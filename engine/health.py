@@ -3,14 +3,15 @@
 import logging
 import datetime
 import pytz
-from .config import gaiaConfig
+
 
 class gaiaHealth():
-    def __init__(self, ecosystem):
-        self.ecosystem = ecosystem
+    def __init__(self, completeConfigObject):
+        self.config = completeConfigObject
+        self.ecosystem = self.config.name
+        self.name = "health"
         self.logger = logging.getLogger("eng.{}.Health".format(self.ecosystem))
-        self.logger.info("Initializing gaiaHealth for {}".format(self.ecosystem))
-        self.config = gaiaConfig(self.ecosystem)
+        self.logger.debug(f"Initializing gaiaHealth for {self.ecosystem}")
         self.timezone = self.config.local_timezone
         self.health_data = {}
     
@@ -38,3 +39,6 @@ class gaiaHealth():
 
     def get_health_data(self):
         return self.health_data
+
+    def stop(self):
+        pass

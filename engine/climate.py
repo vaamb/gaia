@@ -7,12 +7,11 @@
 
 import random
 
-from .config import gaiaConfig
-
 class Chaos:
-    def __init__(self, ecosystem):
-        self.ecosystem = ecosystem
-        self.config = gaiaConfig(self.ecosystem)
+    def __init__(self, completeConfigObject):
+        self.config = completeConfigObject
+        self.ecosystem = self.config.name
+        
         self.chaos_factor = 10 #self.config.chaos_factor
         if self.chaos_factor != 0:
             self.max_duration = 10
@@ -40,7 +39,7 @@ class Chaos:
 
 class gaiaClimate():
     def __init__(self, ecosystem):
-        pass
+        self.name = "climate"
 
     def __call__(self, sensors_data):
         pass
