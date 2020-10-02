@@ -1,14 +1,11 @@
-remoteLauncher.py
-stupid_GPIO.py
-test.py
-test2.py
-
 __pycache__
+.idea
 
-stream_client.py
-engineWrapper.py
-multiplexer.py
+logs
+cache
+test
 
+remoteLauncher.py
 
 *.cfg
-*.log
+

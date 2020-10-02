@@ -6,10 +6,12 @@
 """Add """
 
 import random
+from engine.config_parser import configWatchdog, getConfig
 
 class Chaos:
-    def __init__(self, completeConfigObject):
-        self.config = completeConfigObject
+    def __init__(self, ecosystem):
+        configWatchdog.start()
+        self.config = getConfig(ecosystem)
         self.ecosystem = self.config.name
         
         self.chaos_factor = 10 #self.config.chaos_factor
@@ -37,9 +39,14 @@ class Chaos:
 
             return self.chaos
 
-class gaiaClimate():
-    def __init__(self, ecosystem):
-        self.name = "climate"
 
-    def __call__(self, sensors_data):
+class gaiaClimate():
+    NAME = "climate"
+    def __init__(self, ecosystem):
+        pass
+
+    def start(self):
+        pass
+
+    def stop(self):
         pass

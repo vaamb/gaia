@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 from math import log, e
 
 def pin_translation(pin, direction):

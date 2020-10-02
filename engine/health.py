@@ -4,15 +4,17 @@ import logging
 import datetime
 import pytz
 
+from engine.config_parser import configWatchdog, getConfig, localTZ
 
 class gaiaHealth():
-    def __init__(self, completeConfigObject):
-        self.config = completeConfigObject
+    NAME = "health"
+    def __init__(self, ecosystem):
+        configWatchdog.start()
+        self.config = getConfig(ecosystem)
         self.ecosystem = self.config.name
-        self.name = "health"
         self.logger = logging.getLogger("eng.{}.Health".format(self.ecosystem))
         self.logger.debug(f"Initializing gaiaHealth for {self.ecosystem}")
-        self.timezone = self.config.local_timezone
+        self.timezone = localTZ
         self.health_data = {}
     
     def take_picture(self):
