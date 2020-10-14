@@ -78,18 +78,17 @@ class gaiaSensors():
         now = datetime.now().replace(microsecond = 0)
         now_tz = now.astimezone(self._timezone)
         self._cache["datetime"] = now_tz
-        self._cache["sensors_data"] = {}
         for sensor in self._sensors:
             if sensor.level == "environment":
-                if not self._cache["sensors_data"].get("environment"):
-                    self._cache["sensors_data"].update({"environment": {}})
+                if not self._cache.get("environment"):
+                    self._cache["environment"] = {}
                 data = {sensor.uid: sensor.get_data()}
-                self._cache["sensors_data"]["environment"].update(data)
+                self._cache["environment"].update(data)
             if sensor.level == "plant":
-                if not self._cache["sensors_data"].get("plant"):
-                    self._cache["sensors_data"].update({"plant": {}})
+                if not self._cache.get("plant"):
+                    self._cache["plant"] = {}
                 data = {sensor.uid: sensor.get_data()}
-                self._cache["sensors_data"]["plant"].update(data)                
+                self._cache["plant"].update(data)                
             sleep(0.1)
         with lock:
             self._data = self._cache
