@@ -2,13 +2,16 @@
 import logging
 from logging import config
 import os
+import uuid
 
-class Config():
-    DEBUG = True
+class Config(): 
+    DEBUG = False
     LOG_TO_STDOUT = True
 
     TEST_CONNECTION_IP = "1.1.1.1"
-    GAIAWEB_ADDRESS = ("192.168.1.111", 8888)
+    GAIAWEB = ("192.168.1.111", 5000)
+    
+    UID = hex(uuid.getnode())[2:]
     
     HEALTH_LOGGING_TIME = "00h00"
     CONFIG_WATCHER_PERIOD = 2
