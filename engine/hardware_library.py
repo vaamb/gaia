@@ -30,7 +30,7 @@ except:
 from .utils import dew_point, absolute_humidity, temperature_converter, pin_translation
 
 
-sensorLogger = logging.getLogger("Truc")
+sensorLogger = logging.getLogger("eng.hardware_lib")
 
 
 class hardware:    
@@ -66,6 +66,7 @@ class DHTSensor(baseSensor):
         self._unit = unit
         self._extra_measures = []
         self.update_measures()
+        self._last_data = {}
 
     def update_measures(self):
         self.measures = ["temperature", "humidity"] + self._extra_measures
@@ -76,14 +77,21 @@ class DHTSensor(baseSensor):
     def get_data(self):
         data = {}
         try:
-            data["humidity"], data["temperature"] =\
-                dht.read_retry(self._model, self._pin, 5)
+            for retry in range(3):
+                data["humidity"], data["temperature"] =\
+                    dht.read_retry(self._model, self._pin, 5)
+                if not (abs(self._last_data.get("humidity", data["humidity"]) -
+                            data["humidity"]) > 7.5 or
+                        abs(self._last_data.get("temperature", data["temperature"]) -
+                            data["temperature"]) > 2):
+                    break
             if "dew_point" in self._extra_measures:
                 data["dew_point"] = dew_point(data["temperature"], data["humidity"])
             if "absolute_humidity" in self._extra_measures:
                 data["absolute_humidity"] = absolute_humidity(data["temperature"], data["humidity"])
         except Exception as e:
             sensorLogger.error(f"Error message: {e}")
+        self._last_data = data
         return data
 
 class DHT22Sensor(DHTSensor):
