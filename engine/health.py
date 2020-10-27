@@ -6,8 +6,10 @@ import pytz
 
 from engine.config_parser import configWatchdog, getConfig, localTZ
 
-class gaiaHealth():
+
+class gaiaHealth:
     NAME = "health"
+
     def __init__(self, ecosystem):
         configWatchdog.start()
         self.config = getConfig(ecosystem)
@@ -15,13 +17,13 @@ class gaiaHealth():
         self.logger = logging.getLogger("eng.{}.Health".format(self.ecosystem))
         self.logger.debug(f"Initializing gaiaHealth for {self.ecosystem}")
         self.timezone = localTZ
-        self.health_data = {}
-    
+        self.health_data = None
+
     def take_picture(self):
         self.logger.info("Taking picture of {}".format(self.ecosystem))
         self.logger.info("Picture of {} successfully taken".format(self.ecosystem))
         pass
-    
+
     def image_analysis(self):
         self.logger.info("Starting analysis of {} image".format(self.ecosystem))
         import random
@@ -30,7 +32,7 @@ class gaiaHealth():
         health_index = random.uniform(70, 97)
         self.health_data = {
             self.ecosystem: {
-                "datetime": datetime.datetime.now().replace(microsecond = 0).
+                "datetime": datetime.datetime.now().replace(microsecond=0).
                     astimezone(pytz.timezone(self.timezone)),
                 "green": green,
                 "necrosis": round(necrosis, 2),

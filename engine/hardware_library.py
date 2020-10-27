@@ -9,31 +9,29 @@ VEML7700 = adafruit_veml7700.VEML7700(i2c)
 data = VEML7700.lux
 """
 
-
 import logging
 import random
 
-#import board
-#import busio
-#import adafruit_veml7700
+# import board
+# import busio
+# import adafruit_veml7700
 
 try:
     import RPi.GPIO as GPIO
-except:
+except ImportError:
     from stupid_PI import GPIO
 
 try:
     import Adafruit_DHT as dht
-except:
+except ImportError:
     from stupid_PI import dht
 
 from .utils import dew_point, absolute_humidity, temperature_converter, pin_translation
 
-
 sensorLogger = logging.getLogger("eng.hardware_lib")
 
 
-class hardware:    
+class hardware:
     def __init__(self, hardware_id, address, model, name=None, level="environment"):
         self._uid = hardware_id
         self._address = address
@@ -49,14 +47,16 @@ class hardware:
     def level(self):
         return self._level
 
+
 class baseSensor(hardware):
-    def __init__(self, hardware_id, address, model, name=None, level="environment", 
+    def __init__(self, hardware_id, address, model, name=None, level="environment",
                  max_diff=None):
         super(baseSensor, self).__init__(hardware_id, address, model, name, level)
         self._max_diff = max_diff
 
-    def get_data():
+    def get_data(self):
         return {}
+
 
 class DHTSensor(baseSensor):
     def __init__(self, hardware_id, address, model, name=None, level="environment",
@@ -65,6 +65,7 @@ class DHTSensor(baseSensor):
         self._pin = pin_translation(self._address, "to_BCM")
         self._unit = unit
         self._extra_measures = []
+        self.measures = ["temperature", "humidity"]
         self.update_measures()
         self._last_data = {}
 
@@ -73,12 +74,12 @@ class DHTSensor(baseSensor):
 
     def set_extra_measures(self, extra_measures=[]):
         self._extra_measures = extra_measures
-        
+
     def get_data(self):
         data = {}
         try:
             for retry in range(3):
-                data["humidity"], data["temperature"] =\
+                data["humidity"], data["temperature"] = \
                     dht.read_retry(self._model, self._pin, 5)
                 if not (abs(self._last_data.get("humidity", data["humidity"]) -
                             data["humidity"]) > 7.5 or
@@ -94,15 +95,18 @@ class DHTSensor(baseSensor):
         self._last_data = data
         return data
 
+
 class DHT22Sensor(DHTSensor):
     MODEL = "DHT22"
+
     def __init__(self, hardware_id, address, model=dht.DHT22, name=None, level="environment",
                  max_diff=None):
         super(DHT22Sensor, self).__init__(hardware_id, address, model, name, level, max_diff)
 
+
 class debugSensor_Mega(baseSensor):
     MODEL = "debugMega"
-    
+
     def get_data(self):
         data = {}
         try:
@@ -113,20 +117,22 @@ class debugSensor_Mega(baseSensor):
             data["temperature"] = round(temperature_data, 1)
             data["light"] = light_data
         except Exception as e:
-            sensorLogger.error(f"Error message: {e}")        
+            sensorLogger.error(f"Error message: {e}")
         return data
+
 
 class debugSensor_Moisture(baseSensor):
     MODEL = "debugMoisture"
-    
+
     def get_data(self):
         data = {}
         try:
             moisture_data = random.uniform(10, 55)
             data["moisture"] = round(moisture_data, 1)
         except Exception as e:
-            sensorLogger.error(f"Error message: {e}")        
+            sensorLogger.error(f"Error message: {e}")
         return data
+
 
 DEBUG_SENSORS = [debugSensor_Mega, debugSensor_Moisture]
 SENSORS_AVAILABLE = [DHT22Sensor] + DEBUG_SENSORS

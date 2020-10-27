@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from math import log, e
 
+
 def pin_translation(pin, direction):
     """Tool to translate Raspberry Pi pin number
     Translates Raspberry Pi pin numbering from BCM number to board number 
@@ -76,8 +77,9 @@ def pin_translation(pin, direction):
     if direction == "to_BCM":
         return to_BCM[pin]
 
-    elif direction =="to_board":
+    elif direction == "to_board":
         return to_board[pin]
+
 
 def dew_point(temp, hum, precision_digit=2):
     """
@@ -92,11 +94,12 @@ def dew_point(temp, hum, precision_digit=2):
 
     :return float, dew point temperature in celsius
     """
-    b=17.62
-    c=243.12
-    al = log(hum/100) + (temp*b/(c + temp))
-    Tdp = (c*al)/(b-al)
+    b = 17.62
+    c = 243.12
+    al = log(hum / 100) + (temp * b / (c + temp))
+    Tdp = (c * al) / (b - al)
     return float(round(Tdp, precision_digit))
+
 
 def absolute_humidity(temp, hum, precision_digit=2):
     """
@@ -120,8 +123,9 @@ def absolute_humidity(temp, hum, precision_digit=2):
     # R = 0.08314 
     # result = (p*Mwater)/(R*(Temp+273.15))
     # Or simplified:
-    x = 6.112 * (e**((17.67*temp)/(temp+243.5))*hum*2.1674)/(273.15+temp)
+    x = 6.112 * (e ** ((17.67 * temp) / (temp + 243.5)) * hum * 2.1674) / (273.15 + temp)
     return float(round(x, precision_digit))
+
 
 def temperature_converter(temp, unit_in, unit_out, precision_digit=2):
     """
@@ -147,15 +151,15 @@ def temperature_converter(temp, unit_in, unit_out, precision_digit=2):
         if unit_out in kelvin:
             x = temp + K
         if unit_out in fahrenheit:
-            x = temp*(9/5) + 32
+            x = temp * (9 / 5) + 32
     elif unit_in in kelvin:
         if unit_out in celsius:
             x = temp - K
         if unit_out in fahrenheit:
-            x = (temp-K)*(9/5) + 32
+            x = (temp - K) * (9 / 5) + 32
     elif unit_in in fahrenheit:
         if unit_out in celsius:
-            x = (temp-32)*(5/9)
+            x = (temp - 32) * (5 / 9)
         if unit_out in kelvin:
-            x = (temp-32)*(5/9) + K
+            x = (temp - 32) * (5 / 9) + K
     return float(round(x, precision_digit))

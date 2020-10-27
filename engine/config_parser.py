@@ -43,7 +43,7 @@ def str_to_bool(s):
          raise ValueError(f"{s} can either be 'True'/'true' or 'False'/'false'")
 
 #---------------------------------------------------------------------------
-#   Functions to interact with the module
+#   basicConfig class
 #---------------------------------------------------------------------------
 class _basicConfig():
     def __init__(self):
@@ -236,6 +236,9 @@ class _basicConfig():
         self._private_config.update(home_city)
 
 
+#---------------------------------------------------------------------------
+#   specificConfig class
+#---------------------------------------------------------------------------
 class specificConfig():
     def __init__(self, ecosystem):
         if ecosystem in globalConfig.ecosystems_id:
@@ -251,17 +254,21 @@ class specificConfig():
     def name(self):
         return self.config_dict["name"]
 
+    @property
+    def uid(self):
+        return self.ecosystem_id
+
     @name.setter
     def set_name(self, value):
         self.config_dict["name"] = value
-        self.save("ecosystems")
+        globalConfig.save("ecosystems")
 
     @property
     def status(self):
         return self.config_dict["status"]
 
     @status.setter
-    def set_status(self, value):
+    def status(self, value):
         self.config_dict["status"] = value
 
     """Parameters related to sub-processes control"""
@@ -344,11 +351,7 @@ class specificConfig():
             if self.IO_dict[IO]["type"] == _type and self.IO_dict[IO]["level"] == level:
                 group.append(IO)
         return group
-        """
-        environment = self.get_IO_group("sensor", "environment")
-        plant = self.get_IO_group("sensor", "plant")
-        return (environment + plant)
-        """
+
 
     def create_new_IO_id(self):
         k = 16
@@ -460,6 +463,9 @@ class specificConfig():
         return moments
 
 
+#---------------------------------------------------------------------------
+#   Manager class
+#---------------------------------------------------------------------------
 class Manager:
     def __init__(self):
         self.configs = {}
@@ -494,7 +500,8 @@ DEFAULT_ECOSYSTEM_CFG = {
         "name": "",
         "status": False,
         "management": {
-            "lighting": False,
+            "sensors": True,
+            "light": False,
             "watering": False,
             "climate": False,
             "health": False,
@@ -555,7 +562,7 @@ class configWatchdog:
     def stop():
         globalConfig.stop_watchdog()
 
-    @property
+    @staticmethod
     def status():
         return globalConfig.watchdog
 
@@ -565,7 +572,7 @@ def update():
 def createEcosystem(*args):
     if len(args) == 0:
         name = input("Ecosystem name: ")
-    elif len(args) == 1:
+    else:
         name = args[0]
     globalConfig.create_new_ecosystem(name)
 

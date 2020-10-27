@@ -6,14 +6,14 @@ from datetime import datetime, date
 from threading import Lock, Thread, Event
 
 from simple_pid import PID
+
 try:
     import RPi.GPIO as GPIO
-except:
+except ImportError:
     from stupid_PI import GPIO
-    
+
 from config import Config
 from engine.config_parser import configWatchdog, getConfig, localTZ
-
 
 Kp = 0.01
 Ki = 0.005
@@ -23,6 +23,7 @@ lock = Lock()
 
 class gaiaLight:
     NAME = "light"
+
     def __init__(self, ecosystem):
         configWatchdog.start()
         self._config = getConfig(ecosystem)
@@ -36,7 +37,7 @@ class gaiaLight:
         self._status = {"current": False, "last": False}
         self._mode = "automatic"
         self._method = self._config.light_method
-        self._dimable = {"value": False, #self._config.light_dimmable
+        self._dimable = {"value": False,  # self._config.light_dimmable
                          "level": 100}
         self._pid = PID(Kp=Kp, Ki=Ki, Kd=Kd, output_limits=(20, 100))
         self._moments = {}
@@ -46,25 +47,15 @@ class gaiaLight:
 
         self._logger.debug("gaiaLight successfully initialized")
 
-    def __call__(self, light_intensity):
-        if self._status["current"]:
-            #allow to receive light intensity value from sensors to update light powerintensity
-            self.light_intensity = light_intensity
-            #call pid here
-            if self._adaptative:
-                for light_id in self._config.get_IO_group(""):
-                    pass
-
-    """will require output from sensors, via engine. maybe use a call??"""
     def _tune_light_level(self, light_id):
         dim = self._config.IO_dict[light_id]["model"]
         if dim == "dimmable":
-            #adjust light level through pwm
+            # adjust light level through pwm
             pass
 
     def _hardware_setup(self):
         GPIO.setmode(GPIO.BOARD)
-        
+
         for light in self._config.get_lights():
             pin = self._config.IO_dict[light]["pin"]
             GPIO.setup(pin, GPIO.OUT)
@@ -75,7 +66,7 @@ class gaiaLight:
     def _start_light_loop(self):
         if not self._started:
             self._logger.info("Starting light loop at a frequency of " +
-                              f"{1/Config.LIGHT_LOOP_PERIOD}Hz")
+                              f"{1 / Config.LIGHT_LOOP_PERIOD}Hz")
             self._hardware_setup()
             self._stopEvent = Event()
             self._lightLoopThread = Thread(target=self._light_loop, args=())
@@ -104,21 +95,23 @@ class gaiaLight:
             self._stopEvent.wait(Config.LIGHT_LOOP_PERIOD)
 
     """Functions to switch the light on/off either manually or automatically"""
+
     def _is_time_between(self, begin_time, end_time, check_time=None):
         check_time = check_time or datetime.now().time()
         if begin_time < end_time:
-            return check_time >= begin_time and check_time < end_time
-        else: # crosses midnight
+            return begin_time <= check_time < end_time
+        else:  # crosses midnight
             return check_time >= begin_time or check_time < end_time
 
     def _to_dt(self, _time):
-        #Transforms time to today's datetime. Needed to use timedelta
+        # Transforms time to today's datetime. Needed to use timedelta
         _date = date.today()
         naive_dt = datetime.combine(_date, _time)
         aware_dt = naive_dt.astimezone(self._timezone)
         return aware_dt
 
     def _lighting(self):
+        lighting = False
         if self._mode == "automatic":
             if self._method == "fixed":
                 lighting = self._is_time_between(self._moments["day"], self._moments["night"])
@@ -132,13 +125,12 @@ class gaiaLight:
                 need to change this to calculate it once per day, or at method change
                 
                 """
-                
-                
+
                 morning_end = (self._to_dt(self._moments["sunrise"]) + self._moments["offset"]).time()
                 evening_start = (self._to_dt(self._moments["sunset"]) - self._moments["offset"]).time()
-                #If time between lightning hours
+                # If time between lightning hours
                 if ((self._moments["day"] <= now < morning_end) or
-                    (evening_start <= now < self._moments["night"])):
+                        (evening_start <= now < self._moments["night"])):
                     lighting = True
                 else:
                     lighting = False
@@ -151,11 +143,11 @@ class gaiaLight:
         return lighting
 
     def _light_routine(self):
-        #If lighting == True, lights should be on
+        # If lighting == True, lights should be on
         if self._lighting():
-            #If lights were closed, turn them on
+            # If lights were closed, turn them on
             if not self._status["last"]:
-                #Reset pid so there is no internal value overshoot
+                # Reset pid so there is no internal value overshoot
                 self._pid.reset()
                 self._status["current"] = True
                 for light in self._config.get_IO_group("light", "environment"):
@@ -163,9 +155,9 @@ class gaiaLight:
                     GPIO.output(pin, GPIO.HIGH)
                 if self._mode == "automatic":
                     self._logger.info("Lights have been automatically turned on")
-        #If lighting == False, lights should be off
+        # If lighting == False, lights should be off
         else:
-            #If lights were opened, turn them off
+            # If lights were opened, turn them off
             if self._status["last"]:
                 self._status["current"] = False
                 for light in self._config.get_IO_group("light", "environment"):
@@ -176,9 +168,10 @@ class gaiaLight:
         self._status["last"] = self._status["current"]
 
     """API calls"""
+
     def update_moments(self):
-        #lock thread as all the whole dict should be transformed at the "same time"
-        #add a if method == elongate or mimic, and if connected
+        # lock thread as all the whole dict should be transformed at the "same time"
+        # add a if method == elongate or mimic, and if connected
         lock.acquire()
         try:
             self._moments.update(self._config.time_parameters)
@@ -208,9 +201,9 @@ class gaiaLight:
             "morning_end": (self._to_dt(self._moments["sunrise"]) + self._moments["offset"]).time(),
             "evening_start": (self._to_dt(self._moments["sunset"]) - self._moments["offset"]).time(),
             "evening_end": self._moments["night"]
-                 }
+        }
         return hours
-    
+
     @property
     def light_info(self):
         return {"status": self.status,
@@ -226,8 +219,7 @@ class gaiaLight:
             self.update_moments
         self._method = method
     """
-    
-    
+
     """
     add countdown
     
@@ -291,9 +283,10 @@ class gaiaLight:
         self._pid.tunings(tunings)
 
     """Functions to update config objects"""
+
     def refresh_hardware(self):
         self._hardware_setup()
 
     def stop(self):
-#        self._stop_scheduler()
+        #        self._stop_scheduler()
         self._stop_light_loop()

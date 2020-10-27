@@ -9,12 +9,12 @@ from config import Config
 from engine.config_parser import configWatchdog, getConfig, localTZ
 from .hardware_library import SENSORS_AVAILABLE
 
-
 lock = Lock()
 
 
-class gaiaSensors():
+class gaiaSensors:
     NAME = "sensors"
+
     def __init__(self, ecosystem):
         configWatchdog.start()
         self._config = getConfig(ecosystem)
@@ -75,31 +75,23 @@ class gaiaSensors():
         Loops through all the sensors and stores the value in self._data
         """
         self._cache = {}
-        now = datetime.now().replace(microsecond = 0)
+        now = datetime.now().replace(microsecond=0)
         now_tz = now.astimezone(self._timezone)
         self._cache["datetime"] = now_tz
+        self._cache["data"] = {}
         for sensor in self._sensors:
-            if sensor.level == "environment":
-                if not self._cache.get("environment"):
-                    self._cache["environment"] = {}
-                data = {sensor.uid: sensor.get_data()}
-                self._cache["environment"].update(data)
-            if sensor.level == "plant":
-                if not self._cache.get("plant"):
-                    self._cache["plant"] = {}
-                data = {sensor.uid: sensor.get_data()}
-                self._cache["plant"].update(data)                
-            sleep(0.1)
+            self._cache["data"].update({sensor.uid: sensor.get_data()})
+            sleep(0.01)
         with lock:
             self._data = self._cache
         del self._cache
 
     """API calls"""
-    #Configuration info
+    # configuration info
     def refresh_hardware(self):
         self._setup_sensors()
 
-    #data
+    # data
     @property
     def sensors_data(self):
         return self._data
