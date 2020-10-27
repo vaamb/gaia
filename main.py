@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
-from gevent import monkey
-monkey.patch_all()
+import eventlet
+eventlet.monkey_patch()
 
 from time import sleep
 
-from engine import autoManager, enginesDict
+from client import json, gaiaNamespace, retryClient
 from config import Config
-from client import retryClient, gaiaNamespace, json
+from engine import autoManager, enginesDict
+
 
 ADDR_TUPLE = Config.GAIAWEB
 SERVER_URL = f"http://{ADDR_TUPLE[0]}:{ADDR_TUPLE[1]}"

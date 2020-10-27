@@ -1,22 +1,21 @@
-# -*- coding: utf-8 -*-
+import json
 import logging
 import logging.config
 import os
 import requests
-import json
-from time import sleep
 from threading import Thread, Event
+from time import sleep
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import Config
 from engine import config_parser
+from engine.climate import gaiaClimate
 from engine.config_parser import getIds, configWatchdog, globalConfig, getConfig, createEcosystem, manageEcosystem, \
     delEcosystem, new_config_event, update as updateConfig
+from engine.health import gaiaHealth
 from engine.light import gaiaLight
 from engine.sensors import gaiaSensors
-from engine.health import gaiaHealth
-from engine.climate import gaiaClimate
 
 
 __all__ = ["autoManager", "enginesDict",

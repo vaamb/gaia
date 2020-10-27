@@ -1,15 +1,15 @@
+from datetime import date, datetime, time
+import json
 import logging
-import uuid
 import random
-from datetime import date, time, datetime
+import uuid
+
 import pytz
 from tzlocal import get_localzone
 
 import socketio
 from socketio import exceptions
 from socketio.client import reconnecting_clients
-
-import json
 
 
 class datetimeJSONEncoder(json.JSONEncoder):

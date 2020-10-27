@@ -1,16 +1,14 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+from datetime import date, time, datetime
+import hashlib
 import logging
 import pathlib
-import hashlib
-import socket
 import random
+import socket
 import string
-from datetime import date, time, datetime
 from threading import Thread, Event
 
-import ruamel.yaml
 import pytz
+import ruamel.yaml
 from tzlocal import get_localzone
 
 from config import Config

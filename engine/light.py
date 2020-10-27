@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
-"Add if lamps are/could be dimable in config. If dimable and pwm activated: then do the PID loop "
-import logging
-from time import time
 from datetime import datetime, date
-from threading import Lock, Thread, Event
+import logging
+from threading import Event, Lock, Thread
+from time import time
 
 from simple_pid import PID
 
@@ -14,6 +12,7 @@ except ImportError:
 
 from config import Config
 from engine.config_parser import configWatchdog, getConfig, localTZ
+
 
 Kp = 0.01
 Ki = 0.005

@@ -1,12 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""Will be for heating, cooling, humidify, dehumidify, water plants"""
-
-"""Add """
-
 import random
+
 from engine.config_parser import configWatchdog, getConfig
+
 
 class Chaos:
     def __init__(self, ecosystem):

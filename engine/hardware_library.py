@@ -1,20 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Do i2c config
-
-Ex with VEML7700:
-i2c = busio.I2C(board.SCL, board.SDA)
-VEML7700 = adafruit_veml7700.VEML7700(i2c)
-
-data = VEML7700.lux
-"""
-
 import logging
 import random
-
-# import board
-# import busio
-# import adafruit_veml7700
 
 try:
     import RPi.GPIO as GPIO
@@ -27,6 +12,7 @@ except ImportError:
     from stupid_PI import dht
 
 from .utils import dew_point, absolute_humidity, temperature_converter, pin_translation
+
 
 sensorLogger = logging.getLogger("eng.hardware_lib")
 

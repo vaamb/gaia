@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
+from datetime import datetime
 import logging
+from threading import Event, Thread, Lock
 import time
 from time import sleep
-from datetime import datetime
-from threading import Thread, Lock, Event
 
 from config import Config
 from engine.config_parser import configWatchdog, getConfig, localTZ
 from .hardware_library import SENSORS_AVAILABLE
+
 
 lock = Lock()
 

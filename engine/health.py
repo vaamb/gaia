@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import logging
 import datetime
+import logging
 import pytz
 
 from engine.config_parser import configWatchdog, getConfig, localTZ
