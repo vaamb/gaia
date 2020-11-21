@@ -129,5 +129,5 @@ class gaiaNamespace(socketio.ClientNamespace):
 
     def on_turn_light_auto(self, message):
         ecosystem = message["ecosystem"]
-        self.engines[ecosystem].set_light_off()
+        self.engines[ecosystem].set_light_auto()
         self.on_send_light_data()
