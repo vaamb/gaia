@@ -1,8 +1,7 @@
 from datetime import datetime
 import logging
 from threading import Event, Thread, Lock
-import time
-from time import sleep
+from time import sleep, time
 
 from config import Config
 from engine.config_parser import configWatchdog, getConfig, localTZ
@@ -23,20 +22,34 @@ class gaiaSensors:
         self._logger.debug(f"Initializing gaiaSensors for {self._ecosystem}")
         self._timezone = localTZ
         self._started = False
-        self._setup_sensors()
         self._start_sensors_loop()
         self._logger.debug(f"gaiaSensors has been initialized for {self._ecosystem}")
 
     def _setup_sensors(self):
         self._sensors = []
         for hardware_id in self._config.get_sensors():
+            try:
+                model = self._config.IO_dict[hardware_id]["model"]
+                sensor = SENSORS_AVAILABLE[model]
+            except KeyError:
+                self._logger.error(f"{model} is not in the list of "
+                                   f"sensors available")
+                continue
             address = self._config.IO_dict[hardware_id]["pin"]
             model = self._config.IO_dict[hardware_id]["model"]
             name = self._config.IO_dict[hardware_id]["name"]
             level = self._config.IO_dict[hardware_id]["level"]
-            sensor = SENSORS_AVAILABLE[model]
-            # TODO: add measures selection
-            s = sensor(hardware_id, address, model, name, level)
+            # faster than get when the key is expected to be present
+            try:
+                measure = self._config.IO_dict[hardware_id]["measure"]
+            except KeyError:
+                measure = None
+            s = sensor(hardware_id=hardware_id,
+                       address=address,
+                       model=model,
+                       name=name,
+                       level=level,
+                       measure=measure)
             self._sensors.append(s)
 
     def _start_sensors_loop(self):
@@ -59,10 +72,10 @@ class gaiaSensors:
 
     def _sensors_loop(self):
         while not self._stopEvent.is_set():
-            start_time = time.time()
+            start_time = time()
             self._logger.debug("Starting the data update routine")
             self._update_sensors_data()
-            loop_time = time.time() - start_time
+            loop_time = time() - start_time
             sleep_time = Config.SENSORS_TIMEOUT - loop_time
             if sleep_time < 0:
                 sleep_time = 2
