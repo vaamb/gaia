@@ -20,7 +20,7 @@ from engine.sensors import gaiaSensors
 
 __all__ = ["autoManager", "enginesDict",
            "createEngine", "getEngine", "startEngine", "stopEngine", "delEngine",
-           "gaiaEngine", "gaiaLight", "gaiaSensors", "gaiaHealth", "gaiaClimate",
+           "Engine", "gaiaLight", "gaiaSensors", "gaiaHealth", "gaiaClimate",
            "createEcosystem", "manageEcosystem", "delEcosystem",
            "globalConfig", "getConfig", "updateConfig"]
 
@@ -30,7 +30,7 @@ SUBROUTINES = (gaiaLight, gaiaSensors, gaiaHealth, gaiaClimate)
 # ---------------------------------------------------------------------------
 #   Engine class
 # ---------------------------------------------------------------------------
-class gaiaEngine:
+class Engine:
     """Create an Engine for a given ecosystem. 
     
     The Engine is an object that manages all the required subroutines. 
@@ -159,6 +159,10 @@ class gaiaEngine:
     @property
     def config_dict(self):
         return self._config.config_dict
+
+    @property
+    def status(self):
+        return self._started
 
     # Light
     def update_moments(self):
@@ -349,7 +353,7 @@ class Manager:
         if ecosystem_id in self._subroutine_dict:
             self.stopSubroutine(ecosystem, "all")
         if ecosystem_id not in self.engines:
-            engine = gaiaEngine(ecosystem)
+            engine = Engine(ecosystem)
             self.engines[ecosystem_id] = engine
             self.logger.info(f"Engine for ecosystem {ecosystem_name} has " +
                              "been created")

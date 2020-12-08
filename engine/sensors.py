@@ -34,10 +34,10 @@ class gaiaSensors:
             model = self._config.IO_dict[hardware_id]["model"]
             name = self._config.IO_dict[hardware_id]["name"]
             level = self._config.IO_dict[hardware_id]["level"]
-            for sensor in SENSORS_AVAILABLE:
-                if sensor.MODEL == model:
-                    s = sensor(hardware_id, address, model, name, level)
-                    self._sensors.append(s)
+            sensor = SENSORS_AVAILABLE[model]
+            # TODO: add measures selection
+            s = sensor(hardware_id, address, model, name, level)
+            self._sensors.append(s)
 
     def _start_sensors_loop(self):
         self._logger.debug(f"Starting sensors loop for {self._ecosystem}")

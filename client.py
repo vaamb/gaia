@@ -26,7 +26,6 @@ class datetimeJSONEncoder(json.JSONEncoder):
 
 json.JSONEncoder = datetimeJSONEncoder
 
-
 socketio_logger = logging.getLogger("socketio.client")
 
 
@@ -80,6 +79,12 @@ class gaiaNamespace(socketio.ClientNamespace):
 
     def on_disconnect(self):
         socketio_logger.info('disconnected from server')
+
+    def on_ping(self):
+        pong = []
+        for engine in self.engines:
+            pong.append(self.engines[engine].uid)
+        self.emit("pong", data=pong)
 
     def on_send_config(self):
         config = {ecosystem_id: self.engines[ecosystem_id].config_dict

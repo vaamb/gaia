@@ -46,7 +46,7 @@ class baseSensor(hardware):
 
 class DHTSensor(baseSensor):
     def __init__(self, hardware_id, address, model, name=None, level="environment",
-                 max_diff=None, unit="celcius"):
+                 max_diff=None, unit="celsius"):
         super(DHTSensor, self).__init__(hardware_id, address, model, name, level, max_diff)
         self._pin = pin_translation(self._address, "to_BCM")
         self._unit = unit
@@ -120,6 +120,14 @@ class debugSensor_Moisture(baseSensor):
         return data
 
 
-DEBUG_SENSORS = [debugSensor_Mega, debugSensor_Moisture]
-SENSORS_AVAILABLE = [DHT22Sensor] + DEBUG_SENSORS
+DEBUG_SENSORS = {sensor.MODEL: sensor for sensor in
+                 [debugSensor_Mega,
+                  debugSensor_Moisture]}
+
+GPIO_SENSORS = {sensor.MODEL: sensor for sensor in
+                [DHT22Sensor]}
+
+SENSORS_AVAILABLE = {**DEBUG_SENSORS,
+                     **GPIO_SENSORS}
+
 HARDWARE_AVAILABLE = SENSORS_AVAILABLE
