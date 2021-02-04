@@ -10,9 +10,9 @@ class Config:
 
     TEST_CONNECTION_IP = "1.1.1.1"
     GAIAWEB = ("127.0.0.1", 5000)
-    
+    # GAIAWEB = ("192.168.1.111", 5000)
     UID = hex(uuid.getnode())[2:]
-    
+
     HEALTH_LOGGING_TIME = "00h00"
     CONFIG_WATCHER_PERIOD = 2
     LIGHT_LOOP_PERIOD = 0.5
