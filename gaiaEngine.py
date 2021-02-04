@@ -3,7 +3,9 @@ import eventlet
 
 eventlet.monkey_patch()
 
+import argparse
 from time import sleep
+import logging
 
 from client import json, gaiaNamespace, retryClient
 from config import Config
@@ -13,17 +15,27 @@ from engine import autoManager, enginesDict
 ADDR_TUPLE = Config.GAIAWEB
 SERVER_URL = f"http://{ADDR_TUPLE[0]}:{ADDR_TUPLE[1]}"
 
-# TODO: add CLI
+
+logger = logging.getLogger("gaiaEngine")
+
+
 class gaiaEngine:
-    def __init__(self, use_client=True):
+    def __init__(self,
+                 use_client: bool = False,
+                 use_db: bool = False,
+                 use_web_interface: bool = False,
+                 ):
+        logger.info("Initializing")
         self.use_client = use_client
         self.client = None
         self.started = False
 
     def start(self):
         if not self.started:
+            logger.info("Starting")
             autoManager.start(joint_start=True)
             if self.use_client:
+                logger.info("Starting socketIO client")
                 self.client = retryClient(json=json)
                 namespace = gaiaNamespace(engines_dict=enginesDict, namespace="/gaia")
                 self.client.register_namespace(namespace)
@@ -34,6 +46,7 @@ class gaiaEngine:
 
     def wait(self):
         if self.started:
+            logger.info("Waiting ...")
             while True:
                 if self.use_client:
                     self.client.sleep(1)
@@ -42,13 +55,31 @@ class gaiaEngine:
 
     def stop(self):
         if self.started:
+            logger.info("Stopping")
             autoManager.stop()
             self.client.disconnect()
             self.started = False
 
 
 if __name__ == "__main__":
-    gaia = gaiaEngine()
+    parser = argparse.ArgumentParser(
+        description="gaiaEngine command line interface"
+    )
+    parser.add_argument("-c", "--client", action="store_true",
+                        help="Activate socketIO client to communicate data "
+                             "with gaiaWeb")
+    parser.add_argument("-d", "--db", action="store_true",
+                        help="Activate db data logging")
+    parser.add_argument("-w", "--web", action="store_true",
+                        help="Activate web interface")
+
+    args = parser.parse_args()
+    variables = vars(args)
+    variables["client"] = 1
+    gaia = gaiaEngine(use_client=variables["client"],
+                      use_db=variables["db"],
+                      use_web_interface=variables["web"]
+                      )
     try:
         gaia.start()
         gaia.wait()
