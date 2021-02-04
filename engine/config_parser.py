@@ -3,7 +3,6 @@ import hashlib
 import logging
 import pathlib
 import random
-import socket
 import string
 from threading import Thread, Event
 
@@ -12,6 +11,7 @@ import ruamel.yaml
 from tzlocal import get_localzone
 
 from config import Config
+from engine.utils import get_coordinates, is_connected
 
 
 gaiaEngine_dir = pathlib.Path(__file__).absolute().parents[1]
@@ -20,26 +20,6 @@ localTZ = get_localzone()
 
 
 logger = logging.getLogger("config")
-
-
-def is_connected():
-    try:
-        host = socket.gethostbyname(Config.TEST_CONNECTION_IP)
-        s = socket.create_connection((host, 80), 2)
-        s.close()
-        return True
-    except Exception as ex:
-        print(ex)
-    return False
-
-
-def str_to_bool(s: str):
-    if s.lower() == "true":
-        return True
-    elif s.lower() == "false":
-        return False
-    else:
-        raise ValueError(f"{s} can either be 'True'/'true' or 'False'/'false'")
 
 
 # ---------------------------------------------------------------------------
@@ -196,25 +176,6 @@ class _globalConfig:
                 for ecosystem in self._ecosystems_config}
 
     """Private config parameters"""
-    # TODO: use geopy with memoization
-    @property
-    def home_coordinates(self) -> dict:
-        try:
-            if "home" in self._private_config["places"]:
-                return self._private_config["places"]["home"]["coordinates"]
-            else:
-                return {"latitude": 0, "longitude": 0}
-        except Exception as ex:
-            print(ex)
-        return {"latitude": 0, "longitude": 0}
-
-    @home_coordinates.setter
-    def home_coordinates(self, value: tuple) -> None:
-        # value should be (latitude, longitude)
-        coordinates = {"latitude": value[0], "longitude": value[1]}
-        home = {"places": {"home": {"coordinates": coordinates}}}
-        self._private_config.update(home)
-
     @property
     def home_city(self) -> str:
         try:
@@ -230,6 +191,22 @@ class _globalConfig:
     def home_city(self, city_name: str) -> None:
         home_city = {"places": {"home": {"city": city_name}}}
         self._private_config.update(home_city)
+
+    @property
+    def home_coordinates(self) -> dict:
+        if "home" in self._private_config["places"]:
+            try:
+                return self._private_config["places"]["home"]["coordinates"]
+            except KeyError:
+                return get_coordinates(self.home_city)
+        return {"latitude": 0, "longitude": 0}
+
+    @home_coordinates.setter
+    def home_coordinates(self, value: tuple) -> None:
+        # value should be (latitude, longitude)
+        coordinates = {"latitude": value[0], "longitude": value[1]}
+        home = {"places": {"home": {"coordinates": coordinates}}}
+        self._private_config.update(home)
 
 
 DEFAULT_ECOSYSTEM_CFG = {
