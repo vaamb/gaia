@@ -1,13 +1,13 @@
 from math import log, e
 
 
-def pin_translation(pin, direction):
+def pin_translation(pin: int, direction: str) -> int:
     """Tool to translate Raspberry Pi pin number
     Translates Raspberry Pi pin numbering from BCM number to board number 
     and vice versa
-    
+    ---
     :param pin: int, number of the pin to translate
-    :param direction : str, either 'to_BCM' or 'to_board'
+    :param direction: str, either 'to_BCM' or 'to_board'
 
     :return int, the translated pin number
     """
@@ -80,32 +80,35 @@ def pin_translation(pin, direction):
         return to_board[pin]
 
 
-def dew_point(temp, hum, precision_digit=2):
+def get_dew_point(temp: float,
+                  hum: float,
+                  precision_digit: int = 2) -> float:
     """
     Returns the dew point temperature calculated using the Magnus formula.
     It uses the Sonntag1990 parameters which is valid from -45°C to 60°C
     ---
     :param temp: temperature in degree celsius
-    
     :param hum: relative humidity in percent
-    
     :param precision_digit: level of precision to keep in the result
 
     :return float, dew point temperature in celsius
     """
+
     b = 17.62
     c = 243.12
     al = log(hum / 100) + (temp * b / (c + temp))
     Tdp = (c * al) / (b - al)
+
     return float(round(Tdp, precision_digit))
 
 
-def absolute_humidity(temp, hum, precision_digit=2):
+def get_absolute_humidity(temp: float,
+                          hum: float,
+                          precision_digit: int = 2) -> float:
     """
+    Calculates the absolute humidity. The formula used is given below
     :param temp: temperature in degree celsius
-    
     :param hum: relative humidity in percent
-    
     :param precision_digit: level of precision to keep in the result
 
     :return float, absolute humidity in gram per cubic meter
@@ -122,43 +125,53 @@ def absolute_humidity(temp, hum, precision_digit=2):
     # R = 0.08314 
     # result = (p*Mwater)/(R*(Temp+273.15))
     # Or simplified:
+
     x = 6.112 * (e ** ((17.67 * temp) / (temp + 243.5)) * hum * 2.1674) / (273.15 + temp)
     return float(round(x, precision_digit))
 
 
-def temperature_converter(temp, unit_in, unit_out, precision_digit=2):
+def temperature_converter(temp: float,
+                          unit_in: str,
+                          unit_out: str,
+                          precision_digit: int = 2) -> float:
     """
-    :param temp: temperature
-    
-    :param unit_in: unit among Celsius, Kelvin, Fahrenheit (with or without
+    :param temp: float, the temperature in Celsius degrees
+    :param unit_in: str, unit among Celsius, Kelvin, Fahrenheit (with or without
                     capital letter, can be abbreviated to the first letter)
-
-    :param unit_out: unit among Celsius, Kelvin, Fahrenheit (with or without
+    :param unit_out: str, unit among Celsius, Kelvin, Fahrenheit (with or without
                      capital letter, can be abbreviated to the first letter)
-    
-    :param precision_digit: level of precision to keep in the result
+    :param precision_digit: int, level of precision to keep in the result
 
     :return float, the temperature converter into the desired unit
     """
-    celsius = ["C", "c", "Celsius", "celsius"]
-    kelvin = ["K", "k", "Kelvin", "kelvin"]
-    fahrenheit = ["F", "f", "Fahrenheit", "fahrenheit"]
+
+    celsius = ["c", "celsius"]
+    kelvin = ["k", "kelvin"]
+    fahrenheit = ["f", "fahrenheit"]
     K = 273.15
-    if unit_in == unit_out:
-        x = temp
-    elif unit_in in celsius:
-        if unit_out in kelvin:
+
+    if unit_in.lower() == unit_out.lower():
+        return temp
+
+    elif unit_in.lower() in celsius:
+        if unit_out.lower() in kelvin:
             x = temp + K
-        if unit_out in fahrenheit:
+        if unit_out.lower() in fahrenheit:
             x = temp * (9 / 5) + 32
-    elif unit_in in kelvin:
-        if unit_out in celsius:
+
+    elif unit_in.lower() in kelvin:
+        if unit_out.lower() in celsius:
             x = temp - K
-        if unit_out in fahrenheit:
+        if unit_out.lower() in fahrenheit:
             x = (temp - K) * (9 / 5) + 32
-    elif unit_in in fahrenheit:
-        if unit_out in celsius:
+
+    elif unit_in.lower() in fahrenheit:
+        if unit_out.lower() in celsius:
             x = (temp - 32) * (5 / 9)
-        if unit_out in kelvin:
+        if unit_out.lower() in kelvin:
             x = (temp - 32) * (5 / 9) + K
+
+    else:
+        raise ValueError("This unit is not recognized")
+
     return float(round(x, precision_digit))

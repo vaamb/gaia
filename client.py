@@ -13,7 +13,7 @@ from socketio.client import reconnecting_clients
 
 
 class datetimeJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(self, obj) -> None:
         if isinstance(obj, (datetime, date)):
             obj = obj.astimezone(tz=pytz.timezone("UTC"))
             return obj.replace(microsecond=0).isoformat()
@@ -30,7 +30,7 @@ socketio_logger = logging.getLogger("socketio.client")
 
 
 class retryClient(socketio.Client):
-    def connect(self, *args, **kwargs):
+    def connect(self, *args, **kwargs) -> None:
         self._reconnect_abort.clear()
         reconnecting_clients.append(self)
         attempt_count = 0
@@ -67,31 +67,31 @@ class retryClient(socketio.Client):
 
 
 class gaiaNamespace(socketio.ClientNamespace):
-    def __init__(self, engines_dict, namespace=None):
+    def __init__(self, engines_dict: dict, namespace=None) -> None:
         super(gaiaNamespace, self).__init__(namespace=namespace)
         self.engines = engines_dict
 
-    def on_connect(self):
+    def on_connect(self) -> None:
         self.on_register()
 
-    def on_register(self):
+    def on_register(self) -> None:
         self.emit("register_manager", data={"uid": hex(uuid.getnode())[2:]})
 
-    def on_disconnect(self):
+    def on_disconnect(self) -> None:
         socketio_logger.info('disconnected from server')
 
-    def on_ping(self):
+    def on_ping(self) -> None:
         pong = []
         for engine in self.engines:
             pong.append(self.engines[engine].uid)
         self.emit("pong", data=pong)
 
-    def on_send_config(self):
+    def on_send_config(self) -> None:
         config = {ecosystem_id: self.engines[ecosystem_id].config_dict
                   for ecosystem_id in self.engines}
         self.emit("config", config, )
 
-    def on_send_sensors_data(self):
+    def on_send_sensors_data(self) -> None:
         data = {}
         for ecosystem_id in self.engines:
             try:
@@ -100,7 +100,7 @@ class gaiaNamespace(socketio.ClientNamespace):
                 continue
         self.emit("sensors_data", data)
 
-    def on_send_health_data(self):
+    def on_send_health_data(self) -> None:
         data = {}
         for ecosystem_id in self.engines:
             try:
@@ -111,7 +111,7 @@ class gaiaNamespace(socketio.ClientNamespace):
                 continue
         self.emit("health_data", data)
 
-    def on_send_light_data(self):
+    def on_send_light_data(self) -> None:
         data = {}
         for ecosystem_id in self.engines:
             try:
@@ -120,19 +120,19 @@ class gaiaNamespace(socketio.ClientNamespace):
                 continue
         self.emit("light_data", data)
 
-    def on_turn_light_on(self, message):
+    def on_turn_light_on(self, message: dict) -> None:
         ecosystem = message["ecosystem"]
         countdown = message["countdown"]
         self.engines[ecosystem].set_light_on(countdown=countdown)
         self.on_send_light_data()
 
-    def on_turn_light_off(self, message):
+    def on_turn_light_off(self, message: dict) -> None:
         ecosystem = message["ecosystem"]
         countdown = message["countdown"]
         self.engines[ecosystem].set_light_off(countdown=countdown)
         self.on_send_light_data()
 
-    def on_turn_light_auto(self, message):
+    def on_turn_light_auto(self, message: dict) -> None:
         ecosystem = message["ecosystem"]
         self.engines[ecosystem].set_light_auto()
         self.on_send_light_data()
