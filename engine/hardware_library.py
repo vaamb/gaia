@@ -263,6 +263,7 @@ class virtualGPIO(gpioSensor):
 
 class virtualDHT(virtualGPIO):
     def get_data(self) -> dict:
+        time.sleep(2)
         return {
             "temperature": round(random.uniform(17, 30), 1),
             "humidity": round(random.uniform(20, 55), 1),
@@ -285,6 +286,7 @@ class virtualVEML7700(virtualI2C):
     MODEL = "virtualVEML7700"
 
     def get_data(self) -> dict:
+        time.sleep(0.1)
         return {
             "light": random.randrange(1000, 100000, 10),
         }
