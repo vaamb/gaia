@@ -1,43 +1,64 @@
 import logging
 import random
-
-"""VEML
 import time
+
+# for testing on computer purpose
+try:
+    from adafruit_blinka.microcontroller.bcm283x.pin import Pin
+except ImportError:
+    class Pin:
+        def __init__(self, bcm_nbr):
+            self._id = bcm_nbr
+            self._mode = 0
+            self._value = 0
+
+        def init(self, mode):
+            self._mode = mode
+
+        def value(self, val):
+            if val:
+                self._value = val
+            else:
+                return self._value
+
+import adafruit_veml7700  # adafruit-circuitpython-veml7700
+import adafruit_dht  # adafruit-circuitpython-dht
 import board
 import busio
-import adafruit_veml7700
-"""
 
-try:
-    import RPi.GPIO as GPIO
-except ImportError:
-    from stupid_PI import GPIO
-
-try:
-    import Adafruit_DHT as dht
-except ImportError:
-    from stupid_PI import dht
-
-from .utils import dew_point, absolute_humidity, temperature_converter, pin_translation
+from .utils import get_dew_point, get_absolute_humidity, \
+    temperature_converter, pin_translation
 
 
 sensorLogger = logging.getLogger("eng.hardware_lib")
 
 
+i2c = busio.I2C(board.SCL, board.SDA)
+
+
+def address_to_hex(address: str) -> int:
+    if address in ["def", "default", "DEF", "DEFAULT"]:
+        return 0
+    return int(address, base=16)
+
+
 class hardware:
-    def __init__(self, **kwargs):
-        self._uid = kwargs.pop("hardware_id")
-        self._address = kwargs.pop("address")
+    def __init__(self, **kwargs) -> None:
+        self._uid = kwargs.pop("hardware_uid")
+        self._address = kwargs.pop("address", "").split("_")
         self._model = kwargs.pop("model", None)
         self._name = kwargs.pop("name", self._uid)
         self._level = kwargs.pop("level", "environment")
+
+    def __repr__(self):
+        return f"<{self._uid} | {self._name} | {self._model}>"
 
     @property
     def uid(self) -> str:
         return self._uid
 
     @property
-    def address(self) -> str:
+    def address(self) -> list:
         return self._address
 
     @property
@@ -48,15 +69,64 @@ class hardware:
     def name(self) -> str:
         return self._name
 
+    @name.setter
+    def name(self, new_name: str) -> None:
+        self._name = new_name
+
     @property
     def level(self) -> str:
         return self._level
 
 
-class baseSensor(hardware):
-    def __init__(self, **kwargs):
+class gpioHardware(hardware):
+    IN = 0
+    OUT = 1
+
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._max_diff = kwargs.pop("max_diff", None)
+        assert self._address[0].lower() in ("gpio", "bcm")
+        assert len(self._address) > 1
+        self._pin = None
+        self.set_pin()
+
+    def set_pin(self):
+        pin_bcm = pin_translation(int(self._address[1]), "to_BCM") \
+            if self._address[0].lower() == "gpio" \
+            else self._address[1]
+        self._pin = Pin(pin_bcm)
+
+
+# TODO: handle multiplex
+class i2cHardware(hardware):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        assert self._address[0].lower() == "i2c"
+        self._multiplexed = True if len(self._address) > 2 else False
+
+        self._hex_address = address_to_hex(self._address[1])
+        if self._multiplexed:
+            self._hex_address2 = address_to_hex(self._address[2])
+
+
+class gpioSwitch(gpioHardware):
+    MODEL = "gpioSwitch"
+
+    def __init__(self, **kwargs) -> None:
+        # uncomment if you want to overwrite the name of model
+        #kwargs["model"] = self.MODEL
+        super().__init__(**kwargs)
+        self._pin.init(mode=self.OUT)
+
+    def turn_on(self) -> None:
+        self._pin.value(val=1)
+
+    def turn_off(self) -> None:
+        self._pin.value(val=0)
+
+
+class baseSensor(hardware):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
         self._measure = kwargs.pop("measure", [])
 
     def get_data(self) -> dict:
@@ -67,100 +137,201 @@ class baseSensor(hardware):
         return self._measure
 
     @measure.setter
-    def measure(self, measure: list) -> None:
-        self._measure = measure
+    def measure(self, new_measure: list) -> None:
+        self._measure = new_measure
 
 
-class DHTSensor(baseSensor):
+# ---------------------------------------------------------------------------
+#   GPIO sensors
+# ---------------------------------------------------------------------------
+class gpioSensor(baseSensor, gpioHardware):
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+class DHTSensor(gpioSensor):
+    def __init__(self, **kwargs) -> None:
         if not kwargs.get("measure", []):
             kwargs["measure"] = ["temperature", "humidity"]
         super().__init__(**kwargs)
-        self._pin = pin_translation(self._address, "to_BCM")
+
         self._unit = kwargs.pop("unit", "celsius")
-        self._last_data = {}
+
+        if self._model.upper() == "DHT11":
+            self._device = adafruit_dht.DHT11(self._pin)
+        elif self._model.upper() == "DHT12":
+            self._device = adafruit_dht.DHT22(self._pin)
+        else:
+            raise Exception("Unknown DHT model")
 
     def get_data(self) -> dict:
         data = {}
-        try:
-            for retry in range(3):
-                data["humidity"], data["temperature"] = \
-                    dht.read_retry(self._model, self._pin, 5)
-                # Check if sudden change in humidity or temperature as it is
-                # an often observed DHT bug
-                if not (abs(self._last_data.get("humidity", data["humidity"]) -
-                            data["humidity"]) > 15 or
-                        abs(self._last_data.get("temperature", data["temperature"]) -
-                            data["temperature"]) > 5):
-                    break
-            if "dew_point" in self._measure:
-                data["dew_point"] = dew_point(data["temperature"], data["humidity"])
-            if "absolute_humidity" in self._measure:
-                data["absolute_humidity"] = absolute_humidity(data["temperature"], data["humidity"])
-            if "humidity" not in self._measure:
-                del data["humidity"]
-            if "temperature" not in self._measure:
-                del data["temperature"]
-        except Exception as e:
-            sensorLogger.error(f"Sensor {self._name} encountered an error. "
-                               f"Error message: {e}")
-            data = {}
-        self._last_data = data
+        for retry in range(3):
+            try:
+                self._device.measure()
+                humidity = round(self._device.humidity, 2)
+                temperature = round(self._device.temperature, 2)
+
+                if "humidity" in self._measure:
+                    data["humidity"] = humidity
+
+                if "temperature" in self._measure:
+                    data["temperature"] = \
+                        temperature_converter(temperature, "celsius",
+                                              self._unit)
+
+                if "get_dew_point" in self._measure:
+                    dew_point = get_dew_point(temperature, humidity)
+                    data["dew_point"] = \
+                        temperature_converter(dew_point, "celsius", self._unit)
+
+                if "absolute_humidity" in self._measure:
+                    absolute_humidity = get_absolute_humidity(temperature,
+                                                              humidity)
+                    data["absolute_humidity"] = \
+                        temperature_converter(absolute_humidity, "celsius",
+                                              self._unit)
+                break
+
+            except RuntimeError as e:
+                print(e)
+                time.sleep(2)
+                continue
+
+            except Exception as e:
+                sensorLogger.error(
+                    f"Sensor {self._name} encountered an error. "
+                    f"Error message: {e}")
+                data = {}
+                break
+
         return data
 
 
-class DHT22Sensor(DHTSensor):
-    MODEL = "DHT22"
+class DHT11(DHTSensor):
+    MODEL = "DHT11"
 
-    def __init__(self, **kwargs):
-        kwargs["model"] = dht.DHT22
+    def __init__(self, **kwargs) -> None:
+        kwargs["model"] = self.MODEL
         super().__init__(**kwargs)
 
 
-class VEML7700(baseSensor):
-    MODEL = "_VEML7700"
+class DHT22(DHTSensor):
+    MODEL = "DHT22"
+
+    def __init__(self, **kwargs) -> None:
+        kwargs["model"] = self.MODEL
+        super().__init__(**kwargs)
 
 
-class debugSensor_Mega(baseSensor):
-    MODEL = "debugMega"
+# ---------------------------------------------------------------------------
+#   I2C sensors
+# ---------------------------------------------------------------------------
+class i2cSensor(baseSensor, i2cHardware):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+class VEML7700(i2cSensor):
+    MODEL = "VEML7700"
+
+    def __init__(self, **kwargs) -> None:
+        kwargs["model"] = self.MODEL
+        super().__init__(**kwargs)
+
+        if not self._hex_address:
+            self._hex_address = 0x10
+        self._device = adafruit_veml7700.VEML7700(i2c, self._hex_address)
 
     def get_data(self) -> dict:
         data = {}
         try:
-            temperature_data = random.uniform(17, 30)
-            humidity_data = random.uniform(20, 55)
-            light_data = random.randrange(1000, 100000, 10)
-            data["humidity"] = round(humidity_data, 1)
-            data["temperature"] = round(temperature_data, 1)
-            data["light"] = light_data
+            data["light"] = self._device.lux
         except Exception as e:
-            sensorLogger.error(f"Sensor {self._name} encountered an error. "
-                               f"Error message: {e}")
+            sensorLogger.error(
+                f"Sensor {self._name} encountered an error. "
+                f"Error message: {e}")
         return data
 
 
-class debugSensor_Moisture(baseSensor):
-    MODEL = "debugMoisture"
+# ---------------------------------------------------------------------------
+#   Virtual sensors
+# ---------------------------------------------------------------------------
+class virtualGPIO(gpioSensor):
+    pass
+
+
+class virtualDHT(virtualGPIO):
+    def get_data(self) -> dict:
+        return {
+            "temperature": round(random.uniform(17, 30), 1),
+            "humidity": round(random.uniform(20, 55), 1),
+        }
+
+
+class virtualDHT11(virtualDHT):
+    MODEL = "virtualDHT11"
+
+
+class virtualDHT22(virtualDHT):
+    MODEL = "virtualDHT22"
+
+
+class virtualI2C(i2cSensor):
+    pass
+
+
+class virtualVEML7700(virtualI2C):
+    MODEL = "virtualVEML7700"
 
     def get_data(self) -> dict:
-        data = {}
-        try:
-            moisture_data = random.uniform(10, 55)
-            data["moisture"] = round(moisture_data, 1)
-        except Exception as e:
-            sensorLogger.error(f"Sensor {self._name} encountered an error. "
-                               f"Error message: {e}")
-        return data
+        return {
+            "light": random.randrange(1000, 100000, 10),
+        }
 
 
-DEBUG_SENSORS = {sensor.MODEL: sensor for sensor in
-                 [debugSensor_Mega,
-                  debugSensor_Moisture]}
+class virtualMega(baseSensor):
+    MODEL = "virtualMega"
 
-GPIO_SENSORS = {sensor.MODEL: sensor for sensor in
-                [DHT22Sensor]}
+    def get_data(self) -> dict:
+        return {
+            "temperature": round(random.uniform(17, 30), 1),
+            "humidity": round(random.uniform(20, 55), 1),
+            "light": random.randrange(1000, 100000, 10),
+        }
 
-SENSORS_AVAILABLE = {**DEBUG_SENSORS,
-                     **GPIO_SENSORS}
 
-HARDWARE_AVAILABLE = SENSORS_AVAILABLE
+class virtualMoisture(baseSensor):
+    MODEL = "virtualMoisture"
+
+    def get_data(self) -> dict:
+        return {
+            "moisture": round(random.uniform(10, 55), 1),
+        }
+
+
+GPIO_SENSORS = {hardware.MODEL: hardware for hardware in
+                [DHT11,
+                 DHT22]}
+
+I2C_SENSORS = {hardware.MODEL: hardware for hardware in
+               [VEML7700]}
+
+VIRTUAL_SENSORS = {hardware.MODEL: hardware for hardware in
+                   [virtualDHT11,
+                    virtualDHT22,
+                    virtualVEML7700,
+                    virtualMega,
+                    virtualMoisture]}
+
+SENSORS_AVAILABLE = {**VIRTUAL_SENSORS,
+                     **GPIO_SENSORS,
+                     **I2C_SENSORS}
+
+GPIO_ACTUATOR = {hardware.MODEL: hardware for hardware in
+                 [gpioSwitch]}
+
+ACTUATOR_AVAILABLE = {**GPIO_ACTUATOR}
+
+HARDWARE_AVAILABLE = {**ACTUATOR_AVAILABLE,
+                      **SENSORS_AVAILABLE}

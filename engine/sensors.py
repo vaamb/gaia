@@ -7,7 +7,6 @@ from config import Config
 from engine.config_parser import configWatchdog, getConfig, localTZ
 from .hardware_library import SENSORS_AVAILABLE
 
-
 lock = Lock()
 
 
@@ -23,36 +22,44 @@ class gaiaSensors:
         self._timezone = localTZ
         self._started = False
         self._start_sensors_loop()
-        self._logger.debug(f"gaiaSensors has been initialized for {self._ecosystem}")
+        self._logger.debug(
+            f"gaiaSensors has been initialized for {self._ecosystem}")
 
     def _setup_sensors(self):
         self._sensors = []
-        for hardware_id in self._config.get_sensors():
-            try:
-                model = self._config.IO_dict[hardware_id]["model"]
-                sensor = SENSORS_AVAILABLE[model]
-            except KeyError:
-                self._logger.error(f"{model} is not in the list of "
-                                   f"sensors available")
-                continue
-            address = self._config.IO_dict[hardware_id]["pin"]
-            model = self._config.IO_dict[hardware_id]["model"]
-            name = self._config.IO_dict[hardware_id]["name"]
-            level = self._config.IO_dict[hardware_id]["level"]
-            # faster than get when the key is expected to be present
-            try:
-                measure = self._config.IO_dict[hardware_id]["measure"]
-            except KeyError:
-                measure = None
-            s = sensor(hardware_id=hardware_id,
-                       address=address,
-                       model=model,
-                       name=name,
-                       level=level,
-                       measure=measure)
-            self._sensors.append(s)
+        for hardware_uid in self._config.get_sensors():
+            self._add_sensor(hardware_uid)
 
-    def _start_sensors_loop(self):
+    def _add_sensor(self, hardware_uid: str) -> None:
+        try:
+            model = self._config.IO_dict[hardware_uid]["model"]
+            sensor = SENSORS_AVAILABLE[model]
+        except KeyError:
+            self._logger.error(f"{model} is not in the list of "
+                               f"sensors available")
+            pass
+        name = self._config.IO_dict[hardware_uid]["name"]
+        s = sensor(
+            hardware_uid=hardware_uid,
+            address=self._config.IO_dict[hardware_uid]["address"],
+            model=self._config.IO_dict[hardware_uid]["model"],
+            name=name,
+            level=self._config.IO_dict[hardware_uid]["level"],
+            measure=self._config.IO_dict[hardware_uid]["measure"]
+                if "measure" in self._config.IO_dict[hardware_uid]
+                else None
+        )
+        self._sensors.append(s)
+        self._logger.debug(f"Sensor {name} has been set up")
+
+    def _remove_sensor(self, hardware_uid: str) -> None:
+        try:
+            index = [h.uid for h in self._sensors].index(hardware_uid)
+        except ValueError:
+            self._logger.error(f"Sensor '{hardware_uid}' does not exist")
+        del self._sensors[index]
+
+    def _start_sensors_loop(self) -> None:
         self._logger.debug(f"Starting sensors loop for {self._ecosystem}")
         self.refresh_hardware()
         self._stopEvent = Event()
@@ -63,14 +70,14 @@ class gaiaSensors:
         self._logger.debug(f"Sensors loop started for {self._ecosystem}")
         self._started = True
 
-    def _stop_sensors_loop(self):
+    def _stop_sensors_loop(self) -> None:
         self._logger.debug(f"Stopping sensors loop for {self._ecosystem}")
         self._stopEvent.set()
         self._sensorsLoopThread.join()
         del self._sensorsLoopThread, self._stopEvent
         self._started = False
 
-    def _sensors_loop(self):
+    def _sensors_loop(self) -> None:
         while not self._stopEvent.is_set():
             start_time = time()
             self._logger.debug("Starting the data update routine")
@@ -79,11 +86,12 @@ class gaiaSensors:
             sleep_time = Config.SENSORS_TIMEOUT - loop_time
             if sleep_time < 0:
                 sleep_time = 2
-            self._logger.debug(f"Sensors data update finished in {loop_time:.1f}" +
-                               f"s. Next data update in {sleep_time:.1f}s")
+            self._logger.debug(
+                f"Sensors data update finished in {loop_time:.1f}" +
+                f"s. Next data update in {sleep_time:.1f}s")
             self._stopEvent.wait(sleep_time)
 
-    def _update_sensors_data(self):
+    def _update_sensors_data(self) -> None:
         """
         Loops through all the sensors and stores the value in self._data
         """
@@ -100,16 +108,18 @@ class gaiaSensors:
         del self._cache
 
     """API calls"""
+
     # configuration info
-    def refresh_hardware(self):
+    def refresh_hardware(self) -> None:
         self._setup_sensors()
 
     # data
     @property
-    def sensors_data(self):
+    def sensors_data(self) -> dict:
         return self._data
 
-    def stop(self):
+    def stop(self) -> None:
         self._logger.debug(f"Stopping gaiaSensors for {self._ecosystem}")
         self._stop_sensors_loop()
-        self._logger.debug(f"gaiaSensors has been stopped for {self._ecosystem}")
+        self._logger.debug(
+            f"gaiaSensors has been stopped for {self._ecosystem}")
