@@ -42,9 +42,9 @@ def str_to_bool(s: str):
         raise ValueError(f"{s} can either be 'True'/'true' or 'False'/'false'")
 
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 #   _globalConfig class
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 class _globalConfig:
     def __init__(self) -> None:
         self._ecosystems_config = None
@@ -172,7 +172,7 @@ class _globalConfig:
 
     @property
     def ecosystems_id(self) -> list:
-        return [i for i  in self._ecosystems_config]
+        return [i for i in self._ecosystems_config]
 
     @property
     def ecosystems_name(self) -> list:
@@ -191,7 +191,7 @@ class _globalConfig:
                 for ecosystem in self._ecosystems_config}
 
     @property
-    def name_to_id_dict(self) -> None:
+    def name_to_id_dict(self) -> dict:
         return {self._ecosystems_config[ecosystem]["name"]: ecosystem
                 for ecosystem in self._ecosystems_config}
 
@@ -283,9 +283,9 @@ DEFAULT_ECOSYSTEM_CFG = {
 globalConfig = _globalConfig()
 
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 #   specificConfig class
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 class specificConfig:
     def __init__(self, ecosystem: str) -> None:
         if ecosystem in globalConfig.ecosystems_id:
@@ -375,7 +375,7 @@ class specificConfig:
 
     def get_IO_group(self,
                      IO_type: str,
-                     level: list = ["environment", "plants"]
+                     level: tuple = ("environment", "plants")
                      ) -> list:
         return [IO for IO in self.IO_dict
                 if self.IO_dict[IO]["type"] == IO_type
@@ -458,7 +458,7 @@ class specificConfig:
         and minutes separated by a 'h' or a 'H'. 06h05 as well as 6h05 or 
         even 6H5 are valid input
         """
-        hours, minutes = human_time.replace('H','h').split("h")
+        hours, minutes = human_time.replace('H', 'h').split("h")
         return time(int(hours), int(minutes))
 
     @property
@@ -477,7 +477,7 @@ class specificConfig:
     def time_parameters(self, value: dict) -> None:
         if not isinstance(value, dict):
             raise ValueError("value should be a dict with keys equal to 'day' \
-                             or 'night' and values equal to strinf representing \
+                             or 'night' and values equal to string representing \
                              a human readable time, such as '20h00'")
         self.config_dict["environment"]["day"]["start"] =\
             value["day"]["start"]
@@ -492,7 +492,7 @@ class specificConfig:
         return local_time
 
     @property
-    def moments(self) -> dict:
+    def sun_times(self) -> dict:
         with open(gaiaEngine_dir/"cache/sunrise.cch", "r") as file:
             sunrise = globalConfig.yaml.load(file)
 
@@ -504,17 +504,19 @@ class specificConfig:
             except Exception as ex:
                 print(ex)
             return None
-        moments = {}
-        moments["twilight_begin"] = import_daytime_event("civil_twilight_begin") or time(8, 00)
-        moments["sunrise"] = import_daytime_event("sunrise") or time(8, 00)
-        moments["sunset"] = import_daytime_event("sunset") or time(20, 00)
-        moments["twilight_end"] = import_daytime_event("civil_twilight_end") or time(20, 00)
-        return moments
+        return {
+            "twilight_begin": import_daytime_event(
+                "civil_twilight_begin") or time(8, 00),
+            "sunrise": import_daytime_event("sunrise") or time(8, 00),
+            "sunset": import_daytime_event("sunset") or time(20, 00),
+            "twilight_end": import_daytime_event(
+                "civil_twilight_end") or time(20, 00),
+        }
 
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 #   Manager class
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 class Manager:
     def __init__(self) -> None:
         self.configs = {}
@@ -546,9 +548,9 @@ class Manager:
 _manager = Manager()
 
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 #   Functions to interact with the module
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def getIds(ecosystem: str) -> tuple:
     return _manager.getIds(ecosystem)
 

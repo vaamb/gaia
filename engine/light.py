@@ -38,8 +38,8 @@ class gaiaLight:
         self._lights = []
 
         self._pid = PID(Kp=Kp, Ki=Ki, Kd=Kd, output_limits=(20, 100))
-        self._moments = {}
-        self.update_moments()
+        self._sun_times = {}
+        self.update_sun_times()
         self._timer = 0
         self._start_light_loop()
 
@@ -128,10 +128,10 @@ class gaiaLight:
         lighting = False
         if self._mode == "automatic":
             if self._method == "fixed":
-                lighting = self._is_time_between(self._moments["day"], self._moments["night"])
+                lighting = self._is_time_between(self._sun_times["day"], self._sun_times["night"])
 
             elif self._method == "place":
-                lighting = self._is_time_between(self._moments["sunrise"], self._moments["sunset"])
+                lighting = self._is_time_between(self._sun_times["sunrise"], self._sun_times["sunset"])
 
             elif self._method == "elongate":
                 now = datetime.now().astimezone(self._timezone).time()
@@ -140,11 +140,11 @@ class gaiaLight:
                 
                 """
 
-                morning_end = (self._to_dt(self._moments["sunrise"]) + self._moments["offset"]).time()
-                evening_start = (self._to_dt(self._moments["sunset"]) - self._moments["offset"]).time()
+                morning_end = (self._to_dt(self._sun_times["sunrise"]) + self._sun_times["offset"]).time()
+                evening_start = (self._to_dt(self._sun_times["sunset"]) - self._sun_times["offset"]).time()
                 # If time between lightning hours
-                if ((self._moments["day"] <= now < morning_end) or
-                        (evening_start <= now < self._moments["night"])):
+                if ((self._sun_times["day"] <= now < morning_end) or
+                        (evening_start <= now < self._sun_times["night"])):
                     lighting = True
                 else:
                     lighting = False
@@ -180,16 +180,16 @@ class gaiaLight:
         self._status["last"] = self._status["current"]
 
     """API calls"""
-    def update_moments(self) -> None:
+    def update_sun_times(self) -> None:
         # lock thread as all the whole dict should be transformed at the "same time"
         # add a if method == elongate or mimic, and if connected
         lock.acquire()
         try:
-            self._moments.update(self._config.time_parameters)
-            self._moments.update(self._config.moments)
-            sunrise = self._to_dt(self._moments["sunrise"])
-            twilight_begin = self._to_dt(self._moments["twilight_begin"])
-            self._moments["offset"] = sunrise - twilight_begin
+            self._sun_times.update(self._config.time_parameters)
+            self._sun_times.update(self._config.sun_times)
+            sunrise = self._to_dt(self._sun_times["sunrise"])
+            twilight_begin = self._to_dt(self._sun_times["twilight_begin"])
+            self._sun_times["offset"] = sunrise - twilight_begin
         finally:
             lock.release()
 
@@ -208,10 +208,10 @@ class gaiaLight:
     @property
     def lighting_hours(self) -> dict:
         hours = {
-            "morning_start": self._moments["day"],
-            "morning_end": (self._to_dt(self._moments["sunrise"]) + self._moments["offset"]).time(),
-            "evening_start": (self._to_dt(self._moments["sunset"]) - self._moments["offset"]).time(),
-            "evening_end": self._moments["night"]
+            "morning_start": self._sun_times["day"],
+            "morning_end": (self._to_dt(self._sun_times["sunrise"]) + self._sun_times["offset"]).time(),
+            "evening_start": (self._to_dt(self._sun_times["sunset"]) - self._sun_times["offset"]).time(),
+            "evening_end": self._sun_times["night"]
         }
         return hours
 
@@ -227,7 +227,7 @@ class gaiaLight:
     @method.setter(self, method):
         assert method in ["elongate", "fixed", "mimic"]
         if method == "elongate":
-            self.update_moments
+            self.update_sun_times
         self._method = method
     """
 

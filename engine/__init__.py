@@ -165,10 +165,10 @@ class Engine:
         return self._started
 
     # Light
-    def update_moments(self):
+    def update_sun_times(self):
         subroutine = "light"
         try:
-            self._subroutines[subroutine].update_moments()
+            self._subroutines[subroutine].update_sun_times()
         # The subroutine is not currently running
         except KeyError:
             raise RuntimeError(f"{subroutine.capitalize()} subroutine is " +
@@ -267,26 +267,25 @@ class Manager:
         self.clear_manager = False
 
     def start_momentsManager(self):
-        self.logger.debug("Starting the moments manager")
+        self.logger.debug("Starting the sun_times manager")
         self._scheduler = BackgroundScheduler()
         # No need to use ``_update_moments`` as no engine should have
         # started
-        self.refresh_moments()  # put in in thread as it is IO bound
-        self._scheduler.add_job(self.refresh_moments, "cron",
+        self.refresh_sun_times()  # put in in thread as it is IO bound
+        self._scheduler.add_job(self.refresh_sun_times, "cron",
                                 hour="1", misfire_grace_time=15 * 60,
-                                id="moments")
+                                id="sun_times")
         self._scheduler.start()
         self._momentsManager = True
 
     def stop_momentsManager(self):
-        self.logger.debug("Shutting the moments manager")
-        self._scheduler.remove_job("moments")
+        self.logger.debug("Shutting the sun_times manager")
+        self._scheduler.remove_job("sun_times")
         self._scheduler.shutdown()
         self._momentsManager = False
         self._scheduler = None
 
-    def _download_moments(self):
-        # if at least one need moment and
+    def _download_sun_times(self):
         cache_dir = config_parser.gaiaEngine_dir / "cache"
         if not cache_dir:
             os.mkdir(cache_dir)
@@ -321,10 +320,10 @@ class Manager:
                     self.logger.error("Failed to update sunrise and " +
                                       "sunset times")
         self.logger.error("gaiaEngine is not connected to the Internet, " +
-                          "cannot download moments of the day")
+                          "cannot download sun_times of the day")
         raise ConnectionError
 
-    def refresh_moments(self):
+    def refresh_sun_times(self):
         need = []
         for engine in self.engines:
             try:
@@ -336,17 +335,17 @@ class Manager:
         if need:
             try:
                 # need to handle not connected now
-                self._download_moments()
+                self._download_sun_times()
             except ConnectionError:
                 pass
             for engine in need:
                 try:
-                    self.engines[engine].update_moments()
+                    self.engines[engine].update_sun_times()
                 except RuntimeError:
                     # engine created but light loop not started yet
                     pass
         else:
-            print("No need to refresh moments")
+            print("No need to refresh sun_times")
 
     def createEngine(self, ecosystem, start=False):
         ecosystem_id, ecosystem_name = getIds(ecosystem)
