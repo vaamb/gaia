@@ -31,26 +31,26 @@ class gaiaSensors:
             self._add_sensor(hardware_uid)
 
     def _add_sensor(self, hardware_uid: str) -> None:
+        model = self._config.IO_dict[hardware_uid]["model"]
         try:
-            model = self._config.IO_dict[hardware_uid]["model"]
             sensor = SENSORS_AVAILABLE[model]
-        except KeyError:
-            self._logger.error(f"{model} is not in the list of "
-                               f"sensors available")
-            pass
-        name = self._config.IO_dict[hardware_uid]["name"]
-        s = sensor(
-            hardware_uid=hardware_uid,
-            address=self._config.IO_dict[hardware_uid]["address"],
-            model=self._config.IO_dict[hardware_uid]["model"],
-            name=name,
-            level=self._config.IO_dict[hardware_uid]["level"],
-            measure=self._config.IO_dict[hardware_uid]["measure"]
+            name = self._config.IO_dict[hardware_uid]["name"]
+            s = sensor(
+                hardware_uid=hardware_uid,
+                address=self._config.IO_dict[hardware_uid]["address"],
+                model=self._config.IO_dict[hardware_uid]["model"],
+                name=name,
+                level=self._config.IO_dict[hardware_uid]["level"],
+                measure=self._config.IO_dict[hardware_uid]["measure"]
                 if "measure" in self._config.IO_dict[hardware_uid]
                 else None
-        )
-        self._sensors.append(s)
-        self._logger.debug(f"Sensor {name} has been set up")
+            )
+            self._sensors.append(s)
+            self._logger.debug(f"Sensor {name} has been set up")
+
+        except KeyError:
+            self._logger.error(f"{model} is not in the list of "
+                               "the supported sensors")
 
     def _remove_sensor(self, hardware_uid: str) -> None:
         try:
