@@ -22,7 +22,7 @@ except ImportError:
                 return self._value
 
 import adafruit_veml7700  # adafruit-circuitpython-veml7700
-import adafruit_dht  # adafruit-circuitpython-dht
+import adafruit_dht  # adafruit-circuitpython-dht + sudo apt-get install libgpiod2
 import board
 import busio
 
