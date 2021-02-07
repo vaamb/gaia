@@ -235,3 +235,22 @@ def is_connected() -> bool:
     except Exception as ex:
         print(ex)
     return False
+
+
+# ---------------------------------------------------------------------------
+#   Compatibility modules for testing on laptop
+# ---------------------------------------------------------------------------
+class Pin:
+    def __init__(self, bcm_nbr: int) -> None:
+        self._id = bcm_nbr
+        self._mode = 0
+        self._value = 0
+
+    def init(self, mode: int) -> None:
+        self._mode = mode
+
+    def value(self, val: int) -> int:
+        if val:
+            self._value = val
+        else:
+            return self._value

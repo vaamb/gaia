@@ -319,9 +319,10 @@ class Manager:
                 else:
                     self.logger.error("Failed to update sunrise and " +
                                       "sunset times")
-        self.logger.error("gaiaEngine is not connected to the Internet, " +
-                          "cannot download sun_times of the day")
-        raise ConnectionError
+        else:
+            self.logger.error("gaiaEngine is not connected to the Internet, " +
+                              "cannot download sun_times of the day")
+            raise ConnectionError
 
     def refresh_sun_times(self):
         need = []

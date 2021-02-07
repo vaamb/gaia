@@ -1,45 +1,59 @@
+from datetime import datetime
 import logging
 import random
 import time
 
-# for testing on computer purpose
-try:
-    from adafruit_blinka.microcontroller.bcm283x.pin import Pin
-except ImportError:
-    class Pin:
-        def __init__(self, bcm_nbr):
-            self._id = bcm_nbr
-            self._mode = 0
-            self._value = 0
+from adafruit_platformdetect import Board, Detector
 
-        def init(self, mode):
-            self._mode = mode
-
-        def value(self, val):
-            if val:
-                self._value = val
-            else:
-                return self._value
-
-import adafruit_veml7700  # adafruit-circuitpython-veml7700
-import adafruit_dht  # adafruit-circuitpython-dht + sudo apt-get install libgpiod2
-import board
-import busio
-
+from engine.config_parser import gaiaEngine_dir
 from .utils import get_dew_point, get_absolute_humidity, \
     temperature_converter, pin_translation
+
+detector = Detector()
+detect_board = Board(detector)
+
+if detect_board.any_raspberry_pi:
+    from adafruit_blinka.microcontroller.bcm283x.pin import Pin
+    import adafruit_veml7700  # adafruit-circuitpython-veml7700
+    import adafruit_dht  # adafruit-circuitpython-dht + sudo apt-get install libgpiod2
+    import board
+    import busio
+    from picamera import PiCamera
+    i2c = busio.I2C(board.SCL, board.SDA)
+else:
+    from .utils import Pin
 
 
 sensorLogger = logging.getLogger("eng.hardware_lib")
 
 
-i2c = busio.I2C(board.SCL, board.SDA)
+cache_dir = gaiaEngine_dir/"cache"
 
 
 def address_to_hex(address: str) -> int:
     if address in ["def", "default", "DEF", "DEFAULT"]:
         return 0
     return int(address, base=16)
+
+
+class cameraModule:
+    def __init__(self, ecosystem_name: str) -> None:
+        self.ecosystem_name = ecosystem_name
+        self._camera_folder = cache_dir/"camera"
+
+    def take_picture(self):
+        with PiCamera() as camera:
+            camera.resolution = (3280, 2464)
+            camera.start_preview()
+            # need at least 2 sec sleep for the camera to adapt to light level
+            time.sleep(5)
+            current_datetime = datetime.now().strftime("%Y.%m.%d-%H.%M.%S")
+            pic_name = f"{self.ecosystem_name}-{current_datetime}"
+            pic_path = self._camera_folder/pic_name
+            camera.capture(pic_path, format="png")
+
+    def take_video(self):
+        pass
 
 
 class hardware:
@@ -159,19 +173,31 @@ class DHTSensor(gpioSensor):
 
         if self._model.upper() == "DHT11":
             self._device = adafruit_dht.DHT11(self._pin)
-        elif self._model.upper() == "DHT12":
+        elif self._model.upper() == "DHT22":
             self._device = adafruit_dht.DHT22(self._pin)
         else:
             raise Exception("Unknown DHT model")
 
     def get_data(self) -> dict:
         data = {}
-        for retry in range(3):
+        for retry in range(5):
             try:
                 self._device.measure()
                 humidity = round(self._device.humidity, 2)
                 temperature = round(self._device.temperature, 2)
 
+            except RuntimeError as e:
+                time.sleep(2)
+                continue
+
+            except Exception as e:
+                sensorLogger.error(
+                    f"Sensor {self._name} encountered an error. "
+                    f"Error message: {e}")
+                data = {}
+                break
+
+            else:
                 if "humidity" in self._measure:
                     data["humidity"] = humidity
 
@@ -192,19 +218,6 @@ class DHTSensor(gpioSensor):
                         temperature_converter(absolute_humidity, "celsius",
                                               self._unit)
                 break
-
-            except RuntimeError as e:
-                print(e)
-                time.sleep(2)
-                continue
-
-            except Exception as e:
-                sensorLogger.error(
-                    f"Sensor {self._name} encountered an error. "
-                    f"Error message: {e}")
-                data = {}
-                break
-
         return data
 
 

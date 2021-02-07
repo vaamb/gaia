@@ -209,6 +209,9 @@ class _globalConfig:
         self._private_config.update(home)
 
 
+# ---------------------------------------------------------------------------
+#   default ecosystem configuration
+# ---------------------------------------------------------------------------
 DEFAULT_ECOSYSTEM_CFG = {
     "default": {
         "name": "",
