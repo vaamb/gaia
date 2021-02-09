@@ -309,7 +309,13 @@ class specificConfig:
             return False
 
     def set_management(self, parameter: str, value: bool) -> None:
-        self.config_dict["controls"][parameter] = value
+        self.config_dict["management"][parameter] = value
+
+    # TODO: keep up to date with subroutines.NAME
+    def get_started_subroutines(self) -> list:
+        subroutines = ("light", "sensors", "health", "climate")
+        return [subroutine for subroutine in subroutines
+                if self.get_management(subroutine)]
 
     """Environment related parameters"""
     @property

@@ -75,6 +75,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     variables = vars(args)
+    # TODO: delete this when testing is over
     variables["client"] = 1
     gaia = gaiaEngine(use_client=variables["client"],
                       use_db=variables["db"],

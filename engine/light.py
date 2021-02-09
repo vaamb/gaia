@@ -1,13 +1,13 @@
 from datetime import datetime, date
-import logging
 from threading import Event, Lock, Thread
 from time import time
 
 from simple_pid import PID
 
 from config import Config
-from engine.config_parser import configWatchdog, getConfig, localTZ
+from engine.config_parser import localTZ
 from engine.hardware_library import gpioSwitch
+from engine.subroutine_template import subroutineTemplate
 
 
 Kp = 0.01
@@ -16,34 +16,26 @@ Kd = 0.01
 lock = Lock()
 
 
-class gaiaLight:
+class gaiaLight(subroutineTemplate):
     NAME = "light"
 
-    def __init__(self, ecosystem: str) -> None:
-        configWatchdog.start()
-        self._config = getConfig(ecosystem)
-        self._ecosystem = self._config.name
-        self._logger = logging.getLogger(f"eng.{self._ecosystem}.Light")
-        self._logger.debug("Initializing gaiaLight")
-        self._timezone = localTZ
+    def __init__(self, ecosystem=None, engine=None) -> None:
+        super().__init__(ecosystem=ecosystem, engine=engine)
 
-        self._started = False
-        self._management = self._config.get_management("lighting")
+        self._timezone = localTZ
+        self._management = self._config.get_management("light")
         self._status = {"current": False, "last": False}
         self._mode = "automatic"
         self._method = self._config.light_method
         self._dimmable = {"value": False,  # self._config ...
                           "level": 100}
-
         self._lights = []
-
         self._pid = PID(Kp=Kp, Ki=Ki, Kd=Kd, output_limits=(20, 100))
         self._sun_times = {}
         self.update_sun_times()
         self._timer = 0
-        self._start_light_loop()
 
-        self._logger.debug("gaiaLight successfully initialized")
+        self._finish__init__()
 
     def _tune_light_level(self, hardware_uid: str) -> None:
         # TODO: use PWM
@@ -135,11 +127,7 @@ class gaiaLight:
 
             elif self._method == "elongate":
                 now = datetime.now().astimezone(self._timezone).time()
-                """
-                need to change this to calculate it once per day, or at method change
-                
-                """
-
+                # TODO: change this to calculate it once per day, or at method change
                 morning_end = (self._to_dt(self._sun_times["sunrise"]) + self._sun_times["offset"]).time()
                 evening_start = (self._to_dt(self._sun_times["sunset"]) - self._sun_times["offset"]).time()
                 # If time between lightning hours
@@ -179,8 +167,15 @@ class gaiaLight:
                     self._logger.info("Lights have been automatically turned off")
         self._status["last"] = self._status["current"]
 
+    def _start(self):
+        self._start_light_loop()
+
+    def _stop(self):
+        self._stop_light_loop()
+
     """API calls"""
     def update_sun_times(self) -> None:
+        # TODO: check if it works when not using elongate
         # lock thread as all the whole dict should be transformed at the "same time"
         # add a if method == elongate or mimic, and if connected
         lock.acquire()
@@ -194,66 +189,88 @@ class gaiaLight:
             lock.release()
 
     @property
-    def status(self) -> bool:
+    def light_status(self) -> bool:
         return self._status["current"]
 
     @property
     def mode(self) -> str:
         return self._mode
 
+    @mode.setter
+    def mode(self, value: str) -> None:
+        assert value in ("automatic", "manual")
+        self._mode = value
+
     @property
     def method(self) -> str:
         return self._method
+
+    @method.setter
+    def method(self, value: str) -> None:
+        assert value in ("elongate", "fixed", "mimic")
+        if value == "elongate":
+            self.update_sun_times()
+        self._method = value
 
     @property
     def lighting_hours(self) -> dict:
         hours = {
             "morning_start": self._sun_times["day"],
-            "morning_end": (self._to_dt(self._sun_times["sunrise"]) + self._sun_times["offset"]).time(),
-            "evening_start": (self._to_dt(self._sun_times["sunset"]) - self._sun_times["offset"]).time(),
             "evening_end": self._sun_times["night"]
         }
+        try:
+            hours["morning_end"] = ((self._to_dt(self._sun_times["sunrise"]) +
+                                     self._sun_times["offset"]).time())
+            hours["evening_start"] = ((self._to_dt(self._sun_times["sunset"]) -
+                                       self._sun_times["offset"]).time())
+        except KeyError:
+            hours["morning_end"] = None
+            hours["evening_start"] = None
         return hours
 
     @property
     def light_info(self) -> dict:
-        return {"status": self.status,
-                "mode": self.mode,
-                "method": self.method,
-                "lighting_hours": self.lighting_hours
-                }
+        return {
+            "light_status": self.light_status,
+            "mode": self.mode,
+            "method": self.method,
+            "lighting_hours": self.lighting_hours
+        }
 
-    """
-    @method.setter(self, method):
-        assert method in ["elongate", "fixed", "mimic"]
-        if method == "elongate":
-            self.update_sun_times
-        self._method = method
-    """
-
-    """
-    add countdown
-    """
-
+    # TODO: add countdown
     def set_light_on(self, countdown: float = 0) -> None:
-        self._mode = "manual"
-        self._status["current"] = True
-        additional_message = ""
-        if countdown:
-            additional_message = f" for {countdown} seconds"
-        self._logger.info(f"Lights have been manually turned on{additional_message}")
+        if self._started:
+            self._mode = "manual"
+            self._status["current"] = True
+            additional_message = ""
+            if countdown:
+                additional_message = f" for {countdown} seconds"
+            self._logger.info(
+                f"Lights have been manually turned on{additional_message}")
+        else:
+            raise RuntimeError(f"{self._subroutine_name} is not started in "
+                               f"engine {self._ecosystem}")
 
     def set_light_off(self, countdown: float = 0) -> None:
-        self._mode = "manual"
-        self._status["current"] = False
-        additional_message = ""
-        if countdown:
-            additional_message = f" for {countdown} seconds"
-        self._logger.info(f"Lights have been manually turned off{additional_message}")
+        if self._started:
+            self._mode = "manual"
+            self._status["current"] = False
+            additional_message = ""
+            if countdown:
+                additional_message = f" for {countdown} seconds"
+            self._logger.info(
+                f"Lights have been manually turned off{additional_message}")
+        else:
+            raise RuntimeError(f"{self._subroutine_name} is not started in "
+                               f"engine {self._ecosystem}")
 
     def set_light_auto(self) -> None:
-        self._mode = "automatic"
-        self._logger.info("Lights have been turned to automatic mode")
+        if self._started:
+            self._mode = "automatic"
+            self._logger.info("Lights have been turned to automatic mode")
+        else:
+            raise RuntimeError(f"{self._subroutine_name} is not started in "
+                               f"engine {self._ecosystem}")
 
     def start_countdown(self, countdown: float) -> None:
         if not isinstance(countdown, float):
@@ -295,7 +312,3 @@ class gaiaLight:
 
     def refresh_hardware(self) -> None:
         self._hardware_setup()
-
-    def stop(self) -> None:
-        #        self._stop_scheduler()
-        self._stop_light_loop()

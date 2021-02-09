@@ -1,6 +1,6 @@
 import random
 
-from engine.config_parser import configWatchdog, getConfig
+from engine.subroutine_template import subroutineTemplate
 
 
 class Chaos:
@@ -35,13 +35,12 @@ class Chaos:
             return self.chaos
 
 
-class gaiaClimate():
+class gaiaClimate(subroutineTemplate):
     NAME = "climate"
-    def __init__(self, ecosystem):
-        pass
 
-    def start(self):
-        pass
+    def __init__(self, ecosystem=None, engine=None) -> None:
+        super().__init__(ecosystem=ecosystem, engine=engine)
 
-    def stop(self):
-        pass
+        self._chaos = Chaos()
+
+        self._finish__init__()

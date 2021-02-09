@@ -31,7 +31,7 @@ cache_dir = gaiaEngine_dir/"cache"
 
 
 def address_to_hex(address: str) -> int:
-    if address in ["def", "default", "DEF", "DEFAULT"]:
+    if address.lower() in ["def", "default"]:
         return 0
     return int(address, base=16)
 
@@ -171,10 +171,11 @@ class DHTSensor(gpioSensor):
 
         self._unit = kwargs.pop("unit", "celsius")
 
+        # Load dht device. Rem: don't use pulseio as it uses 100% of one core
         if self._model.upper() == "DHT11":
-            self._device = adafruit_dht.DHT11(self._pin)
+            self._device = adafruit_dht.DHT11(self._pin, use_pulseio=False)
         elif self._model.upper() == "DHT22":
-            self._device = adafruit_dht.DHT22(self._pin)
+            self._device = adafruit_dht.DHT22(self._pin, use_pulseio=False)
         else:
             raise Exception("Unknown DHT model")
 

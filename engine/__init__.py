@@ -8,11 +8,11 @@ from time import sleep
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from config import Config
 from engine import config_parser
 from engine.climate import gaiaClimate
-from engine.config_parser import getIds, configWatchdog, globalConfig, getConfig, createEcosystem, manageEcosystem, \
-    delEcosystem, new_config_event, update as updateConfig
+from engine.config_parser import getIds, configWatchdog, globalConfig, \
+    getConfig, createEcosystem, manageEcosystem, delEcosystem, \
+    new_config_event, update as updateConfig
 from engine.health import gaiaHealth
 from engine.light import gaiaLight
 from engine.sensors import gaiaSensors
@@ -24,6 +24,7 @@ __all__ = ["autoManager", "enginesDict",
            "createEcosystem", "manageEcosystem", "delEcosystem",
            "globalConfig", "getConfig", "updateConfig"]
 
+# TODO: keep specificConfig.get_subroutines() up to date
 SUBROUTINES = (gaiaLight, gaiaSensors, gaiaHealth, gaiaClimate)
 
 
@@ -42,31 +43,39 @@ class Engine:
 
     def __init__(self, ecosystem):
         self._config = getConfig(ecosystem)
-        self._ecosystem_id = self._config.ecosystem_id
+        self._ecosystem_uid = self._config.ecosystem_id
         self._ecosystem_name = self._config.name
         self.logger = logging.getLogger(f"eng.{self._ecosystem_name}")
+        self.logger.debug("Initializing Engine ...")
+
+        self._alarms = []
+        self.subroutines = {}
+        try:
+            for subroutine in SUBROUTINES:
+                self.subroutines[subroutine.NAME] = subroutine(engine=self)
+        except Exception as e:
+            self.logger.error("Error during engine initialization. " +
+                              f"ERROR msg: {e}")
 
         self._started = False
-        self._subroutines = {}
-        self._alarms = []
 
     def start(self):
         if not self._started:
             self.logger.info("Starting Engine for ecosystem " +
                              f"{self._ecosystem_name}")
             configWatchdog.start()
-            self._start_scheduler()
-            threads = []
-            # Initialize subroutines in thread as they are IO bound. After 
+
+            # Start subroutines in thread as they are IO bound. After
             # subroutines initialization is finished, all threads are deleted 
             # and IO-bound subroutines tasks are handled in their own thread.
-            for subroutine in SUBROUTINES:  # add a check for subroutine management
-                t = Thread(target=self._load_subroutine, args=(subroutine,))
-                t.name = f"{subroutine.NAME}Loader-{self._ecosystem_id}"
+            threads = []
+            for subroutine in self._config.get_started_subroutines():
+                t = Thread(target=self._start_subroutine, args=(subroutine, ))
+                t.name = f"{self._ecosystem_uid}-{subroutine.NAME}Starter"
                 t.start()
                 threads.append(t)
-            # Save changes in config
             if not self.config_dict["status"]:
+                # TODO: save changes in config
                 self.config_dict["status"] = True
 
             self.logger.info(f"Engine for ecosystem {self._ecosystem_name} " +
@@ -76,75 +85,25 @@ class Engine:
             del threads
             self._started = True
         else:
-            print(f"Engine {self._ecosystem_name} is already running")
+            raise RuntimeError(f"Engine {self._ecosystem_name} is already running")
 
     def stop(self):
-        self.logger.info("Stopping engine ...")
-        self._stop_scheduler()
-        self._started = False
-        stopped_subroutines = []
-        for subroutine in self._subroutines:
-            subroutine_name = subroutine
-            try:
-                self._subroutines[subroutine].stop()
-                self.logger.debug(f"{subroutine_name.capitalize()} " +
-                                  "subroutine was stopped")
-                stopped_subroutines.append(subroutine)
-            except Exception as e:
-                self.logger.error(f"{subroutine_name.capitalize()} subroutine " +
-                                  f"was not shut down properly. ERROR msg: {e}")
-
-        for subroutine in stopped_subroutines:
-            self._subroutines.pop(subroutine)
-        if not self._subroutines:
-            if self.config_dict["status"]:
-                self.config_dict["status"] = False
-            # save changes in config
-            self.logger.info("Engine stopped")
-            return
-        raise Exception
-
-    def _load_subroutine(self, subroutine):
-        try:
-            self.logger.debug(f"Starting {subroutine.NAME} subroutine")
-            self._subroutines[subroutine.NAME] = subroutine(self._ecosystem_id)
-            self.logger.debug(f"{subroutine.NAME.capitalize()} subroutine " +
-                              "successfully started")
-        except Exception as e:
-            self.logger.error(f"{subroutine.NAME.capitalize()} subroutine " +
-                              f"was not successfully started. ERROR msg: {e}")
-
-    def _start_scheduler(self):
-        h, m = Config.HEALTH_LOGGING_TIME.split("h")
-        self._scheduler = BackgroundScheduler()
-        self._scheduler.add_job(self._health_routine, trigger="cron",
-                                hour=h, minute=m, misfire_grace_time=15 * 60,
-                                id="health")
-        self._scheduler.start()
-
-    def _stop_scheduler(self):
-        self.logger.info("Closing the tasks scheduler")
-        self._scheduler.remove_job("health")
-        self._scheduler.shutdown()
-        del self._scheduler
-        self.logger.info("The tasks scheduler was closed properly")
-
-    def _health_routine(self):
-        mode = self._subroutines["light"].mode or "automatic"
-        status = self._subroutines["light"].status or False
-        try:
-            self.set_light_on()
-            self._subroutines["health"].take_picture()
-            if mode == "automatic":
-                self.set_light_auto()
+        if self._started:
+            self.logger.info("Stopping engine ...")
+            for subroutine in [i for i in self.subroutines.keys()]:
+                self.subroutines[subroutine.NAME].stop()
+            if not any([subroutine.status for subroutine in self.subroutines]):
+                if self.config_dict["status"]:
+                    self.config_dict["status"] = False
+                # TODO: save changes in config
+                self.logger.info("Engine successfully stopped")
             else:
-                if status:
-                    self.set_light_on()
-                else:
-                    self.set_light_off()
-        except KeyError:
-            raise RuntimeError("Health and/or light subroutine is/are " +
-                               f"not running in engine {self._ecosystem_name}")
+                self.logger.error("Failed to stop engine")
+                raise Exception(f"Failed to stop engine for {self._ecosystem_name}")
+            self._started = False
+
+    def _start_subroutine(self, subroutine):
+        self.subroutines[subroutine.NAME].start()
 
     """API calls"""
     # Configuration info
@@ -154,7 +113,7 @@ class Engine:
 
     @property
     def uid(self):
-        return self._ecosystem_id
+        return self._ecosystem_uid
 
     @property
     def config_dict(self):
@@ -167,77 +126,48 @@ class Engine:
     # Light
     def update_sun_times(self):
         subroutine = "light"
-        try:
-            self._subroutines[subroutine].update_sun_times()
-        # The subroutine is not currently running
-        except KeyError:
-            raise RuntimeError(f"{subroutine.capitalize()} subroutine is " +
-                               f"not running in engine {self._ecosystem_name}")
+        self.subroutines[subroutine].update_sun_times()
 
     @property
     def light_info(self):
-        subroutine = "light"
-        try:
-            return self._subroutines[subroutine].light_info
-        # The subroutine is not currently running
-        except KeyError:
-            return {"status": False,
-                    "mode": "NA",
-                    "method": self._config.light_method}
+        return self.subroutines["light"].light_info
 
     def set_light_on(self, countdown=None):
-        subroutine = "light"
         try:
-            self._subroutines[subroutine].set_light_on(countdown=countdown)
+            self.subroutines["light"].set_light_on(countdown=countdown)
         # The subroutine is not currently running
-        except KeyError:
-            raise RuntimeError(f"{subroutine.capitalize()} subroutine is " +
-                               f"not running in engine {self._ecosystem_name}")
+        except RuntimeError as e:
+            print(e)
 
     def set_light_off(self, countdown=None):
-        subroutine = "light"
         try:
-            self._subroutines[subroutine].set_light_off(countdown=countdown)
+            self.subroutines["light"].set_light_off(countdown=countdown)
         # The subroutine is not currently running
-        except KeyError:
-            raise RuntimeError(f"{subroutine.capitalize()} subroutine is " +
-                               f"not running in engine {self._ecosystem_name}")
+        except RuntimeError as e:
+            print(e)
 
     def set_light_auto(self):
-        subroutine = "light"
         try:
-            self._subroutines[subroutine].set_light_auto()
-        except KeyError:
-            # The subroutine is not currently running
-            raise RuntimeError(f"{subroutine.capitalize()} subroutine is " +
-                               f"not running in engine {self._ecosystem_name}")
+            self.subroutines["light"].set_light_auto()
+        # The subroutine is not currently running
+        except RuntimeError as e:
+            print(e)
 
     # Sensors
     @property
     def sensors_data(self):
-        subroutine = "sensors"
-        try:
-            return self._subroutines[subroutine].sensors_data
-        except KeyError:
-            # The subroutine is not currently running
-            raise RuntimeError(f"{subroutine.capitalize()} subroutine is " +
-                               f"not running in engine {self._ecosystem_name}")
+        return self.subroutines["sensors"].sensors_data
 
     # Health
     @property
     def plants_health(self):
-        subroutine = "health"
-        try:
-            return self._subroutines["health"].get_health_data()
-        except KeyError:
-            # The subroutine is not currently running
-            raise RuntimeError(f"{subroutine.capitalize()} subroutine is " +
-                               f"not running in engine {self._ecosystem_name}")
+        return self.subroutines["health"].health_data
 
     # Get subroutines currently running
     @property
     def subroutine_running(self):
-        return [subroutine.NAME for subroutine in self._subroutines]
+        return [subroutine.NAME for subroutine in self.subroutines
+                if self.subroutines[subroutine].status]
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +217,7 @@ class Manager:
 
     def _download_sun_times(self):
         cache_dir = config_parser.gaiaEngine_dir / "cache"
-        if not cache_dir:
+        if not cache_dir.exists():
             os.mkdir(cache_dir)
         if config_parser.is_connected():
             trials = 5

@@ -92,33 +92,28 @@ class gaiaNamespace(socketio.ClientNamespace):
         self.emit("config", config, )
 
     def on_send_sensors_data(self) -> None:
-        data = {}
+        sensors_data = {}
         for ecosystem_id in self.engines:
-            try:
-                data[ecosystem_id] = self.engines[ecosystem_id].sensors_data
-            except RuntimeError:
-                continue
-        self.emit("sensors_data", data)
+            data = self.engines[ecosystem_id].sensors_data
+            if data:
+                sensors_data[ecosystem_id] = data
+        self.emit("sensors_data", sensors_data)
 
     def on_send_health_data(self) -> None:
-        data = {}
+        health_data = {}
         for ecosystem_id in self.engines:
-            try:
-                health = self.engines[ecosystem_id].plants_health
-                if health:
-                    data[ecosystem_id] = health
-            except RuntimeError:
-                continue
-        self.emit("health_data", data)
+            data = self.engines[ecosystem_id].plants_health
+            if data:
+                health_data[ecosystem_id] = data
+        self.emit("health_data", health_data)
 
     def on_send_light_data(self) -> None:
-        data = {}
+        light_data = {}
         for ecosystem_id in self.engines:
-            try:
-                data[ecosystem_id] = self.engines[ecosystem_id].light_info
-            except RuntimeError:
-                continue
-        self.emit("light_data", data)
+            data = self.engines[ecosystem_id].light_info
+            if data:
+                light_data[ecosystem_id] = data
+        self.emit("light_data", light_data)
 
     def on_turn_light_on(self, message: dict) -> None:
         ecosystem = message["ecosystem"]
