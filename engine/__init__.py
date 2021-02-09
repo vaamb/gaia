@@ -71,7 +71,7 @@ class Engine:
             threads = []
             for subroutine in self._config.get_started_subroutines():
                 t = Thread(target=self._start_subroutine, args=(subroutine, ))
-                t.name = f"{self._ecosystem_uid}-{subroutine.NAME}Starter"
+                t.name = f"{self._ecosystem_uid}-{subroutine}Starter"
                 t.start()
                 threads.append(t)
             if not self.config_dict["status"]:
@@ -103,7 +103,7 @@ class Engine:
             self._started = False
 
     def _start_subroutine(self, subroutine):
-        self.subroutines[subroutine.NAME].start()
+        self.subroutines[subroutine].start()
 
     """API calls"""
     # Configuration info
