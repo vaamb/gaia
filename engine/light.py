@@ -32,9 +32,9 @@ class gaiaLight(subroutineTemplate):
         self._lights = []
         self._pid = PID(Kp=Kp, Ki=Ki, Kd=Kd, output_limits=(20, 100))
         self._sun_times = {}
+        # TODO: find a way update_sun_times() is called after download from manager
         self.update_sun_times()
         self._timer = 0
-
         self._finish__init__()
 
     def _tune_light_level(self, hardware_uid: str) -> None:
@@ -47,10 +47,11 @@ class gaiaLight(subroutineTemplate):
     def _add_light(self, hardware_uid: str) -> None:
         name = self._config.IO_dict[hardware_uid]["name"]
         light = gpioSwitch(
-            hardware_uid=hardware_uid,
+            uid=hardware_uid,
+            name=name,
             address=self._config.IO_dict[hardware_uid]["address"],
             model=self._config.IO_dict[hardware_uid]["model"],
-            name=name,
+            type="light",
             level=self._config.IO_dict[hardware_uid]["level"],
         )
         light.turn_off()
@@ -179,8 +180,8 @@ class gaiaLight(subroutineTemplate):
         # lock thread as all the whole dict should be transformed at the "same time"
         # add a if method == elongate or mimic, and if connected
         lock.acquire()
+        self._sun_times.update(self._config.time_parameters)
         try:
-            self._sun_times.update(self._config.time_parameters)
             self._sun_times.update(self._config.sun_times)
             sunrise = self._to_dt(self._sun_times["sunrise"])
             twilight_begin = self._to_dt(self._sun_times["twilight_begin"])
@@ -208,7 +209,7 @@ class gaiaLight(subroutineTemplate):
     @method.setter
     def method(self, value: str) -> None:
         assert value in ("elongate", "fixed", "mimic")
-        if value == "elongate":
+        if value in ("elongate", "mimic"):
             self.update_sun_times()
         self._method = value
 
@@ -265,6 +266,7 @@ class gaiaLight(subroutineTemplate):
                                f"engine {self._ecosystem}")
 
     def set_light_auto(self) -> None:
+        # TODO: add countdown
         if self._started:
             self._mode = "automatic"
             self._logger.info("Lights have been turned to automatic mode")

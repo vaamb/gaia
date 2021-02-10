@@ -1,3 +1,6 @@
+import copy
+from datetime import date, datetime
+import hashlib
 import json
 import logging
 import logging.config
@@ -10,19 +13,19 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from engine import config_parser
 from engine.climate import gaiaClimate
-from engine.config_parser import getIds, configWatchdog, globalConfig, \
+from engine.config_parser import getIds, configWatchdog, \
     getConfig, createEcosystem, manageEcosystem, delEcosystem, \
-    new_config_event, update as updateConfig
+    new_config_event, updateConfig
 from engine.health import gaiaHealth
 from engine.light import gaiaLight
 from engine.sensors import gaiaSensors
 
 
-__all__ = ["autoManager", "enginesDict",
+__all__ = ["autoManager", "get_enginesDict",
            "createEngine", "getEngine", "startEngine", "stopEngine", "delEngine",
            "Engine", "gaiaLight", "gaiaSensors", "gaiaHealth", "gaiaClimate",
            "createEcosystem", "manageEcosystem", "delEcosystem",
-           "globalConfig", "getConfig", "updateConfig"]
+           "getConfig", "updateConfig"]
 
 # TODO: keep specificConfig.get_subroutines() up to date
 SUBROUTINES = (gaiaLight, gaiaSensors, gaiaHealth, gaiaClimate)
@@ -46,24 +49,32 @@ class Engine:
         self._ecosystem_uid = self._config.ecosystem_id
         self._ecosystem_name = self._config.name
         self.logger = logging.getLogger(f"eng.{self._ecosystem_name}")
-        self.logger.debug("Initializing Engine ...")
+        self.logger.info(f"Initializing Engine")
 
         self._alarms = []
         self.subroutines = {}
         try:
             for subroutine in SUBROUTINES:
+                # TODO: origin of circular ref
                 self.subroutines[subroutine.NAME] = subroutine(engine=self)
         except Exception as e:
-            self.logger.error("Error during engine initialization. " +
+            self.logger.error("Error during Engine initialization. " +
                               f"ERROR msg: {e}")
 
         self._started = False
+        self.logger.debug(f"Engine initialization successful")
+
+    def __eq__(self, other):
+        h = hashlib.sha256()
+        h.update(json.dumps(self.config, sort_keys=True).encode())
+        h.update(json.dumps(self.subroutines_started, sort_keys=True).encode())
+        return h.digest() == other
 
     def start(self):
         if not self._started:
-            self.logger.info("Starting Engine for ecosystem " +
-                             f"{self._ecosystem_name}")
-            configWatchdog.start()
+            self.logger.info("Starting Engine")
+            if not configWatchdog.status():
+                configWatchdog.start()
 
             # Start subroutines in thread as they are IO bound. After
             # subroutines initialization is finished, all threads are deleted 
@@ -74,14 +85,18 @@ class Engine:
                 t.name = f"{self._ecosystem_uid}-{subroutine}Starter"
                 t.start()
                 threads.append(t)
-            if not self.config_dict["status"]:
-                # TODO: save changes in config
-                self.config_dict["status"] = True
-
-            self.logger.info(f"Engine for ecosystem {self._ecosystem_name} " +
-                             "successfully started")
-            for t in threads:
-                t.join()
+            if not self.config["status"]:
+                # TODO: save changes in config?
+                # (for now, status refers to whether Engine SHOULD be on or not)
+                self.config["status"] = True
+            try:
+                for t in threads:
+                    t.join()
+            except Exception as e:
+                self._logger.error(
+                    f"Engine was not successfully started. ERROR msg: {e}")
+                raise e
+            self.logger.debug(f"Engine successfully started")
             del threads
             self._started = True
         else:
@@ -91,15 +106,16 @@ class Engine:
         if self._started:
             self.logger.info("Stopping engine ...")
             for subroutine in [i for i in self.subroutines.keys()]:
-                self.subroutines[subroutine.NAME].stop()
-            if not any([subroutine.status for subroutine in self.subroutines]):
-                if self.config_dict["status"]:
-                    self.config_dict["status"] = False
+                self.subroutines[subroutine].stop()
+            if not any([self.subroutines[subroutine].status
+                        for subroutine in self.subroutines]):
+                if self.config["status"]:
+                    self.config["status"] = False
                 # TODO: save changes in config
-                self.logger.info("Engine successfully stopped")
+                self.logger.debug("Engine successfully stopped")
             else:
-                self.logger.error("Failed to stop engine")
-                raise Exception(f"Failed to stop engine for {self._ecosystem_name}")
+                self.logger.error("Failed to stop Engine")
+                raise Exception(f"Failed to stop Engine for {self._ecosystem_name}")
             self._started = False
 
     def _start_subroutine(self, subroutine):
@@ -116,17 +132,16 @@ class Engine:
         return self._ecosystem_uid
 
     @property
-    def config_dict(self):
-        return self._config.config_dict
-
-    @property
     def status(self):
         return self._started
 
+    @property
+    def config(self):
+        return self._config.config_dict
+
     # Light
     def update_sun_times(self):
-        subroutine = "light"
-        self.subroutines[subroutine].update_sun_times()
+        self.subroutines["light"].update_sun_times()
 
     @property
     def light_info(self):
@@ -165,22 +180,22 @@ class Engine:
 
     # Get subroutines currently running
     @property
-    def subroutine_running(self):
-        return [subroutine.NAME for subroutine in self.subroutines
+    def subroutines_started(self):
+        return [subroutine for subroutine in self.subroutines
                 if self.subroutines[subroutine].status]
 
 
 # ---------------------------------------------------------------------------
-#   Manager class
+#   _enginesManager class
 # ---------------------------------------------------------------------------
-class Manager:
+class _enginesManager:
     """Create an Engine manager that will coordinate the Engines in case
-    multiple engines are run on a single computer.
+    multiple Engines are run on a single computer.
 
     Under normal circumstances only one Engine instance should be created
     for each ecosystem. The manager makes sure this is the case. The 
-    manager is automatically instantiated at module load and should be
-    accessed through module functions
+    manager is automatically instantiated if needed and should be
+    accessed through module functions (cf bottom of the file).
     """
 
     def __init__(self):
@@ -196,12 +211,11 @@ class Manager:
         self.stop_engines = False
         self.clear_manager = False
 
+    # TODO: check startup without internet
     def start_momentsManager(self):
         self.logger.debug("Starting the sun_times manager")
         self._scheduler = BackgroundScheduler()
-        # No need to use ``_update_moments`` as no engine should have
-        # started
-        self.refresh_sun_times()  # put in in thread as it is IO bound
+        self.refresh_sun_times()
         self._scheduler.add_job(self.refresh_sun_times, "cron",
                                 hour="1", misfire_grace_time=15 * 60,
                                 id="sun_times")
@@ -216,13 +230,32 @@ class Manager:
         self._scheduler = None
 
     def _download_sun_times(self):
+        global_config = getConfig()
         cache_dir = config_parser.gaiaEngine_dir / "cache"
         if not cache_dir.exists():
             os.mkdir(cache_dir)
-        if config_parser.is_connected():
+
+        # Determine if the file needs to be updated
+        need_update = True
+        try:
+            update_epoch = cache_dir.stat().st_ctime
+            update_dt = datetime.fromtimestamp(update_epoch)
+        except FileNotFoundError:
+            need_update = True
+
+        if update_dt.date() < date.today():
+            need_update = False
+            self.logger.info("Sun times already up to date")
+
+        if not config_parser.is_connected():
+            self.logger.error("gaiaEngine is not connected to the Internet, " +
+                              "cannot download sun_times of the day")
+            raise ConnectionError
+
+        if need_update:
             trials = 5
-            latitude = globalConfig.home_coordinates["latitude"]
-            longitude = globalConfig.home_coordinates["longitude"]
+            latitude = global_config.home_coordinates["latitude"]
+            longitude = global_config.home_coordinates["longitude"]
             count = 1
             while True:
                 try:
@@ -235,7 +268,7 @@ class Manager:
                 except ConnectionError:
                     pass
                 else:
-                    with open(cache_dir / "sunrise.cch", "w") as outfile:
+                    with open(cache_dir / "sunrise.json", "w") as outfile:
                         json.dump(results, outfile)
                     self.logger.info("Sunrise and sunset times successfully " +
                                      "updated")
@@ -249,32 +282,34 @@ class Manager:
                 else:
                     self.logger.error("Failed to update sunrise and " +
                                       "sunset times")
-        else:
-            self.logger.error("gaiaEngine is not connected to the Internet, " +
-                              "cannot download sun_times of the day")
-            raise ConnectionError
+                    raise ConnectionError
 
     def refresh_sun_times(self):
         need = []
         for engine in self.engines:
             try:
-                if globalConfig.config_dict[engine]["environment"]["light"] in ["place", "elongate"]:
+                if self.engines[engine].config["environment"]["light"] in ("mimic", "elongate"):
                     need.append(engine)
             except KeyError:
                 pass
         # return an exception NotConnected if not connected and exception NotRequired if no engine need it
-        if need:
+        if any(need):
             try:
                 # need to handle not connected now
                 self._download_sun_times()
             except ConnectionError:
-                pass
-            for engine in need:
-                try:
-                    self.engines[engine].update_sun_times()
-                except RuntimeError:
-                    # engine created but light loop not started yet
-                    pass
+                for engine in need:
+                    self.engines[engine].config["environment"]["light"] = "fixed"
+                # TODO: make retry possible after a first error
+                self.logger.warning("gaiaEngine could not download sun times."
+                                    "engines light mode has been turned to 'fixed'")
+            else:
+                for engine in need:
+                    try:
+                        self.engines[engine].update_sun_times()
+                    # Except if engine not initialized yet
+                    except KeyError:
+                        pass
         else:
             print("No need to refresh sun_times")
 
@@ -325,12 +360,14 @@ class Manager:
                             "not been created yet")
         return False
 
-    def stopEngine(self, ecosystem):
+    def stopEngine(self, ecosystem, clean=False):
         ecosystem_id, ecosystem_name = getIds(ecosystem)
         if ecosystem_id in self.engines:
             if ecosystem_id in self.engines_started:
                 engine = self.engines[ecosystem_id]
                 engine.stop()
+                if clean:
+                    self.delEngine(ecosystem_id)
                 self.engines_started.remove(ecosystem_id)
                 self.logger.info(f"Engine for ecosystem {ecosystem_name} " +
                                  "has been stopped")
@@ -357,6 +394,9 @@ class Manager:
                                   "First need to stop it")
                 return False
             else:
+                for subroutine in [subroutine for subroutine in
+                                   self.engines[ecosystem_id].subroutines.keys()]:
+                    del self.engines[ecosystem_id].subroutines[subroutine]
                 del self.engines[ecosystem_id]
                 self.logger.info(f"Engine for ecosystem {ecosystem_name} " +
                                  "has been deleted")
@@ -424,86 +464,103 @@ class Manager:
             return False
 
 
-_manager = Manager()
-enginesDict = _manager.engines
+_engines_manager = None
 
 
-class autoManager:
+def get_enginesDict() -> dict:
+    global _engines_manager
+    if not _engines_manager:
+        _engines_manager = _enginesManager()
+    return _engines_manager.engines
+
+
+# ---------------------------------------------------------------------------
+#   _autoManager class
+# ---------------------------------------------------------------------------
+class _autoManager:
     def __init__(self):
+        """ Auto start and stops Engines based on configuration files.
+
+        This class should be accessed through the dummy class autoManager which
+        makes sure only one instance of _autoManager is created.
+        """
         self.logger = logging.getLogger("eng.autoManager")
-        self.thread = None
+        self._thread = None
         self.stop_engines = False
         self.clear_manager = False
         self._joiner = Event()
-        self.started = False
+        self._started = False
 
-    def loop(self):
-        configWatchdog.start()
+    def _loop(self):
+        global_config = getConfig()
         while True:
             new_config_event.wait()
             # this happens when stopping autoManager
             if self.stop_engines:
                 break
             expected_started = []
-            to_delete = list(enginesDict.keys())
-            for ecosystem in globalConfig.ecosystems_id:
+            to_delete = list(_engines_manager.engines.keys())
+            for ecosystem in global_config.ecosystems_id:
                 # create engine if it doesn't exist
-                if ecosystem not in enginesDict:
-                    _manager.createEngine(ecosystem)
+                if ecosystem not in _engines_manager.engines:
+                    _engines_manager.createEngine(ecosystem)
                 # remove the ecosystem from the to_delete_list
                 else:
                     to_delete.remove(ecosystem)
                 # check if the engine is expected to be running
-                if globalConfig.status(ecosystem) is True:
+                if global_config.status(ecosystem) is True:
                     expected_started.append(ecosystem)
 
             # start engines which are expected to run and are not running
             for ecosystem in expected_started:
-                if ecosystem not in _manager.engines_started:
-                    _manager.startEngine(ecosystem)
+                if ecosystem not in _engines_manager.engines_started:
+                    _engines_manager.startEngine(ecosystem)
             # start engines which are not expected to run and are currently
             # running
-            for ecosystem in _manager.engines_started:
+            for ecosystem in _engines_manager.engines_started:
                 if ecosystem not in expected_started:
-                    _manager.stopEngine(ecosystem)
+                    _engines_manager.stopEngine(ecosystem)
             # delete engines which were created and are no longer on the
             # config file
             for ecosystem in to_delete:
-                _manager.delEngine(ecosystem)
+                _engines_manager.delEngine(ecosystem)
             new_config_event.clear()
             self._joiner.set()
         if self.stop_engines:
-            for ecosystem in list(_manager.engines_started):
-                _manager.stopEngine(ecosystem)
-        if self.clear_manager:
-            to_delete = list(enginesDict.keys())
+            for ecosystem in list(_engines_manager.engines_started):
+                _engines_manager.stopEngine(ecosystem)
+        if self._engines_manager:
+            to_delete = list(_engines_manager.engines.keys())
             for ecosystem in to_delete:
-                _manager.delEngine(ecosystem)
-        sleep(10)
+                _engines_manager.delEngine(ecosystem)
 
     def start(self, joint_start=False):
-        if not self.started:
-            _manager.logger.info("Starting the Engines autoManager ...")
-            _manager.logger = self.logger
+        if not self._started:
+            global _engines_manager
+            if not _engines_manager:
+                _engines_manager = _enginesManager()
 
-            self.thread = Thread(target=self.loop)
-            self.thread.name = "autoManager"
-            self.thread.start()
+            _engines_manager.logger.info("Starting the Engines autoManager ...")
+            _engines_manager.logger = self.logger
+
+            self._thread = Thread(target=self._loop)
+            self._thread.name = "autoManager"
+            self._thread.start()
             # send a new config signal to fire the first loop
             new_config_event.set()
             if joint_start:
                 self._joiner.wait()
             self.logger.info("Engines autoManager started")
-            self.started = True
+            self._started = True
         else:
             raise RuntimeError("autoManager can only be started once")
 
     def start_join(self):
-        if self.started:
+        if self._started:
             self._joiner.wait()
 
     def stop(self, stop_engines=True, clear_manager=True):
-        if self.started:
+        if self._started:
             self.logger.info("Stopping the Engines autoManager ...")
             self.stop_engines = stop_engines
             if clear_manager:
@@ -511,23 +568,54 @@ class autoManager:
                 self.clear_manager = True
             # send a new config signal so a last loops starts
             new_config_event.set()
-            self.thread.join()
-            self.thread = None
+            self._thread.join()
+            self._thread = None
             self._joiner.clear()
-            _manager.logger = logging.getLogger("eng.Manager")
-            _manager.logger.info("autoManager stopped")
-            self.started = False
+            _engines_manager.logger = logging.getLogger("eng.Manager")
+            _engines_manager.logger.info("autoManager stopped")
+            self._started = False
 
+    @property
     def status(self):
-        return self.started
+        return self._started
 
 
-autoManager = autoManager()
+_auto_manager = None
 
 
 # ---------------------------------------------------------------------------
-#   Functions to interact with the module
+#   Classe and functions to interact with the module
 # ---------------------------------------------------------------------------
+class autoManager:
+    """ Dummy class to interact with _autoManager()
+
+    This class will instantiate _autoManager() if needed and allow to interact
+    with it. This allows not to launch an instance of _autoManager when loading
+    this module.
+    """
+
+    @staticmethod
+    def start(joint_start=False) -> None:
+        global _auto_manager
+        if not _auto_manager:
+            _auto_manager = _autoManager()
+        _auto_manager.start(joint_start=joint_start)
+
+    @staticmethod
+    def stop(stop_engines=True, clear_manager=True) -> None:
+        global _auto_manager
+        if not _auto_manager:
+            _auto_manager = _autoManager()
+        _auto_manager.stop(stop_engines=stop_engines,
+                           clear_manager=clear_manager)
+
+    @staticmethod
+    def status() -> bool:
+        if not _auto_manager:
+            return False
+        return _auto_manager.status
+
+
 def createEngine(ecosystem, start=False):
     """Create an engine for the specified ecosystem.
     
@@ -543,8 +631,11 @@ def createEngine(ecosystem, start=False):
     
     Rem: cannot be used if the autoManager has been started.
     """
-    if not autoManager.started:
-        return _manager.createEngine(ecosystem, start=start)
+    if not autoManager.status():
+        global _engines_manager
+        if not _engines_manager:
+            _engines_manager = _enginesManager()
+        return _engines_manager.createEngine(ecosystem, start=start)
     raise Exception("You cannot manually manage engines while the " +
                     "autoManager is running")
 
@@ -563,8 +654,11 @@ def getEngine(ecosystem, start=False):
     
     Rem: cannot be used if the autoManager has been started.
     """
-    if not autoManager.started:
-        return _manager.getEngine(ecosystem, start=start)
+    if not autoManager.status():
+        global _engines_manager
+        if not _engines_manager:
+            _engines_manager = _enginesManager()
+        return _engines_manager.getEngine(ecosystem, start=start)
     raise Exception("You cannot manually manage engines while the " +
                     "autoManager is running")
 
@@ -580,8 +674,11 @@ def startEngine(ecosystem):
     
     Rem: cannot be used if the autoManager has been started.
     """
-    if not autoManager.started:
-        return _manager.startEngine(ecosystem)
+    if not autoManager.status():
+        global _engines_manager
+        if not _engines_manager:
+            _engines_manager = _enginesManager()
+        return _engines_manager.startEngine(ecosystem)
     raise Exception("You cannot manually manage engines while the " +
                     "autoManager is running")
 
@@ -595,8 +692,11 @@ def stopEngine(ecosystem):
     Return ``True`` if the engine and all its subroutines stopped
     correctly, ``False`` otherwise.
     """
-    if not autoManager.started:
-        return _manager.stopEngine(ecosystem)
+    if not autoManager.status():
+        global _engines_manager
+        if not _engines_manager:
+            _engines_manager = _enginesManager()
+        return _engines_manager.stopEngine(ecosystem, clean=False)
     raise Exception("You cannot manually manage engines while the autoManager is running")
 
 
@@ -609,8 +709,11 @@ def delEngine(ecosystem):
     
     Return ``True`` if the engine is deleted, ``False`` otherwise.
     """
-    if not autoManager.started:
-        return _manager.delEngine(ecosystem)
+    if not autoManager.status():
+        global _engines_manager
+        if not _engines_manager:
+            _engines_manager = _enginesManager()
+        return _engines_manager.delEngine(ecosystem)
     raise Exception("You cannot manually manage engines while the autoManager is running")
 
 
@@ -628,8 +731,11 @@ def createSubroutine(ecosystem, subroutine):
     
     Rem: cannot be used if the autoManager has been started.
     """
-    if not autoManager.started:
-        return _manager.createSubroutine(ecosystem, subroutine)
+    if not autoManager.status():
+        global _engines_manager
+        if not _engines_manager:
+            _engines_manager = _enginesManager()
+        return _engines_manager.createSubroutine(ecosystem, subroutine)
     raise Exception("You cannot manually manage subroutines while the autoManager is running")
 
 
@@ -647,8 +753,11 @@ def stopSubroutine(ecosystem, subroutine):
     
     Rem: cannot be used if the autoManager has been started.
     """
-    if not autoManager.started:
-        return _manager.stopSubroutine(ecosystem, subroutine)
+    if not autoManager.status():
+        global _engines_manager
+        if not _engines_manager:
+            _engines_manager = _enginesManager()
+        return _engines_manager.stopSubroutine(ecosystem, subroutine)
     raise Exception("You cannot manually manage subroutines while the autoManager is running")
 
 

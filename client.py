@@ -87,47 +87,77 @@ class gaiaNamespace(socketio.ClientNamespace):
         self.emit("pong", data=pong)
 
     def on_send_config(self) -> None:
-        config = {ecosystem_id: self.engines[ecosystem_id].config_dict
+        config = {ecosystem_id: self.engines[ecosystem_id].config
                   for ecosystem_id in self.engines}
         self.emit("config", config, )
 
     def on_send_sensors_data(self) -> None:
         sensors_data = {}
         for ecosystem_id in self.engines:
-            data = self.engines[ecosystem_id].sensors_data
-            if data:
-                sensors_data[ecosystem_id] = data
+            try:
+                data = self.engines[ecosystem_id].sensors_data
+                if data:
+                    sensors_data[ecosystem_id] = data
+            # Except when subroutines are still loading
+            except KeyError:
+                pass
         self.emit("sensors_data", sensors_data)
 
     def on_send_health_data(self) -> None:
         health_data = {}
         for ecosystem_id in self.engines:
-            data = self.engines[ecosystem_id].plants_health
-            if data:
-                health_data[ecosystem_id] = data
+            try:
+                data = self.engines[ecosystem_id].plants_health
+                if data:
+                    health_data[ecosystem_id] = data
+            # Except when subroutines are still loading
+            except KeyError:
+                pass
         self.emit("health_data", health_data)
 
-    def on_send_light_data(self) -> None:
+    def on_send_light_data(self, ecosystem_uid: str = None) -> None:
         light_data = {}
-        for ecosystem_id in self.engines:
-            data = self.engines[ecosystem_id].light_info
-            if data:
-                light_data[ecosystem_id] = data
+
+        if ecosystem_uid:
+            ecosystem_uids = [ecosystem_uid]
+        else:
+            ecosystem_uids = [e_uid for e_uid in self.engines.keys()]
+
+        for e_uid in ecosystem_uids:
+            try:
+                data = self.engines[e_uid].light_info
+                if data:
+                    light_data[e_uid] = data
+            # Except when subroutines are still loading
+            except KeyError:
+                pass
         self.emit("light_data", light_data)
 
     def on_turn_light_on(self, message: dict) -> None:
-        ecosystem = message["ecosystem"]
+        ecosystem_uid = message["ecosystem"]
         countdown = message["countdown"]
-        self.engines[ecosystem].set_light_on(countdown=countdown)
-        self.on_send_light_data()
+        try:
+            self.engines[ecosystem_uid].set_light_on(countdown=countdown)
+            self.on_send_light_data(ecosystem_uid)
+        # Except when subroutines are still loading
+        except KeyError:
+            print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
 
     def on_turn_light_off(self, message: dict) -> None:
-        ecosystem = message["ecosystem"]
+        ecosystem_uid = message["ecosystem"]
         countdown = message["countdown"]
-        self.engines[ecosystem].set_light_off(countdown=countdown)
-        self.on_send_light_data()
+        try:
+            self.engines[ecosystem_uid].set_light_off(countdown=countdown)
+            self.on_send_light_data()
+        # Except when subroutines are still loading
+        except KeyError:
+            print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
 
     def on_turn_light_auto(self, message: dict) -> None:
-        ecosystem = message["ecosystem"]
-        self.engines[ecosystem].set_light_auto()
-        self.on_send_light_data()
+        ecosystem_uid = message["ecosystem"]
+        try:
+            self.engines[ecosystem_uid].set_light_auto()
+            self.on_send_light_data()
+        # Except when subroutines are still loading
+        except KeyError:
+            print(f"{ecosystem_uid}'s light subroutine has not initialized yet")

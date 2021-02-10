@@ -57,12 +57,35 @@ class cameraModule:
 
 
 class hardware:
+    """
+    Base class for all hardware config creation and when creating hardware
+    object from config file.
+    A minimal hardware should have an uid (cf under), a name, an address,
+    a model name, a type and a level.
+    When creating a new hardware, use the
+    specificConfig("your_environment").create_new_hardware() method. This will
+    automatically generate a unique uid, properly format info and save it in
+    ecosystems.cfg
+    """
     def __init__(self, **kwargs) -> None:
-        self._uid = kwargs.pop("hardware_uid")
-        self._address = kwargs.pop("address", "").split("_")
-        self._model = kwargs.pop("model", None)
+        self._plant = kwargs.pop("plant", "")
+        level = kwargs.pop("level")
+        if level.lower() in ("environment", "environments"):
+            self._level = "environment"
+        elif level.lower() in ("plant", "plants"):
+            assert self._plant, "Plants-level hardware need to be provided a " \
+                                "plant name as kwarg with the key name 'plant'"
+            self._level = "plants"
+        else:
+            raise AttributeError("level should be 'plant' or 'environment'")
+        self._uid = kwargs.pop("uid")
         self._name = kwargs.pop("name", self._uid)
-        self._level = kwargs.pop("level", "environment")
+        self._address = kwargs.pop("address")
+        self._model = kwargs.pop("model")
+        self._type = kwargs.pop("type")
+        self._measure = kwargs.pop("measure", [])
+
+        self._address_split = self._address.split("_")
 
     def __repr__(self):
         return f"<{self._uid} | {self._name} | {self._model}>"
@@ -70,14 +93,6 @@ class hardware:
     @property
     def uid(self) -> str:
         return self._uid
-
-    @property
-    def address(self) -> list:
-        return self._address
-
-    @property
-    def model(self) -> str:
-        return self._model
 
     @property
     def name(self) -> str:
@@ -88,8 +103,44 @@ class hardware:
         self._name = new_name
 
     @property
+    def address(self) -> list:
+        return self._address
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    @property
+    def measure(self) -> list:
+        if self._measure or (self._type == "sensor"):
+            return self._measure
+        # "Fake" AttributeError in case self is not a sensor and has no measure
+        raise AttributeError(f"'{type(self).__qualname__}' object has no "
+                             f"attribute 'measure'")
+
+    @measure.setter
+    def measure(self, new_measure: list) -> None:
+        self._measure = new_measure
+
+    @property
     def level(self) -> str:
         return self._level
+
+    def dict_repr(self):
+        _repr = {
+            self._uid: {
+                "name": self._name,
+                "address": self._address,
+                "model": self._model,
+                "type": self._type,
+                "level": self._level,
+            }
+        }
+        if self._measure:
+            _repr[self._uid]["measure"] = self._measure
+        if self._plant:
+            _repr[self._uid]["plant"] = self._plant
+        return _repr
 
 
 class gpioHardware(hardware):
@@ -98,15 +149,18 @@ class gpioHardware(hardware):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        assert self._address[0].lower() in ("gpio", "bcm")
-        assert len(self._address) > 1
+        if not self._address_split[0].lower() in ("gpio", "bcm"):
+            raise ValueError("gpioHardware address must be of type: "
+                             "'GPIO_pinnumber' or 'BCM_pinnumber'")
+        assert len(self._address_split) > 1
         self._pin = None
         self.set_pin()
 
     def set_pin(self):
-        pin_bcm = pin_translation(int(self._address[1]), "to_BCM") \
-            if self._address[0].lower() == "gpio" \
-            else self._address[1]
+        pin_bcm = pin_translation(int(self._address_split[1]), "to_BCM") \
+            if self._address_split[0].lower() == "gpio" \
+            else self._address_split[1]
+        # TODO: assert pin bcm is possible
         self._pin = Pin(pin_bcm)
 
 
@@ -114,12 +168,17 @@ class gpioHardware(hardware):
 class i2cHardware(hardware):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        assert self._address[0].lower() == "i2c"
-        self._multiplexed = True if len(self._address) > 2 else False
 
-        self._hex_address = address_to_hex(self._address[1])
+        if not self._address_split[0].lower() == "i2c":
+            raise ValueError("gpioHardware address must be of type: "
+                             "'I2C_default' or 'I2C_0' to use default sensor "
+                             "I2C address, or of type 'I2C_hexaddress' to "
+                             "specifically use hexaddress")
+        self._multiplexed = True if len(self._address_split) > 2 else False
+
+        self._hex_address = address_to_hex(self._address_split[1])
         if self._multiplexed:
-            self._hex_address2 = address_to_hex(self._address[2])
+            self._hex_address2 = address_to_hex(self._address_split[2])
 
 
 class gpioSwitch(gpioHardware):
@@ -127,7 +186,7 @@ class gpioSwitch(gpioHardware):
 
     def __init__(self, **kwargs) -> None:
         # uncomment if you want to overwrite the name of model
-        #kwargs["model"] = self.MODEL
+#        kwargs["model"] = self.MODEL
         super().__init__(**kwargs)
         self._pin.init(mode=self.OUT)
 
@@ -140,6 +199,7 @@ class gpioSwitch(gpioHardware):
 
 class baseSensor(hardware):
     def __init__(self, **kwargs) -> None:
+        kwargs["type"] = "sensor"
         super().__init__(**kwargs)
         self._measure = kwargs.pop("measure", [])
 
@@ -271,12 +331,18 @@ class VEML7700(i2cSensor):
 # ---------------------------------------------------------------------------
 #   Virtual sensors
 # ---------------------------------------------------------------------------
-class virtualGPIO(gpioSensor):
+class virtualSensor(baseSensor):
+    def random_sleep(self):
+        time.sleep(abs(random.gauss(0.15, 0.075)))
+
+
+class virtualGPIO(virtualSensor, gpioSensor):
     pass
 
 
 class virtualDHT(virtualGPIO):
     def get_data(self) -> dict:
+        self.random_sleep()
         time.sleep(2)
         return {
             "temperature": round(random.uniform(17, 30), 1),
@@ -292,7 +358,7 @@ class virtualDHT22(virtualDHT):
     MODEL = "virtualDHT22"
 
 
-class virtualI2C(i2cSensor):
+class virtualI2C(virtualSensor, i2cSensor):
     pass
 
 
@@ -300,16 +366,18 @@ class virtualVEML7700(virtualI2C):
     MODEL = "virtualVEML7700"
 
     def get_data(self) -> dict:
+        self.random_sleep()
         time.sleep(0.1)
         return {
             "light": random.randrange(1000, 100000, 10),
         }
 
 
-class virtualMega(baseSensor):
+class virtualMega(virtualSensor):
     MODEL = "virtualMega"
 
     def get_data(self) -> dict:
+        self.random_sleep()
         return {
             "temperature": round(random.uniform(17, 30), 1),
             "humidity": round(random.uniform(20, 55), 1),
@@ -317,10 +385,11 @@ class virtualMega(baseSensor):
         }
 
 
-class virtualMoisture(baseSensor):
+class virtualMoisture(virtualSensor):
     MODEL = "virtualMoisture"
 
     def get_data(self) -> dict:
+        self.random_sleep()
         return {
             "moisture": round(random.uniform(10, 55), 1),
         }

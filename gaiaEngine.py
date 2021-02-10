@@ -9,7 +9,7 @@ import logging
 
 from client import json, gaiaNamespace, retryClient
 from config import Config
-from engine import autoManager, enginesDict
+from engine import autoManager, get_enginesDict
 
 
 ADDR_TUPLE = Config.GAIAWEB
@@ -34,6 +34,7 @@ class gaiaEngine:
         if not self.started:
             logger.info("Starting")
             autoManager.start(joint_start=True)
+            enginesDict = get_enginesDict()
             if self.use_client:
                 logger.info("Starting socketIO client")
                 self.client = retryClient(json=json)

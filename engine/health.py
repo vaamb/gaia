@@ -1,9 +1,13 @@
 import datetime
-import logging
+import io
 import pytz
 
-from engine.config_parser import configWatchdog, getConfig, localTZ
+from apscheduler.schedulers.background import BackgroundScheduler
+import numpy as np
 
+from config import Config
+from engine.config_parser import localTZ
+from engine.subroutine_template import subroutineTemplate
 
 
 class gaiaHealth(subroutineTemplate):
@@ -27,10 +31,10 @@ class gaiaHealth(subroutineTemplate):
         self._scheduler.start()
 
     def _stop_scheduler(self):
-        self.logger.info("Closing the tasks scheduler")
+        self._logger.info("Closing the tasks scheduler")
         self._scheduler.remove_job("health")
 #        self._scheduler.shutdown()
-        self.logger.info("The tasks scheduler was closed properly")
+        self._logger.info("The tasks scheduler was closed properly")
 
     def health_routine(self):
         if self._engine:
@@ -40,7 +44,14 @@ class gaiaHealth(subroutineTemplate):
                 light_status = self._engine.subroutines["light"].light_status or False
                 self._engine.set_light_on()
 
-        self.take_picture()
+        try:
+            self._logger.info(f"Taking picture of {self._ecosystem}")
+            self.take_picture()
+            self._logger.debug(
+                f"Picture of {self._ecosystem} successfully taken")
+        except Exception as e:
+            self._logger.error(f"Failing to take picture of {self._ecosystem}. "
+                               f"ERROR msg: {e}")
 
         if self._engine:
             if light:
@@ -54,7 +65,6 @@ class gaiaHealth(subroutineTemplate):
 
         self.analyse_image()
 
-
     def _start(self):
         pass
 
@@ -63,26 +73,30 @@ class gaiaHealth(subroutineTemplate):
         pass
 
     def take_picture(self):
-        self.logger.info("Taking picture of {}".format(self.ecosystem))
-        self.logger.info("Picture of {} successfully taken".format(self.ecosystem))
         pass
 
-    def image_analysis(self):
-        self.logger.info("Starting analysis of {} image".format(self.ecosystem))
-        import random
-        green = random.randrange(12000, 1500000, 1000)
-        necrosis = random.uniform(5, 55)
-        health_index = random.uniform(70, 97)
-        self.health_data = {
-            self.ecosystem: {
-                "datetime": datetime.datetime.now().replace(microsecond=0).
-                    astimezone(pytz.timezone(self.timezone)),
-                "green": green,
-                "necrosis": round(necrosis, 2),
-                "index": round(health_index, 2)
+    def analyse_image(self):
+        self._logger.info(f"Starting analysis of {self._ecosystem} image")
+        # If got an image, analyse it
+        if self._imageIO.getbuffer().nbytes:
+            import random
+            green = random.randrange(12000, 1500000, 1000)
+            necrosis = random.uniform(5, 55)
+            health_index = random.uniform(70, 97)
+            self._health_data = {
+                self.ecosystem: {
+                    "datetime": datetime.datetime.now().replace(microsecond=0).
+                        astimezone(pytz.timezone(self.timezone)),
+                    "green": green,
+                    "necrosis": round(necrosis, 2),
+                    "index": round(health_index, 2)
+                }
             }
-        }
-        self.logger.info("{} picture successfully analysed, indexes computed".format(self.ecosystem))
+            self._logger.info(f"{self._ecosystem} picture successfully analysed, "
+                             f"indexes computed")
+        else:
+            # TODO: change Exception
+            raise Exception
 
     @property
     def health_data(self):

@@ -6,6 +6,8 @@ import uuid
 
 class Config:
     DEBUG = False
+    TESTING = True  # When true, changes won't be save
+
     LOG_TO_STDOUT = True
 
     TEST_CONNECTION_IP = "1.1.1.1"

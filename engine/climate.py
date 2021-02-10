@@ -1,15 +1,18 @@
 import random
 
+from simple_pid import PID
+
 from engine.subroutine_template import subroutineTemplate
 
 
+Kp = 0.01
+Ki = 0.005
+Kd = 0.01
+
+
 class Chaos:
-    def __init__(self, ecosystem):
-        configWatchdog.start()
-        self.config = getConfig(ecosystem)
-        self.ecosystem = self.config.name
-        
-        self.chaos_factor = 10 #self.config.chaos_factor
+    def __init__(self, chaos_factor=10):
+        self.chaos_factor = chaos_factor
         if self.chaos_factor != 0:
             self.max_duration = 10
             pass
@@ -21,8 +24,8 @@ class Chaos:
         if self.chaos_factor != 0:
 
             if self.chaos == 0:
-                rdm = random.randint(1, self.chaos_factor)
-                if rdm == 1:
+                _random = random.randint(1, self.chaos_factor)
+                if _random == 1:
                     self.chaos = 1
 
             elif self.chaos == self.duration:
@@ -42,5 +45,23 @@ class gaiaClimate(subroutineTemplate):
         super().__init__(ecosystem=ecosystem, engine=engine)
 
         self._chaos = Chaos()
+        self._regulators = {
+            "heaters": {"list": [],
+                        "PID": PID(Kp=Kp, Ki=Ki, Kd=Kd)},
+            "coolers": {"list": [],
+                        "PID": PID(Kp=Kp, Ki=Ki, Kd=Kd)},
+            "humidifiers": {"list": [],
+                            "PID": PID(Kp=Kp, Ki=Ki, Kd=Kd)},
+            "dehumidifiers": {"list": [],
+                              "PID": PID(Kp=Kp, Ki=Ki, Kd=Kd)},
+        }
+
+        self._parameters = {
+            "temperature": self._config.get_climate_parameters("temperature"),
+            "humidity": self._config.get_climate_parameters("humidity"),
+
+        }
 
         self._finish__init__()
+
+    # TODO: get heaters and coolers from config
