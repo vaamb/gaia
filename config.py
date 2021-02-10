@@ -1,7 +1,16 @@
 import logging
 from logging import config
 import os
+from pathlib import Path
 import uuid
+
+
+base_dir = Path(__file__).absolute().parents[0]
+
+# TODO: move cache creation where is is needed
+cache_dir = base_dir/"cache"
+if not cache_dir.exists():
+    os.mkdir(cache_dir)
 
 
 class Config:
@@ -9,6 +18,8 @@ class Config:
     TESTING = True  # When true, changes won't be save
 
     LOG_TO_STDOUT = True
+    LOG_TO_FILE = False
+    LOG_ERROR = True
 
     TEST_CONNECTION_IP = "1.1.1.1"
     GAIAWEB = ("127.0.0.1", 5000)
@@ -21,15 +32,26 @@ class Config:
     SENSORS_TIMEOUT = 30
 
 
-def configure_logging():
-    DEBUG = Config.DEBUG
-    LOG_TO_STDOUT = Config.LOG_TO_STDOUT
+def configure_logging(config_class):
+    DEBUG = config_class.DEBUG
+    LOG_TO_STDOUT = config_class.LOG_TO_STDOUT
+    LOG_TO_FILE = config_class.LOG_TO_FILE
+    LOG_ERROR = config_class.LOG_ERROR
 
-    handler = "streamHandler"
-    if not LOG_TO_STDOUT:
-        if not os.path.exists("logs"):
-            os.mkdir("logs")
-        handler = "fileHandler"
+    handlers = []
+
+    if LOG_TO_STDOUT:
+        handlers.append("streamHandler")
+
+    if LOG_TO_FILE or LOG_ERROR:
+        if not os.path.exists(base_dir/"logs"):
+            os.mkdir(base_dir/"logs")
+
+    if LOG_TO_FILE:
+        handlers.append("fileHandler")
+
+    if LOG_ERROR:
+        handlers.append("errorFileHandler")
 
     LOGGING_CONFIG = {
         "version": 1,
@@ -39,50 +61,75 @@ def configure_logging():
             "streamFormat": {
                 "format": "%(asctime)s [%(levelname)-4.4s] %(name)-20.20s: %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S"
-                },
+            },
             "fileFormat": {
                 "format": "%(asctime)s -- %(levelname)s  -- %(name)s -- %(message)s",
-                },
+                "datefmt": "%Y-%m-%d %H:%M:%S"
             },
+            "errorFormat": {
+                'format': '%(asctime)s %(levelname)-4.4s %(module)-17s ' +
+                          'line:%(lineno)-4d  %(message)s',
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            },
+        },
 
         "handlers": {
             "streamHandler": {
                 "level": f"{'DEBUG' if DEBUG else 'INFO'}",
                 "formatter": "streamFormat",
                 "class": "logging.StreamHandler",
-                },
+            },
+        },
+
+        "loggers": {
+            "": {
+                "handlers": handlers,
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
+            },
+            "apscheduler": {
+                "handlers": handlers,
+                "level": "WARNING"
+            },
+            "urllib3": {
+                "handlers": handlers,
+                "level": "WARNING"
+            },
+            "engineio": {
+                "handlers": handlers,
+                "level": "WARNING"
+            },
+            "socketio": {
+                "handlers": handlers,
+                "level": "WARNING"
+            },
+        },
+    }
+
+    # Append file handlers to config as if they are needed they require logs file
+    if LOG_TO_FILE:
+        LOGGING_CONFIG["handlers"].update({
             "fileHandler": {
                 "level": f"{'DEBUG' if DEBUG else 'INFO'}",
                 "formatter": "fileFormat",
                 "class": "logging.handlers.RotatingFileHandler",
-                "filename": "logs/gaia.log",
-                "mode": "w",
-                "maxBytes": 1024*32,
-                "backupCount": 5,
-                },
-            },
+                'filename': 'logs/gaiaEngine.log',
+                'mode': 'w+',
+                'maxBytes': 1024 * 512,
+                'backupCount': 5,
+            }
+        })
 
-        "loggers": {
-            "": {
-                "handlers": [handler],
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
-                },
-            "apscheduler": {
-                "handlers": [handler],
-                "level": "WARNING"
-                },
-            "urllib3": {
-                "handlers": [handler],
-                "level": "WARNING"
-                },
-            "engineio": {
-                "handlers": [handler],
-                "level": "WARNING"
-                },
-            },
-        }
+    if LOG_ERROR:
+        LOGGING_CONFIG["handlers"].update({
+            "errorFileHandler": {
+                "level": f"ERROR",
+                "formatter": "errorFormat",
+                "class": "logging.FileHandler",
+                'filename': 'logs/gaiaEngine_errors.log',
+                'mode': 'a',
+            }
+        })
 
     logging.config.dictConfig(LOGGING_CONFIG)
 
-
-configure_logging()
+configure_logging(Config)
