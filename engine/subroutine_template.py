@@ -11,11 +11,10 @@ class subroutineTemplate:
         assert ecosystem or engine
         if engine:
             # Use weakref for the circular ref
-            ref = weakref.ref(engine)
-            self._engine = ref()
+            self._engine = weakref.proxy(engine)
             if ecosystem:
                 assert ecosystem in (engine.name, engine.uid)
-            self._config = self._engine.config
+            self._config = self._engine._config
         else:
             self._engine = None
             self._config = getConfig(ecosystem)
