@@ -12,7 +12,10 @@ from .utils import get_dew_point, get_absolute_humidity, \
 detector = Detector()
 detect_board = Board(detector)
 
+ON_PY = False
+
 if detect_board.any_raspberry_pi:
+    ON_PY = True
     from adafruit_blinka.microcontroller.bcm283x.pin import Pin
     import adafruit_veml7700  # adafruit-circuitpython-veml7700
     import adafruit_dht  # adafruit-circuitpython-dht + sudo apt-get install libgpiod2
@@ -411,7 +414,7 @@ VIRTUAL_SENSORS = {hardware.MODEL: hardware for hardware in
 
 SENSORS_AVAILABLE = {**VIRTUAL_SENSORS,
                      **GPIO_SENSORS,
-                     **I2C_SENSORS}
+                     **I2C_SENSORS} if ON_PY else {**VIRTUAL_SENSORS}
 
 GPIO_ACTUATOR = {hardware.MODEL: hardware for hardware in
                  [gpioSwitch]}
