@@ -76,8 +76,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     variables = vars(args)
-    # TODO: delete this when testing is over
-    variables["client"] = 1
+    if any((Config.DEBUG, Config.TESTING)):
+        variables["client"] = 1
+        variables["db"] = 1
+        variables["web"] = 1
     gaia = gaiaEngine(use_client=variables["client"],
                       use_db=variables["db"],
                       use_web_interface=variables["web"]
