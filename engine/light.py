@@ -128,12 +128,9 @@ class gaiaLight(subroutineTemplate):
 
             elif self._method == "elongate":
                 now = datetime.now().astimezone(self._timezone).time()
-                # TODO: change this to calculate it once per day, or at method change
-                morning_end = (self._to_dt(self._sun_times["sunrise"]) + self._sun_times["offset"]).time()
-                evening_start = (self._to_dt(self._sun_times["sunset"]) - self._sun_times["offset"]).time()
                 # If time between lightning hours
-                if ((self._sun_times["day"] <= now < morning_end) or
-                        (evening_start <= now < self._sun_times["night"])):
+                if ((self._sun_times["day"] <= now < self._sun_times["morning_end"]) or
+                        (self._sun_times["evening_start"] <= now < self._sun_times["night"])):
                     lighting = True
                 else:
                     lighting = False
@@ -186,8 +183,15 @@ class gaiaLight(subroutineTemplate):
             sunrise = self._to_dt(self._sun_times["sunrise"])
             twilight_begin = self._to_dt(self._sun_times["twilight_begin"])
             self._sun_times["offset"] = sunrise - twilight_begin
-        finally:
-            lock.release()
+            self._sun_times["morning_end"] = \
+                (self._to_dt(self._sun_times["sunrise"]) + self._sun_times["offset"]).time()
+            self._sun_times["evening_start"] = \
+                (self._to_dt(self._sun_times["sunset"]) - self._sun_times["offset"]).time()
+
+        except KeyError:
+            # No sun times available
+            pass
+        lock.release()
 
     @property
     def light_status(self) -> bool:
