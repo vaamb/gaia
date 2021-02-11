@@ -11,17 +11,16 @@ import pytz
 import ruamel.yaml
 from tzlocal import get_localzone
 
-from config import Config
+from config import Config, base_dir
 from engine.utils import get_coordinates, is_connected
 from engine.hardware_library import hardware, gpioHardware, i2cHardware
 
 
-gaiaEngine_dir = pathlib.Path(__file__).absolute().parents[1]
 new_config_event = Event()
 localTZ = get_localzone()
 
 logger = logging.getLogger("gaiaEngine.config")
-logger.setLevel("DEBUG")
+
 
 # ---------------------------------------------------------------------------
 #   default ecosystem configuration
@@ -31,16 +30,13 @@ DEFAULT_ECOSYSTEM_CFG = {
         "name": "",
         "status": False,
         "management": {
-            "sensors": True,
+            "sensors": False,
             "light": False,
-            "watering": False,
             "climate": False,
+            "watering": False,
             "health": False,
             "alarms": False,
-        },
-        "webcam": {
-            "status": False,
-            "model": "regular",
+            "webcam": False,
         },
         "environment": {
             "chaos": 20,
@@ -81,7 +77,7 @@ class _globalConfig:
         cfg = kwargs.pop("cfg", ["ecosystems", "private"])
         if "ecosystems" in cfg:
             try:
-                custom_cfg = gaiaEngine_dir/"ecosystems.cfg"
+                custom_cfg = base_dir / "ecosystems.cfg"
                 with open(custom_cfg, "r") as file:
                     self._ecosystems_config = self.yaml.load(file)
                     if self._ecosystems_config == DEFAULT_ECOSYSTEM_CFG:
@@ -99,7 +95,7 @@ class _globalConfig:
         if "private" in cfg:
             # Try to import custom private configuration file. If it doesn't exist, use default
             try:
-                private_cfg = gaiaEngine_dir/"private.cfg"
+                private_cfg = base_dir / "private.cfg"
                 with open(private_cfg, "r") as file:
                     self._private_config = self.yaml.load(file)
             except IOError:
@@ -114,7 +110,7 @@ class _globalConfig:
     def save(self, cfg: str) -> None:
         if Config.TESTING:
             raise Exception("Config cannot be saved during testing")
-        file_path = gaiaEngine_dir/f"{cfg}.cfg"
+        file_path = base_dir / f"{cfg}.cfg"
         with open(file_path, "w") as file:
             if cfg == "ecosystems":
                 self.yaml.dump(self._ecosystems_config, file)
@@ -249,7 +245,7 @@ class _configWatchdog:
 
     def update_cfg_hash(self) -> None:
         for cfg in ("ecosystems", "private"):
-            path = gaiaEngine_dir/f"{cfg}.cfg"
+            path = base_dir / f"{cfg}.cfg"
             self._hash_dict[cfg] = _global_config.file_hash(path)
 
     def _watchdog(self) -> None:
@@ -596,7 +592,7 @@ class specificConfig:
     @property
     def sun_times(self) -> dict:
         try:
-            with open(gaiaEngine_dir/"cache/sunrise.json", "r") as file:
+            with open(base_dir /"cache/sunrise.json", "r") as file:
                 sunrise = _global_config.yaml.load(file)
         # TODO: handle when cache file does not exist
         except:
@@ -687,6 +683,10 @@ class configWatchdog:
 
 
 def getIds(ecosystem: str) -> tuple:
+    """Return the tuple (ecosystem_uid, ecosystem_name)
+
+    :param ecosystem: str, either an ecosystem uid or ecosystem name
+    """
     global _global_config
     if not _global_config:
         _global_config = _globalConfig()
@@ -694,6 +694,7 @@ def getIds(ecosystem: str) -> tuple:
 
 
 def updateConfig() -> None:
+    """Update the globalConfig based on ecosystem.cfg and private.cfg"""
     global _global_config
     if not _global_config:
         _global_config = _globalConfig()
@@ -701,6 +702,10 @@ def updateConfig() -> None:
 
 
 def createEcosystem(*args) -> None:
+    """Create a new ecosystem with the given name"""
+    global _global_config
+    if not _global_config:
+        _global_config = _globalConfig()
     if len(args) == 0:
         name = input("Ecosystem name: ")
     else:
@@ -717,7 +722,23 @@ def delEcosystem() -> None:
 
 
 def getConfig(ecosystem: str = None):
+    """ Return the specificConfig object for the given ecosystem.
+
+    If no ecosystem is provided, return the globalConfig object instead
+
+    :param ecosystem: str, and ecosystem uid or name. If left to none, will
+                      return globalConfig object instead.
+    """
+
     global _config_manager
     if not _config_manager:
         _config_manager = _configManager()
     return _config_manager.get_config(ecosystem)
+
+
+def delConfig(ecosystem: str) -> None:
+    global _config_manager
+    if not _config_manager:
+        _config_manager = _configManager()
+    ecosystem_uid = getIds(ecosystem)[0]
+    del _config_manager.configs[ecosystem_uid]
