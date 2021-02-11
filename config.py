@@ -7,11 +7,6 @@ import uuid
 
 base_dir = Path(__file__).absolute().parents[0]
 
-# TODO: move cache creation where is is needed
-cache_dir = base_dir/"cache"
-if not cache_dir.exists():
-    os.mkdir(cache_dir)
-
 
 class Config:
     DEBUG = False
