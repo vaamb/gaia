@@ -1,4 +1,3 @@
-import copy
 from datetime import date, datetime
 import hashlib
 import json
@@ -15,7 +14,7 @@ from engine import config_parser
 from engine.climate import gaiaClimate
 from engine.config_parser import getIds, configWatchdog, \
     getConfig, createEcosystem, manageEcosystem, delEcosystem, \
-    new_config_event, updateConfig
+    new_config_event, updateConfig, delConfig
 from engine.health import gaiaHealth
 from engine.light import gaiaLight
 from engine.sensors import gaiaSensors
@@ -28,7 +27,7 @@ __all__ = ["autoManager", "get_enginesDict",
            "getConfig", "updateConfig"]
 
 # TODO: keep specificConfig.get_subroutines() up to date
-SUBROUTINES = (gaiaLight, gaiaSensors, gaiaHealth, gaiaClimate)
+SUBROUTINES = (gaiaSensors, gaiaLight, gaiaClimate, gaiaHealth)
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +54,6 @@ class Engine:
         self.subroutines = {}
         try:
             for subroutine in SUBROUTINES:
-                # TODO: origin of circular ref
                 self.subroutines[subroutine.NAME] = subroutine(engine=self)
         except Exception as e:
             self.logger.error("Error during Engine initialization. " +
@@ -64,6 +62,7 @@ class Engine:
         self._started = False
         self.logger.debug(f"Engine initialization successful")
 
+    # TODO: maybe add id(self) in the hash?
     def __eq__(self, other):
         h = hashlib.sha256()
         h.update(json.dumps(self.config, sort_keys=True).encode())
@@ -231,7 +230,7 @@ class _enginesManager:
 
     def _download_sun_times(self):
         global_config = getConfig()
-        cache_dir = config_parser.gaiaEngine_dir / "cache"
+        cache_dir = config_parser.base_dir / "cache"
         if not cache_dir.exists():
             os.mkdir(cache_dir)
 
@@ -386,7 +385,7 @@ class _enginesManager:
                                 f"{ecosystem_name} as it does not exist")
             return False
 
-    def delEngine(self, ecosystem):
+    def delEngine(self, ecosystem, delete_config: bool = True):
         ecosystem_id, ecosystem_name = getIds(ecosystem)
         if ecosystem_id in self.engines:
             if ecosystem_id in self.engines_started:
@@ -394,10 +393,13 @@ class _enginesManager:
                                   "First need to stop it")
                 return False
             else:
+                # extra security because of circular reference
                 for subroutine in [subroutine for subroutine in
                                    self.engines[ecosystem_id].subroutines.keys()]:
                     del self.engines[ecosystem_id].subroutines[subroutine]
                 del self.engines[ecosystem_id]
+                if delete_config:
+                    delConfig(ecosystem_id)
                 self.logger.info(f"Engine for ecosystem {ecosystem_name} " +
                                  "has been deleted")
                 return True
@@ -700,7 +702,7 @@ def stopEngine(ecosystem):
     raise Exception("You cannot manually manage engines while the autoManager is running")
 
 
-def delEngine(ecosystem):
+def delEngine(ecosystem, delete_config: bool = True):
     """Delete the engine for the specified ecosystem from the Manager
     internal dict.
     
@@ -713,7 +715,7 @@ def delEngine(ecosystem):
         global _engines_manager
         if not _engines_manager:
             _engines_manager = _enginesManager()
-        return _engines_manager.delEngine(ecosystem)
+        return _engines_manager.delEngine(ecosystem, delete_config)
     raise Exception("You cannot manually manage engines while the autoManager is running")
 
 
