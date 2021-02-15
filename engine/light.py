@@ -120,21 +120,7 @@ class gaiaLight(subroutineTemplate):
     def _lighting(self) -> bool:
         lighting = False
         if self._mode == "automatic":
-            if self._method == "fixed":
-                lighting = self._is_time_between(self._sun_times["day"], self._sun_times["night"])
-
-            elif self._method == "place":
-                lighting = self._is_time_between(self._sun_times["sunrise"], self._sun_times["sunset"])
-
-            elif self._method == "elongate":
-                now = datetime.now().astimezone(self._timezone).time()
-                # If time between lightning hours
-                if ((self._sun_times["day"] <= now < self._sun_times["morning_end"]) or
-                        (self._sun_times["evening_start"] <= now < self._sun_times["night"])):
-                    lighting = True
-                else:
-                    lighting = False
-
+            lighting = self.expected_status
         elif self._mode == "manual":
             if self._status["current"]:
                 lighting = True
@@ -175,7 +161,6 @@ class gaiaLight(subroutineTemplate):
     def update_sun_times(self) -> None:
         # TODO: check if it works when not using elongate
         # lock thread as all the whole dict should be transformed at the "same time"
-        # add a if method == elongate or mimic, and if connected
         lock.acquire()
         self._sun_times.update(self._config.time_parameters)
         try:
@@ -192,6 +177,28 @@ class gaiaLight(subroutineTemplate):
             # No sun times available
             pass
         lock.release()
+
+    @ property
+    def expected_status(self) -> bool:
+        lighting = False
+        if self._method == "fixed":
+            lighting = self._is_time_between(self._sun_times["day"],
+                                             self._sun_times["night"])
+
+        elif self._method == "place":
+            lighting = self._is_time_between(self._sun_times["sunrise"],
+                                             self._sun_times["sunset"])
+
+        elif self._method == "elongate":
+            now = datetime.now().astimezone(self._timezone).time()
+            # If time between lightning hours
+            if ((self._sun_times["day"] <= now < self._sun_times["morning_end"]) or
+                    (self._sun_times["evening_start"] <= now < self._sun_times[
+                        "night"])):
+                lighting = True
+            else:
+                lighting = False
+        return lighting
 
     @property
     def light_status(self) -> bool:
@@ -237,9 +244,10 @@ class gaiaLight(subroutineTemplate):
     def light_info(self) -> dict:
         return {
             "light_status": self.light_status,
+            "expected_status": self.expected_status,
             "mode": self.mode,
             "method": self.method,
-            "lighting_hours": self.lighting_hours
+            "lighting_hours": self.lighting_hours,
         }
 
     # TODO: add countdown

@@ -148,7 +148,7 @@ class gaiaNamespace(socketio.ClientNamespace):
         countdown = message["countdown"]
         try:
             self.engines[ecosystem_uid].set_light_off(countdown=countdown)
-            self.on_send_light_data()
+            self.on_send_light_data(ecosystem_uid)
         # Except when subroutines are still loading
         except KeyError:
             print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
@@ -157,7 +157,7 @@ class gaiaNamespace(socketio.ClientNamespace):
         ecosystem_uid = message["ecosystem"]
         try:
             self.engines[ecosystem_uid].set_light_auto()
-            self.on_send_light_data()
+            self.on_send_light_data(ecosystem_uid)
         # Except when subroutines are still loading
         except KeyError:
             print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
