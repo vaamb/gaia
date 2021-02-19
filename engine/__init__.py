@@ -604,18 +604,25 @@ class autoManager:
         _auto_manager.start(joint_start=joint_start)
 
     @staticmethod
-    def stop(stop_engines=True, clear_manager=True) -> None:
+    def stop(stop_engines=True, clear_manager=True) -> bool:
         global _auto_manager
-        if not _auto_manager:
-            _auto_manager = _autoManager()
-        _auto_manager.stop(stop_engines=stop_engines,
-                           clear_manager=clear_manager)
+        if _auto_manager:
+            _auto_manager.stop(stop_engines=stop_engines,
+                               clear_manager=clear_manager)
 
     @staticmethod
     def status() -> bool:
+        global _auto_manager
         if not _auto_manager:
             return False
         return _auto_manager.status
+
+    @staticmethod
+    def is_init() -> bool:
+        global _auto_manager
+        if not _auto_manager:
+            return False
+        return True
 
 
 def createEngine(ecosystem, start=False):
@@ -697,7 +704,7 @@ def stopEngine(ecosystem):
     if not autoManager.status():
         global _engines_manager
         if not _engines_manager:
-            _engines_manager = _enginesManager()
+            return False
         return _engines_manager.stopEngine(ecosystem, clean=False)
     raise Exception("You cannot manually manage engines while the autoManager is running")
 

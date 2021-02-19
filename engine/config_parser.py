@@ -674,17 +674,22 @@ class configWatchdog:
     @staticmethod
     def stop() -> None:
         global _config_watchdog
-        if not _config_watchdog:
-            _config_watchdog = _configWatchdog()
-        _config_watchdog.stop()
+        if _config_watchdog:
+            _config_watchdog.stop()
 
     @staticmethod
     def status() -> bool:
         global _config_watchdog
         if not _config_watchdog:
-            _config_watchdog = _configWatchdog()
+            return False
         return _config_watchdog.status
 
+    @staticmethod
+    def is_init() -> bool:
+        global _config_watchdog
+        if not _config_watchdog:
+            return False
+        return True
 
 def getIds(ecosystem: str) -> tuple:
     """Return the tuple (ecosystem_uid, ecosystem_name)
