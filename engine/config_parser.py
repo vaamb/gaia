@@ -118,10 +118,12 @@ class _globalConfig:
                 self.yaml.dump(self._private_config, file)
 
     def create_new_ecosystem_id(self) -> str:
-        k = 8
+        length = 8
         used_ids = self.ecosystems_id
         while True:
-            x = "".join(random.choices(string.ascii_letters + string.digits, k=k))
+            x = random.choice(string.ascii_letters) + "".join(
+                random.choices(string.ascii_letters + string.digits,
+                               k=length-1))
             if x not in used_ids:
                 break
         return x
@@ -414,10 +416,12 @@ class specificConfig:
                 if self.IO_dict[uid]["type"].lower() == "sensor"]
 
     def _create_new_IO_uid(self) -> str:
-        k = 16
+        length = 16
         used_ids = list(self.IO_dict.keys())
         while True:
-            x = "".join(random.choices(string.ascii_letters + string.digits, k=k))
+            x = random.choice(string.ascii_letters) + "".join(
+                random.choices(string.ascii_letters + string.digits,
+                               k=length - 1))
             if x not in used_ids:
                 break
         return x
