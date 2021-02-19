@@ -21,6 +21,9 @@ class Config:
     # GAIAWEB = ("192.168.1.111", 5000)
     UID = hex(uuid.getnode())[2:]
 
+    GAIA_SECRET_KEY = os.environ.get("GAIA_SECRET_KEY") or \
+                 "BXhNmCEmNdoBNngyGXj6jJtooYAcKpt6"
+
     HEALTH_LOGGING_TIME = "00h00"
     CONFIG_WATCHER_PERIOD = 2
     LIGHT_LOOP_PERIOD = 0.5
@@ -91,11 +94,11 @@ def configure_logging(config_class):
             },
             "engineio": {
                 "handlers": handlers,
-                "level": "WARNING"
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
             },
             "socketio": {
                 "handlers": handlers,
-                "level": "WARNING"
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
             },
         },
     }
@@ -117,7 +120,7 @@ def configure_logging(config_class):
     if LOG_ERROR:
         LOGGING_CONFIG["handlers"].update({
             "errorFileHandler": {
-                "level": f"ERROR",
+                "level": "ERROR",
                 "formatter": "errorFormat",
                 "class": "logging.FileHandler",
                 'filename': 'logs/gaiaEngine_errors.log',
@@ -126,5 +129,6 @@ def configure_logging(config_class):
         })
 
     logging.config.dictConfig(LOGGING_CONFIG)
+
 
 configure_logging(Config)

@@ -1,7 +1,14 @@
+import base64
 from collections import OrderedDict
 from math import log, e
+import os
+import platform
+import secrets
 import socket
 
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import geopy
 
 from config import Config
@@ -235,6 +242,49 @@ def is_connected() -> bool:
     except Exception as ex:
         print(ex)
     return False
+
+
+def encrypted_uid() -> str:
+    h = hashes.Hash(hashes.SHA256())
+    h.update(Config.GAIA_SECRET_KEY.encode("utf-8"))
+    key = base64.urlsafe_b64encode(h.finalize())
+    f = Fernet(key=key)
+    return f.encrypt(Config.UID.encode("utf-8")).decode("utf-8")
+
+
+def generate_uid_token(iterations: int = 160000) -> str:
+    CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+    ssalt = "".join(secrets.choice(CHARS) for _ in range(16))
+    bsalt = ssalt.encode("utf-8")
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=bsalt,
+        iterations=iterations,
+    )
+    bkey = kdf.derive(Config.UID.encode())
+    hkey = base64.b64encode(bkey).hex()
+    return f"pbkdf2:sha256:{iterations}${ssalt}${hkey}"
+
+
+def generate_secret_key_from_password(password: str, set_env: bool = False) -> str:
+    if isinstance(password, str):
+        password = password.encode("utf-8")
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"",
+        iterations=2**21,
+    )
+    bkey = kdf.derive(password)
+    skey = base64.b64encode(bkey).decode("utf-8").strip("=")
+    if set_env:
+        if platform.system() in ("Linux", "Windows"):
+            os.environ["GAIA_SECRET_KEY"] = skey
+        else:
+            # Setting environ in BSD and MacOsX can lead to mem leak (cf. doc)
+            os.putenv("GAIA_SECRET_KEY", skey)
+    return skey
 
 
 # ---------------------------------------------------------------------------

@@ -1,32 +1,32 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 import json
 import logging
 import random
-import uuid
-
-import pytz
-from tzlocal import get_localzone
 
 import socketio
 from socketio import exceptions
 from socketio.client import reconnecting_clients
 
+from engine.config_parser import localTZ
+from engine.utils import encrypted_uid, generate_uid_token
+
+
+socketio_logger = logging.getLogger("socketio.client")
+
 
 class datetimeJSONEncoder(json.JSONEncoder):
     def default(self, obj) -> None:
         if isinstance(obj, (datetime, date)):
-            obj = obj.astimezone(tz=pytz.timezone("UTC"))
+            obj = obj.astimezone(tz=timezone.utc)
             return obj.replace(microsecond=0).isoformat()
         if isinstance(obj, time):
             obj = datetime.combine(date.today(), obj)
-            obj = obj.astimezone(tz=get_localzone())
-            obj = obj.astimezone(tz=pytz.timezone("UTC")).time()
+            obj = obj.astimezone(tz=localTZ)
+            obj = obj.astimezone(tz=timezone.utc).time()
             return obj.replace(microsecond=0).isoformat()
 
 
 json.JSONEncoder = datetimeJSONEncoder
-
-socketio_logger = logging.getLogger("socketio.client")
 
 
 class retryClient(socketio.Client):
@@ -67,6 +67,7 @@ class retryClient(socketio.Client):
 
 
 class gaiaNamespace(socketio.ClientNamespace):
+    # TODO: debug logger on events
     def __init__(self, engines_dict: dict, namespace=None) -> None:
         super(gaiaNamespace, self).__init__(namespace=namespace)
         self.engines = engines_dict
@@ -74,11 +75,15 @@ class gaiaNamespace(socketio.ClientNamespace):
     def on_connect(self) -> None:
         self.on_register()
 
-    def on_register(self) -> None:
-        self.emit("register_manager", data={"uid": hex(uuid.getnode())[2:]})
-
     def on_disconnect(self) -> None:
         socketio_logger.info('disconnected from server')
+
+    def on_register(self) -> None:
+        self.emit("register_manager",
+                  data={
+                      "ikys": encrypted_uid(),
+                      "uid_token": generate_uid_token(),
+                  })
 
     def on_ping(self) -> None:
         pong = []
