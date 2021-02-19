@@ -47,13 +47,13 @@ class gaiaClimate(subroutineTemplate):
         self._chaos = Chaos()
         self._regulators = {
             "heaters": {"list": [],
-                        "PID": PID(Kp=Kp, Ki=Ki, Kd=Kd)},
+                        "PID": None},
             "coolers": {"list": [],
-                        "PID": PID(Kp=Kp, Ki=Ki, Kd=Kd)},
+                        "PID": None},
             "humidifiers": {"list": [],
-                            "PID": PID(Kp=Kp, Ki=Ki, Kd=Kd)},
+                            "PID": None},
             "dehumidifiers": {"list": [],
-                              "PID": PID(Kp=Kp, Ki=Ki, Kd=Kd)},
+                              "PID": None},
         }
 
         self._parameters = {
