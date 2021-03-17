@@ -151,21 +151,21 @@ class Engine:
             self.subroutines["light"].set_light_on(countdown=countdown)
         # The subroutine is not currently running
         except RuntimeError as e:
-            print(e)
+            self.logger.error(e)
 
     def set_light_off(self, countdown=None):
         try:
             self.subroutines["light"].set_light_off(countdown=countdown)
         # The subroutine is not currently running
         except RuntimeError as e:
-            print(e)
+            self.logger.error(e)
 
     def set_light_auto(self):
         try:
             self.subroutines["light"].set_light_auto()
         # The subroutine is not currently running
         except RuntimeError as e:
-            print(e)
+            self.logger.error(e)
 
     # Sensors
     @property
@@ -310,7 +310,7 @@ class _enginesManager:
                     except KeyError:
                         pass
         else:
-            print("No need to refresh sun_times")
+            self.logger.info("No need to refresh sun_times")
 
     def createEngine(self, ecosystem, start=False):
         ecosystem_id, ecosystem_name = getIds(ecosystem)
