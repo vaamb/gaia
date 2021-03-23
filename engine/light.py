@@ -76,7 +76,6 @@ class gaiaLight(subroutineTemplate):
             self._lightLoopThread = Thread(target=self._light_loop, args=())
             self._lightLoopThread.name = f"lightLoop-{self._config.ecosystem_id}"
             self._lightLoopThread.start()
-            self._started = True
         else:
             raise RuntimeError
 
@@ -86,7 +85,6 @@ class gaiaLight(subroutineTemplate):
             self._stopEvent.set()
             self._lightLoopThread.join()
             del self._lightLoopThread, self._stopEvent
-            self._started = False
 
     def _light_loop(self) -> None:
         while not self._stopEvent.is_set():

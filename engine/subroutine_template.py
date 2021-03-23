@@ -52,7 +52,7 @@ class subroutineTemplate:
                 raise e
         else:
             raise RuntimeError(f"{self._subroutine_name} is "
-                               f"already running ")
+                               f"already running")
 
     def stop(self):
         if self._started:
