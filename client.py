@@ -41,7 +41,6 @@ class retryClient(socketio.Client):
             except (socketio.exceptions.ConnectionError, ValueError):
                 pass
             else:
-                self.logger.info('Connection successful')
                 self._reconnect_task = None
                 break
 
@@ -71,19 +70,31 @@ class gaiaNamespace(socketio.ClientNamespace):
     def __init__(self, engines_dict: dict, namespace=None) -> None:
         super(gaiaNamespace, self).__init__(namespace=namespace)
         self.engines = engines_dict
+        self._registered = False
 
     def on_connect(self) -> None:
-        self.on_register()
+        socketio_logger.info("Connection successful")
+        self.register()
 
     def on_disconnect(self) -> None:
-        socketio_logger.info('disconnected from server')
+        if self._registered:
+            socketio_logger.warning("Disconnected from server")
+        else:
+            socketio_logger.error("Failed to register enginesManager")
 
     def on_register(self) -> None:
+        self.register()
+
+    def register(self) -> None:
         self.emit("register_manager",
                   data={
                       "ikys": encrypted_uid(),
                       "uid_token": generate_uid_token(),
                   })
+
+    def on_register_ack(self) -> None:
+        socketio_logger.info("enginesManager registration successful")
+        self._registered = True
 
     def on_ping(self) -> None:
         pong = []
