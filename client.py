@@ -149,30 +149,12 @@ class gaiaNamespace(socketio.ClientNamespace):
                 pass
         self.emit("light_data", light_data)
 
-    def on_turn_light_on(self, message: dict) -> None:
+    def on_turn_light(self, message: dict) -> None:
         ecosystem_uid = message["ecosystem"]
-        countdown = message["countdown"]
+        mode = message["mode"]
+        countdown = message.get("countdown", 0)
         try:
-            self.engines[ecosystem_uid].set_light_on(countdown=countdown)
-            self.on_send_light_data(ecosystem_uid)
-        # Except when subroutines are still loading
-        except KeyError:
-            print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
-
-    def on_turn_light_off(self, message: dict) -> None:
-        ecosystem_uid = message["ecosystem"]
-        countdown = message["countdown"]
-        try:
-            self.engines[ecosystem_uid].set_light_off(countdown=countdown)
-            self.on_send_light_data(ecosystem_uid)
-        # Except when subroutines are still loading
-        except KeyError:
-            print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
-
-    def on_turn_light_auto(self, message: dict) -> None:
-        ecosystem_uid = message["ecosystem"]
-        try:
-            self.engines[ecosystem_uid].set_light_auto()
+            self.engines[ecosystem_uid].turn_light(mode=mode, countdown=countdown)
             self.on_send_light_data(ecosystem_uid)
         # Except when subroutines are still loading
         except KeyError:

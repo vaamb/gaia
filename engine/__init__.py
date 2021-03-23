@@ -146,23 +146,9 @@ class Engine:
     def light_info(self):
         return self.subroutines["light"].light_info
 
-    def set_light_on(self, countdown=None):
+    def turn_light(self, mode="automatic", countdown=None):
         try:
-            self.subroutines["light"].set_light_on(countdown=countdown)
-        # The subroutine is not currently running
-        except RuntimeError as e:
-            self.logger.error(e)
-
-    def set_light_off(self, countdown=None):
-        try:
-            self.subroutines["light"].set_light_off(countdown=countdown)
-        # The subroutine is not currently running
-        except RuntimeError as e:
-            self.logger.error(e)
-
-    def set_light_auto(self):
-        try:
-            self.subroutines["light"].set_light_auto()
+            self.subroutines["light"].turn_light(mode=mode, countdown=countdown)
         # The subroutine is not currently running
         except RuntimeError as e:
             self.logger.error(e)

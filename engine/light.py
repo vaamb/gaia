@@ -21,9 +21,7 @@ class gaiaLight(subroutineTemplate):
 
     def __init__(self, ecosystem=None, engine=None) -> None:
         super().__init__(ecosystem=ecosystem, engine=engine)
-
         self._timezone = localTZ
-        self._management = self._config.get_management("light")
         self._status = {"current": False, "last": False}
         self._mode = "automatic"
         self._method = self._config.light_method
@@ -243,45 +241,31 @@ class gaiaLight(subroutineTemplate):
     @property
     def light_info(self) -> dict:
         return {
-            "light_status": self.light_status,
-            "expected_status": self.expected_status,
+            "status": (self.light_status if self.mode == "manual"
+                             else self.expected_status),
             "mode": self.mode,
             "method": self.method,
             "lighting_hours": self.lighting_hours,
         }
 
-    # TODO: add countdown
-    def set_light_on(self, countdown: float = 0) -> None:
+    def turn_light(self, mode="automatic", countdown: float = 0):
         if self._started:
-            self._mode = "manual"
-            self._status["current"] = True
-            additional_message = ""
-            if countdown:
-                additional_message = f" for {countdown} seconds"
-            self._logger.info(
-                f"Lights have been manually turned on{additional_message}")
-        else:
-            raise RuntimeError(f"{self._subroutine_name} is not started in "
-                               f"engine {self._ecosystem}")
-
-    def set_light_off(self, countdown: float = 0) -> None:
-        if self._started:
-            self._mode = "manual"
-            self._status["current"] = False
-            additional_message = ""
-            if countdown:
-                additional_message = f" for {countdown} seconds"
-            self._logger.info(
-                f"Lights have been manually turned off{additional_message}")
-        else:
-            raise RuntimeError(f"{self._subroutine_name} is not started in "
-                               f"engine {self._ecosystem}")
-
-    def set_light_auto(self) -> None:
-        # TODO: add countdown
-        if self._started:
-            self._mode = "automatic"
-            self._logger.info("Lights have been turned to automatic mode")
+            if mode == "automatic":
+                self._mode = "automatic"
+                self._logger.info("Lights have been turned to automatic mode")
+            elif mode in ("on", "off"):
+                self._mode = "manual"
+                new_status = False
+                if mode == "on":
+                    new_status = True
+                self._status["current"] = new_status
+                additional_message = ""
+                if countdown:
+                    self._timer = time.monotonic() + countdown
+                    additional_message = f" for {countdown} seconds"
+                self._logger.info(
+                    f"Lights have been manually turned {mode}"
+                    f"{additional_message}")
         else:
             raise RuntimeError(f"{self._subroutine_name} is not started in "
                                f"engine {self._ecosystem}")
