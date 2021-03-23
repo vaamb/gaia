@@ -8,6 +8,7 @@ from engine.hardware_library import SENSORS_AVAILABLE
 from engine.subroutine_template import subroutineTemplate
 
 lock = Lock()
+# TODO: add an event here so can call a dispatcher to say when new data (for climate amongst others)
 
 
 class gaiaSensors(subroutineTemplate):
@@ -77,7 +78,11 @@ class gaiaSensors(subroutineTemplate):
             self._update_sensors_data()
             loop_time = monotonic() - start_time
             sleep_time = Config.SENSORS_TIMEOUT - loop_time
+            # TODO: add event for climate
             if sleep_time < 0:
+                self._logger.warning(f"Sensors data loop took {loop_time}. This "
+                                     f"either indicates an error occurred or the "
+                                     f"need to adapt Config.SENSOR_TIMEOUT")
                 sleep_time = 2
             self._logger.debug(
                 f"Sensors data update finished in {loop_time:.1f}" +
