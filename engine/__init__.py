@@ -228,7 +228,7 @@ class _enginesManager:
         except FileNotFoundError:
             need_update = True
 
-        if update_dt.date() < date.today():
+        if update_dt.date() >= date.today():
             need_update = False
             self.logger.info("Sun times already up to date")
 
