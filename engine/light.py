@@ -136,6 +136,14 @@ class gaiaLight(subroutineTemplate):
                     light.turn_on()
                 if self._mode == "automatic":
                     self._logger.info("Lights have been automatically turned on")
+                    if self._engine._socketIO_enabled:
+                        try:
+                            self._engine._socketIO_client\
+                                .namespace_handlers["/gaia"]\
+                                .on_send_light_data(
+                                ecosystem_uid=self._config.uid)
+                        except AttributeError as e:
+                            self._logger.error(e)
         # If lighting == False, lights should be off
         else:
             # If lights were opened, turn them off
@@ -145,6 +153,14 @@ class gaiaLight(subroutineTemplate):
                     light.turn_off()
                 if self._mode == "automatic":
                     self._logger.info("Lights have been automatically turned off")
+                    if self._engine._socketIO_enabled:
+                        try:
+                            self._engine._socketIO_client\
+                                .namespace_handlers["/gaia"]\
+                                .on_send_light_data(
+                                ecosystem_uid=self._config.uid)
+                        except AttributeError as e:
+                            self._logger.error(e)
         self._status["last"] = self._status["current"]
 
     def _start(self):

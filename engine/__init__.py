@@ -9,6 +9,7 @@ from threading import Thread, Event
 from time import sleep
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from socketio import Client
 
 from engine import config_parser
 from engine.climate import gaiaClimate
@@ -20,7 +21,7 @@ from engine.light import gaiaLight
 from engine.sensors import gaiaSensors
 
 
-__all__ = ["autoManager", "get_enginesDict",
+__all__ = ["autoManager", "get_enginesDict", "inject_socketIO_client",
            "createEngine", "getEngine", "startEngine", "stopEngine", "delEngine",
            "Engine", "gaiaLight", "gaiaSensors", "gaiaHealth", "gaiaClimate",
            "createEcosystem", "manageEcosystem", "delEcosystem",
@@ -28,6 +29,43 @@ __all__ = ["autoManager", "get_enginesDict",
 
 # TODO: keep specificConfig.get_subroutines() up to date
 SUBROUTINES = (gaiaSensors, gaiaLight, gaiaClimate, gaiaHealth)
+
+
+class _socketIO_proxy_class:
+    def __init__(self):
+        self._client = None
+        self._enabled = False
+
+    @property
+    def client(self):
+        return self._client
+
+    @client.setter
+    def client(self, socketIO_client):
+        if isinstance(socketIO_client, Client):
+            self._client = socketIO_client
+            self._enabled = True
+        else:
+            print("socketIO_client must be an instance of socketio.Client")
+    
+    @client.deleter
+    def client(self):
+        # Not conventional but need to keep a trace of self._client
+        self._client = None
+        self._enabled = False
+
+    @property
+    def enabled(self):
+        return self._enabled
+
+
+_socketIO_proxy = _socketIO_proxy_class()
+
+
+def inject_socketIO_client(socketIO_client):
+    global _socketIO_proxy
+    if not _socketIO_proxy.client:
+        _socketIO_proxy.client = socketIO_client
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +96,6 @@ class Engine:
         except Exception as e:
             self.logger.error("Error during Engine initialization. " +
                               f"ERROR msg: {e}")
-
         self._started = False
         self.logger.debug(f"Engine initialization successful")
 
@@ -68,6 +105,14 @@ class Engine:
         h.update(json.dumps(self.config, sort_keys=True).encode())
         h.update(json.dumps(self.subroutines_started, sort_keys=True).encode())
         return h.digest() == other
+
+    @property
+    def _socketIO_client(self):
+        return _socketIO_proxy.client
+
+    @property
+    def _socketIO_enabled(self):
+        return _socketIO_proxy.enabled
 
     def start(self):
         if not self._started:
@@ -136,6 +181,7 @@ class Engine:
 
     @property
     def config(self):
+        # TODO: change sensors, light ... management to check whether hardware is used
         return self._config.config_dict
 
     # Light
@@ -191,7 +237,6 @@ class _enginesManager:
         self._subroutine_dict = {}
         self._momentsManager = False
         self._scheduler = None
-        self.autoManager = False
         self.managerThread = None
         self.stop_engines = False
         self.clear_manager = False

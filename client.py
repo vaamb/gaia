@@ -133,7 +133,6 @@ class gaiaNamespace(socketio.ClientNamespace):
 
     def on_send_light_data(self, ecosystem_uid: str = None) -> None:
         light_data = {}
-
         if ecosystem_uid:
             ecosystem_uids = [ecosystem_uid]
         else:

@@ -7,9 +7,9 @@ import argparse
 from time import sleep
 import logging
 
-from client import json, gaiaNamespace, retryClient
 from config import Config
-from engine import autoManager, get_enginesDict
+from client import json, gaiaNamespace, retryClient
+from engine import autoManager, get_enginesDict, inject_socketIO_client
 
 
 ADDR_TUPLE = Config.GAIAWEB
@@ -37,9 +37,10 @@ class gaiaEngine:
             enginesDict = get_enginesDict()
             if self.use_client:
                 logger.info("Starting socketIO client")
-                self.client = retryClient(json=json)
+                self.client = retryClient(json=json, logger=Config.DEBUG)
                 namespace = gaiaNamespace(engines_dict=enginesDict, namespace="/gaia")
                 self.client.register_namespace(namespace)
+                inject_socketIO_client(self.client)
                 self.client.connect(SERVER_URL, transports="websocket", namespaces=['/gaia'])
             self.started = True
         else:
