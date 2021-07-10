@@ -3,9 +3,10 @@ __pycache__
 
 logs
 cache
-test
 
-remoteLauncher.py
 
+*.xlsx
 *.cfg
-*opt*
+
+WIP.*
+PRIV.*

@@ -18,6 +18,7 @@ class subroutineTemplate:
         else:
             self._engine = None
             self._config = getConfig(ecosystem)
+        self._uid = self._config.uid
         self._ecosystem = self._config.name
         self._subroutine_name = f"gaia{self.NAME.capitalize()}"
         self._logger = logging.getLogger(f"eng.{self._ecosystem}."
@@ -75,8 +76,7 @@ class subroutineTemplate:
         return self._started
 
     def add_engine(self, engine) -> None:
-        ref = weakref.ref(engine)
-        self._engine = ref()
+        self._engine = weakref.proxy(engine)
 
     def del_engine(self) -> None:
         self._engine = None

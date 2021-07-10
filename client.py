@@ -11,11 +11,11 @@ from engine.config_parser import localTZ
 from engine.utils import encrypted_uid, generate_uid_token
 
 
-socketio_logger = logging.getLogger("socketio.client")
+socketio_logger = logging.getLogger("gaiaEngine.socketio.client")
 
 
 class datetimeJSONEncoder(json.JSONEncoder):
-    def default(self, obj) -> None:
+    def default(self, obj) -> str:
         if isinstance(obj, (datetime, date)):
             obj = obj.astimezone(tz=timezone.utc)
             return obj.replace(microsecond=0).isoformat()
@@ -31,7 +31,7 @@ json.JSONEncoder = datetimeJSONEncoder
 
 class retryClient(socketio.Client):
     def connect(self, *args, **kwargs) -> None:
-        self._reconnect_abort.clear()
+#        self._reconnect_abort.clear()
         reconnecting_clients.append(self)
         attempt_count = 0
         current_delay = self.reconnection_delay

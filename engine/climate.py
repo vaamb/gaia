@@ -54,6 +54,7 @@ class gaiaClimate(subroutineTemplate):
                             "PID": None},
             "dehumidifiers": {"list": [],
                               "PID": None},
+            "fans": {"list": []}
         }
 
         self._parameters = {
@@ -65,3 +66,4 @@ class gaiaClimate(subroutineTemplate):
         self._finish__init__()
 
     # TODO: get heaters and coolers from config
+    # TODO: if day and night parameters: use them, else, use 8h - 20h

@@ -1,4 +1,8 @@
 #!/usr/bin/python
+from setproctitle import setproctitle
+
+setproctitle("gaiaEngine")
+
 import eventlet
 
 eventlet.monkey_patch()
@@ -42,6 +46,7 @@ class gaiaEngine:
                 self.client.register_namespace(namespace)
                 inject_socketIO_client(self.client)
                 self.client.connect(SERVER_URL, transports="websocket", namespaces=['/gaia'])
+
             self.started = True
         else:
             raise RuntimeError("Only one instance of gaiaEngine can be run")

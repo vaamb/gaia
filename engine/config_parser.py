@@ -20,7 +20,7 @@ new_config_event = Event()
 localTZ = get_localzone()
 
 logger = logging.getLogger("gaiaEngine.config")
-
+# TODO: use a bidict for uid - name
 
 # ---------------------------------------------------------------------------
 #   default ecosystem configuration
@@ -176,6 +176,7 @@ class _globalConfig:
     def set_status(self, ecosystem_id: str, value: bool) -> None:
         self._ecosystems_config[ecosystem_id]["status"] = value
 
+    # TODO: use a bidict
     @property
     def id_to_name_dict(self) -> dict:
         return {ecosystem: self._ecosystems_config[ecosystem]["name"]
@@ -186,6 +187,7 @@ class _globalConfig:
         return {self._ecosystems_config[ecosystem]["name"]: ecosystem
                 for ecosystem in self._ecosystems_config}
 
+    # TODO: use a named tuple
     def getIds(self, ecosystem: str) -> tuple:
         if ecosystem in self.ecosystems_id:
             ecosystem_id = ecosystem
@@ -330,12 +332,13 @@ class specificConfig:
     def status(self, value: bool) -> None:
         self.config_dict["status"] = value
 
-    """Parameters related to sub-processes control"""
+    """Parameters related to sub-routines control"""
+    # TODO: rename to manage, with the new value added = False and
+    #  if new value: update, else: return current value
     def get_management(self, parameter: str) -> bool:
         try:
-            return self.config_dict["management"][parameter]
-        except Exception as ex:
-            print(ex)
+            return self.config_dict["management"].get(parameter, False)
+        except (KeyError, AttributeError):
             return False
 
     def set_management(self, parameter: str, value: bool) -> None:
@@ -350,11 +353,19 @@ class specificConfig:
     """Environment related parameters"""
     @property
     def light_method(self) -> str:
-        if not is_connected():
-            logger.warning("Not connected to the internet, light method automatically turned to 'fixed'")
-            return "fixed"
-        else:
-            return self.config_dict["environment"]["light"]
+        if not self.get_management("light"):
+            return None
+        try:
+            method = self.config_dict["environment"]["light"]
+            if method in ("elongate", "mimic"):
+                if not is_connected():
+                    logger.warning("Not connected to the internet, light "
+                                   "method automatically turned to 'fixed'")
+                    return "fixed"
+            return method
+        except KeyError:
+            raise Exception("Either define ['environment']['light'] or remove "
+                            "light management")
 
     @property
     def chaos(self) -> str:
@@ -366,23 +377,26 @@ class specificConfig:
     def get_climate_parameters(self, parameter: str) -> dict:
         if parameter not in ("temperature", "humidity"):
             raise ValueError("parameter should be 'temperature' or 'humidity'")
-
         data = {}
         for moment_of_day in ("day", "night"):
-            data[moment_of_day] = \
-                self.config_dict["environment"][moment_of_day][parameter]
-
+            try:
+                data[moment_of_day] = \
+                    self.config_dict["environment"][moment_of_day].get(
+                        parameter, None)
+            except KeyError:
+                data[moment_of_day] = None
         try:
             data["hysteresis"] = \
-                self.config_dict["environment"]["hysteresis"][parameter]
+                self.config_dict["environment"]["hysteresis"].get(
+                    parameter, None)
         except KeyError:
             data["hysteresis"] = 0
-
         return data
 
     def set_climate_parameters(self, parameter: str, value: dict) -> None:
         if parameter not in ("temperature", "humidity"):
-            raise ValueError("parameter should be set to either 'temperature' or 'humidity'")
+            raise ValueError("parameter should be set to either 'temperature' "
+                             "or 'humidity'")
         if not isinstance(value, dict):
             raise ValueError("value should be a dict with keys equal to 'day' \
                              and 'night' and values equal to the required \
@@ -565,15 +579,18 @@ class specificConfig:
 
     @property
     def time_parameters(self) -> dict:
+        parameters = {
+            "day": None,
+            "night": None,
+        }
         try:
-            t = {}
             day = self.config_dict["environment"]["day"]["start"]
-            t["day"] = self.human_time_parser(day)
+            parameters["day"] = self.human_time_parser(day)
             night = self.config_dict["environment"]["night"]["start"]
-            t["night"] = self.human_time_parser(night)
-            return t
-        except:
-            raise AttributeError("No time parameter set")
+            parameters["night"] = self.human_time_parser(night)
+        except (KeyError, AttributeError):
+            pass
+        return parameters
 
     @time_parameters.setter
     def time_parameters(self, value: dict) -> None:
