@@ -1,40 +1,52 @@
 import base64
-from collections import OrderedDict
+from datetime import date, datetime, time, timezone
+import hashlib
+import logging
+import logging.config
 from math import log, e
 import os
+import pathlib
 import platform
+import random
 import secrets
 import socket
+from time import sleep
 
+from cachetools import LRUCache
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import geopy
+import ruamel.yaml
+from tzlocal import get_localzone
 
 from config import Config
 
 
-class LRU(OrderedDict):
-    # Recipe taken from python doc
-    def __init__(self, maxsize=32, *args, **kwargs):
-        self.maxsize = maxsize
-        super().__init__(*args, **kwargs)
-
-    def __getitem__(self, key):
-        value = super().__getitem__(key)
-        self.move_to_end(key)
-        return value
-
-    def __setitem__(self, key, value):
-        if key in self:
-            self.move_to_end(key)
-        super().__setitem__(key, value)
-        if len(self) > self.maxsize:
-            oldest = next(iter(self))
-            del self[oldest]
+coordinates = LRUCache(maxsize=16)
 
 
-coordinates = LRU(maxsize=16)
+base_dir = pathlib.Path(__file__).absolute().parents[1]
+
+localTZ = get_localzone()
+
+yaml = ruamel.yaml.YAML()
+
+
+def file_hash(file_path: pathlib.Path) -> hex:
+    try:
+        h = hashlib.md5()
+        with open(file_path, "rb") as f:
+            for block in iter(lambda: f.read(4096), b""):
+                h.update(block)
+        return h.hexdigest()
+    except FileNotFoundError:
+        return 0
+
+
+def utc_time_to_local_time(utc_time: time) -> time:
+    dt = datetime.combine(date.today(), utc_time).replace(tzinfo=timezone.utc)
+    return dt.astimezone().time()
 
 
 def pin_translation(pin: int, direction: str) -> int:
@@ -287,20 +299,118 @@ def generate_secret_key_from_password(password: str, set_env: bool = False) -> s
     return skey
 
 
-# ---------------------------------------------------------------------------
-#   Compatibility modules for testing on laptop
-# ---------------------------------------------------------------------------
-class Pin:
-    def __init__(self, bcm_nbr: int) -> None:
-        self._id = bcm_nbr
-        self._mode = 0
-        self._value = 0
+def random_sleep(avg_duration: float = 0.15,
+                 std_deviation: float = 0.075
+                 ) -> None:
+    sleep(abs(random.gauss(avg_duration, std_deviation)))
 
-    def init(self, mode: int) -> None:
-        self._mode = mode
 
-    def value(self, val: int) -> int:
-        if val:
-            self._value = val
-        else:
-            return self._value
+def configure_logging(config_class):
+    DEBUG = config_class.DEBUG
+    LOG_TO_STDOUT = config_class.LOG_TO_STDOUT
+    LOG_TO_FILE = config_class.LOG_TO_FILE
+    LOG_ERROR = config_class.LOG_ERROR
+
+    handlers = []
+
+    if LOG_TO_STDOUT:
+        handlers.append("streamHandler")
+
+    if LOG_TO_FILE or LOG_ERROR:
+        if not os.path.exists(base_dir/"logs"):
+            os.mkdir(base_dir/"logs")
+
+    if LOG_TO_FILE:
+        handlers.append("fileHandler")
+
+    if LOG_ERROR:
+        handlers.append("errorFileHandler")
+
+    LOGGING_CONFIG = {
+        "version": 1,
+        "disable_existing_loggers": False,
+
+        "formatters": {
+            "streamFormat": {
+                "format": "%(asctime)s [%(levelname)-4.4s] %(name)-20.20s: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            },
+            "fileFormat": {
+                "format": "%(asctime)s -- %(levelname)s  -- %(name)s -- %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            },
+            "errorFormat": {
+                'format': '%(asctime)s %(levelname)-4.4s %(module)-17s ' +
+                          'line:%(lineno)-4d  %(message)s',
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            },
+        },
+
+        "handlers": {
+            "streamHandler": {
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}",
+                "formatter": "streamFormat",
+                "class": "logging.StreamHandler",
+            },
+        },
+
+        "loggers": {
+            "": {
+                "handlers": handlers,
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
+            },
+            "apscheduler": {
+                "handlers": handlers,
+                "level": "WARNING"
+            },
+            "urllib3": {
+                "handlers": handlers,
+                "level": "WARNING"
+            },
+            "engineio": {
+                "handlers": handlers,
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
+            },
+            "socketio": {
+                "handlers": handlers,
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
+            },
+        },
+    }
+
+    # Append file handlers to config as if they are needed they require logs file
+    if LOG_TO_FILE:
+        LOGGING_CONFIG["handlers"].update({
+            "fileHandler": {
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}",
+                "formatter": "fileFormat",
+                "class": "logging.handlers.RotatingFileHandler",
+                'filename': 'logs/gaiaEngine.log',
+                'mode': 'w+',
+                'maxBytes': 1024 * 512,
+                'backupCount': 5,
+            }
+        })
+
+    if LOG_ERROR:
+        LOGGING_CONFIG["handlers"].update({
+            "errorFileHandler": {
+                "level": "ERROR",
+                "formatter": "errorFormat",
+                "class": "logging.FileHandler",
+                'filename': 'logs/gaiaEngine_errors.log',
+                'mode': 'a',
+            }
+        })
+
+    logging.config.dictConfig(LOGGING_CONFIG)
+
+
+class SingletonMeta(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            instance = super().__call__(*args, **kwargs)
+            cls._instances[cls] = instance
+        return cls._instances[cls]

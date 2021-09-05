@@ -3,20 +3,17 @@ import io
 import pytz
 
 from apscheduler.schedulers.background import BackgroundScheduler
-import numpy as np
 
 from config import Config
-from engine.config_parser import localTZ
-from engine.subroutine_template import subroutineTemplate
+from src.subroutines.template import SubroutineTemplate
 
 
-class gaiaHealth(subroutineTemplate):
+class gaiaHealth(SubroutineTemplate):
     NAME = "health"
 
-    def __init__(self, ecosystem=None, engine=None) -> None:
-        super().__init__(ecosystem=ecosystem, engine=engine)
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
-        self._timezone = localTZ
         self._health_data = {}
         self._scheduler = BackgroundScheduler()
         self._imageIO = io.BytesIO

@@ -1,8 +1,6 @@
 import random
 
-from simple_pid import PID
-
-from engine.subroutine_template import subroutineTemplate
+from src.subroutines.template import SubroutineTemplate
 
 
 Kp = 0.01
@@ -38,11 +36,11 @@ class Chaos:
             return self.chaos
 
 
-class gaiaClimate(subroutineTemplate):
+class gaiaClimate(SubroutineTemplate):
     NAME = "climate"
 
-    def __init__(self, ecosystem=None, engine=None) -> None:
-        super().__init__(ecosystem=ecosystem, engine=engine)
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
         self._chaos = Chaos()
         self._regulators = {

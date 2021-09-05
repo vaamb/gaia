@@ -7,8 +7,7 @@ import socketio
 from socketio import exceptions
 from socketio.client import reconnecting_clients
 
-from engine.config_parser import localTZ
-from engine.utils import encrypted_uid, generate_uid_token
+from src.utils import encrypted_uid, generate_uid_token, localTZ
 
 
 socketio_logger = logging.getLogger("gaiaEngine.socketio.client")
@@ -158,3 +157,19 @@ class gaiaNamespace(socketio.ClientNamespace):
         # Except when subroutines are still loading
         except KeyError:
             print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
+
+    def on_turn_actuator(self, message: dict) -> None:
+        ecosystem_uid = message["ecosystem"]
+        actuator = message["actuator"]
+        mode = message["mode"]
+        countdown = message.get("countdown", 0)
+        try:
+            self.engines[ecosystem_uid].turn_actuator(
+                actuator=actuator, mode=mode, countdown=countdown
+            )
+        # Except when subroutines are still loading
+        except KeyError:
+            print(f"{ecosystem_uid}'s {actuator} cannot be turned to {mode} yet")
+        finally:
+            if actuator == "light":
+                self.on_send_light_data(ecosystem_uid)

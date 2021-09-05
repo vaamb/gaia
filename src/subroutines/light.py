@@ -1,13 +1,11 @@
 from datetime import datetime, date
 from threading import Event, Lock, Thread
-from time import time
-
-from simple_pid import PID
+import time
 
 from config import Config
-from engine.config_parser import localTZ
-from engine.hardware_library import gpioSwitch
-from engine.subroutine_template import subroutineTemplate
+from src.utils import localTZ
+from src.hardware.actuators import gpioSwitch
+from src.subroutines.template import SubroutineTemplate
 
 
 Kp = 0.01
@@ -16,23 +14,25 @@ Kd = 0.01
 lock = Lock()
 
 
-class gaiaLight(subroutineTemplate):
+class gaiaLight(SubroutineTemplate):
     NAME = "light"
 
-    def __init__(self, ecosystem=None, engine=None) -> None:
-        super().__init__(ecosystem=ecosystem, engine=engine)
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self._timezone = localTZ
         self._status = {"current": False, "last": False}
         self._mode = "automatic"
+        # TODO: fall back values if not using light
         self._method = self._config.light_method
         self._dimmable = {"value": False,  # self._config ...
                           "level": 100}
         self._lights = []
-        self._pid = PID(Kp=Kp, Ki=Ki, Kd=Kd, output_limits=(20, 100))
-        self._sun_times = {}
-        # TODO: find a way update_sun_times() is called after download from manager
-        self.update_sun_times()
-        self._timer = 0
+        self._pid = None
+        # TODO: get sun_times day/night from config. If not precised: display None, and use 8/20h
+        self._sun_times = {"day": None,
+                           "night": None}
+        self._stopEvent = Event()
+        self._timer: time.monotonic() = 0.0
         self._finish__init__()
 
     def _tune_light_level(self, hardware_uid: str) -> None:
@@ -45,6 +45,7 @@ class gaiaLight(subroutineTemplate):
     def _add_light(self, hardware_uid: str) -> None:
         name = self._config.IO_dict[hardware_uid]["name"]
         light = gpioSwitch(
+            subroutine=self,
             uid=hardware_uid,
             name=name,
             address=self._config.IO_dict[hardware_uid]["address"],
@@ -72,7 +73,7 @@ class gaiaLight(subroutineTemplate):
             self._logger.info("Starting light loop at a frequency of " +
                               f"{1 / Config.LIGHT_LOOP_PERIOD}Hz")
             self._hardware_setup()
-            self._stopEvent = Event()
+
             self._lightLoopThread = Thread(target=self._light_loop, args=())
             self._lightLoopThread.name = f"lightLoop-{self._config.ecosystem_id}"
             self._lightLoopThread.start()
@@ -88,12 +89,11 @@ class gaiaLight(subroutineTemplate):
 
     def _light_loop(self) -> None:
         while not self._stopEvent.is_set():
-            if self._management:
-                if self._timer:
-                    if self._timer < time():
-                        self._timer = 0
-                        self._mode = "automatic"
-                self._light_routine()
+            if self._timer:
+                if self._timer < time.monotonic():
+                    self._timer = 0
+                    self._mode = "automatic"
+            self._light_routine()
             self._stopEvent.wait(Config.LIGHT_LOOP_PERIOD)
 
     """Functions to switch the light on/off either manually or automatically"""
@@ -101,10 +101,14 @@ class gaiaLight(subroutineTemplate):
     def _is_time_between(begin_time: time, end_time: time,
                          check_time=None) -> bool:
         check_time = check_time or datetime.now().time()
-        if begin_time < end_time:
-            return begin_time <= check_time < end_time
-        else:  # crosses midnight
-            return check_time >= begin_time or check_time < end_time
+        try:
+            if begin_time < end_time:
+                return begin_time <= check_time < end_time
+            else:  # crosses midnight
+                return check_time >= begin_time or check_time < end_time
+        except TypeError:
+            # one of times is a none
+            return False
 
     def _to_dt(self, _time: time) -> datetime:
         # Transforms time to today's datetime. Needed to use timedelta
@@ -130,7 +134,7 @@ class gaiaLight(subroutineTemplate):
             # If lights were closed, turn them on
             if not self._status["last"]:
                 # Reset pid so there is no internal value overshoot
-                self._pid.reset()
+#                self._pid.reset()
                 self._status["current"] = True
                 for light in self._lights:
                     light.turn_on()
@@ -141,7 +145,7 @@ class gaiaLight(subroutineTemplate):
                             self._engine._socketIO_client\
                                 .namespace_handlers["/gaia"]\
                                 .on_send_light_data(
-                                ecosystem_uid=self._config.uid)
+                                    ecosystem_uid=self._config.uid)
                         except AttributeError as e:
                             self._logger.error(e)
         # If lighting == False, lights should be off
@@ -155,40 +159,54 @@ class gaiaLight(subroutineTemplate):
                     self._logger.info("Lights have been automatically turned off")
                     if self._engine._socketIO_enabled:
                         try:
-                            self._engine._socketIO_client\
-                                .namespace_handlers["/gaia"]\
-                                .on_send_light_data(
-                                ecosystem_uid=self._config.uid)
+                            self._engine._socketIO_client.emit(
+                                "light_data",
+                                data={self._uid: self.light_info},
+                                namespace="/gaia")
                         except AttributeError as e:
                             self._logger.error(e)
         self._status["last"] = self._status["current"]
 
     def _start(self):
+        # TODO: check that the ecosystem has day and night parameters
+        now = datetime.now()
+        if now.date() !=  self._engine._manager.last_sun_times_update.date():
+            self._engine._manager.refresh_sun_times()
+        self.update_sun_times()
         self._start_light_loop()
 
     def _stop(self):
         self._stop_light_loop()
+        self._sun_times = {}
 
     """API calls"""
     def update_sun_times(self) -> None:
         # TODO: check if it works when not using elongate
         # lock thread as all the whole dict should be transformed at the "same time"
-        lock.acquire()
-        self._sun_times.update(self._config.time_parameters)
-        try:
-            self._sun_times.update(self._config.sun_times)
-            sunrise = self._to_dt(self._sun_times["sunrise"])
-            twilight_begin = self._to_dt(self._sun_times["twilight_begin"])
-            self._sun_times["offset"] = sunrise - twilight_begin
-            self._sun_times["morning_end"] = \
-                (self._to_dt(self._sun_times["sunrise"]) + self._sun_times["offset"]).time()
-            self._sun_times["evening_start"] = \
-                (self._to_dt(self._sun_times["sunset"]) - self._sun_times["offset"]).time()
+        with lock:
+            self._sun_times.update(self._config.time_parameters)
+            if self._sun_times["day"]:
+                try:
+                    # TODO: move this outside,
+                    self._sun_times.update(self._config.sun_times)
+                    sunrise = self._to_dt(self._sun_times["sunrise"])
+                    twilight_begin = self._to_dt(self._sun_times["twilight_begin"])
+                    self._sun_times["offset"] = sunrise - twilight_begin
+                    self._sun_times["morning_end"] = \
+                        (self._to_dt(self._sun_times["sunrise"]) + self._sun_times["offset"]).time()
+                    self._sun_times["evening_start"] = \
+                        (self._to_dt(self._sun_times["sunset"]) - self._sun_times["offset"]).time()
+                except KeyError:
+                    # No sun times available in config/cache
+                    pass
 
-        except KeyError:
-            # No sun times available
-            pass
-        lock.release()
+        if self._engine._socketIO_enabled:
+            try:
+                self._engine._socketIO_client.emit(
+                    "light_data", data={self._uid: self.light_info},
+                    namespace="/gaia")
+            except AttributeError as e:
+                self._logger.error(e)
 
     @ property
     def expected_status(self) -> bool:
@@ -196,7 +214,7 @@ class gaiaLight(subroutineTemplate):
         if self._method == "fixed":
             lighting = self._is_time_between(self._sun_times["day"],
                                              self._sun_times["night"])
-
+        #TODO: try, else use fixed
         elif self._method == "place":
             lighting = self._is_time_between(self._sun_times["sunrise"],
                                              self._sun_times["sunset"])
@@ -253,6 +271,13 @@ class gaiaLight(subroutineTemplate):
         return hours
 
     @property
+    def timer(self) -> float:
+        if self._timer:
+            if self._timer > time.monotonic():
+                return time.monotonic() - self._timer
+        return 0.0
+
+    @property
     def light_info(self) -> dict:
         return {
             "status": (self.light_status if self.mode == "manual"
@@ -260,9 +285,10 @@ class gaiaLight(subroutineTemplate):
             "mode": self.mode,
             "method": self.method,
             "lighting_hours": self.lighting_hours,
+            "timer": self.timer,
         }
 
-    def turn_light(self, mode="automatic", countdown: float = 0):
+    def turn_light(self, mode="automatic", countdown: float = 0.0):
         if self._started:
             if mode == "automatic":
                 self._mode = "automatic"
@@ -284,29 +310,22 @@ class gaiaLight(subroutineTemplate):
             raise RuntimeError(f"{self._subroutine_name} is not started in "
                                f"engine {self._ecosystem}")
 
-    def start_countdown(self, countdown: float) -> None:
-        if not isinstance(countdown, float):
-            raise ValueError("Countdown must be an int")
-        if self._status["current"]:
-            self.set_light_off(countdown)
-        else:
-            self.set_light_on(countdown)
-        self._timer = time() + countdown
-
     def get_countdown(self) -> float:
-        return round(self._timer - time(), 2)
+        return round(self._timer - time.monotonic(), 2)
 
     def increase_countdown(self, additional_time: float) -> None:
         if self._timer:
-            self._logger.info("Increasing timer by {additional_time} seconds")
+            self._logger.info(f"Increasing timer by {additional_time} seconds")
             self._timer += additional_time
         else:
-            self.start_countdown(additional_time)
+            self._timer = time.monotonic() + additional_time
 
     def decrease_countdown(self, decrease_time: float) -> None:
         if self._timer:
-            self._logger.info("Decreasing timer by {decrease_time} seconds")
+            self._logger.info(f"Decreasing timer by {decrease_time} seconds")
             self._timer -= decrease_time
+            if self._timer <= 0:
+                self._timer = 0
         else:
             raise AttributeError("No timer set, you cannot reduce the countdown")
 

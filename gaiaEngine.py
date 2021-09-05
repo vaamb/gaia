@@ -12,8 +12,9 @@ from time import sleep
 import logging
 
 from config import Config
-from client import json, gaiaNamespace, retryClient
-from engine import autoManager, get_enginesDict, inject_socketIO_client
+from src.client import json, gaiaNamespace, retryClient
+from src.manager import enginesManager
+from src.utils import configure_logging
 
 
 ADDR_TUPLE = Config.GAIAWEB
@@ -33,18 +34,22 @@ class gaiaEngine:
         self.use_client = use_client
         self.client = None
         self.started = False
+        self.manager = enginesManager()
 
     def start(self):
         if not self.started:
             logger.info("Starting")
-            autoManager.start(joint_start=True)
-            enginesDict = get_enginesDict()
+            self.manager.start(joint_start=True)
+            # autoManager.start(joint_start=True)
+            # enginesDict = get_enginesDict()
             if self.use_client:
                 logger.info("Starting socketIO client")
                 self.client = retryClient(json=json, logger=Config.DEBUG)
-                namespace = gaiaNamespace(engines_dict=enginesDict, namespace="/gaia")
+                namespace = gaiaNamespace(
+                    engines_dict=self.manager.engines, namespace="/gaia"
+                )
                 self.client.register_namespace(namespace)
-                inject_socketIO_client(self.client)
+                self.manager.SocketIO_client = self.client
                 self.client.connect(SERVER_URL, transports="websocket", namespaces=['/gaia'])
 
             self.started = True
@@ -63,7 +68,7 @@ class gaiaEngine:
     def stop(self):
         if self.started:
             logger.info("Stopping")
-            autoManager.stop()
+            self.manager.stop()
             self.client.disconnect()
             self.started = False
 
@@ -86,6 +91,7 @@ if __name__ == "__main__":
         variables["client"] = 1
         variables["db"] = 1
         variables["web"] = 1
+    configure_logging(Config)
     gaia = gaiaEngine(use_client=variables["client"],
                       use_db=variables["db"],
                       use_web_interface=variables["web"]

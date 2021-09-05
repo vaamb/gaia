@@ -1,29 +1,20 @@
 import logging
 import weakref
 
-from engine.config_parser import configWatchdog, getConfig
 
-
-class subroutineTemplate:
+class SubroutineTemplate:
     NAME = "subroutineTemplate"
 
-    def __init__(self, ecosystem: str = None, engine=None) -> None:
-        assert ecosystem or engine
-        if engine:
-            # Use weakref for the circular ref
-            self._engine = weakref.proxy(engine)
-            if ecosystem:
-                assert ecosystem in (engine.name, engine.uid)
-            self._config = self._engine._config
-        else:
-            self._engine = None
-            self._config = getConfig(ecosystem)
+    def __init__(self, engine) -> None:
+        self._engine = weakref.proxy(engine)
+        self._config = self._engine._config
         self._uid = self._config.uid
         self._ecosystem = self._config.name
         self._subroutine_name = f"gaia{self.NAME.capitalize()}"
-        self._logger = logging.getLogger(f"eng.{self._ecosystem}."
-                                         f"{self.NAME.capitalize()}")
-        self._logger.info(f"Initializing {self._subroutine_name}")
+        self._logger = logging.getLogger(
+            f"eng.{self._ecosystem}.{self.NAME.capitalize()}"
+        )
+        self._logger.debug(f"Initializing {self._subroutine_name}")
         self._started = False
 
     def _finish__init__(self):
@@ -38,9 +29,7 @@ class subroutineTemplate:
 
     def start(self):
         if not self._started:
-            if not self._engine:
-                configWatchdog.start()
-            self._logger.info(f"Starting {self._subroutine_name}")
+            self._logger.debug(f"Starting {self._subroutine_name}")
             try:
                 self._start()
                 self._started = True
@@ -57,9 +46,7 @@ class subroutineTemplate:
 
     def stop(self):
         if self._started:
-            if not self._engine:
-                configWatchdog.stop()
-            self._logger.info(f"Stopping {self._subroutine_name}")
+            self._logger.debug(f"Stopping {self._subroutine_name}")
             try:
                 self._stop()
                 self._started = False

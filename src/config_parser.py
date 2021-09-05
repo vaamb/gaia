@@ -1,26 +1,26 @@
-from datetime import date, datetime, time
-import hashlib
+from datetime import datetime, time
 import json
 import logging
-import pathlib
 import random
 import string
-from threading import Thread, Event
+from threading import Condition, Event, Lock, Thread
+from typing import Union
 
-import pytz
-import ruamel.yaml
-from tzlocal import get_localzone
-
-from config import Config, base_dir
-from engine.utils import get_coordinates, is_connected
-from engine.hardware_library import hardware, gpioHardware, i2cHardware
+from config import Config
+from src.utils import base_dir, file_hash, get_coordinates, is_connected, \
+    SingletonMeta, utc_time_to_local_time, yaml
+from src.hardware.base import hardware, gpioHardware, i2cHardware
 
 
-new_config_event = Event()
-localTZ = get_localzone()
+SUBROUTINE_NAMES = ("climate", "health", "light", "sensors")
+
+
+config_event = Condition()
+lock = Lock()
+
 
 logger = logging.getLogger("gaiaEngine.config")
-# TODO: use a bidict for uid - name
+
 
 # ---------------------------------------------------------------------------
 #   default ecosystem configuration
@@ -63,23 +63,26 @@ DEFAULT_ECOSYSTEM_CFG = {
 # ---------------------------------------------------------------------------
 #   _globalConfig class
 # ---------------------------------------------------------------------------
-_global_config = None
-
-
-class _globalConfig:
+class GeneralConfig(metaclass=SingletonMeta):
     def __init__(self) -> None:
-        logger.debug("Initializing globalConfig")
-        self._ecosystems_config = None
-        self.yaml = ruamel.yaml.YAML()
+        logger.debug("Initializing GeneralConfig")
+        self._ecosystems_config: dict = {}
+        self._private_config: dict = {}
         self._load_config()
+        self._hash_dict = {}
+        self._stop_event = Event()
+        self._thread = None
+        self._started = False
+        self._watchdog_pause = False
+        _configs["__general__"] = self
 
     def _load_config(self, **kwargs) -> None:
-        cfg = kwargs.pop("cfg", ["ecosystems", "private"])
+        cfg = kwargs.pop("cfg", ("ecosystems", "private"))
         if "ecosystems" in cfg:
             try:
-                custom_cfg = base_dir / "ecosystems.cfg"
+                custom_cfg = base_dir/"ecosystems.cfg"
                 with open(custom_cfg, "r") as file:
-                    self._ecosystems_config = self.yaml.load(file)
+                    self._ecosystems_config = yaml.load(file)
                     if self._ecosystems_config == DEFAULT_ECOSYSTEM_CFG:
                         self.default = True
                     else:
@@ -97,25 +100,74 @@ class _globalConfig:
             try:
                 private_cfg = base_dir / "private.cfg"
                 with open(private_cfg, "r") as file:
-                    self._private_config = self.yaml.load(file)
+                    self._private_config = yaml.load(file)
             except IOError:
                 logger.warning("There is currently no custom private configuration file. "
                                "Using the default settings instead")
                 self._private_config = {}
 
-    def update(self, cfg: list = ["ecosystems", "private"]) -> None:
+    def update_cfg_hash(self) -> None:
+        for cfg in ("ecosystems", "private"):
+            path = base_dir / f"{cfg}.cfg"
+            self._hash_dict[cfg] = file_hash(path)
+
+    def _watchdog_loop(self) -> None:
+        while not self._stop_event.is_set():
+            if not self._watchdog_pause:
+                update_cfg = []
+                old_hash = self._hash_dict
+                self.update_cfg_hash()
+                for cfg in ("ecosystems", "private"):
+                    if old_hash[cfg] != self._hash_dict[cfg]:
+                        update_cfg.append(cfg)
+                if update_cfg:
+                    logger.info("Change in config detected, updating it")
+                    self.update(update_cfg)
+                    # set config_event, which is used by autoManager
+                    with config_event:
+                        config_event.notify_all()
+            self._stop_event.wait(Config.CONFIG_WATCHER_PERIOD)
+
+    def start_watchdog(self) -> None:
+        if not self._started:
+            logger.info("Starting configWatchdog")
+            self.update_cfg_hash()
+            self._thread = Thread(target=self._watchdog_loop)
+            self._thread.name = "config_watchdog-Thread"
+            self._thread.start()
+            self._started = True
+            logger.debug("configWatchdog successfully started")
+        else:
+            logger.debug("configWatchdog is already running")
+
+    def stop_watchdog(self) -> None:
+        if self._started:
+            logger.info("Stopping configWatchdog")
+            self._stop_event.set()
+            self._thread.join()
+            self._thread = None
+            self._started = False
+            logger.debug("configWatchdog successfully stopping")
+
+    @property
+    def watchdog_status(self) -> bool:
+        return self._started
+
+    def update(self, cfg: Union[tuple, list] = ("ecosystems", "private")) -> None:
         logger.debug("Updating configuration")
         self._load_config(cfg=cfg)
 
     def save(self, cfg: str) -> None:
-        if Config.TESTING:
+        if not any((Config.DEBUG, Config.TESTING)):
             raise Exception("Config cannot be saved during testing")
-        file_path = base_dir / f"{cfg}.cfg"
+        file_path = base_dir/f"{cfg}.cfg"
         with open(file_path, "w") as file:
             if cfg == "ecosystems":
-                self.yaml.dump(self._ecosystems_config, file)
-            elif cfg == "private":
-                self.yaml.dump(self._private_config, file)
+                with lock:
+                    self.dump(self._ecosystems_config, file)
+            if cfg == "private":
+                with lock:
+                    self.dump(self._private_config, file)
 
     def create_new_ecosystem_id(self) -> str:
         length = 8
@@ -140,19 +192,6 @@ class _globalConfig:
         self.save("ecosystems")
         """
 
-    def file_hash(self, file_path: pathlib.Path) -> hex:
-        sha = hashlib.sha256()
-        try:
-            with open(file_path, 'rb') as f:
-                fb = f.read(1024)
-                while len(fb) > 0:
-                    sha.update(fb)
-                    fb = f.read(1024)
-            h = sha.hexdigest()
-            return h
-        except FileNotFoundError:
-            return None
-
     @property
     def config_dict(self) -> dict:
         return self._ecosystems_config
@@ -176,7 +215,6 @@ class _globalConfig:
     def set_status(self, ecosystem_id: str, value: bool) -> None:
         self._ecosystems_config[ecosystem_id]["status"] = value
 
-    # TODO: use a bidict
     @property
     def id_to_name_dict(self) -> dict:
         return {ecosystem: self._ecosystems_config[ecosystem]["name"]
@@ -188,7 +226,7 @@ class _globalConfig:
                 for ecosystem in self._ecosystems_config}
 
     # TODO: use a named tuple
-    def getIds(self, ecosystem: str) -> tuple:
+    def get_IDs(self, ecosystem: str) -> tuple:
         if ecosystem in self.ecosystems_id:
             ecosystem_id = ecosystem
             ecosystem_name = self.id_to_name_dict[ecosystem]
@@ -198,7 +236,7 @@ class _globalConfig:
             ecosystem_name = ecosystem
             return ecosystem_id, ecosystem_name
         raise ValueError("'ecosystem' parameter should either be an ecosystem " +
-                         "id or an ecosystem name present in the ecosystems.cfg " +
+                         "uid or an ecosystem name present in the ecosystems.cfg " +
                          "file. If you want to create a new ecosystem configuration " +
                          "use the function 'createConfig()'.")
 
@@ -236,77 +274,16 @@ class _globalConfig:
         self._private_config.update(home)
 
 
-class _configWatchdog:
-    def __init__(self) -> None:
-        logger.debug("Initializing configWatchdog")
-        global _global_config
-        if not _global_config:
-            _global_config = _globalConfig()
-        self._hash_dict = {}
-        self._watchdog_stopEvent = Event()
-        self._watchdogThread = None
-        self._started = False
-
-    def update_cfg_hash(self) -> None:
-        for cfg in ("ecosystems", "private"):
-            path = base_dir / f"{cfg}.cfg"
-            self._hash_dict[cfg] = _global_config.file_hash(path)
-
-    def _watchdog(self) -> None:
-        update_cfg = []
-        old_hash = self._hash_dict
-        self.update_cfg_hash()
-        for cfg in ("ecosystems", "private"):
-            if old_hash[cfg] != self._hash_dict[cfg]:
-                update_cfg.append(cfg)
-        if update_cfg:
-            _global_config.update(update_cfg)
-            # set new_config_event, which is used by autoManager
-            new_config_event.set()
-
-    def _watchdog_loop(self) -> None:
-        while not self._watchdog_stopEvent.is_set():
-            self._watchdog()
-            self._watchdog_stopEvent.wait(Config.CONFIG_WATCHER_PERIOD)
-
-    """API calls"""
-    def start(self) -> None:
-        if not self._started:
-            logger.info("Starting configWatchdog")
-            self._watchdogThread = Thread(target=self._watchdog, args=())
-            self._watchdogThread.name = "configWatchdog-Thread"
-            self._watchdogThread.start()
-            self._started = True
-            logger.debug("configWatchdog successfully started")
-        else:
-            logger.debug("configWatchdog is already running")
-
-    def stop(self) -> None:
-        if self._started:
-            logger.info("Stopping configWatchdog")
-            self._watchdog_stopEvent.set()
-            self._watchdogThread.join()
-            self._watchdogThread = None
-            self._started = False
-            logger.debug("configWatchdog successfully stopping")
-
-    @property
-    def status(self) -> bool:
-        return self._started
-
-
 # ---------------------------------------------------------------------------
 #   specificConfig class
 # ---------------------------------------------------------------------------
-class specificConfig:
+class SpecificConfig:
     def __init__(self, ecosystem: str) -> None:
-        global _global_config
-        if not _global_config:
-            _global_config = _globalConfig()
-        ids = _global_config.getIds(ecosystem)
+        self.general_config = get_general_config()
+        ids = self.general_config.get_IDs(ecosystem)
         logger.debug(f"Initializing specificConfig for ecosystem {ids[1]}")
         self.ecosystem_id = ids[0]
-        self.config_dict = _global_config.config_dict[self.ecosystem_id]
+        self.config_dict = self.general_config.config_dict[self.ecosystem_id]
 
     def __str__(self):
         return json.dumps(self.config_dict)
@@ -318,7 +295,7 @@ class specificConfig:
     @name.setter
     def name(self, value: str) -> None:
         self.config_dict["name"] = value
-        _global_config.save("ecosystems")
+        self.general_config.save("ecosystems")
 
     @property
     def uid(self) -> str:
@@ -333,8 +310,6 @@ class specificConfig:
         self.config_dict["status"] = value
 
     """Parameters related to sub-routines control"""
-    # TODO: rename to manage, with the new value added = False and
-    #  if new value: update, else: return current value
     def get_management(self, parameter: str) -> bool:
         try:
             return self.config_dict["management"].get(parameter, False)
@@ -345,9 +320,8 @@ class specificConfig:
         self.config_dict["management"][parameter] = value
 
     # TODO: keep up to date with subroutines.NAME
-    def get_started_subroutines(self) -> list:
-        subroutines = ("light", "sensors", "health", "climate")
-        return [subroutine for subroutine in subroutines
+    def get_managed_subroutines(self) -> list:
+        return [subroutine for subroutine in SUBROUTINE_NAMES
                 if self.get_management(subroutine)]
 
     """Environment related parameters"""
@@ -368,7 +342,7 @@ class specificConfig:
                             "light management")
 
     @property
-    def chaos(self) -> str:
+    def chaos(self) -> int:
         try:
             return self.config_dict["environment"]["chaos"]
         except KeyError:
@@ -445,7 +419,8 @@ class specificConfig:
                 for io in self.IO_dict]
 
     def save(self, cfg):
-        _global_config.save(cfg)
+        if not any((Config.DEBUG, Config.TESTING)):
+            self.general_config.save(cfg)
 
     def create_new_hardware(self,
                             name: str = "",
@@ -479,13 +454,12 @@ class specificConfig:
                 plant=plant
             )
 
-            self.IO_dict.update(new_hardware.dict_repr())
-            if not any((Config.DEBUG, Config.TESTING)):
-                _global_config.save("ecosystems")
+            self.IO_dict.update(new_hardware.dict_repr)
+            self.save("ecosystems")
 
             response["status"] = "200"
             response["message"] = f"Hardware {name} successfully created"
-            response["hardware_info"] = new_hardware.dict_repr()
+            response["hardware_info"] = new_hardware.dict_repr
         except Exception as e:
             response["status"] = "400"
             response["message"] = e
@@ -553,16 +527,14 @@ class specificConfig:
                                                       " to the same hardware"
         if uid:
             del self.IO_dict[uid]
-            if not any((Config.DEBUG, Config.TESTING)):
-                _global_config.save("ecosystems")
+            self.save("ecosystems")
             return
 
         if name:
             _uid = [uid for uid in self.IO_dict
                     if self.IO_dict[uid]["name"] == name]
             del self.IO_dict[_uid]
-            if not any((Config.DEBUG, Config.TESTING)):
-                _global_config.save("ecosystems")
+            self.save("ecosystems")
 
     """Parameters related to time"""
     def human_time_parser(self, human_time: str) -> time:
@@ -602,27 +574,21 @@ class specificConfig:
             value["day"]["start"]
         self.config_dict["environment"]["night"]["start"] =\
             value["night"]["start"]
-        _global_config.save("ecosystems")
-
-    def utc_time_to_local_time(self, utc_time: time) -> time:
-        dt = datetime.combine(date.today(), utc_time)
-        local_dt = pytz.utc.localize(dt)
-        local_time = local_dt.astimezone(localTZ).time()
-        return local_time
+        self.save("ecosystems")
 
     @property
     def sun_times(self) -> dict:
         try:
-            with open(base_dir /"cache/sunrise.json", "r") as file:
-                sunrise = _global_config.yaml.load(file)
+            with open(base_dir/"cache/sunrise.json", "r") as file:
+                sunrise = json.load(file)
         # TODO: handle when cache file does not exist
         except:
-            return
+            return {}
 
         def import_daytime_event(daytime_event: str) -> time:
             try:
                 mytime = datetime.strptime(sunrise[daytime_event], "%I:%M:%S %p").time()
-                local_time = self.utc_time_to_local_time(mytime)
+                local_time = utc_time_to_local_time(mytime)
                 return local_time
             except Exception as ex:
                 print(ex)
@@ -638,105 +604,61 @@ class specificConfig:
 
 
 # ---------------------------------------------------------------------------
-#   Config manager class
-# ---------------------------------------------------------------------------
-class _configManager:
-    """
-    This class should not be manually instantiated. It is automatically
-    instantiated once if needed and is used to store and return unique
-    specificConfig objects. This way, whenever using get_config('my_ecosystem'),
-    it will return the same object.
-    """
-    def __init__(self) -> None:
-        logger.debug("Initializing configManager")
-        self.configs = {}
-        global _global_config
-        if not _global_config:
-            _global_config = _globalConfig()
-
-    def get_config(self, ecosystem: str = None):
-        if not ecosystem:
-            return _global_config
-        ecosystem_id, ecosystem_name = _global_config.getIds(ecosystem)
-        try:
-            return self.configs[ecosystem_id]
-        except KeyError:
-            cfg = specificConfig(ecosystem_id)
-            self.configs[ecosystem_id] = cfg
-            return cfg
-
-
-# ---------------------------------------------------------------------------
 #   Functions to interact with the module
 # ---------------------------------------------------------------------------
-_config_watchdog = None
-_config_manager = None
+_configs = {}
 
 
-class configWatchdog:
-    """ Dummy class to interact with _configWatchdog()
+def get_general_config() -> GeneralConfig:
+    try:
+        return _configs["__general__"]
+    except KeyError:
+        _configs["__general__"] = GeneralConfig()
+        return _configs["__general__"]
 
-    This class will instantiate _configWatchdog() if needed and allow to interact
-    with it. This allows not to launch an instance of _configWatchdog when loading
-    this module for testing purpose or when making custom scripts.
+
+def get_config(ecosystem: str = None) -> Union[GeneralConfig, SpecificConfig]:
+    """ Return the specificConfig object for the given ecosystem.
+
+    If no ecosystem is provided, return the globalConfig object instead
+
+    :param ecosystem: str, an ecosystem uid or name. If left to none, will
+                      return globalConfig object instead.
     """
+    global_cfg = get_general_config()
 
-    @staticmethod
-    def start() -> None:
-        global _config_watchdog
-        if not _config_watchdog:
-            _config_watchdog = _configWatchdog()
-        _config_watchdog.start()
+    if not ecosystem:
+        return global_cfg
 
-    @staticmethod
-    def stop() -> None:
-        global _config_watchdog
-        if _config_watchdog:
-            _config_watchdog.stop()
+    ecosystem_id, ecosystem_name = global_cfg.get_IDs(ecosystem)
+    try:
+        return _configs[ecosystem_id]
+    except KeyError:
+        _configs[ecosystem_id] = SpecificConfig(ecosystem_id)
+        return _configs[ecosystem_id]
 
-    @staticmethod
-    def status() -> bool:
-        global _config_watchdog
-        if not _config_watchdog:
-            return False
-        return _config_watchdog.status
 
-    @staticmethod
-    def is_init() -> bool:
-        global _config_watchdog
-        if not _config_watchdog:
-            return False
-        return True
-
-def getIds(ecosystem: str) -> tuple:
+def get_IDs(ecosystem: str) -> tuple:
     """Return the tuple (ecosystem_uid, ecosystem_name)
 
     :param ecosystem: str, either an ecosystem uid or ecosystem name
     """
-    global _global_config
-    if not _global_config:
-        _global_config = _globalConfig()
-    return _global_config.getIds(ecosystem)
+    return get_general_config().get_IDs(ecosystem)
 
 
-def updateConfig() -> None:
+def update_config() -> None:
     """Update the globalConfig based on ecosystem.cfg and private.cfg"""
-    global _global_config
-    if not _global_config:
-        _global_config = _globalConfig()
-    _global_config.update()
+    get_general_config().update()
 
 
-def createEcosystem(*args) -> None:
+def detach_config(ecosystem) -> None:
+    UID = get_general_config().get_IDs(ecosystem)[0]
+    del _configs[UID]
+
+
+def createEcosystem(name) -> None:
     """Create a new ecosystem with the given name"""
-    global _global_config
-    if not _global_config:
-        _global_config = _globalConfig()
-    if len(args) == 0:
-        name = input("Ecosystem name: ")
-    else:
-        name = args[0]
-    _global_config.create_new_ecosystem(name)
+    get_general_config().create_new_ecosystem(name)
 
 
 def manageEcosystem() -> None:
@@ -745,26 +667,3 @@ def manageEcosystem() -> None:
 
 def delEcosystem() -> None:
     pass
-
-
-def getConfig(ecosystem: str = None):
-    """ Return the specificConfig object for the given ecosystem.
-
-    If no ecosystem is provided, return the globalConfig object instead
-
-    :param ecosystem: str, and ecosystem uid or name. If left to none, will
-                      return globalConfig object instead.
-    """
-
-    global _config_manager
-    if not _config_manager:
-        _config_manager = _configManager()
-    return _config_manager.get_config(ecosystem)
-
-
-def delConfig(ecosystem: str) -> None:
-    global _config_manager
-    if not _config_manager:
-        _config_manager = _configManager()
-    ecosystem_uid = getIds(ecosystem)[0]
-    del _config_manager.configs[ecosystem_uid]
