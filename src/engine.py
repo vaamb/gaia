@@ -5,9 +5,8 @@ import logging.config
 from threading import Thread
 import weakref
 
+from src.shared_resources import thread_pool
 from src.config_parser import get_config
-
-
 from src.subroutines import SUBROUTINES
 
 
@@ -60,22 +59,9 @@ class Engine:
             # Start subroutines in thread as they are IO bound. After
             # subroutines initialization is finished, all threads are deleted 
             # and IO-bound subroutines tasks are handled in their own thread.
-            # TODO: use a thread pool
-            threads = []
             for subroutine in self._config.get_managed_subroutines():
-                t = Thread(target=self._start_subroutine, args=(subroutine, ))
-                t.name = f"{self._ecosystem_uid}-{subroutine}Starter"
-                t.start()
-                threads.append(t)
-            try:
-                for t in threads:
-                    t.join()
-            except Exception as e:
-                self.logger.error(
-                    f"Engine was not successfully started. ERROR msg: {e}")
-                raise e
+                thread_pool.submit(self._start_subroutine, subroutine=subroutine)
             self.logger.debug(f"Engine successfully started")
-            del threads
             self._started = True
         else:
             raise RuntimeError(f"Engine {self._ecosystem_name} is already running")
