@@ -20,6 +20,6 @@ class Config:
                  "BXhNmCEmNdoBNngyGXj6jJtooYAcKpt6"
 
     HEALTH_LOGGING_TIME = "00h00"
-    CONFIG_WATCHER_PERIOD = 2
+    CONFIG_WATCHER_PERIOD = 10
     LIGHT_LOOP_PERIOD = 0.5
     SENSORS_TIMEOUT = 30

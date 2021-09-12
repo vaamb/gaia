@@ -90,13 +90,11 @@ class GeneralConfig(metaclass=SingletonMeta):
             except IOError:
                 logger.warning("There is currently no custom ecosystem configuration file. "
                                "Using the default configuration instead")
-                # create a new ecosystem, which is loaded as self._ecosystems_config
                 self._ecosystems_config = {}
                 self.create_new_ecosystem("Default Ecosystem")
                 self.default = True
 
         if "private" in cfg:
-            # Try to import custom private configuration file. If it doesn't exist, use default
             try:
                 private_cfg = base_dir / "private.cfg"
                 with open(private_cfg, "r") as file:
@@ -115,15 +113,14 @@ class GeneralConfig(metaclass=SingletonMeta):
         while not self._stop_event.is_set():
             if not self._watchdog_pause:
                 update_cfg = []
-                old_hash = self._hash_dict
+                old_hash = dict(self._hash_dict)
                 self.update_cfg_hash()
                 for cfg in ("ecosystems", "private"):
                     if old_hash[cfg] != self._hash_dict[cfg]:
                         update_cfg.append(cfg)
                 if update_cfg:
-                    logger.info("Change in config detected, updating it")
+                    logger.info(f"Change in {cfg} config detected, updating it")
                     self.update(update_cfg)
-                    # set config_event, which is used by autoManager
                     with config_event:
                         config_event.notify_all()
             self._stop_event.wait(Config.CONFIG_WATCHER_PERIOD)
@@ -155,7 +152,10 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     def update(self, cfg: Union[tuple, list] = ("ecosystems", "private")) -> None:
         logger.debug("Updating configuration")
+        self._watchdog_pause = True
         self._load_config(cfg=cfg)
+        self.update_cfg_hash()
+        self._watchdog_pause = False
 
     def save(self, cfg: str) -> None:
         if not any((Config.DEBUG, Config.TESTING)):
@@ -164,10 +164,10 @@ class GeneralConfig(metaclass=SingletonMeta):
         with open(file_path, "w") as file:
             if cfg == "ecosystems":
                 with lock:
-                    self.dump(self._ecosystems_config, file)
+                    yaml.dump(self._ecosystems_config, file)
             if cfg == "private":
                 with lock:
-                    self.dump(self._private_config, file)
+                    yaml.dump(self._private_config, file)
 
     def create_new_ecosystem_id(self) -> str:
         length = 8
