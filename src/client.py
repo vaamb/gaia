@@ -65,7 +65,6 @@ class retryClient(socketio.Client):
 
 
 class gaiaNamespace(socketio.ClientNamespace):
-    # TODO: debug logger on events
     def __init__(self, engines_dict: dict, namespace=None) -> None:
         super(gaiaNamespace, self).__init__(namespace=namespace)
         self.engines = engines_dict
@@ -96,17 +95,20 @@ class gaiaNamespace(socketio.ClientNamespace):
         self._registered = True
 
     def on_ping(self) -> None:
+        socketio_logger.debug("Received ping event")
         pong = []
         for engine in self.engines:
             pong.append(self.engines[engine].uid)
         self.emit("pong", data=pong)
 
     def on_send_config(self) -> None:
+        socketio_logger.debug("Received send_config event")
         config = {ecosystem_id: self.engines[ecosystem_id].config
                   for ecosystem_id in self.engines}
         self.emit("config", config, )
 
     def on_send_sensors_data(self) -> None:
+        socketio_logger.debug("Received send_sensors_data event")
         sensors_data = {}
         for ecosystem_id in self.engines:
             try:
@@ -119,6 +121,7 @@ class gaiaNamespace(socketio.ClientNamespace):
         self.emit("sensors_data", sensors_data)
 
     def on_send_health_data(self) -> None:
+        socketio_logger.debug("Received send_health_data event")
         health_data = {}
         for ecosystem_id in self.engines:
             try:
@@ -131,6 +134,7 @@ class gaiaNamespace(socketio.ClientNamespace):
         self.emit("health_data", health_data)
 
     def on_send_light_data(self, ecosystem_uid: str = None) -> None:
+        socketio_logger.debug("Received send_light_data event")
         light_data = {}
         if ecosystem_uid:
             ecosystem_uids = [ecosystem_uid]
@@ -148,6 +152,7 @@ class gaiaNamespace(socketio.ClientNamespace):
         self.emit("light_data", light_data)
 
     def on_turn_light(self, message: dict) -> None:
+        socketio_logger.debug("Received turn_light event")
         ecosystem_uid = message["ecosystem"]
         mode = message["mode"]
         countdown = message.get("countdown", 0)
@@ -159,6 +164,7 @@ class gaiaNamespace(socketio.ClientNamespace):
             print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
 
     def on_turn_actuator(self, message: dict) -> None:
+        socketio_logger.debug("Received turn_actuator event")
         ecosystem_uid = message["ecosystem"]
         actuator = message["actuator"]
         mode = message["mode"]
