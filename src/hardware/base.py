@@ -95,6 +95,10 @@ class hardware:
         self._name = new_name
 
     @property
+    def subroutine(self):
+        return self._subroutine
+
+    @property
     def address(self) -> list:
         return self._address
 

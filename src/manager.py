@@ -9,9 +9,9 @@ from threading import Thread, Event
 from socketio import Client
 from typing import Dict
 
-from src.engine import Engine
 from src.config_parser import config_event, detach_config, get_config,\
     get_IDs, get_general_config
+from src.engine import Engine
 from src.shared_resources import scheduler, start_scheduler
 from src.utils import base_dir, SingletonMeta
 
@@ -238,7 +238,7 @@ class enginesManager(metaclass=SingletonMeta):
                 else:
                     to_delete.remove(ecosystem)
                 # check if the engine is expected to be running
-                if global_config.status(ecosystem) is True:
+                if global_config.status(ecosystem):
                     expected_started.append(ecosystem)
 
             # start engines which are expected to run and are not running

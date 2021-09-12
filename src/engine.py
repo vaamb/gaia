@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 import logging.config
-from threading import Thread
 import weakref
 
 from src.shared_resources import thread_pool
@@ -46,11 +45,11 @@ class Engine:
         return h.digest() == other
 
     @property
-    def _socketIO_client(self):
+    def socketIO_client(self):
         return self._manager.socketIO_client
 
     @property
-    def _socketIO_enabled(self):
+    def socketIO_enabled(self):
         return self._manager.socketIO_enabled
 
     def start(self):
@@ -85,19 +84,23 @@ class Engine:
     """API calls"""
     # Configuration info
     @property
-    def name(self):
+    def name(self) -> str:
         return self._ecosystem_name
 
     @property
-    def uid(self):
+    def uid(self) -> str:
         return self._ecosystem_uid
 
     @property
-    def status(self):
+    def manager(self):
+        return self._manager
+
+    @property
+    def status(self) -> bool:
         return self._started
 
     @property
-    def config(self):
+    def config(self) -> dict:
         return self._config.config_dict
 
     # Light

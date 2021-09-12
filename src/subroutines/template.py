@@ -59,11 +59,9 @@ class SubroutineTemplate:
                 raise e
 
     @property
+    def engine(self):
+        return self._engine
+
+    @property
     def status(self) -> bool:
         return self._started
-
-    def add_engine(self, engine) -> None:
-        self._engine = weakref.proxy(engine)
-
-    def del_engine(self) -> None:
-        self._engine = None

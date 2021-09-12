@@ -140,9 +140,9 @@ class gaiaLight(SubroutineTemplate):
                     light.turn_on()
                 if self._mode == "automatic":
                     self._logger.info("Lights have been automatically turned on")
-                    if self._engine._socketIO_enabled:
+                    if self._engine.socketIO_enabled:
                         try:
-                            self._engine._socketIO_client\
+                            self._engine.socketIO_client\
                                 .namespace_handlers["/gaia"]\
                                 .on_send_light_data(
                                     ecosystem_uid=self._config.uid)
@@ -157,9 +157,9 @@ class gaiaLight(SubroutineTemplate):
                     light.turn_off()
                 if self._mode == "automatic":
                     self._logger.info("Lights have been automatically turned off")
-                    if self._engine._socketIO_enabled:
+                    if self._engine.socketIO_enabled:
                         try:
-                            self._engine._socketIO_client.emit(
+                            self._engine.socketIO_client.emit(
                                 "light_data",
                                 data={self._uid: self.light_info},
                                 namespace="/gaia")
@@ -170,8 +170,8 @@ class gaiaLight(SubroutineTemplate):
     def _start(self):
         # TODO: check that the ecosystem has day and night parameters
         now = datetime.now()
-        if now.date() !=  self._engine._manager.last_sun_times_update.date():
-            self._engine._manager.refresh_sun_times()
+        if now.date() != self.engine.manager.last_sun_times_update.date():
+            self.engine.manager.refresh_sun_times()
         self.update_sun_times()
         self._start_light_loop()
 
@@ -200,9 +200,9 @@ class gaiaLight(SubroutineTemplate):
                     # No sun times available in config/cache
                     pass
 
-        if self._engine._socketIO_enabled:
+        if self._engine.socketIO_enabled:
             try:
-                self._engine._socketIO_client.emit(
+                self._engine.socketIO_client.emit(
                     "light_data", data={self._uid: self.light_info},
                     namespace="/gaia")
             except AttributeError as e:

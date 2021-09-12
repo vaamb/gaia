@@ -18,12 +18,12 @@ class gpioSwitch(gpioHardware):
     def turn_on(self) -> None:
         self._pin.value(val=1)
         if Config.VIRTUALIZATION:
-            get_virtual_ecosystem(self._subroutine._engine.uid)._light = True
+            get_virtual_ecosystem(self.subroutine.engine.uid)._light = True
 
     def turn_off(self) -> None:
         self._pin.value(val=0)
         if Config.VIRTUALIZATION:
-            get_virtual_ecosystem(self._subroutine._engine.uid)._light = False
+            get_virtual_ecosystem(self.subroutine.engine.uid)._light = False
 
 
 ACTUATORS = {hardware.MODEL: hardware for hardware in

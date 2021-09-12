@@ -39,15 +39,15 @@ class virtualSensor(baseSensor):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if Config.VIRTUALIZATION:
-            get_virtual_ecosystem(self._subroutine._engine.uid, start=True)
+            get_virtual_ecosystem(self.subroutine.engine.uid, start=True)
 
 
 class virtualDHT(virtualSensor):
     def get_data(self) -> dict:
         random_sleep()
         data = {
-            "temperature": get_temperature(self._subroutine._engine.uid),
-            "humidity": get_humidity(self._subroutine._engine.uid),
+            "temperature": get_temperature(self.subroutine.engine.uid),
+            "humidity": get_humidity(self.subroutine.engine.uid),
         }
         if "dew_point" in self._measure:
             data["dew_point"] = get_dew_point(
@@ -72,7 +72,7 @@ class virtualVEML7700(virtualSensor):
     def get_data(self) -> dict:
         random_sleep()
         return {
-            "light": get_light(self._subroutine._engine.uid),
+            "light": get_light(self.subroutine.engine.uid),
         }
 
 
@@ -82,9 +82,9 @@ class virtualMega(virtualSensor):
     def get_data(self) -> dict:
         random_sleep()
         data = {
-            "temperature": get_temperature(self._subroutine._engine.uid),
-            "humidity": get_humidity(self._subroutine._engine.uid),
-            "light": get_light(self._subroutine._engine.uid),
+            "temperature": get_temperature(self.subroutine.engine.uid),
+            "humidity": get_humidity(self.subroutine.engine.uid),
+            "light": get_light(self.subroutine.engine.uid),
         }
         if "dew_point" in self._measure:
             data["dew_point"] = get_dew_point(
@@ -101,7 +101,7 @@ class virtualMoisture(virtualSensor):
     def get_data(self) -> dict:
         random_sleep()
         return {
-            "moisture": get_moisture(self._subroutine._engine.uid),
+            "moisture": get_moisture(self.subroutine.engine.uid),
         }
 
 
