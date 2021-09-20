@@ -1,10 +1,11 @@
+from concurrent.futures import wait, ALL_COMPLETED
 import hashlib
 import json
 import logging
 import logging.config
 import weakref
 
-from src.shared_resources import thread_pool
+from src.shared_resources import futures, thread_pool
 from src.config_parser import get_config
 from src.subroutines import SUBROUTINES
 
@@ -52,16 +53,23 @@ class Engine:
     def socketIO_enabled(self):
         return self._manager.socketIO_enabled
 
-    def start(self):
+    def start(self, joint=False):
         if not self._started:
             self.logger.info("Starting Engine")
             # Start subroutines in thread as they are IO bound. After
             # subroutines initialization is finished, all threads are deleted 
             # and IO-bound subroutines tasks are handled in their own thread.
             for subroutine in self._config.get_managed_subroutines():
-                thread_pool.submit(self._start_subroutine, subroutine=subroutine)
+                f = thread_pool.submit(
+                    self._start_subroutine, subroutine=subroutine)
+                try:
+                    futures[self._ecosystem_uid].append(f)
+                except KeyError:
+                    futures[self._ecosystem_uid] = [f]
             self.logger.debug(f"Engine successfully started")
             self._started = True
+            if joint:
+                wait(futures[self._ecosystem_uid], return_when=ALL_COMPLETED)
         else:
             raise RuntimeError(f"Engine {self._ecosystem_name} is already running")
 

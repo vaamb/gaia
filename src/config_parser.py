@@ -171,7 +171,7 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     def create_new_ecosystem_id(self) -> str:
         length = 8
-        used_ids = self.ecosystems_id
+        used_ids = self.ecosystems_uid
         while True:
             x = random.choice(string.ascii_letters) + "".join(
                 random.choices(string.ascii_letters + string.digits,
@@ -201,7 +201,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._ecosystems_config = dct
 
     @property
-    def ecosystems_id(self) -> list:
+    def ecosystems_uid(self) -> list:
         return [i for i in self._ecosystems_config]
 
     @property
@@ -227,7 +227,7 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     # TODO: use a named tuple
     def get_IDs(self, ecosystem: str) -> tuple:
-        if ecosystem in self.ecosystems_id:
+        if ecosystem in self.ecosystems_uid:
             ecosystem_id = ecosystem
             ecosystem_name = self.id_to_name_dict[ecosystem]
             return ecosystem_id, ecosystem_name
@@ -319,7 +319,6 @@ class SpecificConfig:
     def set_management(self, parameter: str, value: bool) -> None:
         self.config_dict["management"][parameter] = value
 
-    # TODO: keep up to date with subroutines.NAME
     def get_managed_subroutines(self) -> list:
         return [subroutine for subroutine in SUBROUTINE_NAMES
                 if self.get_management(subroutine)]
@@ -377,7 +376,6 @@ class SpecificConfig:
                              parameter")
         for t in ("day", "night"):
             self.config_dict["environment"][t]["target"] = value[t]
-            # TODO: check hysteresis
 
     """Parameters related to IO"""    
     @property

@@ -9,11 +9,13 @@ from threading import Thread, Event
 from socketio import Client
 from typing import Dict
 
-from src.config_parser import config_event, detach_config, get_config,\
+from config import Config
+from .config_parser import config_event, detach_config, get_config,\
     get_IDs, get_general_config
-from src.engine import Engine
-from src.shared_resources import scheduler, start_scheduler
-from src.utils import base_dir, SingletonMeta
+from .engine import Engine
+from .shared_resources import scheduler, start_scheduler
+from .utils import base_dir, SingletonMeta
+from .virtual import get_virtual_ecosystem
 
 
 class enginesManager(metaclass=SingletonMeta):
@@ -134,6 +136,7 @@ class enginesManager(metaclass=SingletonMeta):
     def last_sun_times_update(self):
         return self._last_sun_times_update
 
+    # TODO: handle creation of multiple engines, put a joint option
     def create_engine(self, ecosystem: str, start: bool = False) -> Engine:
         ecosystem_uid, ecosystem_name = get_IDs(ecosystem)
         if ecosystem_uid not in self.engines:
@@ -230,7 +233,10 @@ class enginesManager(metaclass=SingletonMeta):
         while self._run:
             expected_started = []
             to_delete = list(self.engines.keys())
-            for ecosystem in global_config.ecosystems_id:
+            if Config.VIRTUALIZATION:
+                for ecosystem_uid in global_config.ecosystems_uid:
+                    get_virtual_ecosystem(ecosystem_uid, start=True)
+            for ecosystem in global_config.ecosystems_uid:
                 # create engine if it doesn't exist
                 if ecosystem not in self.engines:
                     self.create_engine(ecosystem)
@@ -257,6 +263,8 @@ class enginesManager(metaclass=SingletonMeta):
             self._start_joiner.set()
             with config_event:
                 config_event.wait()
+            if self.socketIO_client:
+                self.socketIO_client.on_send_config()
 
     def start(self, joint_start: bool = False) -> None:
         if not self._run:
@@ -268,7 +276,6 @@ class enginesManager(metaclass=SingletonMeta):
             if joint_start:
                 self._start_joiner.wait()
             self.logger.info("Engines autoManager started")
-
         else:
             raise RuntimeError("autoManager can only be started once")
 

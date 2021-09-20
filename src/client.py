@@ -2,6 +2,7 @@ from datetime import date, datetime, time, timezone
 import json
 import logging
 import random
+from typing import Union
 
 import socketio
 from socketio import exceptions
@@ -101,55 +102,49 @@ class gaiaNamespace(socketio.ClientNamespace):
             pong.append(self.engines[engine].uid)
         self.emit("pong", data=pong)
 
-    def on_send_config(self) -> None:
+    def _get_uid_list(self, ecosystem_uids: Union[str, tuple] = "all") -> list:
+        if "all" in ecosystem_uids:
+            return [e_uid for e_uid in self.engines.keys()]
+        if isinstance(ecosystem_uids, str):
+            return [ecosystem_uids] \
+                if ecosystem_uids in self.engines.keys() else []
+        else:
+            return [e_uid for e_uid in ecosystem_uids
+                    if e_uid in self.engines.keys()]
+
+    def on_send_config(self, ecosystem_uids: Union[str, tuple] = "all") -> None:
         socketio_logger.debug("Received send_config event")
+        uids = self._get_uid_list(ecosystem_uids)
         config = {ecosystem_id: self.engines[ecosystem_id].config
-                  for ecosystem_id in self.engines}
+                  for ecosystem_id in uids}
         self.emit("config", config, )
 
-    def on_send_sensors_data(self) -> None:
+    def _get_data(self, data_type, ecosystem_uids: Union[str, tuple] = "all") -> list:
+        rv = []
+        for uid in self._get_uid_list(ecosystem_uids):
+            try:
+                data = getattr(self.engines[uid], data_type)
+                if data:
+                    rv.append({**{"ecosystem_uid": uid}, **data})
+            # Except when subroutines are still loading
+            except KeyError:
+                pass
+        return rv
+
+    def on_send_sensors_data(self, ecosystem_uids: Union[str, tuple] = "all") -> None:
         socketio_logger.debug("Received send_sensors_data event")
-        sensors_data = {}
-        for ecosystem_id in self.engines:
-            try:
-                data = self.engines[ecosystem_id].sensors_data
-                if data:
-                    sensors_data[ecosystem_id] = data
-            # Except when subroutines are still loading
-            except KeyError:
-                pass
-        self.emit("sensors_data", sensors_data)
+        self.emit("sensors_data",
+                  self._get_data("sensors_data", ecosystem_uids=ecosystem_uids))
 
-    def on_send_health_data(self) -> None:
+    def on_send_health_data(self, ecosystem_uids: Union[str, tuple] = "all") -> None:
         socketio_logger.debug("Received send_health_data event")
-        health_data = {}
-        for ecosystem_id in self.engines:
-            try:
-                data = self.engines[ecosystem_id].plants_health
-                if data:
-                    health_data[ecosystem_id] = data
-            # Except when subroutines are still loading
-            except KeyError:
-                pass
-        self.emit("health_data", health_data)
+        self.emit("health_data",
+                  self._get_data("plants_health", ecosystem_uids=ecosystem_uids))
 
-    def on_send_light_data(self, ecosystem_uid: str = None) -> None:
+    def on_send_light_data(self, ecosystem_uids: Union[str, tuple] = "all") -> None:
         socketio_logger.debug("Received send_light_data event")
-        light_data = {}
-        if ecosystem_uid:
-            ecosystem_uids = [ecosystem_uid]
-        else:
-            ecosystem_uids = [e_uid for e_uid in self.engines.keys()]
-
-        for e_uid in ecosystem_uids:
-            try:
-                data = self.engines[e_uid].light_info
-                if data:
-                    light_data[e_uid] = data
-            # Except when subroutines are still loading
-            except KeyError:
-                pass
-        self.emit("light_data", light_data)
+        self.emit("light_data",
+                  self._get_data("light_info", ecosystem_uids=ecosystem_uids))
 
     def on_turn_light(self, message: dict) -> None:
         socketio_logger.debug("Received turn_light event")

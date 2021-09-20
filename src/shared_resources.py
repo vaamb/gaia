@@ -5,6 +5,7 @@ from apscheduler.schedulers import SchedulerAlreadyRunningError
 
 scheduler = BackgroundScheduler()
 thread_pool = ThreadPoolExecutor(max_workers=5)
+futures = {}
 
 
 def start_scheduler():

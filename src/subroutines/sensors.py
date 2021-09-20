@@ -1,6 +1,6 @@
 from datetime import datetime
 from threading import Event, Thread, Lock
-from time import sleep, monotonic
+from time import monotonic
 
 from config import Config
 from src.utils import localTZ
@@ -17,7 +17,7 @@ class gaiaSensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._timezone = localTZ
-        self._sensors = []
+        self._sensors = {}
         self._data = {}
         self.refresh_hardware()
         self._finish__init__()
@@ -38,42 +38,37 @@ class gaiaSensors(SubroutineTemplate):
                 model=self._config.IO_dict[hardware_uid]["model"],
                 # type is automatically provided
                 level=self._config.IO_dict[hardware_uid]["level"],
-                measure=self._config.IO_dict[hardware_uid]["measure"]
-                       if "measure" in self._config.IO_dict[hardware_uid]
-                       else None,
-                plant=self._config.IO_dict[hardware_uid]["plant"]
-                      if "plant" in self._config.IO_dict[hardware_uid]
-                      else None,
+                measure=self._config.IO_dict[hardware_uid].get("measure", None),
+                plant=self._config.IO_dict[hardware_uid].get("plant", None),
             )
-            self._sensors.append(s)
+            self._sensors[hardware_uid] = s
             self._logger.debug(f"Sensor {name} has been set up")
 
         except KeyError:
             self._logger.error(f"{model} is not in the list of "
                                "the supported sensors")
 
-    def _remove_sensor(self, hardware_uid: str) -> None:
+    def _remove_sensor(self, sensors_uid: str) -> None:
         try:
-            index = [h.uid for h in self._sensors].index(hardware_uid)
-        except ValueError:
-            self._logger.error(f"Sensor '{hardware_uid}' does not exist")
+            self._sensors[sensors_uid]
+        except KeyError:
+            self._logger.error(f"Sensor '{sensors_uid}' does not exist")
         else:
-            del self._sensors[index]
+            del self._sensors[sensors_uid]
 
     def _start_sensors_loop(self) -> None:
         self._logger.debug(f"Starting sensors loop")
-        self.refresh_hardware()
         self._stopEvent = Event()
-        self._sensorsLoopThread = Thread(target=self._sensors_loop, args=())
-        self._sensorsLoopThread.name = f"sensorsLoop-{self._config.ecosystem_id}"
-        self._sensorsLoopThread.start()
+        self._thread = Thread(target=self._sensors_loop, args=())
+        self._thread.name = f"sensorsLoop-{self._config.ecosystem_id}"
+        self._thread.start()
         self._logger.debug(f"Sensors loop successfully started")
 
     def _stop_sensors_loop(self) -> None:
         self._logger.debug(f"Stopping sensors loop")
         self._stopEvent.set()
-        self._sensorsLoopThread.join()
-        del self._sensorsLoopThread, self._stopEvent
+        self._thread.join()
+        del self._thread, self._stopEvent
 
     def _sensors_loop(self) -> None:
         while not self._stopEvent.is_set():
@@ -101,10 +96,11 @@ class gaiaSensors(SubroutineTemplate):
         now = datetime.now().replace(microsecond=0)
         now_tz = now.astimezone(self._timezone)
         cache["datetime"] = now_tz
-        cache["data"] = {}
-        for sensor in self._sensors:
-            cache["data"].update({sensor.uid: sensor.get_data()})
-            sleep(0.01)
+        cache["data"] = []
+        for uid in self._sensors:
+            cache["data"].append(
+                {"sensor_uid": uid, "measures": self._sensors[uid].get_data()}
+            )
         with lock:
             self._data = cache
 

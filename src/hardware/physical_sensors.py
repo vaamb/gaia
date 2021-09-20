@@ -33,8 +33,9 @@ class DHTSensor(gpioSensor):
         else:
             raise Exception("Unknown DHT model")
 
-    def get_data(self) -> dict:
-        data = {}
+        self._raw_data = {}
+
+    def _get_raw_data(self) -> tuple:
         for retry in range(5):
             try:
                 self._device.measure()
@@ -49,30 +50,31 @@ class DHTSensor(gpioSensor):
                 sensorLogger.error(
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: {e}")
-                data = {}
                 break
+            return humidity, temperature
 
-            else:
-                if "humidity" in self._measure:
-                    data["humidity"] = humidity
+    def get_data(self) -> list:
+        raw_humidity, raw_temperature = self._get_raw_data()
+        data = []
+        if raw_humidity is not None and raw_temperature is not None:
+            if "humidity" in self._measure:
+                data.append({"name": "humidity", "values": raw_humidity})
 
-                if "temperature" in self._measure:
-                    data["temperature"] = \
-                        temperature_converter(temperature, "celsius",
-                                              self._unit)
+            if "temperature" in self._measure:
+                temperature = temperature_converter(
+                                 raw_temperature, "celsius", self._unit)
+                data.append({"name": "temperature", "values": temperature})
 
-                if "dew_point" in self._measure:
-                    dew_point = get_dew_point(temperature, humidity)
-                    data["dew_point"] = \
-                        temperature_converter(dew_point, "celsius", self._unit)
+            if "dew_point" in self._measure:
+                raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
+                dew_point = temperature_converter(
+                    raw_dew_point, "celsius", self._unit)
+                data.append({"name": "dew_point", "values": dew_point})
 
-                if "absolute_humidity" in self._measure:
-                    absolute_humidity = get_absolute_humidity(temperature,
-                                                              humidity)
-                    data["absolute_humidity"] = \
-                        temperature_converter(absolute_humidity, "celsius",
-                                              self._unit)
-                break
+            if "absolute_humidity" in self._measure:
+                raw_absolute_humidity = get_absolute_humidity(
+                    raw_temperature, raw_humidity)
+                data.append({"name": "absolute_humidity", "values": raw_absolute_humidity})
         return data
 
 
@@ -111,10 +113,10 @@ class VEML7700(i2cSensor):
             self._hex_address = 0x10
         self._device = _VEML7700(get_i2c(), self._hex_address)
 
-    def get_data(self) -> dict:
-        data = {}
+    def get_data(self) -> list:
+        data = []
         try:
-            data["light"] = self._device.lux
+            data.append({"name": "light", "values": self._device.lux})
         except Exception as e:
             sensorLogger.error(
                 f"Sensor {self._name} encountered an error. "

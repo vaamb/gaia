@@ -145,7 +145,7 @@ class gaiaLight(SubroutineTemplate):
                             self._engine.socketIO_client\
                                 .namespace_handlers["/gaia"]\
                                 .on_send_light_data(
-                                    ecosystem_uid=self._config.uid)
+                                    ecosystem_uids=self._config.uid)
                         except AttributeError as e:
                             self._logger.error(e)
         # If lighting == False, lights should be off
@@ -279,14 +279,13 @@ class gaiaLight(SubroutineTemplate):
 
     @property
     def light_info(self) -> dict:
-        return {
+        return {**{
             "status": (self.light_status if self.mode == "manual"
                              else self.expected_status),
             "mode": self.mode,
             "method": self.method,
-            "lighting_hours": self.lighting_hours,
             "timer": self.timer,
-        }
+        }, **self.lighting_hours}
 
     def turn_light(self, mode="automatic", countdown: float = 0.0):
         if self._started:

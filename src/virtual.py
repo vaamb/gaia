@@ -98,11 +98,12 @@ class VirtualWorld(metaclass=SingletonMeta):
 
             temperature = (
                 base_temperature +
+                self._params["temperature"]["yearly_amp"] * season_factor +
                 self._params["temperature"]["daily_amp"] * day_factor
             )
             self._temperature = round(temperature, 2)
             humidity = (
-                self._params["humidity"]["avg"] +
+                self._params["humidity"]["avg"] -
                 self._params["humidity"]["amp"] * day_factor
             )
             self._humidity = round(humidity, 2)
@@ -135,6 +136,7 @@ class VirtualEcosystem:
                  water_volume: float = 5,  # in liter
                  max_heater_output: int = 25,  # max heater output in watt
                  max_light_output: int = 30000,  # max light output in lux
+                 start: bool = False,
                  ) -> None:
 
         assert len(dimension) == 3
@@ -165,6 +167,9 @@ class VirtualEcosystem:
 
         self._start_time = None
         self._last_update = None
+
+        if start:
+            self.start()
 
     def measure(self):
         delay_between_measures = 15
@@ -270,8 +275,10 @@ def get_virtual_ecosystem(ecosystem: str, start=False) -> VirtualEcosystem:
     try:
         return _virtual_ecosystems[ecosystem_uid]
     except KeyError:
-        _virtual_ecosystems[ecosystem_uid] = \
-            VirtualEcosystem(ecosystem_uid, VirtualWorld())
         if start:
-            _virtual_ecosystems[ecosystem_uid].start()
+            _virtual_ecosystems[ecosystem_uid] = \
+                VirtualEcosystem(ecosystem_uid, VirtualWorld(), start=True)
+        else:
+            _virtual_ecosystems[ecosystem_uid] = \
+                VirtualEcosystem(ecosystem_uid, VirtualWorld())
         return _virtual_ecosystems[ecosystem_uid]

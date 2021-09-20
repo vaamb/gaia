@@ -1,8 +1,9 @@
 import random
 
-from .base import baseSensor
+from .base import gpioSensor, i2cSensor
+from .physical_sensors import DHTSensor
 from config import Config
-from src.utils import get_absolute_humidity, get_dew_point, random_sleep
+from src.utils import random_sleep
 
 
 if not Config.VIRTUALIZATION:
@@ -35,27 +36,30 @@ else:
         return round(random.uniform(10, 55), 2)
 
 
-class virtualSensor(baseSensor):
+class virtualSensor:
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
         if Config.VIRTUALIZATION:
             get_virtual_ecosystem(self.subroutine.engine.uid, start=True)
 
 
-class virtualDHT(virtualSensor):
-    def get_data(self) -> dict:
+class virtualDHT(gpioSensor, virtualSensor):
+    def __init__(self, **kwargs):
+        if not kwargs.get("measure", []):
+            kwargs["measure"] = ["temperature", "humidity"]
+        super().__init__(**kwargs)
+
+        self._unit = kwargs.pop("unit", "celsius")
+
+        self._raw_data = {}
+
+    def _get_raw_data(self) -> tuple:
         random_sleep()
-        data = {
-            "temperature": get_temperature(self.subroutine.engine.uid),
-            "humidity": get_humidity(self.subroutine.engine.uid),
-        }
-        if "dew_point" in self._measure:
-            data["dew_point"] = get_dew_point(
-                data["temperature"], data["humidity"])
-        if "absolute_humidity" in self._measure:
-            data["absolute_humidity"] = get_absolute_humidity(
-                data["temperature"], data["humidity"])
-        return data
+        humidity = get_humidity(self.subroutine.engine.uid)
+        temperature = get_temperature(self.subroutine.engine.uid)
+        return humidity, temperature
+
+    def get_data(self):
+        return DHTSensor.get_data(self)
 
 
 class virtualDHT11(virtualDHT):
@@ -66,43 +70,38 @@ class virtualDHT22(virtualDHT):
     MODEL = "virtualDHT22"
 
 
-class virtualVEML7700(virtualSensor):
+class virtualVEML7700(i2cSensor, virtualSensor):
     MODEL = "virtualVEML7700"
 
-    def get_data(self) -> dict:
+    def get_data(self) -> list:
         random_sleep()
-        return {
-            "light": get_light(self.subroutine.engine.uid),
-        }
+        return [{"name": "light",
+                 "values": get_light(self.subroutine.engine.uid)}]
 
 
-class virtualMega(virtualSensor):
+class virtualMega(virtualDHT):
     MODEL = "virtualMega"
 
-    def get_data(self) -> dict:
-        random_sleep()
-        data = {
-            "temperature": get_temperature(self.subroutine.engine.uid),
-            "humidity": get_humidity(self.subroutine.engine.uid),
-            "light": get_light(self.subroutine.engine.uid),
-        }
-        if "dew_point" in self._measure:
-            data["dew_point"] = get_dew_point(
-                data["temperature"], data["humidity"])
-        if "absolute_humidity" in self._measure:
-            data["absolute_humidity"] = get_absolute_humidity(
-                data["temperature"], data["humidity"])
+    def __init__(self, **kwargs):
+        if not kwargs.get("measure", []):
+            kwargs["measure"] = ["temperature", "humidity", "light"]
+        super().__init__(**kwargs)
+
+    def get_data(self) -> list:
+        data = super().get_data()
+        if "light" in self._measure:
+            data.append({"name": "light",
+                         "values": get_light(self.subroutine.engine.uid)})
         return data
 
 
-class virtualMoisture(virtualSensor):
+class virtualMoisture(gpioSensor, virtualSensor):
     MODEL = "virtualMoisture"
 
-    def get_data(self) -> dict:
+    def get_data(self) -> list:
         random_sleep()
-        return {
-            "moisture": get_moisture(self.subroutine.engine.uid),
-        }
+        return [{"name": "moisture",
+                 "values": get_moisture(self.subroutine.engine.uid)}]
 
 
 VIRTUAL_SENSORS = {hardware.MODEL: hardware for hardware in

@@ -185,8 +185,8 @@ class baseSensor(hardware):
         kwargs["type"] = "sensor"
         super().__init__(**kwargs)
 
-    def get_data(self) -> dict:
-        return {}
+    def get_data(self) -> list:
+        return []
 
 
 class gpioSensor(baseSensor, gpioHardware):
