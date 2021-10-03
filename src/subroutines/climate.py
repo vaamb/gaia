@@ -38,6 +38,7 @@ class Chaos:
 
 class gaiaClimate(SubroutineTemplate):
     NAME = "climate"
+    # TODO: if light method elongate: start of day = min morning start morning end
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
