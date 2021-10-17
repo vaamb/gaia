@@ -36,7 +36,7 @@ class enginesManager(metaclass=SingletonMeta):
         self._start_joiner: Event = Event()
         self._run: bool = False
         self._thread: Thread = None
-        self._SocketIO_client: Client = None
+        self._socketIO_client: Client = None
         self._last_sun_times_update = None
 
     # TODO: check startup without internet
@@ -263,8 +263,16 @@ class enginesManager(metaclass=SingletonMeta):
             self._start_joiner.set()
             with config_event:
                 config_event.wait()
+            for ecosystem_uid in self.engines:
+                try:
+                    self.engines[ecosystem_uid].update_sun_times(send=False)
+                except KeyError:
+                    pass
             if self.socketIO_client:
-                self.socketIO_client.on_send_config()
+                self.socketIO_client.namespace_handlers[
+                    "/gaia"].on_send_config()
+                self.socketIO_client.namespace_handlers[
+                    "/gaia"].on_send_light_data()
 
     def start(self, joint_start: bool = False) -> None:
         if not self._run:
@@ -305,26 +313,13 @@ class enginesManager(metaclass=SingletonMeta):
 
     @property
     def socketIO_client(self):
-        return self._SocketIO_client
+        return self._socketIO_client
 
     @socketIO_client.setter
     def socketIO_client(self, socketIO_client):
         if isinstance(socketIO_client, Client):
-            self._SocketIO_client = socketIO_client
+            self._socketIO_client = socketIO_client
         else:
             raise TypeError(
                 "socketIO_client must be an instance of socketio.Client"
             )
-
-    @property
-    def socketIO_enabled(self):
-        return bool(self._SocketIO_client)
-
-
-"""
-if self._run:
-    raise RuntimeError(
-        "You cannot manually manage engines while the autoManager is "
-        "running"
-    )
-"""

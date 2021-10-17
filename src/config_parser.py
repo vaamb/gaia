@@ -25,6 +25,7 @@ logger = logging.getLogger("gaiaEngine.config")
 # ---------------------------------------------------------------------------
 #   default ecosystem configuration
 # ---------------------------------------------------------------------------
+# TODO: add the choice to change config place (so choose none for debugging)
 DEFAULT_ECOSYSTEM_CFG = {
     "default": {
         "name": "",
@@ -279,14 +280,16 @@ class GeneralConfig(metaclass=SingletonMeta):
 # ---------------------------------------------------------------------------
 class SpecificConfig:
     def __init__(self, ecosystem: str) -> None:
-        self.general_config = get_general_config()
-        ids = self.general_config.get_IDs(ecosystem)
+        ids = get_general_config().get_IDs(ecosystem)
         logger.debug(f"Initializing specificConfig for ecosystem {ids[1]}")
         self.ecosystem_id = ids[0]
-        self.config_dict = self.general_config.config_dict[self.ecosystem_id]
 
     def __str__(self):
         return json.dumps(self.config_dict)
+
+    @property
+    def config_dict(self) -> dict:
+        return get_general_config().config_dict[self.ecosystem_id]
 
     @property
     def name(self) -> str:
@@ -295,7 +298,7 @@ class SpecificConfig:
     @name.setter
     def name(self, value: str) -> None:
         self.config_dict["name"] = value
-        self.general_config.save("ecosystems")
+        get_general_config().save("ecosystems")
 
     @property
     def uid(self) -> str:
@@ -418,7 +421,7 @@ class SpecificConfig:
 
     def save(self, cfg):
         if not any((Config.DEBUG, Config.TESTING)):
-            self.general_config.save(cfg)
+            get_general_config().save(cfg)
 
     def create_new_hardware(self,
                             name: str = "",

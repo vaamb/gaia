@@ -49,10 +49,6 @@ class Engine:
     def socketIO_client(self):
         return self._manager.socketIO_client
 
-    @property
-    def socketIO_enabled(self):
-        return self._manager.socketIO_enabled
-
     def start(self, joint=False):
         if not self._started:
             self.logger.info("Starting Engine")
@@ -112,8 +108,9 @@ class Engine:
         return self._config.config_dict
 
     # Light
-    def update_sun_times(self):
-        self.subroutines["light"].update_sun_times()
+    def update_sun_times(self, send=False):
+        # TODO: catch keyerror and raise specific error
+        self.subroutines["light"].update_sun_times(send=False)
 
     @property
     def light_info(self):

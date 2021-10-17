@@ -117,7 +117,7 @@ class gaiaNamespace(socketio.ClientNamespace):
         uids = self._get_uid_list(ecosystem_uids)
         config = {ecosystem_id: self.engines[ecosystem_id].config
                   for ecosystem_id in uids}
-        self.emit("config", config, )
+        self.emit("config", config)
 
     def _get_data(self, data_type, ecosystem_uids: Union[str, tuple] = "all") -> list:
         rv = []

@@ -140,7 +140,7 @@ class gaiaLight(SubroutineTemplate):
                     light.turn_on()
                 if self._mode == "automatic":
                     self._logger.info("Lights have been automatically turned on")
-                    if self._engine.socketIO_enabled:
+                    if self._engine.socketIO_client:
                         try:
                             self._engine.socketIO_client\
                                 .namespace_handlers["/gaia"]\
@@ -157,12 +157,11 @@ class gaiaLight(SubroutineTemplate):
                     light.turn_off()
                 if self._mode == "automatic":
                     self._logger.info("Lights have been automatically turned off")
-                    if self._engine.socketIO_enabled:
+                    if self._engine.socketIO_client:
                         try:
-                            self._engine.socketIO_client.emit(
-                                "light_data",
-                                data={self._uid: self.light_info},
-                                namespace="/gaia")
+                            self._engine.socketIO_client.namespace_handlers[
+                                "/gaia"].on_send_light_data(
+                                ecosystem_uids=(self._uid,))
                         except AttributeError as e:
                             self._logger.error(e)
         self._status["last"] = self._status["current"]
@@ -172,7 +171,7 @@ class gaiaLight(SubroutineTemplate):
         now = datetime.now()
         if now.date() != self.engine.manager.last_sun_times_update.date():
             self.engine.manager.refresh_sun_times()
-        self.update_sun_times()
+        self.update_sun_times(send=True)
         self._start_light_loop()
 
     def _stop(self):
@@ -180,7 +179,7 @@ class gaiaLight(SubroutineTemplate):
         self._sun_times = {}
 
     """API calls"""
-    def update_sun_times(self) -> None:
+    def update_sun_times(self, send=True) -> None:
         # TODO: check if it works when not using elongate
         # lock thread as all the whole dict should be transformed at the "same time"
         with lock:
@@ -200,11 +199,10 @@ class gaiaLight(SubroutineTemplate):
                     # No sun times available in config/cache
                     pass
 
-        if self._engine.socketIO_enabled:
+        if self._engine.socketIO_client and send:
             try:
-                self._engine.socketIO_client.emit(
-                    "light_data", data={self._uid: self.light_info},
-                    namespace="/gaia")
+                self._engine.socketIO_client.namespace_handlers[
+                    "/gaia"].on_send_light_data(ecosystem_uids=(self._uid, ))
             except AttributeError as e:
                 self._logger.error(e)
 
@@ -251,7 +249,7 @@ class gaiaLight(SubroutineTemplate):
     def method(self, value: str) -> None:
         assert value in ("elongate", "fixed", "mimic")
         if value in ("elongate", "mimic"):
-            self.update_sun_times()
+            self.update_sun_times(send=True)
         self._method = value
 
     @property

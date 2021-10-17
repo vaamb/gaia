@@ -7,7 +7,6 @@ class SubroutineTemplate:
 
     def __init__(self, engine) -> None:
         self._engine = weakref.proxy(engine)
-        self._config = self._engine._config
         self._uid = self._config.uid
         self._ecosystem = self._config.name
         self._subroutine_name = f"gaia{self.NAME.capitalize()}"
@@ -16,6 +15,10 @@ class SubroutineTemplate:
         )
         self._logger.debug(f"Initializing {self._subroutine_name}")
         self._started = False
+
+    @property
+    def _config(self):
+        return self._engine._config
 
     def _finish__init__(self):
         self._logger.debug(f"{self._subroutine_name} successfully "

@@ -40,8 +40,6 @@ class gaiaEngine:
         if not self.started:
             logger.info("Starting")
             self.manager.start(joint_start=True)
-            # autoManager.start(joint_start=True)
-            # enginesDict = get_enginesDict()
             if self.use_client:
                 logger.info("Starting socketIO client")
                 self.client = retryClient(json=json, logger=Config.DEBUG)
@@ -49,7 +47,7 @@ class gaiaEngine:
                     engines_dict=self.manager.engines, namespace="/gaia"
                 )
                 self.client.register_namespace(namespace)
-                self.manager.SocketIO_client = self.client
+                self.manager.socketIO_client = self.client
                 self.client.connect(SERVER_URL, transports="websocket", namespaces=['/gaia'])
 
             self.started = True
