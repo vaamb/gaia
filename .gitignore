@@ -1,0 +1,12 @@
+__pycache__
+.idea
+
+logs
+cache
+
+
+*.xlsx
+*.cfg
+
+WIP.*
+PRIV.*
