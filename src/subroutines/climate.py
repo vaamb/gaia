@@ -1,14 +1,19 @@
 from collections import namedtuple
 from datetime import datetime, time
 from threading import Event
-from typing import Set
+import typing as t
 
 from simple_pid import PID
 
-from ..exceptions import HardwareNotFound, StoppingSubroutine, UndefinedParameter
+from ..exceptions import StoppingSubroutine, UndefinedParameter
 from ..hardware import ACTUATORS, gpioDimmable, gpioSwitch
 from ..shared_resources import scheduler
 from ..subroutines.template import SubroutineTemplate
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from .light import Light
+    from .sensors import Sensors
 
 
 RegulatorCouple = namedtuple("regulator_couple", ["increase", "decrease"])
@@ -34,7 +39,7 @@ class Climate(SubroutineTemplate):
         self._pids: dict[str, PID] = {}
         self._refresh_PIDs()
         self._refresh_hardware_dict()
-        self._regulated: Set[str] = set()
+        self._regulated: t.Set[str] = set()
         self._targets: dict[str, dict[str, float]] = {}
         self._sun_times: dict[str, time] = {
             "morning_start": time(8, 0),
@@ -55,7 +60,7 @@ class Climate(SubroutineTemplate):
             self._pids[climate_param] = PID(Kp, Ki, Kd, output_limits=(-100, 100))
 
     def _update_regulated(self) -> None:
-        regulated: Set[str] = set()
+        regulated: t.Set[str] = set()
         # Check if target values in config
         for climate_param in ("temperature", "humidity", "wind"):
             try:
@@ -89,7 +94,7 @@ class Climate(SubroutineTemplate):
                 regulated.remove(climate_param)
 
         # Check if Sensors taking regulated params are available
-        measures: Set[str] = set()
+        measures: t.Set[str] = set()
         sensor_uid = self.config.get_IO_group("sensor")
         for uid in sensor_uid:
             hardware = self.config.get_IO(uid)
@@ -122,11 +127,12 @@ class Climate(SubroutineTemplate):
             self.manageable = True
 
     def _update_time_parameters(self):
-        if self.ecosystem.subroutines["light"].status:
+        light_subroutine: "Light" = self.ecosystem.subroutines["light"]
+        if light_subroutine.status:
             try:
                 for tod in ("morning_start", "evening_end"):
                     self._sun_times[tod] = \
-                        self.ecosystem.subroutines["light"].lighting_hours[tod]
+                        light_subroutine.lighting_hours[tod]
             except (AttributeError, KeyError):
                 self.logger.error(
                     "Could not obtain time parameters from the Light subroutine, "
@@ -146,8 +152,9 @@ class Climate(SubroutineTemplate):
                 raise StoppingSubroutine
 
     def _climate_routine(self) -> None:
+        sensors_subroutines: "Sensors" = self.ecosystem.subroutines["sensors"]
         if not (
-            self.ecosystem.subroutines["sensors"].manageable and
+            sensors_subroutines.manageable and
             self.config.get_management("sensors")
         ):
             self.logger.error(
@@ -155,7 +162,7 @@ class Climate(SubroutineTemplate):
                 "work. Stopping the climate subroutine."
             )
             self.stop()
-        average = self.ecosystem.subroutines["sensors"].sensors_data.get("average")
+        average = sensors_subroutines.sensors_data.get("average")
         if not average:
             if self._sensor_miss >= MISSES_BEFORE_STOP:
                 self.logger.error(
@@ -239,13 +246,10 @@ class Climate(SubroutineTemplate):
             self.hardware[f"{hardware.type}s"][hardware_uid] = hardware
             self.logger.debug(f"Regulator '{hardware.name}' has been set up")
             return hardware
-        except (HardwareNotFound, ValueError) as e:
-            self.logger.error(f"{e.__class__.__name__}: {e}")
-        except KeyError as e:
+        except Exception as e:
             self.logger.error(
-                f"Could not configure regulator {hardware_uid}, one of the "
-                f"required info is missing. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                f"Encountered an exception while setting up regulator "
+                f"'{hardware_uid}'. ERROR msg: `{e.__class__.__name__}: {e}`."
             )
 
     def remove_hardware(self, hardware_uid: str) -> None:
@@ -279,7 +283,7 @@ class Climate(SubroutineTemplate):
         self._update_climate_targets()
 
     @property
-    def regulated(self) -> Set[str]:
+    def regulated(self) -> t.Set[str]:
         return self._regulated
 
     @property

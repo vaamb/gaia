@@ -35,7 +35,7 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
-        self.subroutines: dict[str, SubroutineTemplate] = {}
+        self.subroutines: SUBROUTINES = {}
         for subroutine in SUBROUTINES:
             self.init_subroutine(subroutine)
         self._chaos: Chaos = Chaos(0, 0, 1)

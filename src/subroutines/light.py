@@ -2,15 +2,20 @@ from datetime import date, datetime, time
 from statistics import mean
 from threading import Event, Lock, Thread
 import time as ctime
+import typing as t
 
 from simple_pid import PID
-from socketio.exceptions import BadNamespaceError
 
-from ..exceptions import HardwareNotFound, UndefinedParameter
+from ..exceptions import UndefinedParameter
 from ..hardware import ACTUATORS, I2C_LIGHT_SENSORS
-from ..hardware.ABC import Switch
 from ..subroutines.template import SubroutineTemplate
 from config import Config
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from .climate import Climate
+    from .sensors import Sensors
+    from ..hardware.ABC import Switch
 
 
 Kp = 0.05
@@ -92,18 +97,16 @@ class Light(SubroutineTemplate):
                 self.ecosystem.event_handler.on_send_light_data(
                     ecosystem_uids=self.config.uid
                 )
-            except AttributeError as e:
-                self.logger.error(e)
-            except BadNamespaceError:
-                self.logger.warning(
-                    "Not connected to the server, cannot send "
-                    "light info"
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
                 )
         self._status["last"] = self._status["current"]
 
     # TODO: add a second loop for light level, only used if light is on and dimmable
     def _light_level_loop(self) -> None:
-        sensor_subroutine = self.ecosystem.subroutines.get("sensor", None)
+        sensor_subroutine: "Sensors" = self.ecosystem.subroutines.get("sensors", None)
         light_sensors = []
         if sensor_subroutine:
             for sensor in sensor_subroutine.hardware.values():
@@ -161,7 +164,7 @@ class Light(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_dict: dict) -> Switch:
+    def add_hardware(self, hardware_dict: dict) -> "Switch":
         hardware_uid = list(hardware_dict.keys())[0]
         try:
             hardware_dict[hardware_uid]["level"] = "environment"
@@ -172,12 +175,10 @@ class Light(SubroutineTemplate):
                 self._dimmable_lights_uid.append(hardware_uid)
             self.logger.debug(f"Light '{hardware.name}' has been set up")
             return hardware
-        except HardwareNotFound as e:
-            self.logger.error(f"{e.__class__.__name__}: {e}")
-        except KeyError as e:
+        except Exception as e:
             self.logger.error(
-                f"Could not configure light {hardware_uid}, one of the "
-                f"required info is missing. ERROR msg: {e}"
+                f"Encountered an exception while setting up light "
+                f"'{hardware_uid}'. ERROR msg: `{e.__class__.__name__}: {e}`."
             )
 
     def remove_hardware(self, hardware_uid: str) -> None:
@@ -253,11 +254,12 @@ class Light(SubroutineTemplate):
                 self.ecosystem.subroutines.get("climate", False)
         ):
             try:
-                self.ecosystem.subroutines["climate"].update_time_parameters()
+                climate_subroutine: Climate = self.ecosystem.subroutines["climate"]
+                climate_subroutine.update_time_parameters()
             except Exception as e:
                 self.logger.error(
-                    f"Could not update climate routine times parameters. Error "
-                    f"msg: {e}"
+                    f"Could not update climate subroutine times parameters. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
                 )
 
         if self.ecosystem.event_handler and send:
@@ -265,11 +267,10 @@ class Light(SubroutineTemplate):
                 self.ecosystem.event_handler.on_send_light_data(
                     ecosystem_uids=(self._uid, )
                 )
-            except AttributeError as e:
-                self.logger.error(e)
-            except BadNamespaceError as e:
-                self.logger.warning(
-                    "Not connected to the server, cannot send light info"
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
                 )
 
     @ property

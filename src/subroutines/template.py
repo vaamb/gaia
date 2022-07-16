@@ -39,16 +39,16 @@ class SubroutineTemplate(ABC):
     def _add_hardware(
             self,
             hardware_dict: dict[str, dict[str, str]],
-            hardware_choice: dict[str, Hardware],
+            hardware_choice: dict[str, t.Type[Hardware]],
     ) -> t.Union[BaseSensor, Dimmer, Hardware, Switch]:
-        hardware_uid = list(hardware_dict.keys())[0]
-        hardware_info = hardware_dict[hardware_uid]
-        model = hardware_info.get("model", None)
+        hardware_uid: str = list(hardware_dict.keys())[0]
+        hardware_info: dict = hardware_dict[hardware_uid]
+        model: str = hardware_info.get("model", None)
         if model not in hardware_choice:
             raise HardwareNotFound(
-                f"{model} is not in the list of the hardware available"
+                f"{model} is not in the list of the hardware available."
             )
-        hardware_class = hardware_choice[model]
+        hardware_class: t.Type[Hardware] = hardware_choice[model]
         hardware = hardware_class(
             subroutine=self,
             uid=hardware_uid,
@@ -57,8 +57,8 @@ class SubroutineTemplate(ABC):
         return hardware
 
     def _refresh_hardware(self, hardware_group: str) -> None:
-        hardware_needed = set(self.config.get_IO_group(hardware_group))
-        hardware_existing = set(self.hardware)
+        hardware_needed: t.Set[str] = set(self.config.get_IO_group(hardware_group))
+        hardware_existing: t.Set[str] = set(self.hardware)
         for hardware_uid in hardware_needed - hardware_existing:
             self.add_hardware({hardware_uid: self.config.IO_dict[hardware_uid]})
         for hardware_uid in hardware_existing - hardware_needed:
@@ -127,7 +127,10 @@ class SubroutineTemplate(ABC):
                     self._started = True
                 except Exception as e:
                     self._started = False
-                    self.logger.error(f"Starting failed. ERROR msg: {e}")
+                    self.logger.error(
+                        f"Starting failed. "
+                        f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                    )
                     raise e
             else:
                 raise RuntimeError("Subroutine is already running")
@@ -146,5 +149,6 @@ class SubroutineTemplate(ABC):
             except Exception as e:
                 self._started = True
                 self.logger.error(
-                    f"Stopping failed. ERROR msg: {e}")
+                    f"Stopping failed. ERROR msg: `{e.__class__.__name__}: {e}`."
+                )
                 raise e

@@ -2,12 +2,16 @@ from datetime import datetime
 from statistics import mean
 from threading import Event, Thread, Lock
 from time import monotonic
+import typing as t
 
-from ..exceptions import HardwareNotFound
 from ..hardware import SENSORS
 from ..hardware.ABC import BaseSensor
 from ..subroutines.template import SubroutineTemplate
 from config import Config
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from .climate import Climate
 
 
 lock = Lock()
@@ -62,8 +66,9 @@ class Sensors(SubroutineTemplate):
         self.logger.info(f"Stopping sensors loop")
         self._stop_event.set()
         self._thread.join()
-        if self.ecosystem.subroutines["climate"].status:
-            self.ecosystem.subroutines["climate"].stop()
+        climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
+        if climate_subroutine.status:
+            climate_subroutine.stop()
         self.hardware = {}
 
     """API calls"""
@@ -78,12 +83,10 @@ class Sensors(SubroutineTemplate):
             self.hardware[hardware_uid] = hardware
             self.logger.debug(f"Sensor {hardware.name} has been set up")
             return hardware
-        except HardwareNotFound as e:
-            self.logger.error(f"{e.__class__.__name__}: {e}")
-        except KeyError as e:
+        except Exception as e:
             self.logger.error(
-                f"Could not configure sensor {hardware_uid}, one of the "
-                f"required info is missing. ERROR msg: {e}"
+                f"Encountered an exception while setting up sensor "
+                f"'{hardware_uid}'. ERROR msg: `{e.__class__.__name__}: {e}`."
             )
 
     def remove_hardware(self, sensors_uid: str) -> None:
@@ -94,16 +97,9 @@ class Sensors(SubroutineTemplate):
 
     def refresh_hardware(self) -> None:
         self._refresh_hardware("sensor")
-        if (
-                self.config.get_management("climate") and
-                self.ecosystem.subroutines.get("climate", False)
-        ):
-            try:
-                self.ecosystem.subroutines["climate"].refresh_hardware()
-            except Exception as e:
-                self.logger.error(
-                    f"Could not update climate routine hardware. Error msg: {e}"
-                )
+        climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
+        if climate_subroutine.status:
+            climate_subroutine.refresh_hardware()
 
     def update_sensors_data(self) -> None:
         """

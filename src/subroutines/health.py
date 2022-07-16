@@ -1,9 +1,14 @@
 import datetime
 import io
+import typing as t
 
 from ..shared_resources import scheduler
 from ..subroutines.template import SubroutineTemplate
 from config import Config
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from .light import Light
 
 
 class Health(SubroutineTemplate):
@@ -30,30 +35,31 @@ class Health(SubroutineTemplate):
 
     def _health_routine(self):
         # If webcam: turn it off and restart after
-        light = self.ecosystem.subroutines["light"].status
-        light_mode = self.ecosystem.subroutines["light"].mode
-        light_status = self.ecosystem.subroutines["light"].light_status
+        light_subroutine: "Light" = self.ecosystem.subroutines["light"]
+        light_mode = light_subroutine.mode
+        light_status = light_subroutine.light_status
         # webcam = self.
-        if light:
-            self.ecosystem.set_light_on()
-
+        if light_subroutine.status:
+            light_subroutine.turn_light("on")
         try:
             self.logger.info(f"Taking picture of {self._ecosystem_name}")
             self.take_picture()
             self.logger.debug(
                 f"Picture of {self._ecosystem_name} successfully taken")
         except Exception as e:
-            self.logger.error(f"Failing to take picture of {self._ecosystem_name}. "
-                               f"ERROR msg: {e}")
+            self.logger.error(
+                f"Failed to take picture of {self._ecosystem_name}. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
 
-        if light:
+        if light_subroutine.status:
             if light_mode == "automatic":
-                self.ecosystem.subroutines["light"].set_light_auto()
+                light_subroutine.turn_light("automatic")
             else:
                 if light_status:
-                    self.ecosystem.subroutines["light"].set_light_on()
+                    light_subroutine.turn_light("on")
                 else:
-                    self.ecosystem.subroutines["light"].set_light_off()
+                    light_subroutine.turn_light("off")
 
         self.analyse_image()
 
