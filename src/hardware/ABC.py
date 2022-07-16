@@ -5,27 +5,24 @@ import pathlib
 import typing as t
 import weakref
 
-from adafruit_platformdetect import Board, Detector
 
-from .. import utils
+from . import _RASPI
+from ..utils import (
+    base_dir, pin_bcm_to_board, pin_board_to_bcm, pin_translation
+)
 
 
 if t.TYPE_CHECKING:
     from src.subroutines.template import SubroutineTemplate
 
 
-_RASPI = Board(Detector()).any_raspberry_pi
-
-if _RASPI: # pragma: no cover
+if _RASPI:  # pragma: no cover
     import board
     import busio
     import pwmio
     from adafruit_blinka.microcontroller.bcm283x.pin import Pin
-else:
-    from .compatibility import board
-    from .compatibility import busio
-    from .compatibility import pwmio
-    from .compatibility import Pin
+else:  # pragma: no cover
+    from ._compatibility import board, busio, pwmio, Pin
 
 
 sensorLogger = logging.getLogger("engine.hardware_lib")
@@ -73,11 +70,11 @@ class Address:
         if self.type.lower() in ("board", "bcm", "gpio"):
             number = int(str_number)
             if self.type.lower() == "board":
-                if number not in utils.pin_board_to_bcm:  # pragma: no cover
+                if number not in pin_board_to_bcm:  # pragma: no cover
                     raise ValueError("The pin is not a valid GPIO pin")
-                self.number = utils.pin_translation(number, "to_BCM")
+                self.number = pin_translation(number, "to_BCM")
             else:
-                if number not in utils.pin_bcm_to_board:  # pragma: no cover
+                if number not in pin_bcm_to_board:  # pragma: no cover
                     raise ValueError("The pin is not a valid GPIO pin")
                 self.number = number
         elif self.type.lower() == "i2c":
@@ -321,7 +318,7 @@ class i2cSensor(BaseSensor, i2cHardware):
 class Camera(Hardware):
     def __init__(self, *args, **kwargs):
         kwargs["level"] = "environment"
-        self.folder = utils.base_dir/f"camera/{self.ecosystem_uid}"
+        self.folder = base_dir/f"camera/{self.subroutine._uid}"
         if not self.folder.exists():
             os.mkdir(self.folder)
         self.running = False

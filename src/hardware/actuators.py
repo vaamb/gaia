@@ -27,7 +27,7 @@ class gpioDimmable(gpioSwitch, gpioDimmer):
 
 ACTUATORS = {
     hardware.__name__: hardware for hardware in [
-        gpioSwitch,
         gpioDimmable,
+        gpioSwitch,
     ]
 }

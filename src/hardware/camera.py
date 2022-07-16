@@ -2,13 +2,14 @@ from datetime import datetime
 from pathlib import Path
 from time import sleep
 
-from .ABC import Camera, _RASPI
+from . import _RASPI
+from .ABC import Camera
 
 
 if _RASPI:  # pragma: no cover
     from picamera import PiCamera as _PiCamera
 else:
-    from .compatibility import PiCamera as _PiCamera
+    from ._compatibility import PiCamera as _PiCamera
 
 
 class PiCamera(Camera):

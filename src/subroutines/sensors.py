@@ -4,8 +4,8 @@ from threading import Event, Thread, Lock
 from time import monotonic
 
 from ..exceptions import HardwareNotFound
+from ..hardware import SENSORS
 from ..hardware.ABC import BaseSensor
-from ..hardware.store import SENSORS
 from ..subroutines.template import SubroutineTemplate
 from config import Config
 

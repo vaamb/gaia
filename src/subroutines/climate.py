@@ -6,8 +6,7 @@ from typing import Set
 from simple_pid import PID
 
 from ..exceptions import HardwareNotFound, StoppingSubroutine, UndefinedParameter
-from ..hardware.actuators import gpioDimmable, gpioSwitch
-from ..hardware.store import ACTUATORS
+from ..hardware import ACTUATORS, gpioDimmable, gpioSwitch
 from ..shared_resources import scheduler
 from ..subroutines.template import SubroutineTemplate
 

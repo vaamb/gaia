@@ -1,39 +1,14 @@
-import random
+import typing as t
 
-from .ABC import BaseSensor, gpioSensor, PlantLevelHardware
-from .compatibility import (
-    DHTBase as cDHTBase, DHT11 as cDHT11, DHT22 as cDHT22, VEML7700 as cVEML7700
-)
-from .random_measures import random_sleep
-from .sensors import DHTSensor, VEML7700
+from .ABC import BaseSensor
+from .sensors import DHTSensor, VEML7700, CapacitiveMoisture
 from config import Config
 
 
-if Config.VIRTUALIZATION:
-    from src.virtual import get_virtual_ecosystem
-    from .random_measures import add_noise
-
-    def get_temperature(ecosystem_uid, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
-        virtual_ecosystem.measure()
-        return round(add_noise(virtual_ecosystem.temperature), 2)
-
-    def get_humidity(ecosystem_uid, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
-        virtual_ecosystem.measure()
-        return round(add_noise(virtual_ecosystem.humidity), 2)
-
-    def get_light(ecosystem_uid, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
-        virtual_ecosystem.measure()
-        return round(add_noise(virtual_ecosystem.lux))
-
-    def get_moisture(ecosystem_uid, plant_uid, *args, **kwargs) -> float:
-        return round(random.uniform(10, 55), 2)
-
-else:
-    from .random_measures import (
-        get_humidity, get_light, get_moisture, get_temperature
+if t.TYPE_CHECKING:
+    from ._compatibility import (
+        DHTBase as _DHTBase, DHT11 as _DHT11, DHT22 as _DHT22,
+        Seesaw, VEML7700 as _VEML7700
     )
 
 
@@ -41,6 +16,7 @@ class virtualSensor(BaseSensor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if Config.VIRTUALIZATION:
+            from ..virtual import get_virtual_ecosystem
             get_virtual_ecosystem(self.subroutine.ecosystem.uid, start=True)
 
     def get_data(self) -> list:
@@ -50,49 +26,34 @@ class virtualSensor(BaseSensor):
 
 
 class virtualDHT(DHTSensor, virtualSensor):
-    def _get_device(self):
+    def _get_device(self) -> "_DHTBase":
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class virtualDHT11(virtualDHT):
-    def _get_device(self) -> cDHTBase:
-        return cDHT11()
+    def _get_device(self) -> "_DHT11":
+        from ._compatibility import DHT11 as _DHT11
+        return _DHT11(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
 class virtualDHT22(virtualDHT):
-    def _get_device(self) -> cDHTBase:
-        return cDHT22()
+    def _get_device(self) -> "_DHT22":
+        from ._compatibility import DHT22 as _DHT22
+        return _DHT22(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
-    def _get_device(self):
-        return cVEML7700()
+    def _get_device(self) -> "_VEML7700":
+        from ._compatibility import VEML7700 as _VEML7700
+        return _VEML7700(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
-class virtualMega(virtualDHT):
-    def __init__(self, *args, **kwargs):
-        if not kwargs.get("measure", []):
-            kwargs["measure"] = ["temperature", "humidity", "light"]
-        super().__init__(*args, **kwargs)
-
-    def _get_device(self) -> cDHTBase:
-        return cDHTBase(self._pin, use_pulseio=False)
-
-    def get_data(self) -> list:
-        data = super().get_data()
-        if "light" in self._measure:
-            data.append({"name": "light",
-                         "value": get_light(self.subroutine.ecosystem.uid)})
-        return data
-
-
-class virtualMoisture(gpioSensor, virtualSensor, PlantLevelHardware):
-    def get_data(self) -> list:
-        random_sleep()
-        return [{"name": "moisture",
-                 "value": get_moisture(self.subroutine.ecosystem.uid, self._plant)}]
+class virtualMoisture(CapacitiveMoisture, virtualSensor):
+    def _get_device(self) -> "Seesaw":
+        from ._compatibility import Seesaw
+        return Seesaw(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
 VIRTUAL_SENSORS = {
@@ -100,7 +61,6 @@ VIRTUAL_SENSORS = {
         virtualDHT11,
         virtualDHT22,
         virtualVEML7700,
-        virtualMega,
         virtualMoisture,
     ]
 }

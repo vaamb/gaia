@@ -7,8 +7,8 @@ from simple_pid import PID
 from socketio.exceptions import BadNamespaceError
 
 from ..exceptions import HardwareNotFound, UndefinedParameter
+from ..hardware import ACTUATORS, I2C_LIGHT_SENSORS
 from ..hardware.ABC import Switch
-from ..hardware.store import ACTUATORS, I2C_LIGHT_SENSORS
 from ..subroutines.template import SubroutineTemplate
 from config import Config
 
@@ -106,7 +106,7 @@ class Light(SubroutineTemplate):
         sensor_subroutine = self.ecosystem.subroutines.get("sensor", None)
         light_sensors = []
         if sensor_subroutine:
-            for sensor in sensor_subroutine.sensors.values():
+            for sensor in sensor_subroutine.hardware.values():
                 if sensor.model in I2C_LIGHT_SENSORS:
                     light_sensors.append(sensor)
         while not self._adjust_light_level_event.is_set():
