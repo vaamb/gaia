@@ -1,131 +1,154 @@
 from datetime import datetime
+from statistics import mean
 from threading import Event, Thread, Lock
 from time import monotonic
 
+from ..exceptions import HardwareNotFound
+from ..hardware.ABC import BaseSensor
+from ..hardware.store import SENSORS
+from ..subroutines.template import SubroutineTemplate
 from config import Config
-from src.utils import localTZ
-from src.hardware.store import SENSORS
-from src.subroutines.template import SubroutineTemplate
 
 
 lock = Lock()
 
 
-class gaiaSensors(SubroutineTemplate):
-    NAME = "sensors"
-
+class Sensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._timezone = localTZ
-        self._sensors = {}
+        self._stop_event = Event()
         self._data = {}
-        self.refresh_hardware()
         self._finish__init__()
 
-    def _add_sensor(self, hardware_uid: str) -> None:
-        model = self._config.IO_dict[hardware_uid]["model"]
-        if Config.VIRTUALIZATION:
-            if not model.startswith("virtual"):
-                model = f"virtual{model}"
-        try:
-            sensor = SENSORS[model]
-            name = self._config.IO_dict[hardware_uid]["name"]
-            s = sensor(
-                subroutine=self,
-                uid=hardware_uid,
-                name=name,
-                address=self._config.IO_dict[hardware_uid]["address"],
-                model=self._config.IO_dict[hardware_uid]["model"],
-                # type is automatically provided
-                level=self._config.IO_dict[hardware_uid]["level"],
-                measure=self._config.IO_dict[hardware_uid].get("measure", None),
-                plant=self._config.IO_dict[hardware_uid].get("plant", None),
-            )
-            self._sensors[hardware_uid] = s
-            self._logger.debug(f"Sensor {name} has been set up")
-
-        except KeyError:
-            self._logger.error(f"{model} is not in the list of "
-                               "the supported sensors")
-
-    def _remove_sensor(self, sensors_uid: str) -> None:
-        try:
-            self._sensors[sensors_uid]
-        except KeyError:
-            self._logger.error(f"Sensor '{sensors_uid}' does not exist")
-        else:
-            del self._sensors[sensors_uid]
-
-    def _start_sensors_loop(self) -> None:
-        self._logger.debug(f"Starting sensors loop")
-        self._stopEvent = Event()
-        self._thread = Thread(target=self._sensors_loop, args=())
-        self._thread.name = f"sensorsLoop-{self._config.ecosystem_id}"
-        self._thread.start()
-        self._logger.debug(f"Sensors loop successfully started")
-
-    def _stop_sensors_loop(self) -> None:
-        self._logger.debug(f"Stopping sensors loop")
-        self._stopEvent.set()
-        self._thread.join()
-        del self._thread, self._stopEvent
-
     def _sensors_loop(self) -> None:
-        while not self._stopEvent.is_set():
+        while not self._stop_event.is_set():
             start_time = monotonic()
-            self._logger.debug("Starting sensors data update routine ...")
-            self._update_sensors_data()
+            self.logger.debug("Starting sensors data update routine ...")
+            self.update_sensors_data()
             loop_time = monotonic() - start_time
             sleep_time = Config.SENSORS_TIMEOUT - loop_time
-            # TODO: add event for climate
-            if sleep_time < 0:
-                self._logger.warning(f"Sensors data loop took {loop_time}. This "
-                                     f"either indicates an error occurred or the "
-                                     f"need to adapt Config.SENSOR_TIMEOUT")
+            if sleep_time < 0:  # pragma: no cover
+                self.logger.warning(
+                    f"Sensors data loop took {loop_time}. This either indicates "
+                    f"an error occurred or the need to adapt SENSOR_TIMEOUT"
+                )
                 sleep_time = 2
-            self._logger.debug(
+            self.logger.debug(
                 f"Sensors data update finished in {loop_time:.1f}" +
-                f"s. Next sensors data update in {sleep_time:.1f}s")
-            self._stopEvent.wait(sleep_time)
+                f"s. Next sensors data update in {sleep_time:.1f}s"
+            )
+            self._stop_event.wait(sleep_time)
 
-    def _update_sensors_data(self) -> None:
+    def _update_manageable(self) -> None:
+        if self.config.get_IO_group("sensor"):
+            self.manageable = True
+        else:
+            self.logger.warning(
+                "No sensor detected, disabling Sensors subroutine"
+            )
+            self.manageable = False
+
+    def _start(self):
+        self.refresh_hardware()
+        self.logger.info(
+            f"Starting sensors loop. It will run every {Config.SENSORS_TIMEOUT} s"
+        )
+        self._thread = Thread(target=self._sensors_loop, args=())
+        self._thread.name = f"{self._uid}-sensors_loop"
+        self._thread.start()
+        self.logger.debug(f"Sensors loop successfully started")
+
+    def _stop(self):
+        self.logger.info(f"Stopping sensors loop")
+        self._stop_event.set()
+        self._thread.join()
+        if self.ecosystem.subroutines["climate"].status:
+            self.ecosystem.subroutines["climate"].stop()
+        self.hardware = {}
+
+    """API calls"""
+    def add_hardware(self, hardware_dict: dict) -> BaseSensor:
+        hardware_uid = list(hardware_dict.keys())[0]
+        try:
+            model = hardware_dict[hardware_uid].get("model", None)
+            if Config.VIRTUALIZATION:
+                if not model.startswith("virtual"):
+                    hardware_dict[hardware_uid]["model"] = f"virtual{model}"
+            hardware = self._add_hardware(hardware_dict, SENSORS)
+            self.hardware[hardware_uid] = hardware
+            self.logger.debug(f"Sensor {hardware.name} has been set up")
+            return hardware
+        except HardwareNotFound as e:
+            self.logger.error(f"{e.__class__.__name__}: {e}")
+        except KeyError as e:
+            self.logger.error(
+                f"Could not configure sensor {hardware_uid}, one of the "
+                f"required info is missing. ERROR msg: {e}"
+            )
+
+    def remove_hardware(self, sensors_uid: str) -> None:
+        try:
+            del self.hardware[sensors_uid]
+        except KeyError:
+            self.logger.error(f"Sensor '{sensors_uid}' does not exist")
+
+    def refresh_hardware(self) -> None:
+        self._refresh_hardware("sensor")
+        if (
+                self.config.get_management("climate") and
+                self.ecosystem.subroutines.get("climate", False)
+        ):
+            try:
+                self.ecosystem.subroutines["climate"].refresh_hardware()
+            except Exception as e:
+                self.logger.error(
+                    f"Could not update climate routine hardware. Error msg: {e}"
+                )
+
+    def update_sensors_data(self) -> None:
         """
         Loops through all the sensors and stores the value in self._data
         """
         cache = {}
+        average = {}
         now = datetime.now().replace(microsecond=0)
-        now_tz = now.astimezone(self._timezone)
-        cache["datetime"] = now_tz
+        cache["datetime"] = now
         cache["data"] = []
-        for uid in self._sensors:
+        for uid in self.hardware:
+            measures = self.hardware[uid].get_data()
             cache["data"].append(
-                {"sensor_uid": uid, "measures": self._sensors[uid].get_data()}
+                {"sensor_uid": uid, "measures": measures}
             )
+            for measure in measures:
+                try:
+                    average[measure["name"]].append(measure["value"])
+                except KeyError:
+                    average[measure["name"]] = [measure["value"]]
+        for measure in average:
+            average[measure] = round(mean(average[measure]), 2)
+        cache["average"] = [
+            {"name": name, "value": value} for name, value in average.items()
+        ]
         with lock:
             self._data = cache
-
-    def _start(self):
-        self._start_sensors_loop()
-
-    def _stop(self):
-        self._stop_sensors_loop()
-        self._data = {}
-
-    """API calls"""
-    def refresh_hardware(self) -> None:
-        # TODO: rebuild so it adds sensors if needed and delete them if not needed anymore
-        for hardware_uid in self._config.get_sensors():
-            self._add_sensor(hardware_uid)
 
     @property
     def sensors_data(self) -> dict:
         """
         Get sensors data as a dict with the following format:
         {
-        "datetime": datetime.now(),
-        "data":
-            "sensor_uid1": sensor_data1
-
+            "datetime": datetime.now(),
+            "data": [
+                {
+                    "sensor_uid": sensor1_uid,
+                    "measures": [
+                        {"name": measure1, "value": sensor1_measure1_value},
+                    ],
+                },
+            ],
+            "average": [
+                {"name": measure, "value": average_measure_value}
+            }],
         }
         """
         return self._data

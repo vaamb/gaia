@@ -2,8 +2,7 @@ from datetime import datetime, time, timedelta
 from time import monotonic
 import math
 
-from src.config_parser import get_IDs
-from src.utils import temperature_converter, SingletonMeta
+from .utils import temperature_converter, SingletonMeta
 
 
 SUNRISE = time(7, 0)
@@ -271,7 +270,8 @@ _virtual_ecosystems = {}
 
 
 def get_virtual_ecosystem(ecosystem: str, start=False) -> VirtualEcosystem:
-    ecosystem_uid = get_IDs(ecosystem)[0]
+    from src.config_parser import get_IDs
+    ecosystem_uid = get_IDs(ecosystem).uid
     try:
         return _virtual_ecosystems[ecosystem_uid]
     except KeyError:

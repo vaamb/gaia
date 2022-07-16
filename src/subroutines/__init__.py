@@ -1,7 +1,15 @@
-from .climate import gaiaClimate
-from .health import gaiaHealth
-from .light import gaiaLight
-from .sensors import gaiaSensors
+from .climate import Climate
+from .health import Health
+from .light import Light
+from .sensors import Sensors
+from .template import SubroutineTemplate
 
 
-SUBROUTINES = (gaiaSensors, gaiaLight, gaiaClimate, gaiaHealth)
+SUBROUTINES: dict[str, SubroutineTemplate] = {
+    subroutine.__name__.lower(): subroutine for subroutine in [
+        Sensors,
+        Light,
+        # Health,
+        Climate,
+    ]
+}

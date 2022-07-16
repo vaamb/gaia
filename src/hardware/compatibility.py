@@ -1,9 +1,7 @@
-import random
 import time
 import warnings
 
-from .rdm_measures import get_humidity, get_light, get_temperature
-from src.utils import random_sleep
+from .random_measures import get_humidity, get_light, get_temperature, random_sleep
 
 
 def custom_format_warning(msg, *args, **kwargs):
@@ -34,6 +32,15 @@ class busio:
         return None
 
 
+class pwmio:
+    """ Compatibility class that implements some methods from adafruit pwmio
+    module
+    """
+    class PWMOut:
+        def __init__(self, *args, **kwargs):
+            duty_cycle = 0
+
+
 class Pin:
     def __init__(self, bcm_nbr: int) -> None:
         self._id = bcm_nbr
@@ -51,17 +58,17 @@ class Pin:
 
 
 class VEML7700:
-    def __init__(self, i2c_bus, address=0x10):
+    def __init__(self, *args, **kwargs):
         pass
 
     @property
     def lux(self):
-        random_sleep(0.05, 0.025)
+        random_sleep(0.02, 0.01)
         return get_light()
 
 
 class DHTBase:
-    def __init__(self, pin, use_pulseio=False):
+    def __init__(self, *args, **kwargs):
         self._last_called = 0
         self._temperature = 0
         self._humidity = 0

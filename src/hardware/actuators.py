@@ -1,30 +1,33 @@
-from .base import gpioHardware
+from .ABC import gpioDimmer, gpioHardware, Switch
 from config import Config
 
 if Config.VIRTUALIZATION:
     from src.virtual import get_virtual_ecosystem
 
 
-# TODO: add model for when using pwm. In this case: address like GPIO_2:PWM_GPIO_12
-class gpioSwitch(gpioHardware):
-    MODEL = "gpioSwitch"
-
+class gpioSwitch(gpioHardware, Switch):
     def __init__(self, **kwargs) -> None:
-        # uncomment if you want to overwrite the name of model
-#        kwargs["model"] = self.MODEL
         super().__init__(**kwargs)
         self._pin.init(mode=self.OUT)
 
     def turn_on(self) -> None:
         self._pin.value(val=1)
         if Config.VIRTUALIZATION:
-            get_virtual_ecosystem(self.subroutine.engine.uid)._light = True
+            get_virtual_ecosystem(self.subroutine.ecosystem.uid)._light = True
 
     def turn_off(self) -> None:
         self._pin.value(val=0)
         if Config.VIRTUALIZATION:
-            get_virtual_ecosystem(self.subroutine.engine.uid)._light = False
+            get_virtual_ecosystem(self.subroutine.ecosystem.uid)._light = False
 
 
-ACTUATORS = {hardware.MODEL: hardware for hardware in
-             [gpioSwitch]}
+class gpioDimmable(gpioSwitch, gpioDimmer):
+    pass
+
+
+ACTUATORS = {
+    hardware.__name__: hardware for hardware in [
+        gpioSwitch,
+        gpioDimmable,
+    ]
+}

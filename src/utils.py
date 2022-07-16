@@ -1,16 +1,15 @@
 import base64
 from datetime import date, datetime, time, timezone
 import hashlib
+import json as _json
 import logging
 import logging.config
 from math import log, e
 import os
 import pathlib
 import platform
-import random
 import secrets
 import socket
-from time import sleep
 
 from cachetools import LRUCache
 from cryptography.fernet import Fernet
@@ -18,7 +17,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import geopy
 import ruamel.yaml
-from tzlocal import get_localzone
 
 from config import Config
 
@@ -28,12 +26,98 @@ coordinates = LRUCache(maxsize=16)
 
 base_dir = pathlib.Path(__file__).absolute().parents[1]
 
-localTZ = get_localzone()
-
 yaml = ruamel.yaml.YAML()
 
 
-def file_hash(file_path: pathlib.Path) -> hex:
+class datetimeJSONEncoder(_json.JSONEncoder):
+    def default(self, obj) -> str:
+        if isinstance(obj, (datetime, date)):
+            obj = obj.astimezone(tz=timezone.utc)
+            return obj.replace(microsecond=0).isoformat()
+        if isinstance(obj, time):
+            obj = datetime.combine(date.today(), obj)
+            obj = obj.astimezone()
+            obj = obj.astimezone(tz=timezone.utc).time()
+            return obj.replace(microsecond=0).isoformat()
+
+
+class json:
+    @staticmethod
+    def dumps(*args, **kwargs):
+        if 'cls' not in kwargs:
+            kwargs['cls'] = datetimeJSONEncoder
+        return _json.dumps(*args, **kwargs)
+
+    @staticmethod
+    def loads(*args, **kwargs):
+        return _json.loads(*args, **kwargs)
+
+
+pin_board_to_bcm = {
+    3: 2,
+    5: 3,
+    7: 4,
+    8: 14,
+    10: 15,
+    11: 17,
+    12: 18,
+    13: 27,
+    15: 22,
+    16: 23,
+    18: 24,
+    19: 10,
+    21: 9,
+    22: 25,
+    23: 11,
+    24: 8,
+    26: 7,
+    27: 0,
+    28: 1,
+    29: 5,
+    31: 6,
+    32: 12,
+    33: 13,
+    35: 19,
+    36: 16,
+    37: 26,
+    38: 20,
+    40: 21
+}
+
+
+pin_bcm_to_board = {
+    2: 3,
+    3: 5,
+    4: 7,
+    14: 8,
+    15: 10,
+    17: 11,
+    18: 12,
+    27: 13,
+    22: 15,
+    23: 16,
+    24: 18,
+    10: 19,
+    9: 21,
+    25: 22,
+    11: 23,
+    8: 24,
+    7: 26,
+    0: 27,
+    1: 28,
+    5: 29,
+    6: 31,
+    12: 32,
+    13: 33,
+    19: 35,
+    16: 36,
+    26: 37,
+    20: 38,
+    21: 40
+}
+
+
+def file_hash(file_path: pathlib.Path) -> str:
     try:
         h = hashlib.md5()
         with open(file_path, "rb") as f:
@@ -41,12 +125,25 @@ def file_hash(file_path: pathlib.Path) -> hex:
                 h.update(block)
         return h.hexdigest()
     except FileNotFoundError:
-        return 0
+        return "0x0"
 
 
 def utc_time_to_local_time(utc_time: time) -> time:
     dt = datetime.combine(date.today(), utc_time).replace(tzinfo=timezone.utc)
     return dt.astimezone().time()
+
+
+def human_time_parser(human_time: str) -> time:
+    """
+    Returns the time from config file written in a human readable manner
+    as a datetime.time object
+
+    :param human_time: str, the time written in a 24h format, with hours
+    and minutes separated by a 'h' or a 'H'. 06h05 as well as 6h05 or
+    even 6H5 are valid input
+    """
+    hours, minutes = human_time.replace('H', 'h').split("h")
+    return time(int(hours), int(minutes))
 
 
 def pin_translation(pin: int, direction: str) -> int:
@@ -60,72 +157,10 @@ def pin_translation(pin: int, direction: str) -> int:
     :return int, the translated pin number
     """
     assert direction in ["to_BCM", "to_board"]
-
-    to_BCM = {3: 2,
-              5: 3,
-              7: 4,
-              8: 14,
-              10: 15,
-              11: 17,
-              12: 18,
-              13: 27,
-              15: 22,
-              16: 23,
-              18: 24,
-              19: 10,
-              21: 9,
-              22: 25,
-              23: 11,
-              24: 8,
-              26: 7,
-              27: 0,
-              28: 1,
-              29: 5,
-              31: 6,
-              32: 12,
-              33: 13,
-              35: 19,
-              36: 16,
-              37: 26,
-              38: 20,
-              40: 21
-              }
-
-    to_board = {2: 3,
-                3: 5,
-                4: 7,
-                14: 8,
-                15: 10,
-                17: 11,
-                18: 12,
-                27: 13,
-                22: 15,
-                23: 16,
-                24: 18,
-                10: 19,
-                9: 21,
-                25: 22,
-                11: 23,
-                8: 24,
-                7: 26,
-                0: 27,
-                1: 28,
-                5: 29,
-                6: 31,
-                12: 32,
-                13: 33,
-                19: 35,
-                16: 36,
-                26: 37,
-                20: 38,
-                21: 40
-                }
-
     if direction == "to_BCM":
-        return to_BCM[pin]
-
-    elif direction == "to_board":
-        return to_board[pin]
+        return pin_board_to_bcm[pin]
+    else:
+        return pin_bcm_to_board[pin]
 
 
 def get_dew_point(temp: float,
@@ -258,10 +293,10 @@ def is_connected() -> bool:
 
 def encrypted_uid() -> str:
     h = hashes.Hash(hashes.SHA256())
-    h.update(Config.GAIA_SECRET_KEY.encode("utf-8"))
+    h.update(Config.OURANOS_SECRET_KEY.encode("utf-8"))
     key = base64.urlsafe_b64encode(h.finalize())
     f = Fernet(key=key)
-    return f.encrypt(Config.UID.encode("utf-8")).decode("utf-8")
+    return f.encrypt(Config.UUID.encode("utf-8")).decode("utf-8")
 
 
 def generate_uid_token(iterations: int = 160000) -> str:
@@ -274,7 +309,7 @@ def generate_uid_token(iterations: int = 160000) -> str:
         salt=bsalt,
         iterations=iterations,
     )
-    bkey = kdf.derive(Config.UID.encode())
+    bkey = kdf.derive(Config.UUID.encode())
     hkey = base64.b64encode(bkey).hex()
     return f"pbkdf2:sha256:{iterations}${ssalt}${hkey}"
 
@@ -297,12 +332,6 @@ def generate_secret_key_from_password(password: str, set_env: bool = False) -> s
             # Setting environ in BSD and MacOsX can lead to mem leak (cf. doc)
             os.putenv("GAIA_SECRET_KEY", skey)
     return skey
-
-
-def random_sleep(avg_duration: float = 0.15,
-                 std_deviation: float = 0.075
-                 ) -> None:
-    sleep(abs(random.gauss(avg_duration, std_deviation)))
 
 
 def configure_logging(config_class):
@@ -332,16 +361,11 @@ def configure_logging(config_class):
 
         "formatters": {
             "streamFormat": {
-                "format": "%(asctime)s [%(levelname)-4.4s] %(name)-20.20s: %(message)s",
+                "format": "%(asctime)s %(levelname)-4.4s [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S"
             },
             "fileFormat": {
-                "format": "%(asctime)s -- %(levelname)s  -- %(name)s -- %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S"
-            },
-            "errorFormat": {
-                'format': '%(asctime)s %(levelname)-4.4s %(module)-17s ' +
-                          'line:%(lineno)-4d  %(message)s',
+                "format": "%(asctime)s -- %(levelname)-7.7s  -- %(name)s -- %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S"
             },
         },
@@ -352,6 +376,22 @@ def configure_logging(config_class):
                 "formatter": "streamFormat",
                 "class": "logging.StreamHandler",
             },
+            "fileHandler": {
+                "level": f"{'DEBUG' if DEBUG else 'INFO'}",
+                "formatter": "fileFormat",
+                "class": "logging.handlers.RotatingFileHandler",
+                'filename': 'logs/base.log',
+                'mode': 'w+',
+                'maxBytes': 1024 * 512,
+                'backupCount': 5,
+            },
+            "errorFileHandler": {
+                "level": "ERROR",
+                "formatter": "fileFormat",
+                "class": "logging.FileHandler",
+                'filename': 'logs/errors.log',
+                'mode': 'a',
+            }
         },
 
         "loggers": {
@@ -377,32 +417,6 @@ def configure_logging(config_class):
             },
         },
     }
-
-    # Append file handlers to config as if they are needed they require logs file
-    if LOG_TO_FILE:
-        LOGGING_CONFIG["handlers"].update({
-            "fileHandler": {
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}",
-                "formatter": "fileFormat",
-                "class": "logging.handlers.RotatingFileHandler",
-                'filename': 'logs/gaiaEngine.log',
-                'mode': 'w+',
-                'maxBytes': 1024 * 512,
-                'backupCount': 5,
-            }
-        })
-
-    if LOG_ERROR:
-        LOGGING_CONFIG["handlers"].update({
-            "errorFileHandler": {
-                "level": "ERROR",
-                "formatter": "errorFormat",
-                "class": "logging.FileHandler",
-                'filename': 'logs/gaiaEngine_errors.log',
-                'mode': 'a',
-            }
-        })
-
     logging.config.dictConfig(LOGGING_CONFIG)
 
 
