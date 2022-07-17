@@ -12,8 +12,9 @@ from config import Config
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from src.engine import Engine
-    from src.events import Events
+    from .engine import Engine
+    from .events import Events
+    from .subroutines import Health, Light, Sensors
 
 
 class Ecosystem:
@@ -35,7 +36,7 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
-        self.subroutines: dict[str, t.Type[SubroutineTemplate]] = {}
+        self.subroutines: SUBROUTINES = {}
         for subroutine in SUBROUTINES:
             self.init_subroutine(subroutine)
         self._chaos: Chaos = Chaos(self, 0, 0, 1)
@@ -225,48 +226,47 @@ class Ecosystem:
         """
         try:
             if actuator.lower() == "light":
-                self.subroutines["light"].turn_light(
+                light_subroutine: "Light" = self.subroutines["light"]
+                light_subroutine.turn_light(
                     mode=mode, countdown=countdown
                 )
-        except KeyError:
+        except RuntimeError:
             self.logger.error(
                 f"Cannot turn {actuator} to {mode} as the subroutine managing it "
                 f"is not currently running"
             )
-        except RuntimeError as e:
-            self.logger.error(e)
 
     # Light
     @property
     def light_info(self) -> dict:
-        if self.subroutines["light"].status:
-            return self.subroutines["light"].light_info
+        light_subroutine: "Light" = self.subroutines["light"]
+        if light_subroutine.status:
+            return light_subroutine.light_info
         return {}
 
     def update_sun_times(self, send=False) -> None:
         self.logger.debug("Updating sun times")
-        if self.subroutines["light"].status:
-            self.subroutines["light"].update_sun_times(send=send)
+        light_subroutine: "Light" = self.subroutines["light"]
+        if light_subroutine.status:
+            light_subroutine.update_sun_times(send=send)
         else:
             self.logger.error(
                 f"Cannot update sun times as the light subroutine is not "
                 f"currently running"
             )
 
-    def turn_light(self, mode="automatic", countdown=0.0) -> None:
-        # Old way, use turn_actuator instead
-        self.turn_actuator("light", mode=mode, countdown=countdown)
-
     # Sensors
     @property
     def sensors_data(self) -> dict:
-        if self.subroutines["sensors"].status:
-            return self.subroutines["sensors"].sensors_data
+        sensors_subroutine: "Sensors" = self.subroutines["sensors"]
+        if sensors_subroutine.status:
+            return sensors_subroutine.sensors_data
         return {}
 
     # Health
     @property
     def plants_health(self) -> dict:
-        if self.subroutines["health"].status:
-            return self.subroutines["health"].plants_health
+        health_subroutine: "Health" = self.subroutines["health"]
+        if health_subroutine.status:
+            return health_subroutine.plants_health
         return {}
