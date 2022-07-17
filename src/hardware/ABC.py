@@ -196,9 +196,9 @@ class gpioHardware(Hardware):
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
-        self._pin = self._get_pin()
+        self._pin = self._get_pin(self._address["main"].number)
 
-    def _get_pin(self) -> "Pin":
+    def _get_pin(self, address) -> "Pin":
         if _IS_RASPI:
             try:
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -209,7 +209,7 @@ class gpioHardware(Hardware):
                 )
         else:
             from ._compatibility import Pin
-        return Pin(self._address["main"].number)
+        return Pin(address)
 
 
 class Switch(Hardware):
@@ -241,7 +241,7 @@ class Dimmer(Hardware):
         )  # pragma: no cover
 
 
-class gpioDimmer(Dimmer):
+class gpioDimmer(gpioHardware, Dimmer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self._address["secondary"].type in ("bcm", "board", "gpio"):  # pragma: no cover
@@ -249,7 +249,7 @@ class gpioDimmer(Dimmer):
                 "gpioDimmable address must be of type"
                 "'addressType1_addressNum1:GPIO_pinNumber'"
             )
-        self._PWMPin = Pin(self._address["secondary"].number)
+        self._PWMPin = self._get_pin(self._address["secondary"].number)
         self._dimmer = self._get_dimmer()
 
     def _get_dimmer(self) -> "pwmio.PWMOut":
@@ -276,9 +276,9 @@ class i2cHardware(Hardware):
         super().__init__(*args, **kwargs)
         if not self._address["main"].type == "i2c":  # pragma: no cover
             raise ValueError(
-                "gpioHardware address must be of type: 'I2C_default' or 'I2C_0' "
+                "i2cHardware address must be of type: 'I2C_default' or 'I2C_0' "
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
-                "to use a specific hex address"
+                "to use a specific address"
             )
 
 

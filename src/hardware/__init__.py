@@ -7,7 +7,7 @@ from .sensors import (
     CapacitiveMoisture, DHT11, DHT22, GPIO_SENSORS, I2C_SENSORS, VEML7700
 )
 from .virtual_sensors import (
-    virtualMoisture, virtualDHT11, virtualDHT22, VIRTUAL_SENSORS,
+    virtualCapacitiveMoisture, virtualDHT11, virtualDHT22, VIRTUAL_SENSORS,
     virtualVEML7700
 )
 

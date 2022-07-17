@@ -21,7 +21,7 @@ def temp_dir():
 @pytest.fixture
 def general_config(temp_dir):
     config = GeneralConfig(base_dir=temp_dir)
-    config.config_dict = TESTING_ECOSYSTEM_CFG
+    config.ecosystems_config = TESTING_ECOSYSTEM_CFG
     yield config
 
 

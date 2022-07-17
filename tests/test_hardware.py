@@ -1,7 +1,14 @@
-from src.hardware.ABC import BaseSensor, PlantLevelHardware
-from src.hardware.store import (
+import typing as t
+
+from src.hardware.ABC import BaseSensor, PlantLevelHardware, Dimmer
+from src.hardware import (
     ACTUATORS, GPIO_SENSORS, I2C_SENSORS, VIRTUAL_SENSORS
 )
+
+
+if t.TYPE_CHECKING:
+    from src.subroutines import Light
+
 
 TEST_ADDRESS = "I2C_0x20.default:GPIO_18"
 I2C_ADDRESS = "I2C_default"
@@ -26,11 +33,11 @@ class TestHardware(BaseSensor, PlantLevelHardware):
     pass
 
 
-def test_base_class(sensors_subroutine):
+def test_base_class(light_subroutine: "Light"):
     hardware_info = dict(BASE_HARDWARE_DICT[HARDWARE_UID])
     hardware_info["address"] = TEST_ADDRESS
-    hardware = TestHardware(sensors_subroutine, HARDWARE_UID, **hardware_info)
-    assert hardware.subroutine == sensors_subroutine
+    hardware = TestHardware(light_subroutine, HARDWARE_UID, **hardware_info)
+    assert hardware.subroutine == light_subroutine
     assert hardware.uid == HARDWARE_UID
     assert hardware.name == "test"
     hardware.name = "foo"
@@ -40,63 +47,62 @@ def test_base_class(sensors_subroutine):
     assert hardware.plant == "testPlant"
     assert "testMeasure" in hardware.measure
     str(hardware)
-    hardware.dict_repr
+    assert isinstance(hardware.dict_repr, dict)
 
 
-def test_actuators(light_subroutine):
-    hardware_dict = dict(BASE_HARDWARE_DICT)
-    for actuator_model in ACTUATORS:
-        hardware_dict[HARDWARE_UID]["address"] = GPIO_ADDRESS
-        hardware_dict[HARDWARE_UID]["type"] = "light"
-        hardware_dict[HARDWARE_UID]["level"] = "environment"
-        hardware_dict[HARDWARE_UID]["model"] = actuator_model
-        light = light_subroutine.add_hardware(hardware_dict)
-        light.turn_on()
-        light.turn_off()
+def test_actuators(light_subroutine: "Light"):
+    hardware_info = dict(BASE_HARDWARE_DICT[HARDWARE_UID])
+    hardware_info["address"] = GPIO_ADDRESS
+    hardware_info["type"] = "light"
+    hardware_info["level"] = "environment"
+    for actuator_model, actuator_cls in ACTUATORS.items():
+        hardware_info["model"] = actuator_model
+        actuator = actuator_cls(light_subroutine, HARDWARE_UID, **hardware_info)
+        actuator.turn_on()
+        actuator.turn_off()
+        if isinstance(actuator, Dimmer):
+            actuator.set_pwm_level(15)
     return True
 
 
-def test_gpio_sensors(sensors_subroutine):
-    hardware_dict = dict(BASE_HARDWARE_DICT)
-    for sensor_model in GPIO_SENSORS:
-        hardware_dict[HARDWARE_UID]["address"] = GPIO_ADDRESS
-        hardware_dict[HARDWARE_UID]["type"] = "sensor"
-        hardware_dict[HARDWARE_UID]["level"] = "environment"
-        hardware_dict[HARDWARE_UID]["model"] = sensor_model
-        if sensor_model == "DHT22":
-            hardware_dict[HARDWARE_UID]["measure"] = [
-                "temperature", "humidity", "dew_point", "absolute_humidity"
-            ]
-        sensor = sensors_subroutine.add_hardware(hardware_dict)
+def test_gpio_sensors(light_subroutine: "Light"):
+    hardware_info = dict(BASE_HARDWARE_DICT[HARDWARE_UID])
+    hardware_info["address"] = GPIO_ADDRESS
+    hardware_info["type"] = "sensor"
+    hardware_info["level"] = "environment"
+    hardware_info["measure"] = [
+        "absolute_humidity", "dew_point", "humidity", "light", "temperature",
+    ]
+    for sensor_model, sensor_cls in GPIO_SENSORS.items():
+        sensor = sensor_cls(light_subroutine, HARDWARE_UID, **hardware_info)
         sensor.get_data()
     return True
 
 
-def test_i2c_sensors(sensors_subroutine):
-    hardware_dict = dict(BASE_HARDWARE_DICT)
-    for sensor_model in I2C_SENSORS:
-        hardware_dict[HARDWARE_UID]["address"] = I2C_ADDRESS
-        hardware_dict[HARDWARE_UID]["type"] = "sensor"
-        hardware_dict[HARDWARE_UID]["level"] = "environment"
-        hardware_dict[HARDWARE_UID]["model"] = sensor_model
-        sensors_subroutine.add_hardware(hardware_dict)
-        sensor = sensors_subroutine.add_hardware(hardware_dict)
+def test_i2c_sensors(light_subroutine: "Light"):
+    hardware_info = dict(BASE_HARDWARE_DICT[HARDWARE_UID])
+    hardware_info["address"] = I2C_ADDRESS
+    hardware_info["type"] = "sensor"
+    hardware_info["level"] = "environment"
+    hardware_info["measure"] = [
+        "absolute_humidity", "dew_point", "humidity", "light", "temperature",
+    ]
+    for sensor_model, sensor_cls in I2C_SENSORS.items():
+        sensor = sensor_cls(light_subroutine, HARDWARE_UID, **hardware_info)
         sensor.get_data()
     return True
 
 
-def test_virtual_sensors(sensors_subroutine):
-    hardware_dict = dict(BASE_HARDWARE_DICT)
+def test_virtual_sensors(light_subroutine: "Light"):
+    hardware_info = dict(BASE_HARDWARE_DICT[HARDWARE_UID])
+    hardware_info["type"] = "sensor"
+    hardware_info["level"] = "environment"
     virtual_i2c_sensors = [f"virtual{model}" for model in I2C_SENSORS]
-    for sensor_model in VIRTUAL_SENSORS:
+    for sensor_model, sensor_cls in VIRTUAL_SENSORS.items():
         if sensor_model in virtual_i2c_sensors:
-            address = I2C_ADDRESS
+            hardware_info["address"] = I2C_ADDRESS
         else:
-            address = GPIO_ADDRESS
-        hardware_dict[HARDWARE_UID]["address"] = address
-        hardware_dict[HARDWARE_UID]["type"] = "sensor"
-        hardware_dict[HARDWARE_UID]["level"] = "environment"
-        hardware_dict[HARDWARE_UID]["model"] = sensor_model
-        sensors_subroutine.add_hardware(hardware_dict)
-        sensor = sensors_subroutine.add_hardware(hardware_dict)
+            hardware_info["address"] = GPIO_ADDRESS
+        hardware_info["model"] = sensor_model
+        sensor = sensor_cls(light_subroutine, HARDWARE_UID, **hardware_info)
         sensor.get_data()

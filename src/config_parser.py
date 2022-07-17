@@ -184,8 +184,15 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._ecosystems_config.update(ecosystem_cfg)
 
     @property
-    def as_dict(self) -> dict:
+    def ecosystems_config(self) -> dict:
         return self._ecosystems_config
+
+    @ecosystems_config.setter
+    def ecosystems_config(self, value):
+        if Config.TESTING:
+            self._ecosystems_config = value
+        else:
+            raise AttributeError("can't set attribute 'ecosystems_config")
 
     @property
     def base_dir(self) -> pathlib.Path:
@@ -284,7 +291,7 @@ class SpecificConfig:
 
     @property
     def as_dict(self) -> dict:
-        return self._general_config.as_dict[self.uid]
+        return self._general_config.ecosystems_config[self.uid]
 
     @property
     def name(self) -> str:
