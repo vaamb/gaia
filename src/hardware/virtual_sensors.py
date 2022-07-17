@@ -50,7 +50,7 @@ class virtualVEML7700(VEML7700, virtualSensor):
         return _VEML7700(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
-class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
+class virtualMoisture(CapacitiveMoisture, virtualSensor):
     def _get_device(self) -> "Seesaw":
         from ._compatibility import Seesaw
         return Seesaw(ecosystem_uid=self.subroutine.ecosystem.uid)
