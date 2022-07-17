@@ -1,5 +1,5 @@
 from datetime import date, datetime
-import json
+from json.decoder import JSONDecodeError
 import logging
 import logging.config
 import os
@@ -12,7 +12,7 @@ from .config_parser import config_event, detach_config, GeneralConfig, get_IDs
 from .ecosystem import Ecosystem
 from .events import Events
 from .shared_resources import scheduler, start_scheduler
-from .utils import base_dir, SingletonMeta
+from .utils import base_dir, json, SingletonMeta
 from .virtual import get_virtual_ecosystem
 from config import Config
 
@@ -52,7 +52,10 @@ class Engine(metaclass=SingletonMeta):
         self.refresh_sun_times()
         scheduler.add_job(self.refresh_sun_times, "cron",
                           hour="1", misfire_grace_time=15 * 60,
-                          id="sun_times")
+                          id="refresh_sun_times")
+        scheduler.add_job(self.refresh_chaos, "cron",
+                          hour="0", minute="5", misfire_grace_time=15 * 60,
+                          id="refresh_chaos")
         start_scheduler()
 
     def _stop_background_tasks(self) -> None:
@@ -257,7 +260,7 @@ class Engine(metaclass=SingletonMeta):
 
     def refresh_ecosystems(self):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file"""
-        expected_started = set(self.config.get_ecosystems_running())
+        expected_started = set(self.config.get_ecosystems_expected_running())
         to_delete = set(self.ecosystems.keys())
         for ecosystem_uid in self.config.ecosystems_uid:
             # create the Ecosystem if it doesn't exist
@@ -318,6 +321,21 @@ class Engine(metaclass=SingletonMeta):
                         pass
         else:
             self.logger.debug("No need to refresh sun times")
+
+    def refresh_chaos(self):
+        for ecosystem in self.ecosystems.values():
+            ecosystem.refresh_chaos()
+        chaos_file = base_dir / "cache/chaos.json"
+        try:
+            with chaos_file.open("r+") as file:
+                ecosystem_chaos = json.loads(file.read())
+                ecosystems = list(ecosystem_chaos.keys())
+                for ecosystem in ecosystems:
+                    if ecosystem not in self.ecosystems:
+                        del ecosystem_chaos[ecosystem]
+                file.write(json.dumps(ecosystem_chaos))
+        except (FileNotFoundError, JSONDecodeError):  # Empty or absent file
+            pass
 
     def start(self) -> None:
         """Start the Engine

@@ -193,6 +193,7 @@ class Light(SubroutineTemplate):
         self._refresh_hardware("light")
 
     def update_sun_times(self, send=True) -> None:
+        self.logger.debug("Updating sun times")
         try:
             time_parameters = self.config.time_parameters
         except UndefinedParameter:

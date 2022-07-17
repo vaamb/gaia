@@ -35,10 +35,11 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
-        self.subroutines: SUBROUTINES = {}
+        self.subroutines: dict[str, t.Type[SubroutineTemplate]] = {}
         for subroutine in SUBROUTINES:
             self.init_subroutine(subroutine)
-        self._chaos: Chaos = Chaos(0, 0, 1)
+        self._chaos: Chaos = Chaos(self, 0, 0, 1)
+        self.refresh_chaos()
         self._started: bool = False
         self.logger.debug(f"Ecosystem initialization successful")
 
@@ -63,16 +64,16 @@ class Ecosystem:
         for subroutine in to_start:
             self.start_subroutine(subroutine)
 
-    def _refresh_chaos(self):
+    def refresh_chaos(self):
         try:
             values = self.config.get_chaos()
         except UndefinedParameter:
             values = {}
         finally:
-            self._chaos = Chaos(
-                values.get("frequency", 0), values.get("duration", 0),
-                values.get("intensity", 1)
-            )
+            self.chaos.frequency = values.get("frequency", 0)
+            self.chaos.duration = values.get("duration", 0)
+            self.chaos.intensity = values.get("intensity", 1)
+            self.chaos.update()
 
     """
     API calls
@@ -108,8 +109,6 @@ class Ecosystem:
             if self.status:
                 self.logger.info("No subroutine are running, stopping the Ecosystem")
                 self.stop()
-        else:
-            self._refresh_chaos()
 
     def start(self):
         """Start the Ecosystem
@@ -121,7 +120,6 @@ class Ecosystem:
             try:
                 self.logger.info("Starting the Ecosystem")
                 self._refresh_subroutines()
-                self._refresh_chaos()
                 self.logger.debug(f"Ecosystem successfully started")
                 self._started = True
             except NoSubroutineNeeded:
@@ -246,6 +244,7 @@ class Ecosystem:
         return {}
 
     def update_sun_times(self, send=False) -> None:
+        self.logger.debug("Updating sun times")
         if self.subroutines["light"].status:
             self.subroutines["light"].update_sun_times(send=send)
         else:

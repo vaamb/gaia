@@ -1,11 +1,16 @@
 from datetime import date, datetime, time, timedelta
-import json
+from json.decoder import JSONDecodeError
 from math import pi, sin
 from pathlib import Path
 import typing as t
 import random
+import weakref
 
 from ..utils import base_dir, json
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from src.ecosystem import Ecosystem
 
 
 def _intensity_function(value: float) -> float:
@@ -21,43 +26,59 @@ def _intensity_function(value: float) -> float:
 class Chaos:
     def __init__(
             self,
+            ecosystem: "Ecosystem",
             frequency: int = 10,
             max_duration: int = 10,
             max_intensity: float = 1.1,
     ) -> None:
+        self._ecosystem: "Ecosystem" = weakref.proxy(ecosystem)
         self.frequency: int = frequency
-        self.max_duration: int = max_duration
-        self.max_intensity: float = max_intensity
-        self.chaos_file: Path = base_dir / "cache" / "_time_window.json"
+        self.duration: int = max_duration
+        self.intensity: float = max_intensity
+        self.chaos_file: Path = base_dir / "cache" / "chaos.json"
         self._intensity_function: t.Callable = _intensity_function
         self._time_window: dict[str, datetime] = {}
         self._load_chaos()
-        self.update()
 
     def _load_chaos(self) -> None:
         try:
             with self.chaos_file.open() as file:
-                params = json.loads(file.read())
+                ecosystems = json.loads(file.read())
+                params = ecosystems[self.ecosystem.uid]["time_window"]
                 for param in ("start", "end"):
                     utc_param = datetime.fromisoformat(params[param])
                     self._time_window[param] = utc_param.astimezone()
-        except (FileNotFoundError, ValueError):
+        except (
+                FileNotFoundError, JSONDecodeError, KeyError, ValueError
+        ):
+            now = datetime.now().astimezone()
             self._time_window = {
-                "start": datetime.now().astimezone(),
-                "end": datetime.now().astimezone(),
+                "start": now - timedelta(seconds=2),
+                "end": now - timedelta(seconds=1),
             }
 
     def _dump_chaos(self) -> None:
+        try:
+            with self.chaos_file.open("r") as file:
+                ecosystems = json.loads(file.read())
+        except (FileNotFoundError, JSONDecodeError):  # Empty file
+            ecosystems = {}
+        ecosystems[self.ecosystem.uid] = {
+            "last_update": datetime.now().astimezone(),
+            "time_window": self._time_window,
+        }
         with self.chaos_file.open("w") as file:
-            file.write(json.dumps(self._time_window))
+            file.write(json.dumps(ecosystems))
 
     def update(self) -> None:
-        now = datetime.now().astimezone()
-        need_update = False
+        now: datetime = datetime.now().astimezone()
+        need_update: bool = False
         try:
-            last_update = self.chaos_file.stat().st_mtime
-            last_update = datetime.fromtimestamp(last_update)
-        except FileNotFoundError:
+            with self.chaos_file.open("r") as file:
+                ecosystems: dict = json.loads(file.read())
+                last_update: str = ecosystems[self.ecosystem.uid]["last_update"]
+                last_update: datetime = datetime.fromisoformat(last_update)
+        except (FileNotFoundError, JSONDecodeError, KeyError):
             need_update = True
         else:
             if last_update.date() < now.date():
@@ -66,10 +87,14 @@ class Chaos:
             chaos_probability = random.randint(1, self.frequency)
             if chaos_probability == 1:
                 start = datetime.combine(date.today(), time()).astimezone()
-                end = random.randint(1, self.max_duration)
+                end = random.randint(1, self.duration)
                 self._time_window["start"] = start
                 self._time_window["end"] = start + timedelta(days=end)
             self._dump_chaos()
+
+    @property
+    def ecosystem(self):
+        return self._ecosystem
 
     @ property
     def status(self) -> bool:
@@ -88,7 +113,7 @@ class Chaos:
         duration_fraction = chaos_start_to_now_minutes / chaos_duration_minutes
         return (
             self.intensity_function(duration_fraction) *
-            (self.max_intensity - 1.0)
+            (self.intensity - 1.0)
         ) + 1.0
 
     @property

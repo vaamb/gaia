@@ -193,12 +193,11 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     @property
     def ecosystems_uid(self) -> list:
-        return [i for i in self._ecosystems_config]
+        return [i for i in self._ecosystems_config.keys()]
 
     @property
     def ecosystems_name(self) -> list:
-        return [self._ecosystems_config[i]["name"]
-                for i in self._ecosystems_config]
+        return [i["name"] for i in self._ecosystems_config.values()]
 
     @property
     def id_to_name_dict(self) -> dict:
@@ -210,7 +209,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         return {self._ecosystems_config[ecosystem]["name"]: ecosystem
                 for ecosystem in self._ecosystems_config}
 
-    def get_ecosystems_running(self) -> set:
+    def get_ecosystems_expected_running(self) -> set:
         return set([
             ecosystem_uid for ecosystem_uid in self._ecosystems_config
             if self._ecosystems_config[ecosystem_uid]["status"]
@@ -342,7 +341,7 @@ class SpecificConfig:
 
     def get_chaos(self) -> dict:
         try:
-            return self.as_dict["environment"]["_time_window"]
+            return self.as_dict["environment"]["chaos"]
         except KeyError:
             raise UndefinedParameter
 
