@@ -1,21 +1,35 @@
 from datetime import datetime
 from pathlib import Path
 from time import sleep
+import typing as t
 
-from . import _RASPI
+from . import _IS_RASPI
 from .ABC import Camera
 
 
-if _RASPI:  # pragma: no cover
-    from picamera import PiCamera as _PiCamera
-else:
-    from ._compatibility import PiCamera as _PiCamera
+if t.TYPE_CHECKING:
+    if _IS_RASPI:  # pragma: no cover
+        from picamera import PiCamera as _PiCamera
+    else:
+        from ._compatibility import PiCamera as _PiCamera
 
 
 class PiCamera(Camera):
-    def take_picture(self) -> Path:
+    def _get_camera(self) -> "_PiCamera":
+        if _IS_RASPI:  # pragma: no cover
+            try:
+                from picamera import PiCamera as _PiCamera
+            except ImportError:
+                raise RuntimeError(
+                    "picamera package is required. Run `pip install "
+                    "picamera` in your virtual env."
+                )
+        else:
+            from ._compatibility import PiCamera as _PiCamera
+        return _PiCamera
 
-        with _PiCamera() as camera:
+    def take_picture(self) -> Path:
+        with self._get_camera() as camera:
             camera.resolution = (3280, 2464)
             camera.start_preview()
             # need at least 2 sec sleep for the camera to adapt to light level

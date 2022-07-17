@@ -1,6 +1,6 @@
 from adafruit_platformdetect import Board, Detector
 
-_RASPI = Board(Detector()).any_raspberry_pi
+_IS_RASPI = Board(Detector()).any_raspberry_pi
 
 from .actuators import ACTUATORS, gpioDimmable, gpioSwitch
 from .sensors import (

@@ -2,11 +2,11 @@ import random
 import time
 import warnings
 
-from . import _RASPI
+from . import _IS_RASPI
 from config import Config
 
 
-if not _RASPI:
+if not _IS_RASPI:
     def custom_format_warning(msg, *args, **kwargs):
         return str(msg) + '\n'
 

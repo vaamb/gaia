@@ -1,12 +1,24 @@
 from time import sleep
+import typing as t
 
-from . import _RASPI
+from . import _IS_RASPI
 from .ABC import (
     get_i2c, gpioSensor, i2cSensor, PlantLevelHardware, sensorLogger
 )
 from ..utils import (
     get_absolute_humidity, get_dew_point, temperature_converter
 )
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    if _IS_RASPI:
+        from adafruit_dht import DHT11 as _DHT11, DHT22 as _DHT22
+        from adafruit_veml7700 import VEML7700 as _VEML7700
+        from adafruit_seesaw.seesaw import Seesaw
+    else:
+        from ._compatibility import (
+            DHT11 as _DHT11, DHT22 as _DHT22, Seesaw, VEML7700 as _VEML7700
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -80,8 +92,8 @@ class DHTSensor(gpioSensor):
 
 
 class DHT11(DHTSensor):
-    def _get_device(self):
-        if _RASPI:
+    def _get_device(self) -> "_DHT11":
+        if _IS_RASPI:
             try:
                 from adafruit_dht import DHT11 as _DHT11
             except ImportError:
@@ -96,8 +108,8 @@ class DHT11(DHTSensor):
 
 
 class DHT22(DHTSensor):
-    def _get_device(self):
-        if _RASPI:
+    def _get_device(self) -> "_DHT22":
+        if _IS_RASPI:
             try:
                 from adafruit_dht import DHT22 as _DHT22
             except ImportError:
@@ -131,8 +143,8 @@ class VEML7700(i2cSensor):
             self._address["main"].number = 0x10
         self._device = self._get_device()
 
-    def _get_device(self):
-        if _RASPI:
+    def _get_device(self) -> "_VEML7700":
+        if _IS_RASPI:
             try:
                 from adafruit_veml7700 import VEML7700 as _VEML7700
             except ImportError:
@@ -171,14 +183,14 @@ class CapacitiveSensor(i2cSensor):
         self._unit = kwargs.pop("unit", "celsius")
         self._device = self._get_device()
 
-    def _get_device(self):
-        if _RASPI:
+    def _get_device(self) -> "Seesaw":
+        if _IS_RASPI:
             try:
                 from adafruit_seesaw.seesaw import Seesaw
             except ImportError:
                 raise RuntimeError(
                     "Adafruit seesaw package is required. Run `pip install "
-                    "adafruit-circuitpython-seesaw` in your virtual ."
+                    "adafruit-circuitpython-seesaw` in your virtual env."
                 )
         else:
             from ._compatibility import Seesaw
