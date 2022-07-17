@@ -1,4 +1,5 @@
 from collections import namedtuple
+from contextlib import contextmanager
 from datetime import datetime, time
 import json
 import logging
@@ -19,7 +20,7 @@ from .utils import (
 from config import Config
 
 config_event = Condition()
-lock = Lock()
+_lock = Lock()
 
 
 logger = logging.getLogger(f"{Config.APP_NAME.lower()}.config")
@@ -62,15 +63,15 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._base_dir = pathlib.Path(base_dir)
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
-        for cfg in ("ecosystems", "private"):
-            self._load_config(cfg)
         self._hash_dict = {}
         self._stop_event = Event()
         self._watchdog_pause = Event()
         self._watchdog_pause.set()
         self._thread = None
         self._started = False
-        self.__in_context_manager = False
+        with self.pausing_watchdog():
+            for cfg in ("ecosystems", "private"):
+                self._load_config(cfg)
 
     def __repr__(self) -> str:
         return f"GeneralConfig(watchdog={self._started})"
@@ -113,17 +114,15 @@ class GeneralConfig(metaclass=SingletonMeta):
     def _watchdog_loop(self) -> None:
         while not self._stop_event.is_set():
             self._watchdog_pause.wait()
-            update_cfg = []
             old_hash = dict(self._hash_dict)
             self._update_cfg_hash()
-            for cfg in ("ecosystems", "private"):
-                if old_hash[cfg] != self._hash_dict[cfg]:
-                    update_cfg.append(cfg)
+            update_cfg = [
+                cfg for cfg in ("ecosystems", "private")
+                if old_hash[cfg] != self._hash_dict[cfg]
+            ]
             if update_cfg:
-                logger.info(f"Change in {cfg} config detected, updating it")
+                logger.info(f"Change in config detected, updating it.")
                 self.update(update_cfg)
-                with config_event:
-                    config_event.notify_all()
             self._stop_event.wait(Config.CONFIG_WATCHER_PERIOD)
 
     def start_watchdog(self) -> None:
@@ -147,24 +146,39 @@ class GeneralConfig(metaclass=SingletonMeta):
             self._started = False
             logger.debug("Configuration files watchdog successfully stopped")
 
-    def update(self, config: Union[tuple, list] = ("ecosystems", "private")) -> None:
-        logger.debug("Updating configuration")
-        self._watchdog_pause.clear()
-        for cfg in config:
-            self._load_config(cfg=cfg)
-        self._update_cfg_hash()
-        self._watchdog_pause.set()
+    @contextmanager
+    def pausing_watchdog(self):
+        with _lock:
+            try:
+                self._watchdog_pause.clear()
+                yield
+            finally:
+                self._update_cfg_hash()
+                self._watchdog_pause.set()
 
-    def save(self, cfg: str) -> None:
-        file_path = self._base_dir/f"{cfg}.cfg"
-        with lock:
-            with open(file_path, "w") as file:
-                if cfg == "ecosystems":
-                    yaml.dump(self._ecosystems_config, file)
-                elif cfg == "private":
-                    yaml.dump(self._private_config, file)
-                else:
-                    raise ValueError("cfg should be 'ecosystems' or 'private'")
+    def update(self, config: Union[list, str, tuple] = ("ecosystems", "private")) -> None:
+        if isinstance(config, str):
+            config = (config, )
+        logger.debug(f"Updating configuration file(s) {tuple(config)}")
+        with self.pausing_watchdog():
+            for cfg in config:
+                self._load_config(cfg=cfg)
+            with config_event:
+                config_event.notify_all()
+
+    def save(self, config: Union[list, str, tuple]) -> None:
+        if isinstance(config, str):
+            config = (config, )
+        for cfg in config:
+            file_path = self._base_dir/f"{cfg}.cfg"
+            with self.pausing_watchdog():
+                with open(file_path, "w") as file:
+                    if cfg == "ecosystems":
+                        yaml.dump(self._ecosystems_config, file)
+                    elif cfg == "private":
+                        yaml.dump(self._private_config, file)
+                    else:
+                        raise ValueError("cfg should be 'ecosystems' or 'private'")
 
     def _create_new_ecosystem_uid(self) -> str:
         length = 8
