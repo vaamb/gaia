@@ -95,6 +95,14 @@ class SubroutineTemplate(ABC):
     def status(self) -> bool:
         return self._started
 
+    @property
+    def management(self) -> bool:
+        return self.config.get_management(self.name)
+
+    @management.setter
+    def management(self, value: bool) -> None:  # TODO: save changes
+        self.config.set_management(self.name, value)
+
     @abstractmethod
     def add_hardware(self, hardware_dict: dict) -> t.Union[BaseSensor, Dimmer, Hardware, Switch]:
         raise NotImplementedError(
@@ -114,11 +122,8 @@ class SubroutineTemplate(ABC):
         )
 
     def update_manageable(self) -> None:
-        if self.config.get_management(self.name) and not Config.TESTING:
+        if self.management:
             self._update_manageable()
-
-    def set_management(self, value):
-        self.config.set_management(self.name, value)
 
     def start(self) -> None:
         if self.manageable:

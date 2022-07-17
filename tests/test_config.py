@@ -2,7 +2,7 @@ from src.config_parser import GeneralConfig
 
 
 def test_general_config_singleton(temp_dir, general_config):
-    assert general_config == GeneralConfig(temp_dir)
+    assert general_config is GeneralConfig(temp_dir)
 
 
 def test_config_files_created(general_config):

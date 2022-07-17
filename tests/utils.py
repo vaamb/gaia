@@ -3,19 +3,37 @@ ECOSYSTEM_UID = "zutqsCKn"
 TESTING_ECOSYSTEM_CFG = {
     ECOSYSTEM_UID: {
         "name": "test",
-        "status": True,
+        "status": False,
         "management": {
-            "sensors": True,
-            "light": True,
-            "climate": True,
-            "watering": True,
-            "health": True,
-            "alarms": True,
-            "webcam": True,
+            "sensors": False,
+            "light": False,
+            "climate": False,
+            "watering": False,
+            "health": False,
+            "alarms": False,
+            "webcam": False,
         },
         "environment": {
-            "light": "fixed"
+            "light": "fixed",
         },
         "IO": {},
     }
+}
+
+TEST_ADDRESS = "I2C_0x20.default:GPIO_18"
+I2C_ADDRESS = "I2C_default"
+GPIO_ADDRESS = "GPIO_4:BOARD_12"
+
+HARDWARE_UID = "cpgCZFJGGYlIXlLL"
+
+BASE_HARDWARE_DICT = {
+    HARDWARE_UID: {
+        "name": "test",
+        "address": "",
+        "type": "sensor",
+        "level": "plants",
+        "model": "testModel",
+        "plant": "testPlant",
+        "measure": ["testMeasure"],
+    },
 }
