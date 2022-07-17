@@ -128,7 +128,9 @@ class Events:
         mode = message["mode"]
         countdown = message.get("countdown", 0)
         try:
-            self.ecosystems[ecosystem_uid].turn_light(mode=mode, countdown=countdown)
+            self.ecosystems[ecosystem_uid].turn_actuator(
+                "light", mode=mode, countdown=countdown
+            )
             self.on_send_light_data(ecosystem_uid)
         # Except when subroutines are still loading
         except KeyError:

@@ -6,7 +6,7 @@ import typing as t
 
 from simple_pid import PID
 
-from ..exceptions import UndefinedParameter
+from ..exceptions import StoppingSubroutine, UndefinedParameter
 from ..hardware import ACTUATORS, I2C_LIGHT_SENSORS
 from ..subroutines.template import SubroutineTemplate
 from config import Config
@@ -56,6 +56,88 @@ class Light(SubroutineTemplate):
         self._adjust_light_level_event = Event()
         self._timer: ctime.monotonic() = 0.0
         self._finish__init__()
+
+    def _update_sun_times(self, send=True) -> None:
+        self.logger.debug("Updating sun times")
+        try:
+            time_parameters = self.config.time_parameters
+        except UndefinedParameter:
+            time_parameters = {}
+        try:
+            sun_times = self.config.sun_times
+        except UndefinedParameter:
+            sun_times = {}
+        # Check we've got the info required
+        # Then update info using lock as the whole dict should be transformed at the "same time"
+        if self._method == "fixed":
+            if not time_parameters.get("day", False):
+                self.logger.error(
+                    "Cannot use method 'fixed' without time parameters set in "
+                    "config. Turning out light"
+                )
+                raise StoppingSubroutine
+            else:
+                with lock:
+                    self._sun_times["morning_start"] = time_parameters["day"]
+                    self._sun_times["evening_end"] = time_parameters["night"]
+
+        elif self._method == "place":
+            if not sun_times.get("sunrise", False):
+                self.logger.error(
+                    "Cannot use method 'place' without sun times available. "
+                    "Using 'fixed' method instead."
+                )
+                self.method = "fixed"
+                self.update_sun_times()
+            else:
+                with lock:
+                    self._sun_times["morning_start"] = sun_times["sunrise"]
+                    self._sun_times["evening_end"] = sun_times["sunset"]
+
+        elif self._method == "elongate":
+            if not time_parameters.get("day", False) and not sun_times.get("sunrise", False):
+                self.logger.error(
+                    "Cannot use method 'elongate' without time parameters set in "
+                    "config and sun times available. Using 'fixed' method instead."
+                )
+                self.method = "fixed"
+                self.update_sun_times()
+            else:
+                sunrise = _to_dt(sun_times["sunrise"])
+                sunset = _to_dt(sun_times["sunset"])
+                twilight_begin = _to_dt(sun_times["twilight_begin"])
+                offset = sunrise - twilight_begin
+                with lock:
+                    self._sun_times["morning_start"] = time_parameters["day"]
+                    self._sun_times["morning_end"] = (sunrise + offset).time()
+                    self._sun_times["evening_start"] = (sunset - offset).time()
+                    self._sun_times["evening_end"] = time_parameters["night"]
+        else:
+            raise StoppingSubroutine
+
+        if (
+                self.config.get_management("climate") and
+                self.ecosystem.subroutines.get("climate", False)
+        ):
+            try:
+                climate_subroutine: Climate = self.ecosystem.subroutines["climate"]
+                climate_subroutine.update_time_parameters()
+            except Exception as e:
+                self.logger.error(
+                    f"Could not update climate subroutine times parameters. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
+
+        if self.ecosystem.event_handler and send:
+            try:
+                self.ecosystem.event_handler.on_send_light_data(
+                    ecosystem_uids=(self._uid, )
+                )
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                )
 
     def _light_state_loop(self) -> None:
         self.logger.info(
@@ -148,7 +230,7 @@ class Light(SubroutineTemplate):
         now = datetime.now()
         if now.date() > self.ecosystem.engine.last_sun_times_update.date():
             self.ecosystem.engine.refresh_sun_times()
-        self.update_sun_times(send=True)
+        self._update_sun_times(send=True)
         self.refresh_hardware()
         self._light_loop_thread = Thread(
             target=self._light_state_loop, args=()
@@ -192,87 +274,11 @@ class Light(SubroutineTemplate):
     def refresh_hardware(self) -> None:
         self._refresh_hardware("light")
 
-    def update_sun_times(self, send=True) -> None:
-        self.logger.debug("Updating sun times")
+    def update_sun_times(self, send=True):
         try:
-            time_parameters = self.config.time_parameters
-        except UndefinedParameter:
-            time_parameters = {}
-        try:
-            sun_times = self.config.sun_times
-        except UndefinedParameter:
-            sun_times = {}
-        # Check we've got the info required
-        # Then update info using lock as the whole dict should be transformed at the "same time"
-        if self._method == "fixed":
-            if not time_parameters.get("day", False):
-                self.logger.error(
-                    "Cannot use method 'fixed' without time parameters set in "
-                    "config. Turning out light"
-                )
-                self.stop()
-            else:
-                with lock:
-                    self._sun_times["morning_start"] = time_parameters["day"]
-                    self._sun_times["evening_end"] = time_parameters["night"]
-
-        elif self._method == "place":
-            if not sun_times.get("sunrise", False):
-                self.logger.error(
-                    "Cannot use method 'place' without sun times available. "
-                    "Using 'fixed' method instead."
-                )
-                self.method = "fixed"
-                self.update_sun_times()
-            else:
-                with lock:
-                    self._sun_times["morning_start"] = sun_times["sunrise"]
-                    self._sun_times["evening_end"] = sun_times["sunset"]
-
-        elif self._method == "elongate":
-            if not time_parameters.get("day", False) and not sun_times.get("sunrise", False):
-                self.logger.error(
-                    "Cannot use method 'elongate' without time parameters set in "
-                    "config and sun times available. Using 'fixed' method instead."
-                )
-                self.method = "fixed"
-                self.update_sun_times()
-            else:
-                sunrise = _to_dt(sun_times["sunrise"])
-                sunset = _to_dt(sun_times["sunset"])
-                twilight_begin = _to_dt(sun_times["twilight_begin"])
-                offset = sunrise - twilight_begin
-                with lock:
-                    self._sun_times["morning_start"] = time_parameters["day"]
-                    self._sun_times["morning_end"] = (sunrise + offset).time()
-                    self._sun_times["evening_start"] = (sunset - offset).time()
-                    self._sun_times["evening_end"] = time_parameters["night"]
-        else:
+            self._update_sun_times(send)
+        except StoppingSubroutine:
             self.stop()
-
-        if (
-                self.config.get_management("climate") and
-                self.ecosystem.subroutines.get("climate", False)
-        ):
-            try:
-                climate_subroutine: Climate = self.ecosystem.subroutines["climate"]
-                climate_subroutine.update_time_parameters()
-            except Exception as e:
-                self.logger.error(
-                    f"Could not update climate subroutine times parameters. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
-                )
-
-        if self.ecosystem.event_handler and send:
-            try:
-                self.ecosystem.event_handler.on_send_light_data(
-                    ecosystem_uids=(self._uid, )
-                )
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
-                )
 
     @ property
     def expected_status(self) -> bool:
