@@ -59,9 +59,9 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
 
 VIRTUAL_SENSORS = {
     hardware.__name__: hardware for hardware in [
-        virtualCapacitiveMoisture,
         virtualDHT11,
         virtualDHT22,
         virtualVEML7700,
+        virtualCapacitiveMoisture,
     ]
 }
