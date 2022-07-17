@@ -5,13 +5,28 @@ from src.hardware import (
     ACTUATORS, GPIO_SENSORS, I2C_SENSORS, VIRTUAL_SENSORS
 )
 
-from .utils import (
-    BASE_HARDWARE_DICT, GPIO_ADDRESS, HARDWARE_UID, I2C_ADDRESS, TEST_ADDRESS
-)
-
 
 if t.TYPE_CHECKING:
     from src.subroutines import Light
+
+
+TEST_ADDRESS = "I2C_0x20.default:GPIO_18"
+I2C_ADDRESS = "I2C_default"
+GPIO_ADDRESS = "GPIO_4:BOARD_12"
+
+HARDWARE_UID = "cpgCZFJGGYlIXlLL"
+
+BASE_HARDWARE_DICT = {
+    HARDWARE_UID: {
+        "name": "test",
+        "address": "",
+        "type": "sensor",
+        "level": "plants",
+        "model": "testModel",
+        "plant": "testPlant",
+        "measure": ["testMeasure"],
+    },
+}
 
 
 class TestHardware(BaseSensor, PlantLevelHardware):
