@@ -129,6 +129,9 @@ class SubroutineTemplate(ABC):
         if self.management:
             self._update_manageable()
 
+    def set_management(self, value):
+        self.config.set_management(self.name, value)
+
     def start(self) -> None:
         if self.manageable:
             if not self._started:
