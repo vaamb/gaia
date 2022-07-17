@@ -260,6 +260,7 @@ class Climate(SubroutineTemplate):
         self.logger.error(f"Regulator '{hardware_uid}' does not exist")
 
     def refresh_hardware(self) -> None:
+        self.update_climate_parameters()
         for regulator_type in self.hardware:
             IO_type = regulator_type[:-1] if regulator_type.endswith("s") \
                 else regulator_type
