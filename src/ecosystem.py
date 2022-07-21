@@ -4,17 +4,16 @@ import typing as t
 import weakref
 
 from .config_parser import get_config, SpecificConfig
-from .exceptions import NoSubroutineNeeded, UndefinedParameter
+from .exceptions import StoppingEcosystem, UndefinedParameter
 from .subroutines.chaos import Chaos
 from .subroutines import SUBROUTINES
-from .subroutines.template import SubroutineTemplate
 from config import Config
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from .engine import Engine
     from .events import Events
-    from .subroutines import Health, Light, Sensors
+    from .subroutines import Climate, Health, Light, Sensors
 
 
 class Ecosystem:
@@ -58,93 +57,17 @@ class Ecosystem:
         for subroutine in to_stop:
             self.stop_subroutine(subroutine)
         if not subroutines_needed:
-            raise NoSubroutineNeeded
+            raise StoppingEcosystem
         for subroutine in self.subroutines_started:
             self.subroutines[subroutine].refresh_hardware()
         to_start = subroutines_needed - self.subroutines_started
         for subroutine in to_start:
             self.start_subroutine(subroutine)
 
-    def refresh_chaos(self):
-        try:
-            values = self.config.chaos
-        except UndefinedParameter:
-            values = {}
-        finally:
-            self.chaos.frequency = values.get("frequency", 0)
-            self.chaos.duration = values.get("duration", 0)
-            self.chaos.intensity = values.get("intensity", 1)
-            self.chaos.update()
-
     """
     API calls
     """
-    def init_subroutine(self, subroutine_name: str) -> None:
-        """Initialize a Subroutines
 
-        :param subroutine_name: The name of the Subroutines to initialize
-        """
-        self.subroutines[subroutine_name] = SUBROUTINES[subroutine_name](self)
-
-    def start_subroutine(self, subroutine_name: str) -> None:
-        """Start a Subroutines
-
-        :param subroutine_name: The name of the Subroutines to start
-        """
-        self.subroutines[subroutine_name].start()
-
-    def stop_subroutine(self, subroutine_name: str) -> None:
-        """Stop a Subroutines
-
-        :param subroutine_name: The name of the Subroutines to stop
-        """
-        self.subroutines[subroutine_name].stop()
-
-    def refresh_subroutines(self) -> None:
-        """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
-        for subroutine in self.subroutines.values():
-            subroutine.update_manageable()
-        try:
-            self._refresh_subroutines()
-        except NoSubroutineNeeded:
-            if self.status:
-                self.logger.info("No subroutine are running, stopping the Ecosystem")
-                self.stop()
-
-    def start(self):
-        """Start the Ecosystem
-
-        When started, the Ecosystem will automatically start and stop the
-        Subroutines based on the 'ecosystem.cfg' file
-        """
-        if not self.status:
-            try:
-                self.logger.info("Starting the Ecosystem")
-                self._refresh_subroutines()
-                self.logger.debug(f"Ecosystem successfully started")
-                self._started = True
-            except NoSubroutineNeeded:
-                self.logger.info(
-                    "The Ecosystem isn't managing any subroutine, it will stop"
-                )
-        else:
-            raise RuntimeError(f"Ecosystem {self._name} is already running")
-
-    def stop(self):
-        """Stop the Ecosystem"""
-        if self.status:
-            self.logger.info("Stopping the Ecosystem ...")
-            for subroutine in reversed(list(SUBROUTINES.keys())):
-                self.subroutines[subroutine].stop()
-            if not any([self.subroutines[subroutine].status
-                        for subroutine in self.subroutines]):
-                self.logger.debug("Ecosystem successfully stopped")
-            else:
-                self.logger.error("Failed to stop Ecosystem")
-                raise Exception(f"Failed to stop Ecosystem {self._name}")
-            self._started = False
-
-    # General info
     @property
     def uid(self) -> str:
         return self._uid
@@ -209,6 +132,82 @@ class Ecosystem:
     def hardware(self) -> dict:
         return self.config.ecosystem_config.get("IO", {})
 
+    def init_subroutine(self, subroutine_name: str) -> None:
+        """Initialize a Subroutines
+
+        :param subroutine_name: The name of the Subroutines to initialize
+        """
+        self.subroutines[subroutine_name] = SUBROUTINES[subroutine_name](self)
+
+    def start_subroutine(self, subroutine_name: str) -> None:
+        """Start a Subroutines
+
+        :param subroutine_name: The name of the Subroutines to start
+        """
+        self.subroutines[subroutine_name].start()
+
+    def stop_subroutine(self, subroutine_name: str) -> None:
+        """Stop a Subroutines
+
+        :param subroutine_name: The name of the Subroutines to stop
+        """
+        self.subroutines[subroutine_name].stop()
+
+    def refresh_subroutines(self) -> None:
+        """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
+        for subroutine in self.subroutines.values():
+            subroutine.update_manageable()
+        try:
+            self._refresh_subroutines()
+        except StoppingEcosystem:
+            if self.status:
+                self.logger.info("No subroutine are running, stopping the Ecosystem")
+                self.stop()
+
+    def refresh_chaos(self):
+        try:
+            values = self.config.chaos
+        except UndefinedParameter:
+            values = {}
+        finally:
+            self.chaos.frequency = values.get("frequency", 0)
+            self.chaos.duration = values.get("duration", 0)
+            self.chaos.intensity = values.get("intensity", 1)
+            self.chaos.update()
+
+    def start(self):
+        """Start the Ecosystem
+
+        When started, the Ecosystem will automatically start and stop the
+        Subroutines based on the 'ecosystem.cfg' file
+        """
+        if not self.status:
+            try:
+                self.logger.info("Starting the Ecosystem")
+                self._refresh_subroutines()
+                self.logger.debug(f"Ecosystem successfully started")
+                self._started = True
+            except StoppingEcosystem:
+                self.logger.info(
+                    "The Ecosystem isn't managing any subroutine, it will stop"
+                )
+        else:
+            raise RuntimeError(f"Ecosystem {self._name} is already running")
+
+    def stop(self):
+        """Stop the Ecosystem"""
+        if self.status:
+            self.logger.info("Stopping the Ecosystem ...")
+            for subroutine in reversed(list(SUBROUTINES.keys())):
+                self.subroutines[subroutine].stop()
+            if not any([self.subroutines[subroutine].status
+                        for subroutine in self.subroutines]):
+                self.logger.debug("Ecosystem successfully stopped")
+            else:
+                self.logger.error("Failed to stop Ecosystem")
+                raise Exception(f"Failed to stop Ecosystem {self._name}")
+            self._started = False
+
     # Actuator
     def turn_actuator(
             self,
@@ -230,43 +229,78 @@ class Ecosystem:
                 light_subroutine.turn_light(
                     mode=mode, countdown=countdown
                 )
+            else:
+                raise ValueError
         except RuntimeError:
             self.logger.error(
                 f"Cannot turn {actuator} to {mode} as the subroutine managing it "
                 f"is not currently running"
             )
 
-    # Light
-    @property
-    def light_info(self) -> dict:
-        light_subroutine: "Light" = self.subroutines["light"]
-        if light_subroutine.status:
-            return light_subroutine.light_info
-        return {}
-
-    def update_sun_times(self, send=False) -> None:
-        self.logger.debug("Updating sun times")
-        light_subroutine: "Light" = self.subroutines["light"]
-        if light_subroutine.status:
-            light_subroutine.update_sun_times(send=send)
-        else:
-            self.logger.warning(
-                f"Cannot update sun times as the light subroutine is not "
-                f"currently running"
-            )
-
     # Sensors
     @property
     def sensors_data(self) -> dict:
-        sensors_subroutine: "Sensors" = self.subroutines["sensors"]
+        try:
+            sensors_subroutine: "Sensors" = self.subroutines["sensors"]
+        except KeyError:
+            return {}
         if sensors_subroutine.status:
             return sensors_subroutine.sensors_data
         return {}
 
+    # Light
+    @property
+    def light_info(self) -> dict:
+        try:
+            light_subroutine: "Light" = self.subroutines["light"]
+        except KeyError:
+            return {}
+        if light_subroutine.status:
+            return light_subroutine.light_info
+        return {}
+
+    def refresh_sun_times(self, send=False) -> None:
+        def raise_error():
+            raise RuntimeError(
+                "Cannot update sun times as the light subroutine is not "
+                "currently running"
+            )
+        self.logger.debug("Updating sun times")
+        try:
+            light_subroutine: "Light" = self.subroutines["light"]
+        except KeyError:
+            raise_error()
+        if light_subroutine.status:
+            light_subroutine.refresh_sun_times(send=send)
+        else:
+            raise_error()
+
     # Health
     @property
     def plants_health(self) -> dict:
-        health_subroutine: "Health" = self.subroutines["health"]
+        try:
+            health_subroutine: "Health" = self.subroutines["health"]
+        except KeyError:
+            return {}
         if health_subroutine.status:
             return health_subroutine.plants_health
+        return {}
+
+    # Climate
+    def climate_parameters_regulated(self) -> t.Set[str]:
+        try:
+            climate_subroutine: "Climate" = self.subroutines["climate"]
+        except KeyError:
+            return set()
+        if climate_subroutine.status:
+            return climate_subroutine.regulated
+        return set()
+
+    def climate_targets(self) -> dict[str, t.Union[float, int]]:
+        try:
+            climate_subroutine: "Climate" = self.subroutines["climate"]
+        except KeyError:
+            return {}
+        if climate_subroutine.status:
+            return climate_subroutine.targets
         return {}

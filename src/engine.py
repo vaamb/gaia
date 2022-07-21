@@ -286,7 +286,7 @@ class Engine(metaclass=SingletonMeta):
                 for ecosystem in need:
                     try:
                         if self.ecosystems[ecosystem].status:
-                            self.ecosystems[ecosystem].update_sun_times()
+                            self.ecosystems[ecosystem].refresh_sun_times()
                     except KeyError:
                         # Occur
                         pass
