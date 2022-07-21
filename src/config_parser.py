@@ -66,7 +66,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._base_dir = pathlib.Path(base_dir)
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
-        self._last_sun_times_update: datetime = datetime.now()
+        self._last_sun_times_update: datetime = datetime(1970, 1, 1)
         self._hash_dict = {}
         self._stop_event = Event()
         self._watchdog_pause = Event()
@@ -104,7 +104,7 @@ class GeneralConfig(metaclass=SingletonMeta):
     def _load_or_create_config(self, cfg: str) -> None:
         try:
             self._load_config(cfg)
-        except IOError:
+        except OSError:
             if cfg == "ecosystems":
                 logger.warning(
                     "There is currently no custom ecosystem configuration file. "
@@ -260,17 +260,17 @@ class GeneralConfig(metaclass=SingletonMeta):
             if self._ecosystems_config[ecosystem_uid]["status"]
         ])
 
-    def get_IDs(self, ecosystem: str) -> IDsTuple:
-        if ecosystem in self.ecosystems_uid:
-            ecosystem_uid = ecosystem
-            ecosystem_name = self.id_to_name_dict[ecosystem]
+    def get_IDs(self, ecosystem_id: str) -> IDsTuple:
+        if ecosystem_id in self.ecosystems_uid:
+            ecosystem_uid = ecosystem_id
+            ecosystem_name = self.id_to_name_dict[ecosystem_id]
             return IDsTuple(ecosystem_uid, ecosystem_name)
-        elif ecosystem in self.ecosystems_name:
-            ecosystem_uid = self.name_to_id_dict[ecosystem]
-            ecosystem_name = ecosystem
+        elif ecosystem_id in self.ecosystems_name:
+            ecosystem_uid = self.name_to_id_dict[ecosystem_id]
+            ecosystem_name = ecosystem_id
             return IDsTuple(ecosystem_uid, ecosystem_name)
         raise ValueError(
-            "'ecosystem' parameter should either be an ecosystem uid or an "
+            "'ecosystem_id' parameter should either be an ecosystem uid or an "
             "ecosystem name present in the 'ecosystems.cfg' file. If you want "
             "to create a new ecosystem configuration use the function "
             "'createConfig()'."
@@ -323,7 +323,7 @@ class GeneralConfig(metaclass=SingletonMeta):
             with open(self.base_dir/"cache/sunrise.json", "r") as file:
                 payload = json.load(file)
                 sunrise = payload["data"]["home"]
-        except (IOError, JSONDecodeError, KeyError):
+        except (OSError, JSONDecodeError, KeyError):
             raise UndefinedParameter
 
         def import_daytime_event(daytime_event: str) -> time:
@@ -410,9 +410,10 @@ class SpecificConfig:
     def __init__(self, general_config: GeneralConfig, ecosystem: str) -> None:
         self._general_config = weakref.proxy(general_config)
         ids = self._general_config.get_IDs(ecosystem)
-        logger.debug(f"Initializing SpecificConfig for ecosystem {ids.name}")
         self.uid = ids.uid
-        # TODO: add missing managements in dict and set to false
+        self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
+        self.logger.debug(f"Initializing SpecificConfig")
+        self._first_connection_error = True
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
@@ -470,10 +471,12 @@ class SpecificConfig:
             method = self.ecosystem_config["environment"]["light"]
             if method in ("elongate", "mimic"):
                 if not is_connected():
-                    logger.warning(
-                        "Not connected to the internet, light method "
-                        "automatically turned to 'fixed'"
-                    )
+                    if self._first_connection_error:
+                        self.logger.warning(
+                            "Not connected to the internet, light method "
+                            "automatically turned to 'fixed'"
+                        )
+                        self._first_connection_error = False
                     return "fixed"
             return method
         except KeyError:  # pragma: no cover

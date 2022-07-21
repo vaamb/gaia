@@ -1,9 +1,7 @@
-from datetime import date, datetime
 from json.decoder import JSONDecodeError
 import logging
 import logging.config
 import os
-import requests
 from threading import Thread
 import typing as t
 import weakref
@@ -29,21 +27,19 @@ class Engine(metaclass=SingletonMeta):
     :param general_config: a GeneralConfig object
     """
     def __init__(self, general_config: GeneralConfig) -> None:
+        self._config: GeneralConfig = weakref.proxy(general_config)
         self.logger: logging.Logger = logging.getLogger(
             f"{Config.APP_NAME.lower()}.engine"
         )
         self.logger.debug("Initializing")
-        self.ecosystems: dict[str, Ecosystem] = {}
-        self.config: GeneralConfig = weakref.proxy(general_config)
+        self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = Config.UUID
         self._run: bool = False
         self._event_handler: t.Union[Events, None] = None
-        self._last_sun_times_update = datetime(1970, 1, 1)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
 
-    # TODO: check startup without internet
     def _start_background_tasks(self) -> None:
         self.logger.debug("Starting background tasks")
         self.config.start_watchdog()
@@ -65,65 +61,6 @@ class Engine(metaclass=SingletonMeta):
         scheduler.remove_job("refresh_sun_times")
         scheduler.remove_job("refresh_chaos")
 
-    def _download_sun_times(self) -> None:
-        sun_times_file = self.config.base_dir/"cache/sunrise.json"
-        # Determine if the file needs to be updated
-        need_update = False
-        try:
-            with sun_times_file.open("r") as file:
-                sun_times_data = json.loads(file.read())
-                last_update: str = sun_times_data["last_update"]
-                self._last_sun_times_update: datetime = \
-                    datetime.fromisoformat(last_update).astimezone()
-        except (FileNotFoundError, JSONDecodeError):
-            need_update = True
-        else:
-            if self._last_sun_times_update.date() < date.today():
-                need_update = True
-            else:
-                self.logger.debug("Sun times already up to date")
-        if need_update:
-            self.logger.info("Refreshing sun times")
-            try:
-                home_coordinates = self.config.home_coordinates
-            except UndefinedParameter:
-                self.logger.error(
-                    "You need to define your home city coordinates in "
-                    "'private.cfg' in order to update sun times."
-                )
-            else:
-                latitude = home_coordinates["latitude"]
-                longitude = home_coordinates["longitude"]
-                try:
-                    self.logger.debug(
-                        "Trying to update sunrise and sunset times on "
-                        "sunrise-sunset.org"
-                    )
-                    response = requests.get(
-                        url=f"https://api.sunrise-sunset.org/json",
-                        params={"lat": latitude, "lng": longitude},
-                        timeout=3.0
-                    )
-                    data = response.json()
-                    results = data["results"]
-                except requests.exceptions.ConnectionError:
-                    self.logger.debug(
-                        "Failed to update sunrise and sunset times"
-                    )
-                    raise ConnectionError
-                else:
-                    self._last_sun_times_update = datetime.now()
-                    payload = {
-                        "last_update": self._last_sun_times_update,
-                        "data": {"home": results},
-                    }
-                    with open(sun_times_file, "w") as file:
-                        json.dump(payload, file)
-
-                    self.logger.info(
-                        "Sunrise and sunset times successfully updated"
-                    )
-
     def _loop(self) -> None:
         if Config.VIRTUALIZATION:
             for ecosystem_uid in self.config.ecosystems_uid:
@@ -143,6 +80,14 @@ class Engine(metaclass=SingletonMeta):
     API calls
     """
     @property
+    def ecosystems(self):
+        return self._ecosystems
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
     def ecosystems_started(self) -> set:
         return set([
             ecosystem.uid for ecosystem in self.ecosystems.values()
@@ -150,8 +95,16 @@ class Engine(metaclass=SingletonMeta):
         ])
 
     @property
-    def last_sun_times_update(self):
-        return self._last_sun_times_update
+    def event_handler(self):
+        """Return the event handler
+
+        Either a Socketio Namespace or dispatcher EventHandler
+        """
+        return self._event_handler
+
+    @event_handler.setter
+    def event_handler(self, event_handler: Events):
+        self._event_handler = event_handler
 
     def init_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
         """Initialize an Ecosystem
@@ -172,10 +125,10 @@ class Engine(metaclass=SingletonMeta):
                 self.start_ecosystem(ecosystem_uid)
             return ecosystem
         raise RuntimeError(
-            f"Ecosystem {ecosystem_name} already exists"
+            f"Ecosystem {ecosystem_id} already exists"
         )
 
-    def start_ecosystem(self, ecosystem_id: str) -> bool:
+    def start_ecosystem(self, ecosystem_id: str) -> None:
         """Start an Ecosystem
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -194,16 +147,16 @@ class Engine(metaclass=SingletonMeta):
                 self.logger.info(
                     f"Ecosystem {ecosystem_name} started"
                 )
-                return True
             else:
-                self.logger.debug(f"Ecosystem {ecosystem_name} " +
-                                  "has already been started")
-                return True
-        self.logger.warning(f"Ecosystem {ecosystem_name} has " +
-                            "not been created yet")
-        return False
+                raise RuntimeError(
+                    f"Ecosystem {ecosystem_id} has already been started"
+                )
+        else:
+            raise RuntimeError(
+                f"Neet to initialise Ecosystem {ecosystem_id} first"
+            )
 
-    def stop_ecosystem(self, ecosystem_id: str, dismount: bool = False) -> bool:
+    def stop_ecosystem(self, ecosystem_id: str, dismount: bool = False) -> None:
         """Stop an Ecosystem
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -215,8 +168,8 @@ class Engine(metaclass=SingletonMeta):
         ecosystem_uid, ecosystem_name = get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
-                _ecosystem = self.ecosystems[ecosystem_uid]
-                _ecosystem.stop()
+                ecosystem = self.ecosystems[ecosystem_uid]
+                ecosystem.stop()
                 if dismount:
                     self.dismount_ecosystem(ecosystem_uid)
                 self.logger.info(
@@ -224,17 +177,17 @@ class Engine(metaclass=SingletonMeta):
                 # If no more ecosystem running, stop background routines
                 if not self.ecosystems_started:
                     self._stop_background_tasks()
-                return True
         else:
-            self.logger.warning(f"Cannot stop Ecosystem {ecosystem_name} as "
-                                f"it does not exist")
-            return False
+            raise RuntimeError(
+                f"Cannot stop Ecosystem {ecosystem_id} as it has not been "
+                f"initialised"
+            )
 
     def dismount_ecosystem(
             self,
             ecosystem_id: str,
             detach_config_: bool = True
-    ) -> bool:
+    ) -> None:
         """Remove the Ecosystem from Engine's memory
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -245,23 +198,21 @@ class Engine(metaclass=SingletonMeta):
         ecosystem_id, ecosystem_name = get_IDs(ecosystem_id)
         if ecosystem_id in self.ecosystems:
             if ecosystem_id in self.ecosystems_started:
-                self.logger.error(
-                    "Cannot dismount a started Ecosystem. First need to stop it"
+                raise RuntimeError(
+                    "Cannot dismount a started Ecosystem. First stop it"
                 )
-                return False
             else:
                 del self.ecosystems[ecosystem_id]
                 if detach_config_:
                     detach_config(ecosystem_id)
                 self.logger.info(
-                    f"Ecosystem '{ecosystem_name}' has been dismounted"
+                    f"Ecosystem '{ecosystem_id}' has been dismounted"
                 )
-                return True
         else:
-            self.logger.warning(
-                f"Cannot dismount Ecosystem '{ecosystem_name}' as it does not exist"
+            raise RuntimeError(
+                f"Cannot dismount Ecosystem '{ecosystem_id}' as it has not been "
+                f"initialised"
             )
-            return False
 
     def get_ecosystem(self, ecosystem: str) -> Ecosystem:
         """Get the required Ecosystem
@@ -371,7 +322,7 @@ class Engine(metaclass=SingletonMeta):
             self._thread.name = "engine"
             self._thread.start()
             self.logger.info("Engine started")
-        else:
+        else:  # pragma: no cover
             raise RuntimeError("Engine can only be started once")
 
     def stop(
@@ -400,15 +351,3 @@ class Engine(metaclass=SingletonMeta):
                     self.dismount_ecosystem(ecosystem)
 
             self.logger.info("The Engine has stopped")
-
-    @property
-    def event_handler(self):
-        """Return the event handler
-
-        Either a Socketio Namespace or dispatcher EventHandler
-        """
-        return self._event_handler
-
-    @event_handler.setter
-    def event_handler(self, event_handler: Events):
-        self._event_handler = event_handler

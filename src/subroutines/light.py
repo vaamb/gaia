@@ -236,7 +236,7 @@ class Light(SubroutineTemplate):
     def _start(self):
         # TODO: check that the ecosystem has day and night parameters
         now = datetime.now()
-        if now.date() > self.ecosystem.engine.last_sun_times_update.date():
+        if now.date() > self.ecosystem.config.general.last_sun_times_update.date():
             self.ecosystem.engine.refresh_sun_times()
         self._update_sun_times(send=True)
         self.refresh_hardware()
