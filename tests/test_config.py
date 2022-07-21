@@ -75,7 +75,11 @@ def test_home(general_config: GeneralConfig):
 # ---------------------------------------------------------------------------
 #   Test SpecificConfig
 # ---------------------------------------------------------------------------
-def test_specific_properties(specific_config: "SpecificConfig"):
+def test_specific_properties(
+        general_config: GeneralConfig,
+        specific_config: "SpecificConfig"
+):
+    assert specific_config.general.__dict__ == general_config.__dict__
     assert specific_config.ecosystem_config == TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]
     assert specific_config.name == "test"
     specific_config.name = "name"

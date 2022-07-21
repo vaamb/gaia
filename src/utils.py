@@ -20,7 +20,12 @@ import ruamel.yaml
 from config import Config
 
 
-base_dir = pathlib.Path(__file__).absolute().parents[1]
+try:
+    base_dir = pathlib.Path(Config.BASE_DIR)
+    if not base_dir.exists():
+        raise RuntimeError("Base directory does not exist, please create it")
+except AttributeError:
+    base_dir = pathlib.Path(__file__).absolute().parents[1]
 
 yaml = ruamel.yaml.YAML()
 

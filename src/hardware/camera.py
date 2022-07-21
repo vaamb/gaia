@@ -36,7 +36,7 @@ class PiCamera(Camera):
             sleep(3)
             current_datetime = datetime.now().strftime("%Y.%m.%d:%H.%M.%S")
             picture_name = f"{self.ecosystem_uid}-{current_datetime}"
-            picture_path = self.folder/picture_name
+            picture_path = self.cam_dir / picture_name
             camera.capture(picture_path, format="jpg")
         return picture_path
 

@@ -1,12 +1,13 @@
 from datetime import date, datetime, time, timedelta
 from json.decoder import JSONDecodeError
 from math import pi, sin
+import os
 from pathlib import Path
 import typing as t
 import random
 import weakref
 
-from ..utils import base_dir, json
+from ..utils import json
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -35,14 +36,18 @@ class Chaos:
         self.frequency: int = frequency
         self.duration: int = max_duration
         self.intensity: float = max_intensity
-        self.chaos_file: Path = base_dir / "cache" / "chaos.json"
+        base_dir = self.ecosystem.config.general.base_dir
+        cache_dir = base_dir/"cache"
+        if not cache_dir.exists():
+            os.mkdir(cache_dir)
+        self._chaos_file: Path = cache_dir/"chaos.json"
         self._intensity_function: t.Callable = _intensity_function
         self._time_window: dict[str, datetime] = {}
         self._load_chaos()
 
     def _load_chaos(self) -> None:
         try:
-            with self.chaos_file.open() as file:
+            with self._chaos_file.open() as file:
                 ecosystems = json.loads(file.read())
                 params = ecosystems[self.ecosystem.uid]["time_window"]
                 for param in ("start", "end"):
@@ -59,7 +64,7 @@ class Chaos:
 
     def _dump_chaos(self) -> None:
         try:
-            with self.chaos_file.open("r") as file:
+            with self._chaos_file.open("r") as file:
                 ecosystems = json.loads(file.read())
         except (FileNotFoundError, JSONDecodeError):  # Empty file
             ecosystems = {}
@@ -67,14 +72,14 @@ class Chaos:
             "last_update": datetime.now().astimezone(),
             "time_window": self._time_window,
         }
-        with self.chaos_file.open("w") as file:
+        with self._chaos_file.open("w") as file:
             file.write(json.dumps(ecosystems))
 
     def update(self) -> None:
         now: datetime = datetime.now().astimezone()
         need_update: bool = False
         try:
-            with self.chaos_file.open("r") as file:
+            with self._chaos_file.open("r") as file:
                 ecosystems: dict = json.loads(file.read())
                 last_update: str = ecosystems[self.ecosystem.uid]["last_update"]
                 last_update: datetime =\

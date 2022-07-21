@@ -8,7 +8,7 @@ import weakref
 
 from . import _IS_RASPI
 from ..utils import (
-    base_dir, pin_bcm_to_board, pin_board_to_bcm, pin_translation
+    pin_bcm_to_board, pin_board_to_bcm, pin_translation
 )
 
 
@@ -361,9 +361,10 @@ class i2cSensor(BaseSensor, i2cHardware):
 class Camera(Hardware):
     def __init__(self, *args, **kwargs):
         kwargs["level"] = "environment"
-        self.folder = base_dir/f"camera/{self.subroutine._uid}"
-        if not self.folder.exists():
-            os.mkdir(self.folder)
+        base_dir = self.subroutine.config.general.base_dir
+        self.cam_dir = base_dir / f"camera/{self.subroutine.ecosystem_uid}"
+        if not self.cam_dir.exists():
+            os.mkdir(self.cam_dir)
         self.running = False
         super().__init__(*args, **kwargs)
         self.ecosystem_uid = self.subroutine.config.uid

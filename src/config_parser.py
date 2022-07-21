@@ -327,6 +327,10 @@ class SpecificConfig:
                f"general_config={self._general_config})"
 
     @property
+    def general(self) -> GeneralConfig:
+        return self._general_config
+
+    @property
     def ecosystem_config(self) -> dict:
         return self._general_config.ecosystems_config[self.uid]
 
