@@ -48,13 +48,16 @@ class Light(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self._status = {"current": False, "last": False}
         self._mode = "automatic"
-        self._method = self.config.light_method
         self._dimmable_lights_uid = []
         self._pid = PID(Kp, Ki, Kd)
         self._sun_times = {"morning_start": time(8), "evening_end": time(20)}
         self._stop_event = Event()
         self._adjust_light_level_event = Event()
         self._timer: ctime.monotonic() = 0.0
+        try:
+            self._method = self.config.light_method
+        except UndefinedParameter:
+            self._method = None
         self._finish__init__()
 
     def _update_sun_times(self, send=True) -> None:
@@ -88,20 +91,20 @@ class Light(SubroutineTemplate):
                     "Using 'fixed' method instead."
                 )
                 self.method = "fixed"
-                self.update_sun_times()
+                self._update_sun_times()
             else:
                 with lock:
                     self._sun_times["morning_start"] = sun_times["sunrise"]
                     self._sun_times["evening_end"] = sun_times["sunset"]
 
         elif self._method == "elongate":
-            if not time_parameters.get("day", False) and not sun_times.get("sunrise", False):
+            if not time_parameters.get("day", False) or not sun_times.get("sunrise", False):
                 self.logger.error(
                     "Cannot use method 'elongate' without time parameters set in "
                     "config and sun times available. Using 'fixed' method instead."
                 )
                 self.method = "fixed"
-                self.update_sun_times()
+                self._update_sun_times()
             else:
                 sunrise = _to_dt(sun_times["sunrise"])
                 sunset = _to_dt(sun_times["sunset"])
@@ -217,11 +220,16 @@ class Light(SubroutineTemplate):
                 return False
 
     def _update_manageable(self) -> None:
-        if self.config.get_IO_group("light"):
+        try:
+            time_parameters = bool(self.config.time_parameters)
+        except UndefinedParameter:
+            time_parameters = False
+        if all((self.config.get_IO_group("light"), self.method, time_parameters)):
             self.manageable = True
         else:
             self.logger.warning(
-                "No light detected, disabling Light subroutine"
+                "At least one of light hardware, lighting method, or time "
+                "parameters is missing. Disabling Light subroutine"
             )
             self.manageable = False
 

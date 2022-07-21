@@ -38,7 +38,7 @@ class DHTSensor(gpioSensor):
         self._device = self._get_device()
         self._raw_data = {}
 
-    def _get_device(self):
+    def _get_device(self):  # pragma: no cover
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -196,7 +196,7 @@ class CapacitiveSensor(i2cSensor):
             from ._compatibility import Seesaw
         return Seesaw(get_i2c(), self._address["main"].number)
 
-    def get_data(self) -> list[dict]:
+    def get_data(self) -> list[dict]:  # pragma: no cover
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )

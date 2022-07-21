@@ -13,9 +13,7 @@ TESTING_ECOSYSTEM_CFG = {
             "alarms": False,
             "webcam": False,
         },
-        "environment": {
-            "light": "fixed",
-        },
+        "environment": {},
         "IO": {},
     }
 }

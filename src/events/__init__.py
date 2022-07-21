@@ -1,8 +1,8 @@
 import logging
 import typing as t
 
+from src.utils import encrypted_uid, generate_uid_token
 from config import Config
-from ..utils import encrypted_uid, generate_uid_token
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -83,7 +83,7 @@ class Events:
         for uid in uids:
             data = getattr(self.ecosystems[uid], config_type)
             if data:
-                data.update({"uid": uid})
+                data.reload({"uid": uid})
                 rv.append(data)
         self.emit(config_type, rv)
 

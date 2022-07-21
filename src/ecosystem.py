@@ -67,7 +67,7 @@ class Ecosystem:
 
     def refresh_chaos(self):
         try:
-            values = self.config.get_chaos()
+            values = self.config.chaos
         except UndefinedParameter:
             values = {}
         finally:
@@ -192,7 +192,7 @@ class Ecosystem:
     def management(self) -> dict:
         """Return the subroutines' management corrected by whether they are
         manageable or not"""
-        base_management = self.config.as_dict["management"]
+        base_management = self.config.ecosystem_config["management"]
         management = {}
         for m in base_management:
             try:
@@ -203,11 +203,11 @@ class Ecosystem:
 
     @property
     def environmental_parameters(self) -> dict:
-        return self.config.as_dict.get("environment", {})
+        return self.config.ecosystem_config.get("environment", {})
 
     @property
     def hardware(self) -> dict:
-        return self.config.as_dict.get("IO", {})
+        return self.config.ecosystem_config.get("IO", {})
 
     # Actuator
     def turn_actuator(
@@ -250,7 +250,7 @@ class Ecosystem:
         if light_subroutine.status:
             light_subroutine.update_sun_times(send=send)
         else:
-            self.logger.error(
+            self.logger.warning(
                 f"Cannot update sun times as the light subroutine is not "
                 f"currently running"
             )

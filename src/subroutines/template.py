@@ -27,10 +27,10 @@ class SubroutineTemplate(ABC):
         self.logger.debug("Initializing")
         self.hardware: dict[str, Hardware] = {}
         self.manageable: bool = True
-        self.update_manageable()
         self._started: bool = False
 
     def _finish__init__(self) -> None:
+        self.update_manageable()
         self.logger.debug("Initialization successfully")
 
     def __repr__(self) -> str:

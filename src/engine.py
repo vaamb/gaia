@@ -11,8 +11,9 @@ import weakref
 from .config_parser import config_event, detach_config, GeneralConfig, get_IDs
 from .ecosystem import Ecosystem
 from .events import Events
+from .exceptions import UndefinedParameter
 from .shared_resources import scheduler, start_scheduler
-from .utils import base_dir, json, SingletonMeta
+from .utils import json, SingletonMeta
 from .virtual import get_virtual_ecosystem
 from config import Config
 
@@ -46,7 +47,7 @@ class Engine(metaclass=SingletonMeta):
     def _start_background_tasks(self) -> None:
         self.logger.debug("Starting background tasks")
         self.config.start_watchdog()
-        cache_dir = base_dir / "cache"
+        cache_dir = self.config.base_dir/"cache"
         if not cache_dir.exists():
             os.mkdir(cache_dir)
         self.refresh_sun_times()
@@ -61,50 +62,67 @@ class Engine(metaclass=SingletonMeta):
     def _stop_background_tasks(self) -> None:
         self.logger.debug("Stopping background tasks")
         self.config.stop_watchdog()
-        scheduler.remove_job("sun_times")
+        scheduler.remove_job("refresh_sun_times")
+        scheduler.remove_job("refresh_chaos")
 
     def _download_sun_times(self) -> None:
-        save_file = base_dir / "cache" / "sunrise.json"
+        sun_times_file = self.config.base_dir/"cache/sunrise.json"
         # Determine if the file needs to be updated
         need_update = False
         try:
-            last_update = save_file.stat().st_mtime
-            self._last_sun_times_update = datetime.fromtimestamp(last_update)
-        except FileNotFoundError:
+            with sun_times_file.open("r") as file:
+                sun_times_data = json.loads(file.read())
+                last_update: str = sun_times_data["last_update"]
+                self._last_sun_times_update: datetime = \
+                    datetime.fromisoformat(last_update).astimezone()
+        except (FileNotFoundError, JSONDecodeError):
             need_update = True
         else:
-            if self._last_sun_times_update.date() == date.today():
-                self.logger.debug("Sun times already up to date")
-            else:
+            if self._last_sun_times_update.date() < date.today():
                 need_update = True
+            else:
+                self.logger.debug("Sun times already up to date")
         if need_update:
             self.logger.info("Refreshing sun times")
-            latitude = self.config.home_coordinates["latitude"]
-            longitude = self.config.home_coordinates["longitude"]
             try:
-                self.logger.debug(
-                    "Trying to update sunrise and sunset times on "
-                    "sunrise-sunset.org"
+                home_coordinates = self.config.home_coordinates
+            except UndefinedParameter:
+                self.logger.error(
+                    "You need to define your home city coordinates in "
+                    "'private.cfg' in order to update sun times."
                 )
-                response = requests.get(
-                    url=f"https://api.sunrise-sunset.org/json",
-                    params={"lat": latitude, "lng": longitude},
-                    timeout=3.0
-                )
-                data = response.json()
-                results = data["results"]
-            except requests.exceptions.ConnectionError:
-                self.logger.debug(
-                    "Failed to update sunrise and sunset times"
-                )
-                raise ConnectionError
             else:
-                with open(save_file, "w") as outfile:
-                    json.dump(results, outfile)
-                self._last_sun_times_update = datetime.now()
-                self.logger.debug(
-                    "Sunrise and sunset times successfully updated"
-                )
+                latitude = home_coordinates["latitude"]
+                longitude = home_coordinates["longitude"]
+                try:
+                    self.logger.debug(
+                        "Trying to update sunrise and sunset times on "
+                        "sunrise-sunset.org"
+                    )
+                    response = requests.get(
+                        url=f"https://api.sunrise-sunset.org/json",
+                        params={"lat": latitude, "lng": longitude},
+                        timeout=3.0
+                    )
+                    data = response.json()
+                    results = data["results"]
+                except requests.exceptions.ConnectionError:
+                    self.logger.debug(
+                        "Failed to update sunrise and sunset times"
+                    )
+                    raise ConnectionError
+                else:
+                    self._last_sun_times_update = datetime.now()
+                    payload = {
+                        "last_update": self._last_sun_times_update,
+                        "data": {"home": results},
+                    }
+                    with open(sun_times_file, "w") as file:
+                        json.dump(payload, file)
+
+                    self.logger.info(
+                        "Sunrise and sunset times successfully updated"
+                    )
 
     def _loop(self) -> None:
         if Config.VIRTUALIZATION:
@@ -135,8 +153,8 @@ class Engine(metaclass=SingletonMeta):
     def last_sun_times_update(self):
         return self._last_sun_times_update
 
-    def create_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
-        """Create an Ecosystem
+    def init_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
+        """Initialize an Ecosystem
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
                              'ecosystems.cfg'
@@ -255,7 +273,7 @@ class Engine(metaclass=SingletonMeta):
         if ecosystem_uid in self.ecosystems:
             _ecosystem = self.ecosystems[ecosystem_uid]
         else:
-            _ecosystem = self.create_ecosystem(ecosystem_uid)
+            _ecosystem = self.init_ecosystem(ecosystem_uid)
         return _ecosystem
 
     def refresh_ecosystems(self):
@@ -265,7 +283,7 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem_uid in self.config.ecosystems_uid:
             # create the Ecosystem if it doesn't exist
             if ecosystem_uid not in self.ecosystems:
-                self.create_ecosystem(ecosystem_uid)
+                self.init_ecosystem(ecosystem_uid)
             # remove the Ecosystem from the to_delete set
             try:
                 to_delete.remove(ecosystem_uid)
@@ -299,10 +317,11 @@ class Engine(metaclass=SingletonMeta):
                 if (
                     self.ecosystems[ecosystem].config.light_method in
                     ("mimic", "elongate")
-                    and self.ecosystems[ecosystem].status
+                    # And expected to be running
+                    and self.ecosystems[ecosystem].config.status
                 ):
                     need.append(ecosystem)
-            except KeyError:
+            except UndefinedParameter:
                 # Bad configuration file
                 pass
         if any(need):
@@ -315,7 +334,8 @@ class Engine(metaclass=SingletonMeta):
             else:
                 for ecosystem in need:
                     try:
-                        self.ecosystems[ecosystem].update_sun_times()
+                        if self.ecosystems[ecosystem].status:
+                            self.ecosystems[ecosystem].update_sun_times()
                     except KeyError:
                         # Occur
                         pass
@@ -325,7 +345,7 @@ class Engine(metaclass=SingletonMeta):
     def refresh_chaos(self):
         for ecosystem in self.ecosystems.values():
             ecosystem.refresh_chaos()
-        chaos_file = base_dir / "cache/chaos.json"
+        chaos_file = self.config.base_dir/"cache/chaos.json"
         try:
             with chaos_file.open("r+") as file:
                 ecosystem_chaos = json.loads(file.read())

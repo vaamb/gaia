@@ -51,11 +51,15 @@ def i2c_address_to_hex(address: str) -> int:
 
 
 class Address:
+    __slots__ = ("type", "multiplexed", "multiplexer", "number")
+
     def __init__(self, address_string: str):
         """
         :param address_string: str: address in form 'GPIO_1'
         """
         address_components = address_string.split("_")
+        if len(address_components) != 2:
+            raise ValueError
         self.type: str = address_components[0].lower()
         self.multiplexed: bool = False
         self.multiplexer: int = 0
@@ -114,7 +118,10 @@ class Hardware:
             model: str,
             **kwargs
     ) -> None:
-        self._subroutine: "SubroutineTemplate" = weakref.proxy(subroutine)
+        if subroutine == "hardware_creation":
+            self._subroutine = None
+        else:
+            self._subroutine: "SubroutineTemplate" = weakref.proxy(subroutine)
         self._uid: str = uid
         if level.lower() in ("environment", "environments"):
             self._level: str = "environment"
@@ -154,7 +161,11 @@ class Hardware:
         return self._subroutine
 
     @property
-    def address(self) -> str:
+    def address(self) -> dict[str, Address]:
+        return self._address
+
+    @property
+    def address_repr(self):
         sec = self._address.get("secondary", None)
         if sec:
             return f"{self._address['main']}:{sec}"
@@ -178,7 +189,7 @@ class Hardware:
         return {
             "uid": self._uid,
             "name": self._name,
-            "address": self._address,
+            "address": self.address_repr,
             "model": self._model,
             "type": self._type,
             "level": self._level,

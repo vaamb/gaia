@@ -77,7 +77,8 @@ class Chaos:
             with self.chaos_file.open("r") as file:
                 ecosystems: dict = json.loads(file.read())
                 last_update: str = ecosystems[self.ecosystem.uid]["last_update"]
-                last_update: datetime = datetime.fromisoformat(last_update)
+                last_update: datetime =\
+                    datetime.fromisoformat(last_update).astimezone()
         except (FileNotFoundError, JSONDecodeError, KeyError):
             need_update = True
         else:

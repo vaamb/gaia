@@ -5,7 +5,7 @@ from .sensors import DHTSensor, VEML7700, CapacitiveMoisture
 from config import Config
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from ._compatibility import (
         DHTBase as _DHTBase, DHT11 as _DHT11, DHT22 as _DHT22,
         Seesaw, VEML7700 as _VEML7700
@@ -19,14 +19,14 @@ class virtualSensor(BaseSensor):
             from ..virtual import get_virtual_ecosystem
             get_virtual_ecosystem(self.subroutine.ecosystem.uid, start=True)
 
-    def get_data(self) -> list:
+    def get_data(self) -> list:  # pragma: no cover
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class virtualDHT(DHTSensor, virtualSensor):
-    def _get_device(self) -> "_DHTBase":
+    def _get_device(self) -> "_DHTBase":  # pragma: no cover
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -50,7 +50,7 @@ class virtualVEML7700(VEML7700, virtualSensor):
         return _VEML7700(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
-class virtualMoisture(CapacitiveMoisture, virtualSensor):
+class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
     def _get_device(self) -> "Seesaw":
         from ._compatibility import Seesaw
         return Seesaw(ecosystem_uid=self.subroutine.ecosystem.uid)
@@ -58,9 +58,9 @@ class virtualMoisture(CapacitiveMoisture, virtualSensor):
 
 VIRTUAL_SENSORS = {
     hardware.__name__: hardware for hardware in [
+        virtualCapacitiveMoisture,
         virtualDHT11,
         virtualDHT22,
         virtualVEML7700,
-        virtualCapacitiveMoisture,
     ]
 }

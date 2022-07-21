@@ -5,8 +5,11 @@ from src.hardware import (
     ACTUATORS, GPIO_SENSORS, I2C_SENSORS, VIRTUAL_SENSORS
 )
 
+from .utils import TESTING_ECOSYSTEM_CFG
+
 
 if t.TYPE_CHECKING:
+    from src.config_parser import GeneralConfig
     from src.subroutines import Light
 
 
@@ -33,7 +36,7 @@ class TestHardware(BaseSensor, PlantLevelHardware):
     pass
 
 
-def test_base_class(light_subroutine: "Light"):
+def test_base_class(general_config: "GeneralConfig", light_subroutine: "Light"):
     hardware_info = dict(BASE_HARDWARE_DICT[HARDWARE_UID])
     hardware_info["address"] = TEST_ADDRESS
     hardware = TestHardware(light_subroutine, HARDWARE_UID, **hardware_info)
@@ -41,13 +44,14 @@ def test_base_class(light_subroutine: "Light"):
     assert hardware.uid == HARDWARE_UID
     assert hardware.name == "test"
     hardware.name = "foo"
-    assert hardware.address == TEST_ADDRESS.replace("default", "0x0")
+    assert hardware.address_repr == TEST_ADDRESS.replace("default", "0x0")
     assert hardware.level == "plants"
     assert hardware.model == "testModel"
     assert hardware.plant == "testPlant"
     assert "testMeasure" in hardware.measure
     str(hardware)
     assert isinstance(hardware.dict_repr, dict)
+    general_config.ecosystems_config = TESTING_ECOSYSTEM_CFG
 
 
 def test_actuators(light_subroutine: "Light"):

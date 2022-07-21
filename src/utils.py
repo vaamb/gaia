@@ -11,7 +11,6 @@ import platform
 import secrets
 import socket
 
-from cachetools import LRUCache
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -19,9 +18,6 @@ import geopy
 import ruamel.yaml
 
 from config import Config
-
-
-coordinates = LRUCache(maxsize=16)
 
 
 base_dir = pathlib.Path(__file__).absolute().parents[1]
@@ -43,10 +39,20 @@ class datetimeJSONEncoder(_json.JSONEncoder):
 
 class json:
     @staticmethod
+    def dump(*args, **kwargs):
+        if 'cls' not in kwargs:
+            kwargs['cls'] = datetimeJSONEncoder
+        return _json.dump(*args, **kwargs)
+
+    @staticmethod
     def dumps(*args, **kwargs):
         if 'cls' not in kwargs:
             kwargs['cls'] = datetimeJSONEncoder
         return _json.dumps(*args, **kwargs)
+
+    @staticmethod
+    def load(*args, **kwargs):
+        return _json.load(*args, **kwargs)
 
     @staticmethod
     def loads(*args, **kwargs):
@@ -239,45 +245,56 @@ def temperature_converter(temp: float,
     elif unit_in.lower() in celsius:
         if unit_out.lower() in kelvin:
             x = temp + K
-        if unit_out.lower() in fahrenheit:
+        elif unit_out.lower() in fahrenheit:
             x = temp * (9 / 5) + 32
+        else:
+            raise ValueError(
+                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
+            )
 
     elif unit_in.lower() in kelvin:
         if unit_out.lower() in celsius:
             x = temp - K
-        if unit_out.lower() in fahrenheit:
+        elif unit_out.lower() in fahrenheit:
             x = (temp - K) * (9 / 5) + 32
+        else:
+            raise ValueError(
+                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
+            )
 
     elif unit_in.lower() in fahrenheit:
         if unit_out.lower() in celsius:
             x = (temp - 32) * (5 / 9)
-        if unit_out.lower() in kelvin:
+        elif unit_out.lower() in kelvin:
             x = (temp - 32) * (5 / 9) + K
+        else:
+            raise ValueError(
+                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
+            )
 
     else:
-        raise ValueError("This unit is not recognized")
+        raise ValueError(
+            "units must be 'celsius', 'fahrenheit' or 'kelvin'"
+        )
 
     return float(round(x, precision_digit))
 
 
 def get_coordinates(city: str) -> dict:
-    """
-    Memoize and return the geocode of the given city using geopy API. The
-    memoization step allows to reduce the number of call to the Nominatim API.
+    """Get the geocode of the given city using geopy API.
 
     :param city: str, the name of a city.
     :return: dict with the latitude and longitude of the given city.
     """
-    # if not memoized, look for coordinates
-    if city not in coordinates:
-        geolocator = geopy.geocoders.Nominatim(user_agent="EP-gaia")
-        location = geolocator.geocode(city)
-        coordinates[city] = {
+    geolocator = geopy.geocoders.Nominatim(user_agent="EP-gaia")
+    location = geolocator.geocode(city)
+    if not location:
+        raise LookupError
+    else:
+        return {
             "latitude": location.latitude,
             "longitude": location.longitude,
         }
-
-    return coordinates[city]
 
 
 def is_connected() -> bool:
