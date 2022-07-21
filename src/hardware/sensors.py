@@ -38,7 +38,7 @@ class DHTSensor(gpioSensor):
         self._device = self._get_device()
         self._raw_data = {}
 
-    def _get_device(self):
+    def _get_device(self):  # pragma: no cover
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -59,13 +59,16 @@ class DHTSensor(gpioSensor):
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
-                break
+                raise RuntimeError
 
             else:
                 return humidity, temperature
 
     def get_data(self) -> list:
-        raw_humidity, raw_temperature = self._get_raw_data()
+        try:
+            raw_humidity, raw_temperature = self._get_raw_data()
+        except RuntimeError:
+            raw_humidity = raw_temperature = None
         data = []
         if raw_humidity is not None and raw_temperature is not None:
             if "humidity" in self.measure:
@@ -196,7 +199,7 @@ class CapacitiveSensor(i2cSensor):
             from ._compatibility import Seesaw
         return Seesaw(get_i2c(), self._address["main"].number)
 
-    def get_data(self) -> list[dict]:
+    def get_data(self) -> list[dict]:  # pragma: no cover
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -223,13 +226,15 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
-                break
-
+                raise RuntimeError
             else:
                 return moisture, temperature
 
     def get_data(self) -> list[dict]:
-        moisture, raw_temperature = self._get_raw_data()
+        try:
+            moisture, raw_temperature = self._get_raw_data()
+        except RuntimeError:
+            moisture = raw_temperature = None
         data = []
         if "moisture" in self.measure:
             data.append({"name": "moisture", "value": moisture})

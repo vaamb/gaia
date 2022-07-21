@@ -6,8 +6,8 @@ if Config.VIRTUALIZATION:
 
 
 class gpioSwitch(gpioHardware, Switch):
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self._pin.init(mode=self.OUT)
 
     def turn_on(self) -> None:

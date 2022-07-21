@@ -48,16 +48,19 @@ class Light(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self._status = {"current": False, "last": False}
         self._mode = "automatic"
-        self._method = self.config.light_method
         self._dimmable_lights_uid = []
         self._pid = PID(Kp, Ki, Kd)
         self._sun_times = {"morning_start": time(8), "evening_end": time(20)}
         self._stop_event = Event()
         self._adjust_light_level_event = Event()
         self._timer: ctime.monotonic() = 0.0
+        try:
+            self._method = self.config.light_method
+        except UndefinedParameter:
+            self._method = None
         self._finish__init__()
 
-    def _update_sun_times(self, send=True) -> None:
+    def _refresh_sun_times(self, send=True) -> None:
         self.logger.debug("Updating sun times")
         try:
             time_parameters = self.config.time_parameters
@@ -88,20 +91,20 @@ class Light(SubroutineTemplate):
                     "Using 'fixed' method instead."
                 )
                 self.method = "fixed"
-                self.update_sun_times()
+                self._refresh_sun_times()
             else:
                 with lock:
                     self._sun_times["morning_start"] = sun_times["sunrise"]
                     self._sun_times["evening_end"] = sun_times["sunset"]
 
         elif self._method == "elongate":
-            if not time_parameters.get("day", False) and not sun_times.get("sunrise", False):
+            if not time_parameters.get("day", False) or not sun_times.get("sunrise", False):
                 self.logger.error(
                     "Cannot use method 'elongate' without time parameters set in "
                     "config and sun times available. Using 'fixed' method instead."
                 )
                 self.method = "fixed"
-                self.update_sun_times()
+                self._refresh_sun_times()
             else:
                 sunrise = _to_dt(sun_times["sunrise"])
                 sunset = _to_dt(sun_times["sunset"])
@@ -217,20 +220,24 @@ class Light(SubroutineTemplate):
                 return False
 
     def _update_manageable(self) -> None:
-        if self.config.get_IO_group("light"):
+        try:
+            time_parameters = bool(self.config.time_parameters)
+        except UndefinedParameter:
+            time_parameters = False
+        if all((self.config.get_IO_group("light"), self.method, time_parameters)):
             self.manageable = True
         else:
             self.logger.warning(
-                "No light detected, disabling Light subroutine"
+                "At least one of light hardware, lighting method, or time "
+                "parameters is missing. Disabling Light subroutine"
             )
             self.manageable = False
 
     def _start(self):
-        # TODO: check that the ecosystem has day and night parameters
         now = datetime.now()
-        if now.date() > self.ecosystem.engine.last_sun_times_update.date():
+        if now.date() > self.ecosystem.config.general.last_sun_times_update.date():
             self.ecosystem.engine.refresh_sun_times()
-        self._update_sun_times(send=True)
+        self._refresh_sun_times(send=True)
         self.refresh_hardware()
         self._light_loop_thread = Thread(
             target=self._light_state_loop, args=()
@@ -274,9 +281,9 @@ class Light(SubroutineTemplate):
     def refresh_hardware(self) -> None:
         self._refresh_hardware("light")
 
-    def update_sun_times(self, send=True):
+    def refresh_sun_times(self, send=True):
         try:
-            self._update_sun_times(send)
+            self._refresh_sun_times(send)
         except StoppingSubroutine:
             self.stop()
 
@@ -321,7 +328,7 @@ class Light(SubroutineTemplate):
     def method(self, value: str) -> None:
         assert value in ("elongate", "fixed", "mimic")
         if value in ("elongate", "mimic"):
-            self.update_sun_times(send=True)
+            self.refresh_sun_times(send=True)
         self._method = value
 
     @property
@@ -373,6 +380,8 @@ class Light(SubroutineTemplate):
                 self.logger.info(
                     f"Lights have been manually turned {mode}"
                     f"{additional_message}")
+            else:
+                raise ValueError("mode must be 'on', 'off' or 'automatic'")
         else:
             raise RuntimeError(f"{self.name} is not started in "
                                f"engine {self.ecosystem}")

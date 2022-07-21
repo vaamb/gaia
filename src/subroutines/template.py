@@ -27,10 +27,10 @@ class SubroutineTemplate(ABC):
         self.logger.debug("Initializing")
         self.hardware: dict[str, Hardware] = {}
         self.manageable: bool = True
-        self.update_manageable()
         self._started: bool = False
 
     def _finish__init__(self) -> None:
+        self.update_manageable()
         self.logger.debug("Initialization successfully")
 
     def __repr__(self) -> str:
@@ -92,8 +92,20 @@ class SubroutineTemplate(ABC):
         return self._ecosystem.config
 
     @property
+    def ecosystem_uid(self) -> str:
+        return self._ecosystem.uid
+
+    @property
     def status(self) -> bool:
         return self._started
+
+    @property
+    def management(self) -> bool:
+        return self.config.get_management(self.name)
+
+    @management.setter
+    def management(self, value: bool) -> None:  # TODO: save changes
+        self.config.set_management(self.name, value)
 
     @abstractmethod
     def add_hardware(self, hardware_dict: dict) -> t.Union[BaseSensor, Dimmer, Hardware, Switch]:
@@ -114,11 +126,8 @@ class SubroutineTemplate(ABC):
         )
 
     def update_manageable(self) -> None:
-        if self.config.get_management(self.name) and not Config.TESTING:
+        if self.management:
             self._update_manageable()
-
-    def set_management(self, value):
-        self.config.set_management(self.name, value)
 
     def start(self) -> None:
         if self.manageable:

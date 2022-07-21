@@ -10,8 +10,8 @@ import pathlib
 import platform
 import secrets
 import socket
+import typing as t
 
-from cachetools import LRUCache
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -21,10 +21,12 @@ import ruamel.yaml
 from config import Config
 
 
-coordinates = LRUCache(maxsize=16)
-
-
-base_dir = pathlib.Path(__file__).absolute().parents[1]
+try:
+    base_dir = pathlib.Path(Config.BASE_DIR)
+    if not base_dir.exists():
+        raise RuntimeError("Base directory does not exist, please create it")
+except AttributeError:
+    base_dir = pathlib.Path(__file__).absolute().parents[1]
 
 yaml = ruamel.yaml.YAML()
 
@@ -43,10 +45,20 @@ class datetimeJSONEncoder(_json.JSONEncoder):
 
 class json:
     @staticmethod
+    def dump(*args, **kwargs):
+        if 'cls' not in kwargs:
+            kwargs['cls'] = datetimeJSONEncoder
+        return _json.dump(*args, **kwargs)
+
+    @staticmethod
     def dumps(*args, **kwargs):
         if 'cls' not in kwargs:
             kwargs['cls'] = datetimeJSONEncoder
         return _json.dumps(*args, **kwargs)
+
+    @staticmethod
+    def load(*args, **kwargs):
+        return _json.load(*args, **kwargs)
 
     @staticmethod
     def loads(*args, **kwargs):
@@ -163,9 +175,11 @@ def pin_translation(pin: int, direction: str) -> int:
         return pin_bcm_to_board[pin]
 
 
-def get_dew_point(temp: float,
-                  hum: float,
-                  precision_digit: int = 2) -> float:
+def get_dew_point(
+        temp: t.Union[float, None],
+        hum: t.Union[float, None],
+        precision_digit: int = 2
+) -> t.Union[float, None]:
     """
     Returns the dew point temperature calculated using the Magnus formula.
     It uses the Sonntag1990 parameters which is valid from -45°C to 60°C
@@ -176,6 +190,8 @@ def get_dew_point(temp: float,
 
     :return float, dew point temperature in celsius
     """
+    if temp is None or hum is None:
+        return None
 
     b = 17.62
     c = 243.12
@@ -185,9 +201,11 @@ def get_dew_point(temp: float,
     return float(round(Tdp, precision_digit))
 
 
-def get_absolute_humidity(temp: float,
-                          hum: float,
-                          precision_digit: int = 2) -> float:
+def get_absolute_humidity(
+        temp: t.Union[float, None],
+        hum: t.Union[float, None],
+        precision_digit: int = 2
+) -> t.Union[float, None]:
     """
     Calculates the absolute humidity. The formula used is given below
     :param temp: temperature in degree celsius
@@ -196,6 +214,8 @@ def get_absolute_humidity(temp: float,
 
     :return float, absolute humidity in gram per cubic meter
     """
+    if temp is None or hum is None:
+        return None
     # The formula is based on ideal gas law (PV = nRT) where n = m/M and V = 1m**3
     # As we need m, we transform it to m = PVM/RT
     # Pressure of water vapor at 100% relative humidity:
@@ -208,15 +228,16 @@ def get_absolute_humidity(temp: float,
     # R = 0.08314 
     # result = (p*Mwater)/(R*(Temp+273.15))
     # Or simplified:
-
     x = 6.112 * (e ** ((17.67 * temp) / (temp + 243.5)) * hum * 2.1674) / (273.15 + temp)
     return float(round(x, precision_digit))
 
 
-def temperature_converter(temp: float,
-                          unit_in: str,
-                          unit_out: str,
-                          precision_digit: int = 2) -> float:
+def temperature_converter(
+        temp: t.Union[float, None],
+        unit_in: str,
+        unit_out: str,
+        precision_digit: int = 2
+) -> t.Union[float, None]:
     """
     :param temp: float, the temperature in Celsius degrees
     :param unit_in: str, unit among Celsius, Kelvin, Fahrenheit (with or without
@@ -227,7 +248,8 @@ def temperature_converter(temp: float,
 
     :return float, the temperature converter into the desired unit
     """
-
+    if temp is None:
+        return None
     celsius = ["c", "celsius"]
     kelvin = ["k", "kelvin"]
     fahrenheit = ["f", "fahrenheit"]
@@ -239,45 +261,56 @@ def temperature_converter(temp: float,
     elif unit_in.lower() in celsius:
         if unit_out.lower() in kelvin:
             x = temp + K
-        if unit_out.lower() in fahrenheit:
+        elif unit_out.lower() in fahrenheit:
             x = temp * (9 / 5) + 32
+        else:
+            raise ValueError(
+                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
+            )
 
     elif unit_in.lower() in kelvin:
         if unit_out.lower() in celsius:
             x = temp - K
-        if unit_out.lower() in fahrenheit:
+        elif unit_out.lower() in fahrenheit:
             x = (temp - K) * (9 / 5) + 32
+        else:
+            raise ValueError(
+                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
+            )
 
     elif unit_in.lower() in fahrenheit:
         if unit_out.lower() in celsius:
             x = (temp - 32) * (5 / 9)
-        if unit_out.lower() in kelvin:
+        elif unit_out.lower() in kelvin:
             x = (temp - 32) * (5 / 9) + K
+        else:
+            raise ValueError(
+                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
+            )
 
     else:
-        raise ValueError("This unit is not recognized")
+        raise ValueError(
+            "units must be 'celsius', 'fahrenheit' or 'kelvin'"
+        )
 
     return float(round(x, precision_digit))
 
 
 def get_coordinates(city: str) -> dict:
-    """
-    Memoize and return the geocode of the given city using geopy API. The
-    memoization step allows to reduce the number of call to the Nominatim API.
+    """Get the geocode of the given city using geopy API.
 
     :param city: str, the name of a city.
     :return: dict with the latitude and longitude of the given city.
     """
-    # if not memoized, look for coordinates
-    if city not in coordinates:
-        geolocator = geopy.geocoders.Nominatim(user_agent="EP-gaia")
-        location = geolocator.geocode(city)
-        coordinates[city] = {
+    geolocator = geopy.geocoders.Nominatim(user_agent="EP-gaia")
+    location = geolocator.geocode(city)
+    if not location:
+        raise LookupError
+    else:
+        return {
             "latitude": location.latitude,
             "longitude": location.longitude,
         }
-
-    return coordinates[city]
 
 
 def is_connected() -> bool:

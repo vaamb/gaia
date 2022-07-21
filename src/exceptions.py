@@ -2,15 +2,11 @@ class HardwareNotFound(ValueError):
     pass
 
 
-class NoSubroutineNeeded(RuntimeError):
+class StoppingEcosystem(RuntimeError):
     pass
 
 
 class StoppingSubroutine(RuntimeError):
-    pass
-
-
-class SubroutineNotFound(ValueError):
     pass
 
 

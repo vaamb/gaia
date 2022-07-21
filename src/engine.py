@@ -1,9 +1,7 @@
-from datetime import date, datetime
 from json.decoder import JSONDecodeError
 import logging
 import logging.config
 import os
-import requests
 from threading import Thread
 import typing as t
 import weakref
@@ -11,8 +9,9 @@ import weakref
 from .config_parser import config_event, detach_config, GeneralConfig, get_IDs
 from .ecosystem import Ecosystem
 from .events import Events
+from .exceptions import UndefinedParameter
 from .shared_resources import scheduler, start_scheduler
-from .utils import base_dir, json, SingletonMeta
+from .utils import json, SingletonMeta
 from .virtual import get_virtual_ecosystem
 from config import Config
 
@@ -28,25 +27,23 @@ class Engine(metaclass=SingletonMeta):
     :param general_config: a GeneralConfig object
     """
     def __init__(self, general_config: GeneralConfig) -> None:
+        self._config: GeneralConfig = weakref.proxy(general_config)
         self.logger: logging.Logger = logging.getLogger(
             f"{Config.APP_NAME.lower()}.engine"
         )
         self.logger.debug("Initializing")
-        self.ecosystems: dict[str, Ecosystem] = {}
-        self.config: GeneralConfig = weakref.proxy(general_config)
+        self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = Config.UUID
         self._run: bool = False
         self._event_handler: t.Union[Events, None] = None
-        self._last_sun_times_update = datetime(1970, 1, 1)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
 
-    # TODO: check startup without internet
     def _start_background_tasks(self) -> None:
         self.logger.debug("Starting background tasks")
         self.config.start_watchdog()
-        cache_dir = base_dir / "cache"
+        cache_dir = self.config.base_dir/"cache"
         if not cache_dir.exists():
             os.mkdir(cache_dir)
         self.refresh_sun_times()
@@ -61,50 +58,8 @@ class Engine(metaclass=SingletonMeta):
     def _stop_background_tasks(self) -> None:
         self.logger.debug("Stopping background tasks")
         self.config.stop_watchdog()
-        scheduler.remove_job("sun_times")
-
-    def _download_sun_times(self) -> None:
-        save_file = base_dir / "cache" / "sunrise.json"
-        # Determine if the file needs to be updated
-        need_update = False
-        try:
-            last_update = save_file.stat().st_mtime
-            self._last_sun_times_update = datetime.fromtimestamp(last_update)
-        except FileNotFoundError:
-            need_update = True
-        else:
-            if self._last_sun_times_update.date() == date.today():
-                self.logger.debug("Sun times already up to date")
-            else:
-                need_update = True
-        if need_update:
-            self.logger.info("Refreshing sun times")
-            latitude = self.config.home_coordinates["latitude"]
-            longitude = self.config.home_coordinates["longitude"]
-            try:
-                self.logger.debug(
-                    "Trying to update sunrise and sunset times on "
-                    "sunrise-sunset.org"
-                )
-                response = requests.get(
-                    url=f"https://api.sunrise-sunset.org/json",
-                    params={"lat": latitude, "lng": longitude},
-                    timeout=3.0
-                )
-                data = response.json()
-                results = data["results"]
-            except requests.exceptions.ConnectionError:
-                self.logger.debug(
-                    "Failed to update sunrise and sunset times"
-                )
-                raise ConnectionError
-            else:
-                with open(save_file, "w") as outfile:
-                    json.dump(results, outfile)
-                self._last_sun_times_update = datetime.now()
-                self.logger.debug(
-                    "Sunrise and sunset times successfully updated"
-                )
+        scheduler.remove_job("refresh_sun_times")
+        scheduler.remove_job("refresh_chaos")
 
     def _loop(self) -> None:
         if Config.VIRTUALIZATION:
@@ -125,6 +80,14 @@ class Engine(metaclass=SingletonMeta):
     API calls
     """
     @property
+    def ecosystems(self):
+        return self._ecosystems
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
     def ecosystems_started(self) -> set:
         return set([
             ecosystem.uid for ecosystem in self.ecosystems.values()
@@ -132,11 +95,19 @@ class Engine(metaclass=SingletonMeta):
         ])
 
     @property
-    def last_sun_times_update(self):
-        return self._last_sun_times_update
+    def event_handler(self):
+        """Return the event handler
 
-    def create_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
-        """Create an Ecosystem
+        Either a Socketio Namespace or dispatcher EventHandler
+        """
+        return self._event_handler
+
+    @event_handler.setter
+    def event_handler(self, event_handler: Events):
+        self._event_handler = event_handler
+
+    def init_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
+        """Initialize an Ecosystem
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
                              'ecosystems.cfg'
@@ -154,10 +125,10 @@ class Engine(metaclass=SingletonMeta):
                 self.start_ecosystem(ecosystem_uid)
             return ecosystem
         raise RuntimeError(
-            f"Ecosystem {ecosystem_name} already exists"
+            f"Ecosystem {ecosystem_id} already exists"
         )
 
-    def start_ecosystem(self, ecosystem_id: str) -> bool:
+    def start_ecosystem(self, ecosystem_id: str) -> None:
         """Start an Ecosystem
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -176,16 +147,16 @@ class Engine(metaclass=SingletonMeta):
                 self.logger.info(
                     f"Ecosystem {ecosystem_name} started"
                 )
-                return True
             else:
-                self.logger.debug(f"Ecosystem {ecosystem_name} " +
-                                  "has already been started")
-                return True
-        self.logger.warning(f"Ecosystem {ecosystem_name} has " +
-                            "not been created yet")
-        return False
+                raise RuntimeError(
+                    f"Ecosystem {ecosystem_id} has already been started"
+                )
+        else:
+            raise RuntimeError(
+                f"Neet to initialise Ecosystem {ecosystem_id} first"
+            )
 
-    def stop_ecosystem(self, ecosystem_id: str, dismount: bool = False) -> bool:
+    def stop_ecosystem(self, ecosystem_id: str, dismount: bool = False) -> None:
         """Stop an Ecosystem
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -197,8 +168,8 @@ class Engine(metaclass=SingletonMeta):
         ecosystem_uid, ecosystem_name = get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
-                _ecosystem = self.ecosystems[ecosystem_uid]
-                _ecosystem.stop()
+                ecosystem = self.ecosystems[ecosystem_uid]
+                ecosystem.stop()
                 if dismount:
                     self.dismount_ecosystem(ecosystem_uid)
                 self.logger.info(
@@ -206,17 +177,17 @@ class Engine(metaclass=SingletonMeta):
                 # If no more ecosystem running, stop background routines
                 if not self.ecosystems_started:
                     self._stop_background_tasks()
-                return True
         else:
-            self.logger.warning(f"Cannot stop Ecosystem {ecosystem_name} as "
-                                f"it does not exist")
-            return False
+            raise RuntimeError(
+                f"Cannot stop Ecosystem {ecosystem_id} as it has not been "
+                f"initialised"
+            )
 
     def dismount_ecosystem(
             self,
             ecosystem_id: str,
             detach_config_: bool = True
-    ) -> bool:
+    ) -> None:
         """Remove the Ecosystem from Engine's memory
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -227,23 +198,21 @@ class Engine(metaclass=SingletonMeta):
         ecosystem_id, ecosystem_name = get_IDs(ecosystem_id)
         if ecosystem_id in self.ecosystems:
             if ecosystem_id in self.ecosystems_started:
-                self.logger.error(
-                    "Cannot dismount a started Ecosystem. First need to stop it"
+                raise RuntimeError(
+                    "Cannot dismount a started Ecosystem. First stop it"
                 )
-                return False
             else:
                 del self.ecosystems[ecosystem_id]
                 if detach_config_:
                     detach_config(ecosystem_id)
                 self.logger.info(
-                    f"Ecosystem '{ecosystem_name}' has been dismounted"
+                    f"Ecosystem '{ecosystem_id}' has been dismounted"
                 )
-                return True
         else:
-            self.logger.warning(
-                f"Cannot dismount Ecosystem '{ecosystem_name}' as it does not exist"
+            raise RuntimeError(
+                f"Cannot dismount Ecosystem '{ecosystem_id}' as it has not been "
+                f"initialised"
             )
-            return False
 
     def get_ecosystem(self, ecosystem: str) -> Ecosystem:
         """Get the required Ecosystem
@@ -255,7 +224,7 @@ class Engine(metaclass=SingletonMeta):
         if ecosystem_uid in self.ecosystems:
             _ecosystem = self.ecosystems[ecosystem_uid]
         else:
-            _ecosystem = self.create_ecosystem(ecosystem_uid)
+            _ecosystem = self.init_ecosystem(ecosystem_uid)
         return _ecosystem
 
     def refresh_ecosystems(self):
@@ -265,7 +234,7 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem_uid in self.config.ecosystems_uid:
             # create the Ecosystem if it doesn't exist
             if ecosystem_uid not in self.ecosystems:
-                self.create_ecosystem(ecosystem_uid)
+                self.init_ecosystem(ecosystem_uid)
             # remove the Ecosystem from the to_delete set
             try:
                 to_delete.remove(ecosystem_uid)
@@ -299,15 +268,16 @@ class Engine(metaclass=SingletonMeta):
                 if (
                     self.ecosystems[ecosystem].config.light_method in
                     ("mimic", "elongate")
-                    and self.ecosystems[ecosystem].status
+                    # And expected to be running
+                    and self.ecosystems[ecosystem].config.status
                 ):
                     need.append(ecosystem)
-            except KeyError:
+            except UndefinedParameter:
                 # Bad configuration file
                 pass
         if any(need):
             try:
-                self._download_sun_times()
+                self.config.download_sun_times()
             except ConnectionError:
                 self.logger.error("The Engine could not download sun times")
                 for ecosystem in need:
@@ -315,7 +285,8 @@ class Engine(metaclass=SingletonMeta):
             else:
                 for ecosystem in need:
                     try:
-                        self.ecosystems[ecosystem].update_sun_times()
+                        if self.ecosystems[ecosystem].status:
+                            self.ecosystems[ecosystem].refresh_sun_times()
                     except KeyError:
                         # Occur
                         pass
@@ -325,7 +296,7 @@ class Engine(metaclass=SingletonMeta):
     def refresh_chaos(self):
         for ecosystem in self.ecosystems.values():
             ecosystem.refresh_chaos()
-        chaos_file = base_dir / "cache/chaos.json"
+        chaos_file = self.config.base_dir/"cache/chaos.json"
         try:
             with chaos_file.open("r+") as file:
                 ecosystem_chaos = json.loads(file.read())
@@ -351,7 +322,7 @@ class Engine(metaclass=SingletonMeta):
             self._thread.name = "engine"
             self._thread.start()
             self.logger.info("Engine started")
-        else:
+        else:  # pragma: no cover
             raise RuntimeError("Engine can only be started once")
 
     def stop(
@@ -380,15 +351,3 @@ class Engine(metaclass=SingletonMeta):
                     self.dismount_ecosystem(ecosystem)
 
             self.logger.info("The Engine has stopped")
-
-    @property
-    def event_handler(self):
-        """Return the event handler
-
-        Either a Socketio Namespace or dispatcher EventHandler
-        """
-        return self._event_handler
-
-    @event_handler.setter
-    def event_handler(self, event_handler: Events):
-        self._event_handler = event_handler

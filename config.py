@@ -7,7 +7,7 @@ class Config:
     VERSION = "0.5.2"
 
     DEBUG = False
-    TESTING = False
+    TESTING = True
     VIRTUALIZATION = True
 
     LOG_TO_STDOUT = True

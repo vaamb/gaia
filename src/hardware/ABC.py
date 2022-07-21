@@ -8,7 +8,7 @@ import weakref
 
 from . import _IS_RASPI
 from ..utils import (
-    base_dir, pin_bcm_to_board, pin_board_to_bcm, pin_translation
+    pin_bcm_to_board, pin_board_to_bcm, pin_translation
 )
 
 
@@ -51,11 +51,15 @@ def i2c_address_to_hex(address: str) -> int:
 
 
 class Address:
+    __slots__ = ("type", "multiplexed", "multiplexer", "number")
+
     def __init__(self, address_string: str):
         """
         :param address_string: str: address in form 'GPIO_1'
         """
         address_components = address_string.split("_")
+        if len(address_components) != 2:
+            raise ValueError
         self.type: str = address_components[0].lower()
         self.multiplexed: bool = False
         self.multiplexer: int = 0
@@ -114,7 +118,10 @@ class Hardware:
             model: str,
             **kwargs
     ) -> None:
-        self._subroutine: "SubroutineTemplate" = weakref.proxy(subroutine)
+        if subroutine == "hardware_creation":
+            self._subroutine = None
+        else:
+            self._subroutine: "SubroutineTemplate" = weakref.proxy(subroutine)
         self._uid: str = uid
         if level.lower() in ("environment", "environments"):
             self._level: str = "environment"
@@ -154,7 +161,11 @@ class Hardware:
         return self._subroutine
 
     @property
-    def address(self) -> str:
+    def address(self) -> dict[str, Address]:
+        return self._address
+
+    @property
+    def address_repr(self):
         sec = self._address.get("secondary", None)
         if sec:
             return f"{self._address['main']}:{sec}"
@@ -178,7 +189,7 @@ class Hardware:
         return {
             "uid": self._uid,
             "name": self._name,
-            "address": self._address,
+            "address": self.address_repr,
             "model": self._model,
             "type": self._type,
             "level": self._level,
@@ -196,9 +207,9 @@ class gpioHardware(Hardware):
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
-        self._pin = self._get_pin()
+        self._pin = self._get_pin(self._address["main"].number)
 
-    def _get_pin(self) -> "Pin":
+    def _get_pin(self, address) -> "Pin":
         if _IS_RASPI:
             try:
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -209,10 +220,13 @@ class gpioHardware(Hardware):
                 )
         else:
             from ._compatibility import Pin
-        return Pin(self._address["main"].number)
+        return Pin(address)
 
 
 class Switch(Hardware):
+    def __del__(self):
+        self.turn_off()
+
     def turn_on(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
@@ -235,13 +249,16 @@ class Dimmer(Hardware):
                 "being PWM-able"
             )
 
+    def __del__(self):
+        self.set_pwm_level(0)
+
     def set_pwm_level(self, level) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
 
-class gpioDimmer(Dimmer):
+class gpioDimmer(gpioHardware, Dimmer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self._address["secondary"].type in ("bcm", "board", "gpio"):  # pragma: no cover
@@ -249,7 +266,7 @@ class gpioDimmer(Dimmer):
                 "gpioDimmable address must be of type"
                 "'addressType1_addressNum1:GPIO_pinNumber'"
             )
-        self._PWMPin = Pin(self._address["secondary"].number)
+        self._PWMPin = self._get_pin(self._address["secondary"].number)
         self._dimmer = self._get_dimmer()
 
     def _get_dimmer(self) -> "pwmio.PWMOut":
@@ -276,9 +293,9 @@ class i2cHardware(Hardware):
         super().__init__(*args, **kwargs)
         if not self._address["main"].type == "i2c":  # pragma: no cover
             raise ValueError(
-                "gpioHardware address must be of type: 'I2C_default' or 'I2C_0' "
+                "i2cHardware address must be of type: 'I2C_default' or 'I2C_0' "
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
-                "to use a specific hex address"
+                "to use a specific address"
             )
 
 
@@ -350,9 +367,10 @@ class i2cSensor(BaseSensor, i2cHardware):
 class Camera(Hardware):
     def __init__(self, *args, **kwargs):
         kwargs["level"] = "environment"
-        self.folder = base_dir/f"camera/{self.subroutine._uid}"
-        if not self.folder.exists():
-            os.mkdir(self.folder)
+        base_dir = self.subroutine.config.general.base_dir
+        self.cam_dir = base_dir / f"camera/{self.subroutine.ecosystem_uid}"
+        if not self.cam_dir.exists():
+            os.mkdir(self.cam_dir)
         self.running = False
         super().__init__(*args, **kwargs)
         self.ecosystem_uid = self.subroutine.config.uid

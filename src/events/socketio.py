@@ -5,7 +5,7 @@ from socketio import exceptions
 from socketio.client import reconnecting_clients
 
 from . import Events, logger
-from ..ecosystem import Ecosystem
+from src.ecosystem import Ecosystem
 
 
 class RetryClient(socketio.Client):

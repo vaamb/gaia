@@ -5,7 +5,7 @@ from .sensors import Sensors
 from .template import SubroutineTemplate
 
 
-SUBROUTINES: dict[str, SubroutineTemplate] = {
+SUBROUTINES: dict[str, type(SubroutineTemplate)] = {
     subroutine.__name__.lower(): subroutine for subroutine in [
         Sensors,
         Light,
