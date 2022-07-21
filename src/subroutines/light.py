@@ -137,6 +137,9 @@ class Light(SubroutineTemplate):
                     ecosystem_uids=(self._uid, )
                 )
             except Exception as e:
+                msg = e.args[1] if len(e.args) > 1 else e.args[0]
+                if "is not a connected namespace" in msg:
+                    return  # TODO: find a way to catch if many errors
                 self.logger.error(
                     f"Encountered an error while sending light data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
@@ -183,6 +186,9 @@ class Light(SubroutineTemplate):
                     ecosystem_uids=self.config.uid
                 )
             except Exception as e:
+                msg = e.args[1] if len(e.args) > 1 else e.args[0]
+                if "is not a connected namespace" in msg:
+                    return
                 self.logger.error(
                     f"Encountered an error while sending light data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"

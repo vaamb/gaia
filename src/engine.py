@@ -61,11 +61,13 @@ class Engine(metaclass=SingletonMeta):
         scheduler.remove_job("refresh_sun_times")
         scheduler.remove_job("refresh_chaos")
 
-    def _loop(self) -> None:
+    def _engine_startup(self) -> None:
         if Config.VIRTUALIZATION:
             for ecosystem_uid in self.config.ecosystems_uid:
                 get_virtual_ecosystem(ecosystem_uid, start=True)
         self.refresh_ecosystems()
+
+    def _loop(self) -> None:
         while self._run:
             with config_event:
                 config_event.wait()
@@ -308,7 +310,7 @@ class Engine(metaclass=SingletonMeta):
         except (FileNotFoundError, JSONDecodeError):  # Empty or absent file
             pass
 
-    def start(self) -> None:
+    def start(self, wait=False) -> None:
         """Start the Engine
 
         When started, the Engine will automatically manage the Ecosystems based
@@ -317,10 +319,11 @@ class Engine(metaclass=SingletonMeta):
         """
         if not self._run:
             self.logger.info("Starting the Engine ...")
-            self._run = True
+            self._engine_startup()
             self._thread = Thread(target=self._loop)
             self._thread.name = "engine"
             self._thread.start()
+            self._run = True
             self.logger.info("Engine started")
         else:  # pragma: no cover
             raise RuntimeError("Engine can only be started once")
