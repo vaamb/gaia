@@ -22,7 +22,7 @@ class RetryClient(socketio.Client):
     def __init__(self, *args, **kwargs):
         logger.debug("Starting socketIO client")
         super().__init__(*args, **kwargs)
-        is_socketio = True  # Used by Gaia to choose the sleep method
+        self.is_socketio = True  # Used by Gaia to choose the sleep method
 
     def connect(self, *args, **kwargs) -> None:
         logger.info("Attempting to connect to the server")

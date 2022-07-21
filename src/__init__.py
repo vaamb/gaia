@@ -54,6 +54,7 @@ class Gaia:
                     f"Encountered an exception while trying {func.__name__}."
                     f"Error msg: `{e.__class__.__name__}: {e}`"
                 )
+        self.logger.info("Initialising the message broker")
         if server == "socketio":
             from events.socketio import (
                 BadNamespaceError, gaiaNamespace, RetryClient
@@ -108,17 +109,21 @@ class Gaia:
         )
 
     def _connect_to_ouranos(self) -> None:
-        def thread_func():
-            self.logger.info("Starting socketIO client")
-            server_url = f"http{url[url.index('://'):]}"
-            self.message_broker.connect(
-                server_url, transports="websocket", namespaces=['/gaia']
-            )
-        self._thread = threading.Thread(target=thread_func)
-        self._thread.name = "socketio.connection"
-        self._thread.start()
+        if hasattr(self.message_broker, "is_socketio"):
+            def thread_func():
+                self.logger.info("Starting socketIO client")
+                server_url = f"http{url[url.index('://'):]}"
+                self.message_broker.connect(
+                    server_url, transports="websocket", namespaces=['/gaia']
+                )
+            self._thread = threading.Thread(target=thread_func)
+            self._thread.name = "socketio.connection"
+            self._thread.start()
+        else:
+            self.message_broker.start()
 
     def _init_database(self) -> None:
+        self.logger.info("Initialising the database")
         from database import models, routines, SQLAlchemyWrapper
         self.db = SQLAlchemyWrapper(Config)
         self.db.create_all()
