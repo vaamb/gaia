@@ -42,6 +42,11 @@ def test_save_reload(general_config: GeneralConfig):
     assert general_config.private_config == private_config
 
 
+def test_download_sun_times(general_config: GeneralConfig):
+    # general_config.download_sun_times()
+    pass
+
+
 def test_properties(temp_dir, general_config: GeneralConfig):
     assert str(general_config.base_dir) == str(temp_dir)
     assert general_config.ecosystems_uid == [ECOSYSTEM_UID]
@@ -53,6 +58,8 @@ def test_properties(temp_dir, general_config: GeneralConfig):
     assert general_config.get_ecosystems_expected_running() == \
            {ECOSYSTEM_UID}
     general_config.ecosystems_config[ECOSYSTEM_UID]["status"] = status
+    with pytest.raises(UndefinedParameter):
+        general_config.sun_times
 
 
 def test_get_IDs():

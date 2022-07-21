@@ -326,7 +326,7 @@ class Engine(metaclass=SingletonMeta):
                 pass
         if any(need):
             try:
-                self._download_sun_times()
+                self.config.download_sun_times()
             except ConnectionError:
                 self.logger.error("The Engine could not download sun times")
                 for ecosystem in need:

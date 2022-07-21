@@ -1,10 +1,12 @@
 from collections import namedtuple
 from contextlib import contextmanager
-from datetime import datetime, time
-import json
+from datetime import date, datetime, time
+from json.decoder import JSONDecodeError
 import logging
+import os
 import pathlib
 import random
+import requests
 import string
 from threading import Condition, Event, Lock, Thread
 from typing import Union
@@ -16,7 +18,7 @@ from .hardware.ABC import Hardware
 from .subroutines import SUBROUTINES
 from .utils import (
     base_dir, file_hash, get_coordinates, human_time_parser, is_connected,
-    SingletonMeta, utc_time_to_local_time, yaml
+    json, SingletonMeta, utc_time_to_local_time, yaml
 )
 from config import Config
 
@@ -64,6 +66,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._base_dir = pathlib.Path(base_dir)
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
+        self._last_sun_times_update: datetime = datetime.now()
         self._hash_dict = {}
         self._stop_event = Event()
         self._watchdog_pause = Event()
@@ -230,6 +233,10 @@ class GeneralConfig(metaclass=SingletonMeta):
         return self._base_dir
 
     @property
+    def last_sun_times_update(self) -> datetime:
+        return self._last_sun_times_update
+
+    @property
     def ecosystems_uid(self) -> list:
         return [i for i in self._ecosystems_config.keys()]
 
@@ -309,6 +316,91 @@ class GeneralConfig(metaclass=SingletonMeta):
             self._private_config["places"]["home"] = {}
         coordinates = {"latitude": value[0], "longitude": value[1]}
         self._private_config["places"]["home"]["coordinates"] = coordinates
+
+    @property
+    def sun_times(self) -> dict:
+        try:
+            with open(self.base_dir/"cache/sunrise.json", "r") as file:
+                payload = json.load(file)
+                sunrise = payload["data"]["home"]
+        except (IOError, JSONDecodeError, KeyError):
+            raise UndefinedParameter
+
+        def import_daytime_event(daytime_event: str) -> time:
+            try:
+                my_time = datetime.strptime(
+                    sunrise[daytime_event], "%I:%M:%S %p").time()
+                local_time = utc_time_to_local_time(my_time)
+                return local_time
+            except Exception:
+                raise UndefinedParameter
+        return {
+            "twilight_begin": import_daytime_event("civil_twilight_begin"),
+            "sunrise": import_daytime_event("sunrise"),
+            "sunset": import_daytime_event("sunset"),
+            "twilight_end": import_daytime_event("civil_twilight_end"),
+        }
+
+    def download_sun_times(self) -> None:
+        cache_file = self.base_dir/"cache"
+        if not cache_file.exists():
+            os.mkdir(cache_file)
+        sun_times_file = cache_file/"sunrise.json"
+        # Determine if the file needs to be updated
+        need_update = False
+        try:
+            with sun_times_file.open("r") as file:
+                sun_times_data = json.loads(file.read())
+                last_update: str = sun_times_data["last_update"]
+                self._last_sun_times_update: datetime = \
+                    datetime.fromisoformat(last_update).astimezone()
+        except (FileNotFoundError, JSONDecodeError):
+            need_update = True
+        else:
+            if self._last_sun_times_update.date() < date.today():
+                need_update = True
+            else:
+                logger.debug("Sun times already up to date")
+        if need_update:
+            logger.info("Refreshing sun times")
+            try:
+                home_coordinates = self.home_coordinates
+            except UndefinedParameter:
+                logger.error(
+                    "You need to define your home city coordinates in "
+                    "'private.cfg' in order to update sun times."
+                )
+            else:
+                latitude = home_coordinates["latitude"]
+                longitude = home_coordinates["longitude"]
+                try:
+                    logger.debug(
+                        "Trying to update sunrise and sunset times on "
+                        "sunrise-sunset.org"
+                    )
+                    response = requests.get(
+                        url=f"https://api.sunrise-sunset.org/json",
+                        params={"lat": latitude, "lng": longitude},
+                        timeout=3.0
+                    )
+                    data = response.json()
+                    results = data["results"]
+                except requests.exceptions.ConnectionError:
+                    logger.debug(
+                        "Failed to update sunrise and sunset times"
+                    )
+                    raise ConnectionError
+                else:
+                    self._last_sun_times_update = datetime.now()
+                    payload = {
+                        "last_update": self._last_sun_times_update,
+                        "data": {"home": results},
+                    }
+                    with open(sun_times_file, "w") as file:
+                        json.dump(payload, file)
+                    logger.info(
+                        "Sunrise and sunset times successfully updated"
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -604,27 +696,7 @@ class SpecificConfig:
 
     @property
     def sun_times(self) -> dict:
-        try:
-            with open(self._general_config.base_dir/"cache/sunrise.json", "r") as file:
-                payload = json.load(file)
-                sunrise = payload["data"]["home"]
-        except (IOError, json.decoder.JSONDecodeError, KeyError):
-            raise UndefinedParameter
-
-        def import_daytime_event(daytime_event: str) -> time:
-            try:
-                my_time = datetime.strptime(
-                    sunrise[daytime_event], "%I:%M:%S %p").time()
-                local_time = utc_time_to_local_time(my_time)
-                return local_time
-            except Exception:
-                raise UndefinedParameter
-        return {
-            "twilight_begin": import_daytime_event("civil_twilight_begin"),
-            "sunrise": import_daytime_event("sunrise"),
-            "sunset": import_daytime_event("sunset"),
-            "twilight_end": import_daytime_event("civil_twilight_end"),
-        }
+        return self.general.sun_times
 
 
 # ---------------------------------------------------------------------------
