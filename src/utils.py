@@ -10,6 +10,7 @@ import pathlib
 import platform
 import secrets
 import socket
+import typing as t
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
@@ -174,9 +175,11 @@ def pin_translation(pin: int, direction: str) -> int:
         return pin_bcm_to_board[pin]
 
 
-def get_dew_point(temp: float,
-                  hum: float,
-                  precision_digit: int = 2) -> float:
+def get_dew_point(
+        temp: t.Union[float, None],
+        hum: t.Union[float, None],
+        precision_digit: int = 2
+) -> t.Union[float, None]:
     """
     Returns the dew point temperature calculated using the Magnus formula.
     It uses the Sonntag1990 parameters which is valid from -45°C to 60°C
@@ -187,6 +190,8 @@ def get_dew_point(temp: float,
 
     :return float, dew point temperature in celsius
     """
+    if temp is None or hum is None:
+        return None
 
     b = 17.62
     c = 243.12
@@ -196,9 +201,11 @@ def get_dew_point(temp: float,
     return float(round(Tdp, precision_digit))
 
 
-def get_absolute_humidity(temp: float,
-                          hum: float,
-                          precision_digit: int = 2) -> float:
+def get_absolute_humidity(
+        temp: t.Union[float, None],
+        hum: t.Union[float, None],
+        precision_digit: int = 2
+) -> t.Union[float, None]:
     """
     Calculates the absolute humidity. The formula used is given below
     :param temp: temperature in degree celsius
@@ -207,6 +214,8 @@ def get_absolute_humidity(temp: float,
 
     :return float, absolute humidity in gram per cubic meter
     """
+    if temp is None or hum is None:
+        return None
     # The formula is based on ideal gas law (PV = nRT) where n = m/M and V = 1m**3
     # As we need m, we transform it to m = PVM/RT
     # Pressure of water vapor at 100% relative humidity:
@@ -219,15 +228,16 @@ def get_absolute_humidity(temp: float,
     # R = 0.08314 
     # result = (p*Mwater)/(R*(Temp+273.15))
     # Or simplified:
-
     x = 6.112 * (e ** ((17.67 * temp) / (temp + 243.5)) * hum * 2.1674) / (273.15 + temp)
     return float(round(x, precision_digit))
 
 
-def temperature_converter(temp: float,
-                          unit_in: str,
-                          unit_out: str,
-                          precision_digit: int = 2) -> float:
+def temperature_converter(
+        temp: t.Union[float, None],
+        unit_in: str,
+        unit_out: str,
+        precision_digit: int = 2
+) -> t.Union[float, None]:
     """
     :param temp: float, the temperature in Celsius degrees
     :param unit_in: str, unit among Celsius, Kelvin, Fahrenheit (with or without
@@ -238,7 +248,8 @@ def temperature_converter(temp: float,
 
     :return float, the temperature converter into the desired unit
     """
-
+    if temp is None:
+        return None
     celsius = ["c", "celsius"]
     kelvin = ["k", "kelvin"]
     fahrenheit = ["f", "fahrenheit"]
