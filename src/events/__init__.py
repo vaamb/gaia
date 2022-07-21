@@ -83,7 +83,7 @@ class Events:
         for uid in uids:
             data = getattr(self.ecosystems[uid], config_type)
             if data:
-                data.reload({"uid": uid})
+                data.upload({"uid": uid})
                 rv.append(data)
         self.emit(config_type, rv)
 
