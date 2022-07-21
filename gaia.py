@@ -32,7 +32,7 @@ if __name__ == "__main__":
     configure_logging(Config)
     gaia = Gaia(
         connect_to_ouranos=variables["socketio"],
-        use_db=variables["db"],
+        use_database=variables["db"],
     )
     try:
         gaia.start()
