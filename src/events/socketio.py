@@ -1,7 +1,14 @@
+try:
+    import socketio
+except ImportError:
+    raise RuntimeError(
+        "Python-socketio is required to use socketio. Run "
+        "`pip install python-socketio` in your virtual env"
+    )
+
 import random
 
-import socketio
-from socketio import exceptions
+from socketio.exceptions import BadNamespaceError
 from socketio.client import reconnecting_clients
 
 from . import Events, logger

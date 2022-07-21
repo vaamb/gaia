@@ -1,7 +1,6 @@
 from time import sleep
 import logging
 
-from dispatcher import KOMBU_SUPPORTED
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import Config
@@ -9,6 +8,13 @@ from src.config_parser import GeneralConfig
 from src.engine import Engine
 from src.utils import json
 
+
+_KOMBU_SUPPORTED = (
+    "amqp", "amqps", "pyamqp", "librabbitmq", "memory", "redis", "rediss",
+    "SQS", "sqs", "mongodb", "zookeeper", "sqlalchemy", "sqla", "SLMQ", "slmq",
+    "filesystem", "qpid", "sentinel", "consul", "etcd", "azurestoragequeues",
+    "azureservicebus", "pyro"
+)
 
 scheduler = BackgroundScheduler()
 
@@ -43,14 +49,9 @@ class Gaia:
                 url = Config.MESSAGE_BROKER_URL or "socketio://127.0.0.1:5000"
                 server = url[:url.index("://")]
                 if server == "socketio":
-                    try:
-                        import socketio
-                    except ImportError:
-                        raise RuntimeError(
-                            "Install 'socketio' package to use socketio"
-                        )
-                    from socketio.exceptions import BadNamespaceError
-                    from events.socketio import gaiaNamespace, RetryClient
+                    from events.socketio import (
+                        BadNamespaceError, gaiaNamespace, RetryClient
+                    )
                     server_url = f"http{url[url.index('://'):]}"
                     self.logger.info("Starting socketIO client")
                     self.message_broker = RetryClient(json=json, logger=Config.DEBUG)
@@ -77,9 +78,8 @@ class Gaia:
                                 f"Error msg: `{e.__class__.__name__}: {e}`"
                             )
 
-                elif server in KOMBU_SUPPORTED:
-                    from dispatcher import get_dispatcher
-                    from events.dispatcher import gaiaEvents
+                elif server in _KOMBU_SUPPORTED:
+                    from events.dispatcher import gaiaEvents, get_dispatcher
                     self.logger.info("Starting dispatcher")
                     self.message_broker = get_dispatcher("gaia", Config)
                     events_handler = gaiaEvents(self.engine.ecosystems)
