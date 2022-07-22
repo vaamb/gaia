@@ -50,15 +50,21 @@ class Gaia:
             try:
                 func()
             except Exception as e:
-                self.logger.error(
-                    f"Encountered an exception while trying {func.__name__}."
-                    f"Error msg: `{e.__class__.__name__}: {e}`"
+                log_msg = (
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
                 )
+                ex_msg = e.args[1] if len(e.args) > 1 else e.args[0]
+                # If socketio error when not connected, log to debug
+                if "is not a connected namespace" in ex_msg:
+                    self.logger.debug(log_msg)
+                else:
+                    self.logger.error(log_msg)
+
         self.logger.info("Initialising the message broker")
+
         if server == "socketio":
-            from events.socketio import (
-                BadNamespaceError, gaiaNamespace, RetryClient
-            )
+            from events.socketio import gaiaNamespace, RetryClient
             self.message_broker = RetryClient(json=json, logger=Config.DEBUG)
             namespace = gaiaNamespace(
                 ecosystem_dict=self.engine.ecosystems, namespace="/gaia"
@@ -66,30 +72,18 @@ class Gaia:
             self.message_broker.register_namespace(namespace)
             events_handler = self.message_broker.namespace_handlers["/gaia"]
 
-            def try_func(func):
-                try:
-                    func()
-                except BadNamespaceError as e:  # Most of the time: not connected
-                    self.logger.debug(
-                        f"Encountered an exception while trying {func.__name__}."
-                        f"Error msg: `{e.__class__.__name__}: {e}`"
-                    )
-                except Exception as e:
-                    self.logger.error(
-                        f"Encountered an exception while trying {func.__name__}."
-                        f"Error msg: `{e.__class__.__name__}: {e}`"
-                    )
-
         elif server in _KOMBU_SUPPORTED:
             from events.dispatcher import gaiaEvents, get_dispatcher
             self.logger.info("Starting dispatcher")
             self.message_broker = get_dispatcher("gaia", Config)
             events_handler = gaiaEvents(self.engine.ecosystems)
             self.message_broker.register_event_handler(events_handler)
+
         else:
             raise RuntimeError(
                 f"{server} is not supported"
             )
+
         self.engine.event_handler = events_handler
         # Schedule jobs
         scheduler.add_job(
@@ -159,5 +153,9 @@ class Gaia:
         if self.started:
             self.logger.info("Stopping")
             self.engine.stop()
-            self.message_broker.disconnect()
+            if self.connect_to_ouranos:
+                if hasattr(self.message_broker, "is_socketio"):
+                    self.message_broker.disconnect()
+                else:
+                    self.message_broker.stop()
             self.started = False

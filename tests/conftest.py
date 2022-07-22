@@ -7,7 +7,6 @@ from src.config_parser import GeneralConfig, SpecificConfig
 from src.ecosystem import Ecosystem
 from src.engine import Engine
 from src.subroutines import Climate, Light, Sensors
-from src.utils import SingletonMeta
 from config import Config
 
 
@@ -37,7 +36,7 @@ def specific_config(general_config):
     yield config
 
 
-@pytest.fixture(scope="session")  # Actually singleton
+@pytest.fixture(scope="session")
 def engine(general_config):
     engine = Engine(general_config)
     yield engine
