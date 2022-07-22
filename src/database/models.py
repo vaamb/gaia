@@ -11,7 +11,7 @@ class SensorHistory(base):
     id = sa.Column(sa.Integer, autoincrement=True, nullable=False, primary_key=True)
     sensor_uid = sa.Column(sa.String(length=16), nullable=False)
     ecosystem_uid = sa.Column(sa.String(length=8), nullable=False)
-    measure = sa.Column(sa.Integer, nullable=False)
+    measure = sa.Column(sa.String(length=16), nullable=False)
     datetime = sa.Column(sa.DateTime, nullable=False)
     value = sa.Column(sa.Float(precision=2), nullable=False)
 
@@ -20,3 +20,13 @@ class SensorHistory(base):
             "measure", "datetime", "value", "ecosystem_uid", "sensor_uid",
             name="_no_repost_constraint"),
     )
+
+    @property
+    def dict_repr(self) -> dict:
+        return {
+            "sensor_uid": self.sensor_uid,
+            "ecosystem_uid": self.ecosystem_uid,
+            "measure": self.measure,
+            "datetime": self.datetime,
+            "value": self.value,
+        }

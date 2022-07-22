@@ -86,9 +86,15 @@ class SQLAlchemyWrapper:
             self._engines[bind] = engine
         return engine
 
-    @property
+    @contextmanager
     def scoped_session(self):
-        return self._session
+        try:
+            yield self._session()
+        except Exception as e:
+            self._session.rollback()
+            raise e
+        finally:
+            self._session.remove()
 
     def get_binds_mapping(self) -> dict:
         binds = [None] + list(self._config.get("DATABASE_BINDS", ()))
@@ -114,4 +120,4 @@ class SQLAlchemyWrapper:
             self.Model.metadata.drop_all(bind=engine, tables=tables)
 
     def close(self):
-        return self.session.remove()
+        return self._session.remove()

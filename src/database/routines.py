@@ -1,3 +1,4 @@
+from datetime import timezone
 import typing as t
 
 from .models import SensorHistory
@@ -24,6 +25,7 @@ def log_sensors_data(scoped_session: "scoped_session", engine: "Engine"):
             sensors_data = ecosystem.sensors_data
             if sensors_data:
                 measurement_time: datetime = sensors_data["datetime"]
+                measurement_time = measurement_time.astimezone(timezone.utc)
                 if measurement_time.minute // sensors_logging_period == 0:
                     for sensor in sensors_data["data"]:
                         sensor_uid = sensor["sensor_uid"]
