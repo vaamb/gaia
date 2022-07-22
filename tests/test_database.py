@@ -8,7 +8,8 @@ from config import Config
 
 
 @pytest.fixture
-def db():
+def db(temp_dir):
+    Config.BASE_DIR = temp_dir
     db = SQLAlchemyWrapper(Config)
     db.create_all()
     yield db

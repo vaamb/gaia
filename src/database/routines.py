@@ -26,7 +26,7 @@ def log_sensors_data(scoped_session: "scoped_session", engine: "Engine"):
             if sensors_data:
                 measurement_time: datetime = sensors_data["datetime"]
                 measurement_time = measurement_time.astimezone(timezone.utc)
-                if measurement_time.minute // sensors_logging_period == 0:
+                if measurement_time.minute % sensors_logging_period == 0:
                     for sensor in sensors_data["data"]:
                         sensor_uid = sensor["sensor_uid"]
                         for measure in sensor["measures"]:
@@ -39,4 +39,3 @@ def log_sensors_data(scoped_session: "scoped_session", engine: "Engine"):
                             )
                             session.add(data_point)
         session.commit()
-    scoped_session.remove()
