@@ -13,7 +13,7 @@ if t.TYPE_CHECKING:
     from src.subroutines import Light
 
 
-TEST_ADDRESS = "I2C_0x20.default:GPIO_18"
+TEST_ADDRESS = "I2C_0x70#1.default:GPIO_18"
 I2C_ADDRESS = "I2C_default"
 GPIO_ADDRESS = "GPIO_4:BOARD_12"
 

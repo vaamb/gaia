@@ -1,7 +1,8 @@
 import typing as t
 
 from .ABC import BaseSensor
-from .sensors import DHTSensor, VEML7700, CapacitiveMoisture
+from .GPIO_sensors import DHTSensor
+from .I2C_sensors import VEML7700, CapacitiveMoisture
 from config import Config
 
 

@@ -7,6 +7,7 @@ import weakref
 
 
 from . import _IS_RASPI
+from . multiplexers import get_i2c, get_multiplexer, TCA9548A
 from ..utils import (
     pin_bcm_to_board, pin_board_to_bcm, pin_translation
 )
@@ -23,35 +24,15 @@ if t.TYPE_CHECKING and 0:  # pragma: no cover
 
 sensorLogger = logging.getLogger("engine.hardware_lib")
 
-_store = {}
 
-
-def get_i2c():
-    try:
-        return _store["I2C"]
-    except KeyError:
-        if _IS_RASPI:
-            try:
-                from adafruit_blinka import board, busio
-            except ImportError:
-                raise RuntimeError(
-                    "Adafruit blinka package is required. Run `pip install "
-                    "adafruit-blinka` in your virtual env`."
-                )
-        else:
-            from ._compatibility import board, busio
-        _store["I2C"] = busio.I2C(board.SCL, board.SDA)
-        return _store["I2C"]
-
-
-def i2c_address_to_hex(address: str) -> int:
+def str_to_hex(address: str) -> int:
     if address.lower() in ("def", "default"):
         return 0
     return int(address, base=16)
 
 
 class Address:
-    __slots__ = ("type", "multiplexed", "multiplexer", "number")
+    __slots__ = ("type", "main", "multiplexer", "multiplexer_channel")
 
     def __init__(self, address_string: str):
         """
@@ -61,9 +42,9 @@ class Address:
         if len(address_components) != 2:
             raise ValueError
         self.type: str = address_components[0].lower()
-        self.multiplexed: bool = False
+        self.main: int = 0
         self.multiplexer: int = 0
-        self.number: int = 0
+        self.multiplexer_channel: int = 0
         self._set_number(address_components[1])
 
     def __repr__(self):
@@ -71,10 +52,13 @@ class Address:
             rep_f = hex
         else:
             rep_f = int
-        if self.multiplexed:
-            return f"{self.type.upper()}_{rep_f(self.multiplexer)}.{rep_f(self.number)}"
+        if self.multiplexer:
+            return (
+                f"{self.type.upper()}_{rep_f(self.multiplexer)}#"
+                f"{self.multiplexer_channel}.{rep_f(self.main)}"
+            )
         else:
-            return f"{self.type.upper()}_{rep_f(self.number)}"
+            return f"{self.type.upper()}_{rep_f(self.main)}"
 
     def _set_number(self, str_number: str):
         if self.type.lower() in ("board", "bcm", "gpio"):
@@ -82,19 +66,24 @@ class Address:
             if self.type.lower() == "board":
                 if number not in pin_board_to_bcm:  # pragma: no cover
                     raise ValueError("The pin is not a valid GPIO pin")
-                self.number = pin_translation(number, "to_BCM")
+                self.main = pin_translation(number, "to_BCM")
             else:
                 if number not in pin_bcm_to_board:  # pragma: no cover
                     raise ValueError("The pin is not a valid GPIO pin")
-                self.number = number
+                self.main = number
         elif self.type.lower() == "i2c":
-            numbers = str_number.split(".")
-            if len(numbers) > 1:
-                self.multiplexed = True
-                self.multiplexer = i2c_address_to_hex(numbers[0])
-                self.number = i2c_address_to_hex(numbers[1])
+            i2c_components = str_number.split(".")
+            if len(i2c_components) > 1:
+                self.main = str_to_hex(i2c_components[1])
+                multiplexer_components = i2c_components[0].split("#")
+                self.multiplexer = str_to_hex(multiplexer_components[0])
+                self.multiplexer_channel = str_to_hex(multiplexer_components[1])
             else:
-                self.number = i2c_address_to_hex(numbers[0])
+                self.main = str_to_hex(i2c_components[0])
+
+    @property
+    def is_multiplexed(self):
+        return self.multiplexer is not 0
 
 
 class Hardware:
@@ -207,7 +196,7 @@ class gpioHardware(Hardware):
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
-        self._pin = self._get_pin(self._address["main"].number)
+        self._pin = self._get_pin(self._address["main"].main)
 
     def _get_pin(self, address) -> "Pin":
         if _IS_RASPI:
@@ -266,7 +255,7 @@ class gpioDimmer(gpioHardware, Dimmer):
                 "gpioDimmable address must be of type"
                 "'addressType1_addressNum1:GPIO_pinNumber'"
             )
-        self._PWMPin = self._get_pin(self._address["secondary"].number)
+        self._PWMPin = self._get_pin(self._address["secondary"].main)
         self._dimmer = self._get_dimmer()
 
     def _get_dimmer(self) -> "pwmio.PWMOut":
@@ -297,6 +286,15 @@ class i2cHardware(Hardware):
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
                 "to use a specific address"
             )
+
+    def _get_i2c(self, address: str = "main"):
+        if self.address[address].is_multiplexed:
+            multiplexer_address = self.address[address].multiplexer
+            multiplexer_channel = self.address[address].multiplexer_channel
+            multiplexer = get_multiplexer(multiplexer_address)
+            return multiplexer.get_channel(multiplexer_channel)
+        else:
+            return get_i2c()
 
 
 class PlantLevelHardware(Hardware):
