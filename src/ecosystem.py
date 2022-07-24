@@ -164,6 +164,12 @@ class Ecosystem:
                 self.logger.info("No subroutine are running, stopping the Ecosystem")
                 self.stop()
 
+    def get_subroutine_status(self, subroutine_name: str) -> bool:
+        try:
+            return self.subroutines[subroutine_name].status
+        except KeyError:
+            return False
+
     def refresh_chaos(self):
         try:
             values = self.config.chaos
@@ -225,10 +231,11 @@ class Ecosystem:
         """
         try:
             if actuator.lower() == "light":
-                light_subroutine: "Light" = self.subroutines["light"]
-                light_subroutine.turn_light(
-                    mode=mode, countdown=countdown
-                )
+                if self.get_subroutine_status("light"):
+                    light_subroutine: "Light" = self.subroutines["light"]
+                    light_subroutine.turn_light(
+                        mode=mode, countdown=countdown
+                    )
             else:
                 raise ValueError
         except RuntimeError:
@@ -240,67 +247,47 @@ class Ecosystem:
     # Sensors
     @property
     def sensors_data(self) -> dict:
-        try:
+        if self.get_subroutine_status("sensors"):
             sensors_subroutine: "Sensors" = self.subroutines["sensors"]
-        except KeyError:
-            return {}
-        if sensors_subroutine.status:
             return sensors_subroutine.sensors_data
         return {}
 
     # Light
     @property
     def light_info(self) -> dict:
-        try:
+        if self.get_subroutine_status("light"):
             light_subroutine: "Light" = self.subroutines["light"]
-        except KeyError:
-            return {}
-        if light_subroutine.status:
             return light_subroutine.light_info
         return {}
 
     def refresh_sun_times(self, send=False) -> None:
-        def raise_error():
-            raise RuntimeError(
+        if self.get_subroutine_status("light"):
+            self.logger.debug("Updating sun times")
+            light_subroutine: "Light" = self.subroutines["light"]
+            light_subroutine.refresh_sun_times(send=send)
+        else:
+            RuntimeError(
                 "Cannot update sun times as the light subroutine is not "
                 "currently running"
             )
-        self.logger.debug("Updating sun times")
-        try:
-            light_subroutine: "Light" = self.subroutines["light"]
-        except KeyError:
-            raise_error()
-        if light_subroutine.status:
-            light_subroutine.refresh_sun_times(send=send)
-        else:
-            raise_error()
 
     # Health
     @property
     def plants_health(self) -> dict:
-        try:
+        if self.get_subroutine_status("health"):
             health_subroutine: "Health" = self.subroutines["health"]
-        except KeyError:
-            return {}
-        if health_subroutine.status:
             return health_subroutine.plants_health
         return {}
 
     # Climate
     def climate_parameters_regulated(self) -> t.Set[str]:
-        try:
+        if self.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.subroutines["climate"]
-        except KeyError:
-            return set()
-        if climate_subroutine.status:
             return climate_subroutine.regulated
         return set()
 
     def climate_targets(self) -> dict[str, t.Union[float, int]]:
-        try:
+        if self.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.subroutines["climate"]
-        except KeyError:
-            return {}
-        if climate_subroutine.status:
             return climate_subroutine.targets
         return {}

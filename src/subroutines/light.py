@@ -118,12 +118,9 @@ class Light(SubroutineTemplate):
         else:
             raise StoppingSubroutine
 
-        if (
-                self.config.get_management("climate") and
-                self.ecosystem.subroutines.get("climate", False)
-        ):
+        if self.ecosystem.get_subroutine_status("climate"):
+            climate_subroutine: Climate = self.ecosystem.subroutines["climate"]
             try:
-                climate_subroutine: Climate = self.ecosystem.subroutines["climate"]
                 climate_subroutine.update_time_parameters()
             except Exception as e:
                 self.logger.error(
@@ -197,19 +194,19 @@ class Light(SubroutineTemplate):
 
     # TODO: add a second loop for light level, only used if light is on and dimmable
     def _light_level_loop(self) -> None:
-        sensor_subroutine: "Sensors" = self.ecosystem.subroutines.get("sensors", None)
-        light_sensors = []
-        if sensor_subroutine:
-            for sensor in sensor_subroutine.hardware.values():
-                if sensor.model in I2C_LIGHT_SENSORS:
-                    light_sensors.append(sensor)
-        while not self._adjust_light_level_event.is_set():
-            light_level = []
-            for light_sensor in light_sensors:
-                light_level.append(light_sensor._get_lux())
-            mean_light = mean(light_level)
-            self._light_level_routine(mean_light)
-            self._adjust_light_level_event.wait(1)
+        if self.ecosystem.get_subroutine_status("sensors"):
+            sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
+            light_sensors = [
+                sensor for sensor in sensors_subroutine.hardware.values()
+                if sensor.model in I2C_LIGHT_SENSORS
+            ]
+            while not self._adjust_light_level_event.is_set():
+                light_level = []
+                for light_sensor in light_sensors:
+                    light_level.append(light_sensor._get_lux())
+                mean_light = mean(light_level)
+                self._light_level_routine(mean_light)
+                self._adjust_light_level_event.wait(1)
 
     def _light_level_routine(self, light_level) -> None:
         pass

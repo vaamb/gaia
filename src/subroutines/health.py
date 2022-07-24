@@ -33,14 +33,7 @@ class Health(SubroutineTemplate):
         scheduler.remove_job(f"{self._ecosystem_name}-health")
         self.logger.info("The tasks scheduler was closed properly")
 
-    def _health_routine(self):
-        # If webcam: turn it off and restart after
-        light_subroutine: "Light" = self.ecosystem.subroutines["light"]
-        light_mode = light_subroutine.mode
-        light_status = light_subroutine.light_status
-        # webcam = self.
-        if light_subroutine.status:
-            light_subroutine.turn_light("on")
+    def _take_picture(self):
         try:
             self.logger.info(f"Taking picture of {self._ecosystem_name}")
             self.take_picture()
@@ -52,7 +45,37 @@ class Health(SubroutineTemplate):
                 f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
 
-        if light_subroutine.status:
+    def _analyse_picture(self):
+        self.logger.info(f"Starting analysis of {self._ecosystem} image")
+        # If got an image, analyse it
+        if self._imageIO.getbuffer().nbytes:
+            import random
+            green = random.randrange(12000, 1500000, 1000)
+            necrosis = random.uniform(5, 55)
+            health_index = random.uniform(70, 97)
+            self._plants_health = {
+                "datetime": datetime.datetime.now().replace(microsecond=0),
+                "data": {
+                    "green": green,
+                    "necrosis": round(necrosis, 2),
+                    "index": round(health_index, 2),
+                },
+            }
+            self.logger.info(f"{self._ecosystem} picture successfully analysed, "
+                             f"indexes computed")
+        else:
+            # TODO: change Exception
+            raise Exception
+
+    def _health_routine(self):
+        # If webcam: turn it off and restart after
+        light_running = self.ecosystem.get_subroutine_status("light")
+        if light_running:
+            light_subroutine: "Light" = self.ecosystem.subroutines["light"]
+            light_mode = light_subroutine.mode
+            light_status = light_subroutine.light_status
+            light_subroutine.turn_light("on")
+            self._take_picture()
             if light_mode == "automatic":
                 light_subroutine.turn_light("automatic")
             else:
@@ -60,8 +83,9 @@ class Health(SubroutineTemplate):
                     light_subroutine.turn_light("on")
                 else:
                     light_subroutine.turn_light("off")
-
-        self.analyse_image()
+        else:
+            self._take_picture()
+        self._analyse_picture()
 
     def _update_manageable(self) -> None:
         if self.config.get_IO_group("camera"):
@@ -74,7 +98,7 @@ class Health(SubroutineTemplate):
             self.manageable = False
 
     def _start(self):
-        if not self.ecosystem.subroutines["light"].started:
+        if not self.ecosystem.get_subroutine_status("light"):
             self.logger.warning(
                 "The Ecosystem is not managing light subroutine, be sure the "
                 "plants will receive sufficient and consistent light when "
@@ -96,28 +120,6 @@ class Health(SubroutineTemplate):
 
     def take_picture(self):
         pass
-
-    def analyse_image(self):
-        self.logger.info(f"Starting analysis of {self._ecosystem} image")
-        # If got an image, analyse it
-        if self._imageIO.getbuffer().nbytes:
-            import random
-            green = random.randrange(12000, 1500000, 1000)
-            necrosis = random.uniform(5, 55)
-            health_index = random.uniform(70, 97)
-            self._plants_health = {
-                "datetime": datetime.datetime.now().replace(microsecond=0),
-                "data": {
-                    "green": green,
-                    "necrosis": round(necrosis, 2),
-                    "index": round(health_index, 2),
-                },
-            }
-            self.logger.info(f"{self._ecosystem} picture successfully analysed, "
-                             f"indexes computed")
-        else:
-            # TODO: change Exception
-            raise Exception
 
     @property
     def plants_health(self):

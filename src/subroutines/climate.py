@@ -127,8 +127,8 @@ class Climate(SubroutineTemplate):
             self.manageable = True
 
     def _update_time_parameters(self):
-        light_subroutine: "Light" = self.ecosystem.subroutines["light"]
-        if light_subroutine.status:
+        if self.ecosystem.get_subroutine_status("light"):
+            light_subroutine: "Light" = self.ecosystem.subroutines["light"]
             try:
                 for tod in ("morning_start", "evening_end"):
                     self._sun_times[tod] = \
@@ -152,64 +152,74 @@ class Climate(SubroutineTemplate):
                 raise StoppingSubroutine
 
     def _climate_routine(self) -> None:
-        sensors_subroutines: "Sensors" = self.ecosystem.subroutines["sensors"]
-        if not (
-            sensors_subroutines.manageable and
-            self.config.get_management("sensors")
-        ):
-            self.logger.error(
-                "The climate subroutine requires sensors management in order to "
-                "work. Stopping the climate subroutine."
-            )
-            self.stop()
-        average = sensors_subroutines.sensors_data.get("average")
-        if not average:
-            if self._sensor_miss >= MISSES_BEFORE_STOP:
-                self.logger.error(
-                    "Maximum number of sensor data miss reached, stopping "
-                    "climate subroutine."
-                )
-                self.stop()
-            else:
-                self._sensor_miss += 1
+        if self.ecosystem.get_subroutine_status("sensors"):
+            sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
+            average = sensors_subroutine.sensors_data.get("average")
+            if not average:
                 self.logger.debug(
                     f"No sensor data found, climate subroutine will try "
                     f"again {5 - self._sensor_miss} times before stopping."
                 )
-            return
-        for data in average:
-            measure = data["name"]
-            if measure in self._regulated:
-                value = data["value"]
-                now = datetime.now().time()
-                tod = "day" if (self._sun_times["morning_start"] < now <=
-                                self._sun_times["morning_start"]) else "night"
-                target = self._targets[measure][tod] * self.ecosystem.chaos.factor
-                hysteresis = self._targets[measure].get("hysteresis", 0)
-                self._pids[measure].setpoint = target
-                if abs(target - value) < hysteresis:
-                    self._pids[measure].reset()  # Keep reset or not? Risk of integral windup if not
-                    output = 0
-                else:
-                    output = self._pids[measure](value)
-                if output > 0:
-                    hardware_type = f"{REGULATORS[measure].increase}s"
-                    for hardware in self.hardware[hardware_type].values():
-                        hardware.turn_on()
-                        if isinstance(hardware, gpioDimmable):
-                            hardware.set_pwm_level(output)
-                    hardware_type = f"{REGULATORS[measure].decrease}s"
-                    for hardware in self.hardware[hardware_type].values():
-                        hardware.turn_off()
-                elif output < 0:
-                    hardware_type = f"{REGULATORS[measure].increase}s"
-                    for hardware in self.hardware[hardware_type].values():
-                        hardware.turn_off()
-                    hardware_type = f"{REGULATORS[measure].decrease}s"
-                    for hardware in self.hardware[hardware_type].values():
-                        hardware.turn_on()
-                        if isinstance(hardware, gpioDimmable):
-                            hardware.set_pwm_level(-output)
+                self._sensor_miss += 1
+            else:
+                for data in average:
+                    measure = data["name"]
+                    if measure in self._regulated:
+                        value = data["value"]
+                        now = datetime.now().time()
+                        tod = "day" if (
+                                    self._sun_times["morning_start"] < now <=
+                                    self._sun_times[
+                                        "morning_start"]) else "night"
+                        target = self._targets[measure][
+                                     tod] * self.ecosystem.chaos.factor
+                        hysteresis = self._targets[measure].get("hysteresis",
+                                                                0)
+                        self._pids[measure].setpoint = target
+                        if abs(target - value) < hysteresis:
+                            self._pids[
+                                measure].reset()  # Keep reset or not? Risk of integral windup if not
+                            output = 0
+                        else:
+                            output = self._pids[measure](value)
+                        if output > 0:
+                            hardware_type = f"{REGULATORS[measure].increase}s"
+                            for hardware in self.hardware[hardware_type].values():
+                                hardware.turn_on()
+                                if isinstance(hardware, gpioDimmable):
+                                    hardware.set_pwm_level(output)
+                            hardware_type = f"{REGULATORS[measure].decrease}s"
+                            for hardware in self.hardware[hardware_type].values():
+                                hardware.turn_off()
+                        elif output < 0:
+                            hardware_type = f"{REGULATORS[measure].increase}s"
+                            for hardware in self.hardware[hardware_type].values():
+                                hardware.turn_off()
+                            hardware_type = f"{REGULATORS[measure].decrease}s"
+                            for hardware in self.hardware[hardware_type].values():
+                                hardware.turn_on()
+                                if isinstance(hardware, gpioDimmable):
+                                    hardware.set_pwm_level(-output)
+        else:
+            if not self.config.get_management("sensors"):
+                self.logger.error(
+                    "The climate subroutine requires sensors management in order to "
+                    "work. Stopping the climate subroutine."
+                )
+                self.stop()
+            else:
+                self.logger.debug(
+                    f"Could not reach Sensors subroutine, climate subroutine will "
+                    f"try again {5 - self._sensor_miss} times before stopping."
+                )
+                self._sensor_miss += 1
+
+        if self._sensor_miss >= MISSES_BEFORE_STOP:
+            self.logger.error(
+                "Maximum number of Sensors data miss reached, stopping "
+                "climate subroutine."
+            )
+            self.stop()
 
     def _update_climate_targets(self) -> None:
         for regulated in self._regulated:

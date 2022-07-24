@@ -66,8 +66,8 @@ class Sensors(SubroutineTemplate):
         self.logger.info(f"Stopping sensors loop")
         self._stop_event.set()
         self._thread.join()
-        climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
-        if climate_subroutine.status:
+        if self.ecosystem.get_subroutine_status("climate"):
+            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.stop()
         self.hardware = {}
 
@@ -97,8 +97,8 @@ class Sensors(SubroutineTemplate):
 
     def refresh_hardware(self) -> None:
         self._refresh_hardware("sensor")
-        climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
-        if climate_subroutine.status:
+        if self.ecosystem.get_subroutine_status("climate"):
+            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.refresh_hardware()
 
     def update_sensors_data(self) -> None:
