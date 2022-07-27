@@ -23,7 +23,8 @@ def log_sensors_data(scoped_session: "scoped_session", engine: "Engine"):
     with scoped_session() as session:
         for ecosystem_uid, ecosystem in engine.ecosystems.items():
             sensors_data = ecosystem.sensors_data
-            if sensors_data:
+            database_management = ecosystem.config.get_management("database")
+            if sensors_data and database_management:
                 measurement_time: datetime = sensors_data["datetime"]
                 measurement_time = measurement_time.astimezone(timezone.utc)
                 if measurement_time.minute % sensors_logging_period == 0:

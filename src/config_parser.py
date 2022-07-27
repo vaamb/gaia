@@ -39,6 +39,7 @@ DEFAULT_ECOSYSTEM_CFG = {
     "name": "",
     "status": False,
     "management": {
+        "database": False,
         "sensors": False,
         "light": False,
         "climate": False,
