@@ -10,6 +10,9 @@ class Config:
     TESTING = True
     VIRTUALIZATION = True
 
+    USE_DATABASE = True
+    USE_BROKER = True
+
     LOG_TO_STDOUT = True
     LOG_TO_FILE = True
     LOG_ERROR = True
