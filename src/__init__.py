@@ -64,7 +64,7 @@ class Gaia:
         self.logger.info("Initialising the message broker")
 
         if server == "socketio":
-            from events.socketio import gaiaNamespace, RetryClient
+            from src.events.socketio import gaiaNamespace, RetryClient
             self.message_broker = RetryClient(json=json, logger=Config.DEBUG)
             namespace = gaiaNamespace(
                 ecosystem_dict=self.engine.ecosystems, namespace="/gaia"
@@ -73,7 +73,7 @@ class Gaia:
             events_handler = self.message_broker.namespace_handlers["/gaia"]
 
         elif server in _KOMBU_SUPPORTED:
-            from events.dispatcher import gaiaEvents, get_dispatcher
+            from src.events.dispatcher import gaiaEvents, get_dispatcher
             self.logger.info("Starting dispatcher")
             self.message_broker = get_dispatcher("gaia", Config)
             events_handler = gaiaEvents(self.engine.ecosystems)
