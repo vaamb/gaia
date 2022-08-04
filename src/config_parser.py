@@ -136,7 +136,7 @@ class GeneralConfig(metaclass=SingletonMeta):
                 if old_hash[cfg] != self._hash_dict[cfg]
             ]
             if reload_cfg:
-                logger.info(f"Change in config detected, updating it.")
+                logger.info(f"Change in config file(s) detected, updating GeneralConfig.")
                 self.reload(reload_cfg)
             self._stop_event.wait(Config.CONFIG_WATCHER_PERIOD)
 
