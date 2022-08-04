@@ -1,3 +1,5 @@
+import itertools
+import sys
 import threading
 from time import sleep
 import logging
@@ -24,6 +26,8 @@ _KOMBU_SUPPORTED = (
 )
 
 scheduler = BackgroundScheduler()
+
+spinner = itertools.cycle(["", ".", "..", "..."])
 
 
 class Gaia:
@@ -142,8 +146,12 @@ class Gaia:
 
     def wait(self):
         if self.started:
-            self.logger.info("Waiting ...")
+            self.logger.info("Running")
             while True:
+                sys.stdout.write("\r")
+                sys.stdout.write(next(spinner))
+                sys.stdout.write("\033[K")
+                sys.stdout.flush()
                 if hasattr(self.message_broker, "is_socketio"):
                     self.message_broker.sleep(1)
                 else:
