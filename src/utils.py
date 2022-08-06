@@ -413,17 +413,17 @@ def configure_logging(config_class):
                 "level": f"{'DEBUG' if DEBUG else 'INFO'}",
                 "formatter": "fileFormat",
                 "class": "logging.handlers.RotatingFileHandler",
-                'filename': 'logs/base.log',
-                'mode': 'w+',
-                'maxBytes': 1024 * 512,
-                'backupCount': 5,
+                'filename': f"{str(base_dir)}/logs/base.log",
+                "mode": "w+",
+                "maxBytes": 1024 * 512,
+                "backupCount": 5,
             },
             "errorFileHandler": {
                 "level": "ERROR",
                 "formatter": "fileFormat",
                 "class": "logging.FileHandler",
-                'filename': 'logs/errors.log',
-                'mode': 'a',
+                "filename": f"{str(base_dir)}/logs/errors.log",
+                "mode": "a",
             }
         },
 

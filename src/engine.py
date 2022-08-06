@@ -138,20 +138,15 @@ class Engine(metaclass=SingletonMeta):
         """
         ecosystem_uid, ecosystem_name = get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
-            if not self.ecosystems_started:
-                self._start_background_tasks()
             if ecosystem_uid not in self.ecosystems_started:
-                ecosystem = self.ecosystems[ecosystem_uid]
+                ecosystem: Ecosystem = self.ecosystems[ecosystem_uid]
                 self.logger.debug(
                     f"Starting ecosystem {ecosystem_name}"
                 )
                 ecosystem.start()
-                self.logger.info(
-                    f"Ecosystem {ecosystem_name} started"
-                )
             else:
                 raise RuntimeError(
-                    f"Ecosystem {ecosystem_id} has already been started"
+                    f"Ecosystem {ecosystem_id} is already running"
                 )
         else:
             raise RuntimeError(
@@ -310,7 +305,7 @@ class Engine(metaclass=SingletonMeta):
         except (FileNotFoundError, JSONDecodeError):  # Empty or absent file
             pass
 
-    def start(self, wait=False) -> None:
+    def start(self) -> None:
         """Start the Engine
 
         When started, the Engine will automatically manage the Ecosystems based
@@ -319,6 +314,7 @@ class Engine(metaclass=SingletonMeta):
         """
         if not self._run:
             self.logger.info("Starting the Engine ...")
+            self._start_background_tasks()
             self._engine_startup()
             self._thread = Thread(target=self._loop)
             self._thread.name = "engine"
