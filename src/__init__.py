@@ -37,7 +37,7 @@ class Gaia:
             use_database: bool = False,  # TODO
     ) -> None:
         self.logger = logging.getLogger("gaia")
-        self.logger.debug("Initializing")
+        self.logger.info("Initializing Gaia")
         self.connect_to_ouranos = connect_to_ouranos
         self.use_database = use_database
         self.engine = Engine(GeneralConfig())
