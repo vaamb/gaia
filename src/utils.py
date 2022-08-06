@@ -394,7 +394,11 @@ def configure_logging(config_class):
 
         "formatters": {
             "streamFormat": {
-                "format": "%(asctime)s %(levelname)-4.4s [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s",
+                "format": (
+                    "%(asctime)s %(levelname)-4.4s [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s"
+                    if DEBUG else
+                    "%(asctime)s %(levelname)-4.4s %(name)-35.35s: %(message)s"
+                ),
                 "datefmt": "%Y-%m-%d %H:%M:%S"
             },
             "fileFormat": {
