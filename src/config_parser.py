@@ -382,7 +382,8 @@ class GeneralConfig(metaclass=SingletonMeta):
                     response = requests.get(
                         url=f"https://api.sunrise-sunset.org/json",
                         params={"lat": latitude, "lng": longitude},
-                        timeout=3.0
+                        timeout=3.0,
+                        verify=False,  # TODO: change when renewed
                     )
                     data = response.json()
                     results = data["results"]
