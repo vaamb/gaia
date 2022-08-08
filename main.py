@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 from setproctitle import getproctitle, setproctitle
+#!/usr/bin/python3
+from setproctitle import setproctitle
 
 setproctitle("Gaia")
 
