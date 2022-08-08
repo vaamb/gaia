@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 from setproctitle import setproctitle
 
 setproctitle("Gaia")
@@ -6,8 +6,6 @@ setproctitle("Gaia")
 import eventlet
 
 eventlet.monkey_patch()
-
-import argparse
 
 from config import Config
 from src import Gaia
