@@ -1,9 +1,7 @@
 #!/usr/bin/python3
-from setproctitle import getproctitle, setproctitle
-#!/usr/bin/python3
 from setproctitle import setproctitle
 
-setproctitle("Gaia")
+setproctitle("gaia")
 
 import eventlet
 
@@ -23,7 +21,7 @@ if __name__ == "__main__":
     logger = logging.getLogger("gaia")
     STARTED = False
     for process in psutil.process_iter():
-        if "gaia" in process.name().lower():
+        if "gaia" in process.name():
             STARTED = True
     if STARTED:
         logger.error("Only one instance of Gaia should be running at the time")
