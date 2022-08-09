@@ -21,7 +21,7 @@ if __name__ == "__main__":
     logger = logging.getLogger("gaia")
     STARTED = False
     for process in psutil.process_iter():
-        if "gaia" in process.name():
+        if not Config.TESTING and "gaia" in process.name():
             STARTED = True
     if STARTED:
         logger.error("Only one instance of Gaia should be running at the time")
