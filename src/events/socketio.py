@@ -2,8 +2,9 @@ try:
     import socketio
 except ImportError:
     raise RuntimeError(
-        "Python-socketio is required to use socketio. Run "
-        "`pip install python-socketio` in your virtual env"
+        "Python-socketio and websocket-client are required "
+        "to use socketio. Run `pip install python-socketio[client] "
+        "websocket-client` in your virtual env"
     )
 
 import random

@@ -99,7 +99,7 @@ while true; do
                     Socket.IO )
                       echo "Installing Socket.IO";
                       start_spinner;
-                      pip3 install socketio;
+                      pip3 install socketio[client] websocket-client;
                       stop_spinner;
                       echo "Socket.IO installed";;
                     Kombu )
