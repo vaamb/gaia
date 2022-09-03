@@ -83,7 +83,7 @@ class Address:
 
     @property
     def is_multiplexed(self):
-        return self.multiplexer is not 0
+        return self.multiplexer != 0
 
 
 class Hardware:
@@ -300,24 +300,24 @@ class i2cHardware(Hardware):
 class PlantLevelHardware(Hardware):
     def __init__(self, *args, **kwargs):
         kwargs["level"] = "plants"
-        plant = kwargs.pop("plant", "")
-        if not plant:  # pragma: no cover
+        plants = kwargs.pop("plants", "")
+        if not plants:  # pragma: no cover
             raise ValueError(
                 "Plants-level hardware need to be provided a plant name "
                 "as kwarg with the key name 'plant'"
             )
-        self._plant = plant
+        self._plants = plants
         super().__init__(*args, **kwargs)
 
     @property
     def dict_repr(self) -> dict:
         base_repr = super().dict_repr
-        base_repr["plant"] = self._plant
+        base_repr["plant"] = self._plants
         return base_repr
 
     @property
-    def plant(self) -> str:
-        return self._plant
+    def plants(self) -> str:
+        return self._plants
 
 
 class BaseSensor(Hardware):
