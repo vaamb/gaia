@@ -7,11 +7,18 @@ from .models import base
 from src.utils import base_dir
 
 
-class SQLAlchemyWrapper:
-    """Wrapper to use SQLAlchemy in parallel of Flask-SQLAlchemy
-    outside of app context
+def config_dict_from_class(obj) -> dict:
+    config = {}
+    for key in dir(obj):
+        if key.isupper():
+            config[key] = getattr(obj, key)
+    return config
 
-    For a safe use, use as follow:
+
+class SQLAlchemyWrapper:
+    """Convenience wrapper to use SQLAlchemy
+
+    For a safe use, use as follows:
     ``
     db = SQLAlchemyWrapper()
     with db.scoped_session() as session:
@@ -52,14 +59,19 @@ class SQLAlchemyWrapper:
         else:
             return self._session()
 
-    def init(self, config_class) -> None:
-        try:
-            uri = getattr(config_class, "DATABASE_URI")
-        except AttributeError:
-            db_file = base_dir/"gaia_data.db"
+    def init(self, config_object) -> None:
+        if isinstance(config_object, type):
+            self._config = config_dict_from_class(config_object)
+        elif isinstance(config_object, str):
+            self._config = {"SQLALCHEMY_DATABASE_URI": config_object}
+        elif isinstance(config_object, dict):
+            self._config = config_object
+        else:
+            raise TypeError("config_object can either be a str, a dict or a class")
+        if "SQLALCHEMY_DATABASE_URI" not in self._config:
+            db_file = base_dir / "gaia_data.db"
             uri = f"sqlite:///{db_file}"
-        self._config = {"DATABASE_URI": uri}
-        from . import models
+            self._config["SQLALCHEMY_DATABASE_URI"] = uri
         self._session_factory = sessionmaker(binds=self.get_binds_mapping())
         self._session = scoped_session(self._session_factory)
         self._initialized = True
@@ -75,10 +87,10 @@ class SQLAlchemyWrapper:
 
     def _get_uri_for_bind(self, bind: str = None) -> str:
         if bind is None:
-            return self._config["DATABASE_URI"]
-        binds = self._config.get("DATABASE_BINDS", ())
+            return self._config["SQLALCHEMY_DATABASE_URI"]
+        binds = self._config.get("SQLALCHEMY_BINDS", ())
         assert bind in binds, f"Set bind {bind} in the config "\
-                              f"'DATABASE_BINDS' in order to use it."
+                              f"'SQLALCHEMY_BINDS' in order to use it."
         return binds[bind]
 
     def _get_engine_for_bind(self, bind: str = None) -> Engine:
