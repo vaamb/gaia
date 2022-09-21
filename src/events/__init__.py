@@ -55,11 +55,8 @@ class Events:
         self.register()
 
     def register(self) -> None:
-        self.emit(
-            "register_engine",
-            data={"ikys": encrypted_uid(), "uid_token": generate_uid_token()},
-            namespace="/gaia"
-        )
+        data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
+        self.emit("register_engine", data=data)
 
     def on_register_ack(self) -> None:
         logger.info("Engine registration successful")
