@@ -7,8 +7,6 @@ except ImportError:
         "virtual env"
     )
 
-from dispatcher import get_dispatcher  # used by gaia
-
 from . import Events
 from ..ecosystem import Ecosystem
 

@@ -76,10 +76,11 @@ class Gaia:
             self.message_broker.register_namespace(namespace)
             events_handler = self.message_broker.namespace_handlers["/gaia"]
 
-        elif server in _KOMBU_SUPPORTED:
-            from .events.dispatcher import gaiaNamespace, get_dispatcher
+        elif server in ("amqp", "redis"):
+            from dispatcher import KombuDispatcher
+            from .events.dispatcher import gaiaNamespace
             self.logger.info("Starting dispatcher")
-            self.message_broker = get_dispatcher("gaia", Config)
+            self.message_broker = KombuDispatcher("gaia", url=url)
             events_handler = gaiaNamespace("aggregator", self.engine.ecosystems)
             self.message_broker.register_event_handler(events_handler)
 
