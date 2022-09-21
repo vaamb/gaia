@@ -91,17 +91,17 @@ class Gaia:
         self.engine.event_handler = events_handler
         # Schedule jobs
         scheduler.add_job(
-            try_func, kwargs={"func": events_handler.on_send_sensors_data},
+            try_func, kwargs={"func": events_handler.send_sensors_data},
             id="send_sensors_data", trigger="cron", minute="*",
             misfire_grace_time=10
         )
         scheduler.add_job(
-            try_func, kwargs={"func": events_handler.on_send_light_data},
+            try_func, kwargs={"func": events_handler.send_light_data},
             id="send_light_data", trigger="cron", hour="1",
             misfire_grace_time=10
         )
         scheduler.add_job(
-            try_func, kwargs={"func": events_handler.on_send_health_data},
+            try_func, kwargs={"func": events_handler.send_health_data},
             id="send_health_data", trigger="cron", hour="1",
             misfire_grace_time=10
         )

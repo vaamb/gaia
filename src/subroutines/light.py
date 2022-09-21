@@ -130,7 +130,7 @@ class Light(SubroutineTemplate):
 
         if self.ecosystem.event_handler and send:
             try:
-                self.ecosystem.event_handler.on_send_light_data(
+                self.ecosystem.event_handler.send_light_data(
                     ecosystem_uids=(self._uid, )
                 )
             except Exception as e:
@@ -179,7 +179,7 @@ class Light(SubroutineTemplate):
                     send_data = True
         if send_data and self.ecosystem.event_handler:
             try:
-                self.ecosystem.event_handler.on_send_light_data(
+                self.ecosystem.event_handler.send_light_data(
                     ecosystem_uids=self.config.uid
                 )
             except Exception as e:

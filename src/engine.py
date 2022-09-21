@@ -75,8 +75,8 @@ class Engine(metaclass=SingletonMeta):
                 break
             self.refresh_ecosystems()
             if self.event_handler:
-                self.event_handler.on_send_config()
-                self.event_handler.on_send_light_data()
+                self.event_handler.send_config()
+                self.event_handler.send_light_data()
 
     """
     API calls
