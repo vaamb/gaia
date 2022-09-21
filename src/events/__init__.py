@@ -123,22 +123,21 @@ class Events:
 
     def send_sensors_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
         logger.debug("Received send_sensors_data event")
-        self.emit(
-            "sensors_data",
-            self._get_data("sensors_data", ecosystem_uids=ecosystem_uids)
-        )
+        data = self._get_data("sensors_data", ecosystem_uids=ecosystem_uids)
+        if data:
+            self.emit("sensors_data", data=data)
 
     def send_health_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
         logger.debug("Received send_health_data event")
-        self.emit(
-            "health_data",
-            self._get_data("plants_health", ecosystem_uids=ecosystem_uids)
-        )
+        data = self._get_data("plants_health", ecosystem_uids=ecosystem_uids)
+        if data:
+            self.emit("health_data", data=data)
 
     def send_light_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
         logger.debug("Received send_light_data event")
-        self.emit("light_data",
-                  self._get_data("light_info", ecosystem_uids=ecosystem_uids))
+        data = self._get_data("light_info", ecosystem_uids=ecosystem_uids)
+        if data:
+            self.emit("light_data", data=data)
 
     def on_turn_light(self, message: dict) -> None:
         logger.debug("Received turn_light event")
