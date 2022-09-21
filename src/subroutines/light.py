@@ -185,7 +185,7 @@ class Light(SubroutineTemplate):
             except Exception as e:
                 msg = e.args[1] if len(e.args) > 1 else e.args[0]
                 if "is not a connected namespace" in msg:
-                    return
+                    pass
                 self.logger.error(
                     f"Encountered an error while sending light data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
