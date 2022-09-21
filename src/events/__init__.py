@@ -34,7 +34,7 @@ class Events:
         else:
             self.db = None
 
-    def emit(self, *args, **kwargs):
+    def emit(self, event, data=None, to=None, room=None, namespace=None):
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -43,7 +43,7 @@ class Events:
         logger.info(
             "Connection successful. Trying to register the engine"
         )
-        self.on_register()
+        self.register()
 
     def on_disconnect(self) -> None:
         if self._registered:
@@ -51,7 +51,10 @@ class Events:
         else:
             logger.error("Failed to register engine")
 
-    def on_register(self) -> None:
+    def on_register(self):
+        self.register()
+
+    def register(self) -> None:
         self.emit(
             "register_engine",
             data={"ikys": encrypted_uid(), "uid_token": generate_uid_token()},
@@ -61,6 +64,10 @@ class Events:
     def on_register_ack(self) -> None:
         logger.info("Engine registration successful")
         self._registered = True
+        self.send_config()
+        self.send_sensors_data()
+        self.send_light_data()
+        self.send_health_data()
 
     def on_ping(self) -> None:
         logger.debug("Received ping event")
@@ -78,7 +85,7 @@ class Events:
             return [e_uid for e_uid in ecosystem_uids
                     if e_uid in self.ecosystems.keys()]
 
-    def on_send_config(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+    def send_config(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
         logger.debug("Received send_config event")
         uids = self._get_uid_list(ecosystem_uids)
         [self._send_config(config_type, uids) for config_type in
@@ -114,21 +121,21 @@ class Events:
                 pass
         return rv
 
-    def on_send_sensors_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+    def send_sensors_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
         logger.debug("Received send_sensors_data event")
         self.emit(
             "sensors_data",
             self._get_data("sensors_data", ecosystem_uids=ecosystem_uids)
         )
 
-    def on_send_health_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+    def send_health_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
         logger.debug("Received send_health_data event")
         self.emit(
             "health_data",
             self._get_data("plants_health", ecosystem_uids=ecosystem_uids)
         )
 
-    def on_send_light_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+    def send_light_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
         logger.debug("Received send_light_data event")
         self.emit("light_data",
                   self._get_data("light_info", ecosystem_uids=ecosystem_uids))
@@ -142,7 +149,7 @@ class Events:
             self.ecosystems[ecosystem_uid].turn_actuator(
                 "light", mode=mode, countdown=countdown
             )
-            self.on_send_light_data(ecosystem_uid)
+            self.send_light_data(ecosystem_uid)
         # Except when subroutines are still loading
         except KeyError:
             print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
@@ -162,7 +169,7 @@ class Events:
             print(f"{ecosystem_uid}'s {actuator} cannot be turned to {mode} yet")
         finally:
             if actuator == "light":
-                self.on_send_light_data(ecosystem_uid)
+                self.send_light_data(ecosystem_uid)
 
     def on_change_management(self, message: dict) -> None:
         ecosystem_uid: str = message["ecosystem"]
