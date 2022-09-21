@@ -77,10 +77,10 @@ class Gaia:
             events_handler = self.message_broker.namespace_handlers["/gaia"]
 
         elif server in _KOMBU_SUPPORTED:
-            from .events.dispatcher import gaiaEvents, get_dispatcher
+            from .events.dispatcher import gaiaNamespace, get_dispatcher
             self.logger.info("Starting dispatcher")
             self.message_broker = get_dispatcher("gaia", Config)
-            events_handler = gaiaEvents(self.engine.ecosystems)
+            events_handler = gaiaNamespace("aggregator", self.engine.ecosystems)
             self.message_broker.register_event_handler(events_handler)
 
         else:

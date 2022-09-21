@@ -13,10 +13,10 @@ from . import Events
 from ..ecosystem import Ecosystem
 
 
-class gaiaEvents(dispatcher.EventHandler, Events):
+class gaiaNamespace(dispatcher.EventHandler, Events):
     """A Dispatcher EventHandler using the events defined by the Events class
     """
-    def __init__(self, ecosystem_dict: dict[str, Ecosystem]):
+    def __init__(self, namespace, ecosystem_dict: dict[str, Ecosystem]):
         # Dirty but it works
-        dispatcher.EventHandler.__init__(self)
+        dispatcher.EventHandler.__init__(self, namespace)
         Events.__init__(self, ecosystem_dict)
