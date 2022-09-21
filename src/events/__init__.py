@@ -39,7 +39,7 @@ class Events:
             "This method must be implemented in a subclass"
         )
 
-    def on_connect(self) -> None:
+    def on_connect(self, **kwargs) -> None:
         logger.info(
             "Connection successful. Trying to register the engine"
         )
