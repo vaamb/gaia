@@ -1,8 +1,8 @@
 import itertools
+import logging
 import sys
 import threading
 from time import sleep
-import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -82,7 +82,9 @@ class Gaia:
             self.logger.info("Starting dispatcher")
             self.message_broker = KombuDispatcher(
                 "gaia", url=url,
-                queue_options={"auto_delete": True, "durable": False}
+                queue_options={
+                    "name": f"gaia-{Config.UUID}", "durable": True
+                }
             )
             events_handler = gaiaNamespace("aggregator", self.engine.ecosystems)
             self.message_broker.register_event_handler(events_handler)
