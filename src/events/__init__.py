@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+from time import sleep
 import typing as t
 
 from src.utils import encrypted_uid, generate_uid_token
@@ -25,6 +26,8 @@ class Events:
 
     :param ecosystem_dict: a dict holding all the Ecosystem instances
     """
+    type = "raw"
+
     def __init__(self, ecosystem_dict: dict[str, "Ecosystem"]) -> None:
         self.ecosystems = ecosystem_dict
         self._registered = False
@@ -34,10 +37,28 @@ class Events:
         else:
             self.db = None
 
-    def emit(self, event, data=None, to=None, room=None, namespace=None):
+    def emit(self, event, data=None, to=None, room=None, namespace=None, **kwargs):
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
+
+    def background_task(self):
+        while True:
+            self.ping()
+            sleep(15)
+
+    def ping(self) -> None:
+        ecosystems = []
+        for ecosystem in self.ecosystems.values():
+            ecosystems.append(ecosystem.uid)
+        if self.type == "socketio":
+            self.emit("ping", data=ecosystems)
+        elif self.type == "dispatcher":
+            self.emit("ping", data=ecosystems, ttl=60)
+
+    def register(self) -> None:
+        data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
+        self.emit("register_engine", data=data)
 
     def on_connect(self, **kwargs) -> None:
         logger.info(
@@ -54,10 +75,6 @@ class Events:
     def on_register(self):
         self.register()
 
-    def register(self) -> None:
-        data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
-        self.emit("register_engine", data=data)
-
     def on_register_ack(self) -> None:
         logger.info("Engine registration successful")
         self._registered = True
@@ -66,12 +83,7 @@ class Events:
         self.send_light_data()
         self.send_health_data()
 
-    def on_ping(self) -> None:
-        logger.debug("Received ping event")
-        pong = []
-        for ecosystem in self.ecosystems.values():
-            pong.append(ecosystem.uid)
-        self.emit("pong", data=pong)
+
 
     def _get_uid_list(self, ecosystem_uids: t.Union[str, tuple] = "all") -> list:
         if isinstance(ecosystem_uids, str):

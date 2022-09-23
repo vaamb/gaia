@@ -67,6 +67,8 @@ class RetryClient(socketio.Client):
 class gaiaNamespace(socketio.ClientNamespace, Events):
     """A Socket.IO client namespace using the events defined by the Events class
     """
+    type = "socketio"
+
     def __init__(self, namespace, ecosystem_dict: dict[str, Ecosystem]):
         # Dirty but it works
         socketio.ClientNamespace.__init__(self, namespace=namespace)
