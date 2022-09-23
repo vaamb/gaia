@@ -81,7 +81,8 @@ class Gaia:
             from .events.dispatcher import gaiaNamespace
             self.logger.info("Starting dispatcher")
             self.message_broker = KombuDispatcher(
-                "gaia", url=url, exchange_opt={"name": "ouranos"}
+                "gaia", url=url,
+                queue_options={"auto_delete": True, "durable": False}
             )
             events_handler = gaiaNamespace("aggregator", self.engine.ecosystems)
             self.message_broker.register_event_handler(events_handler)
