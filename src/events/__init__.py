@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+from threading import Thread
 from time import sleep
 import typing as t
 
@@ -17,6 +18,7 @@ if Config.USE_DATABASE:
     from src.database import SQLAlchemyWrapper
     from src.database.models import SensorHistory
 
+
 logger = logging.getLogger(f"{Config.APP_NAME.lower()}.broker")
 
 
@@ -31,6 +33,7 @@ class Events:
     def __init__(self, ecosystem_dict: dict[str, "Ecosystem"]) -> None:
         self.ecosystems = ecosystem_dict
         self._registered = False
+        self._background_task = False
         if Config.USE_DATABASE:
             from src.database import SQLAlchemyWrapper
             self.db = SQLAlchemyWrapper(Config)
@@ -60,11 +63,18 @@ class Events:
         data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
         self.emit("register_engine", data=data)
 
-    def on_connect(self, **kwargs) -> None:
+    def on_connect(self, environment) -> None:
         logger.info(
             "Connection successful. Trying to register the engine"
         )
         self.register()
+        if not self._background_task:
+            thread = Thread(target=self.background_task)
+            thread.name = "ping"
+            thread.start()
+            self._thread = thread
+            self._background_task = True
+        # TODO: move after registration
 
     def on_disconnect(self) -> None:
         if self._registered:
@@ -82,8 +92,6 @@ class Events:
         self.send_sensors_data()
         self.send_light_data()
         self.send_health_data()
-
-
 
     def _get_uid_list(self, ecosystem_uids: t.Union[str, tuple] = "all") -> list:
         if isinstance(ecosystem_uids, str):
