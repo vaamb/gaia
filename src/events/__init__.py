@@ -51,47 +51,49 @@ class Events:
             sleep(15)
 
     def ping(self) -> None:
-        ecosystems = []
-        for ecosystem in self.ecosystems.values():
-            ecosystems.append(ecosystem.uid)
+        ecosystems = [ecosystem.uid for ecosystem in self.ecosystems.values()]
         if self.type == "socketio":
             self.emit("ping", data=ecosystems)
         elif self.type == "dispatcher":
-            self.emit("ping", data=ecosystems, ttl=60)
+            self.emit("ping", data=ecosystems, ttl=30)
 
     def register(self) -> None:
         data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
         self.emit("register_engine", data=data)
 
-    def on_connect(self, environment) -> None:
-        logger.info(
-            "Connection successful. Trying to register the engine"
-        )
-        self.register()
+    def initialize_data_transfer(self) -> None:
         if not self._background_task:
             thread = Thread(target=self.background_task)
             thread.name = "ping"
             thread.start()
             self._thread = thread
             self._background_task = True
-        # TODO: move after registration
+        self.send_config()
+        self.send_sensors_data()
+        self.send_light_data()
+        self.send_health_data()
 
-    def on_disconnect(self) -> None:
+    def on_connect(self, environment) -> None:
+        logger.info("Connection successful")
+        self.on_register()
+
+    def on_disconnect(self, *args) -> None:
         if self._registered:
             logger.warning("Disconnected from server")
         else:
             logger.error("Failed to register engine")
 
-    def on_register(self):
-        self.register()
+    def on_register(self, *args):
+        if self.type == "socketio":
+            logger.info("Trying to register the engine")
+            self.register()
+        elif self.type == "dispatcher":
+            self.initialize_data_transfer()
 
-    def on_register_ack(self) -> None:
+    def on_register_ack(self, *args) -> None:
         logger.info("Engine registration successful")
         self._registered = True
-        self.send_config()
-        self.send_sensors_data()
-        self.send_light_data()
-        self.send_health_data()
+        self.initialize_data_transfer()
 
     def _get_uid_list(self, ecosystem_uids: t.Union[str, tuple] = "all") -> list:
         if isinstance(ecosystem_uids, str):
@@ -102,17 +104,11 @@ class Events:
             return [e_uid for e_uid in ecosystem_uids
                     if e_uid in self.ecosystems.keys()]
 
-    def send_config(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
-        logger.debug("Received send_config event")
-        uids = self._get_uid_list(ecosystem_uids)
-        [self._send_config(config_type, uids) for config_type in
-         ("base_info", "management", "environmental_parameters", "hardware")]
-
-    def _send_config(
+    def _get_specific_config(
             self,
             config_type: str,
             ecosystem_uids: t.Union[str, tuple, list] = "all"
-    ) -> None:
+    ) -> list[dict]:
         uids = self._get_uid_list(ecosystem_uids)
         rv = []
         for uid in uids:
@@ -120,7 +116,13 @@ class Events:
             if data:
                 data.update({"uid": uid})
                 rv.append(data)
-        self.emit(config_type, rv)
+        return rv
+
+    def send_config(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+        logger.debug("Received send_config event")
+        uids = self._get_uid_list(ecosystem_uids)
+        [self.emit(cfg, data=self._get_specific_config(cfg, uids)) for cfg in
+         ("base_info", "management", "environmental_parameters", "hardware")]
 
     def _get_data(
             self,
@@ -194,7 +196,10 @@ class Events:
         try:
             self.ecosystems[ecosystem_uid].config.set_management(management, status)
             self.ecosystems[ecosystem_uid].config.save()
-            self._send_config("management")
+            self.emit(
+                "management",
+                data=self._get_specific_config("management", ecosystem_uid)
+            )
         except KeyError:
             print(f"{ecosystem_uid}'s management {management} cannot be turned "
                   f"to {status} yet")
