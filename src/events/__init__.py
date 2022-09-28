@@ -4,8 +4,9 @@ from threading import Thread
 from time import sleep
 import typing as t
 
-from src.utils import encrypted_uid, generate_uid_token
 from config import Config
+from src.shared_resources import scheduler
+from src.utils import encrypted_uid, generate_uid_token
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -45,7 +46,37 @@ class Events:
             "This method must be implemented in a subclass"
         )
 
+    def _try_func(self, func):
+        try:
+            func()
+        except Exception as e:
+            log_msg = (
+                f"Encountered an error while sending light data. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`"
+            )
+            ex_msg = e.args[1] if len(e.args) > 1 else e.args[0]
+            # If socketio error when not connected, log to debug
+            if "is not a connected namespace" in ex_msg:
+                logger.debug(log_msg)
+            else:
+                logger.error(log_msg)
+
     def background_task(self):
+        scheduler.add_job(
+            self._try_func, kwargs={"func": self.send_sensors_data},
+            id="send_sensors_data", trigger="cron", minute="*",
+            misfire_grace_time=10
+        )
+        scheduler.add_job(
+            self._try_func, kwargs={"func": self.send_light_data},
+            id="send_light_data", trigger="cron", hour="1",
+            misfire_grace_time=10*60
+        )
+        scheduler.add_job(
+            self._try_func, kwargs={"func": self.send_health_data},
+            id="send_health_data", trigger="cron", hour="1",
+            misfire_grace_time=10*60
+        )
         while True:
             self.ping()
             sleep(15)
@@ -58,7 +89,12 @@ class Events:
             self.emit("ping", data=ecosystems, ttl=30)
 
     def register(self) -> None:
-        data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
+        if self.type == "socketio":
+            data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
+        elif self.type == "dispatcher":
+            data = {"engine_uid": Config.UUID}
+        else:
+            raise TypeError("Event type is invalid")
         self.emit("register_engine", data=data)
 
     def initialize_data_transfer(self) -> None:
@@ -75,7 +111,7 @@ class Events:
 
     def on_connect(self, environment) -> None:
         logger.info("Connection successful")
-        self.on_register()
+        self.register()
 
     def on_disconnect(self, *args) -> None:
         if self._registered:
@@ -84,11 +120,11 @@ class Events:
             logger.error("Failed to register engine")
 
     def on_register(self, *args):
-        if self.type == "socketio":
-            logger.info("Trying to register the engine")
+        if self._registered:
+            # else: not connected yet, info still in queue
+            logger.info("Received registration request from server")
             self.register()
-        elif self.type == "dispatcher":
-            self.initialize_data_transfer()
+            self._registered = False
 
     def on_register_ack(self, *args) -> None:
         logger.info("Engine registration successful")

@@ -4,11 +4,10 @@ import sys
 import threading
 from time import sleep
 
-from apscheduler.schedulers.background import BackgroundScheduler
-
 from config import Config
 from src.config_parser import GeneralConfig
 from src.engine import Engine
+from src.shared_resources import scheduler, start_scheduler
 from src.utils import json
 
 
@@ -18,14 +17,6 @@ except AttributeError:
     url = "socketio://127.0.0.1:5000"
 server = url[:url.index("://")]
 
-_KOMBU_SUPPORTED = (
-    "amqp", "amqps", "pyamqp", "librabbitmq", "memory", "redis", "rediss",
-    "SQS", "sqs", "mongodb", "zookeeper", "sqlalchemy", "sqla", "SLMQ", "slmq",
-    "filesystem", "qpid", "sentinel", "consul", "etcd", "azurestoragequeues",
-    "azureservicebus", "pyro"
-)
-
-scheduler = BackgroundScheduler()
 
 spinner = itertools.cycle(["", ".", "..", "..."])
 
@@ -50,21 +41,6 @@ class Gaia:
         self.started = False
 
     def _init_message_broker(self) -> None:
-        def try_func(func):
-            try:
-                func()
-            except Exception as e:
-                log_msg = (
-                    f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
-                )
-                ex_msg = e.args[1] if len(e.args) > 1 else e.args[0]
-                # If socketio error when not connected, log to debug
-                if "is not a connected namespace" in ex_msg:
-                    self.logger.debug(log_msg)
-                else:
-                    self.logger.error(log_msg)
-
         self.logger.info("Initialising the message broker")
 
         if server == "socketio":
@@ -95,22 +71,6 @@ class Gaia:
             )
 
         self.engine.event_handler = events_handler
-        # Schedule jobs
-        scheduler.add_job(
-            try_func, kwargs={"func": events_handler.send_sensors_data},
-            id="send_sensors_data", trigger="cron", minute="*",
-            misfire_grace_time=10
-        )
-        scheduler.add_job(
-            try_func, kwargs={"func": events_handler.send_light_data},
-            id="send_light_data", trigger="cron", hour="1",
-            misfire_grace_time=10
-        )
-        scheduler.add_job(
-            try_func, kwargs={"func": events_handler.send_health_data},
-            id="send_health_data", trigger="cron", hour="1",
-            misfire_grace_time=10
-        )
 
     def _connect_to_ouranos(self) -> None:
         if hasattr(self.message_broker, "is_socketio"):
@@ -144,7 +104,7 @@ class Gaia:
             self.engine.start()
             if self.connect_to_ouranos:
                 self._connect_to_ouranos()
-            scheduler.start()
+            start_scheduler()
             self.started = True
             self.logger.info("GAIA started successfully")
         else:
