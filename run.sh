@@ -2,8 +2,12 @@
 
 echo "Starting Gaia"
 
-if [ $(ps | grep "gaia") -eq 0 ]; then
-  pkill -15 gaia
+DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+cd $DIR
+
+if pgrep -x "gaia" > /dev/nul; then
+  pkill -15 "gaia"
 fi
 
 source venv/bin/activate

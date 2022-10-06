@@ -1,5 +1,9 @@
 #!/bin/bash
 
+
+PACKAGES="libffi-dev libssl-dev"
+
+
 # https://willcarh.art/blog/how-to-write-better-bash-spinners
 spinner_pid=
 
@@ -55,6 +59,15 @@ if [ $(grep -ic "^start_x=1" /boot/config.txt) -eq 0 ]; then
 fi
 stop_spinner;
 echo "I2C, SPI and camera enabled";
+
+
+echo "Installing required packages";
+start_spinner;
+sudo apt update;
+sudo apt install -y $PACKAGES
+stop_spinner;
+echo "Required packages installed";
+
 
 # TODO: install camera packages (open cv related libraries)
 echo "Installing python virtual environment";
