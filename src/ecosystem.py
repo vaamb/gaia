@@ -25,7 +25,7 @@ class Ecosystem:
     : param ecosystem_id: The name or the uid of an ecosystem, as written in
                           'ecosystems.cfg'
     """
-    def __init__(self, ecosystem_id, engine: "Engine"):
+    def __init__(self, ecosystem_id: str, engine: "Engine"):
         self._config: SpecificConfig = get_config(ecosystem_id)
         self._uid: str = self._config.uid
         self._name: str = self._config.name

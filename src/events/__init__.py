@@ -120,11 +120,9 @@ class Events:
             logger.error("Failed to register engine")
 
     def on_register(self, *args):
-        if self._registered:
-            # else: not connected yet, info still in queue
-            logger.info("Received registration request from server")
-            self.register()
-            self._registered = False
+        self._registered = False
+        logger.info("Received registration request from server")
+        self.register()
 
     def on_register_ack(self, *args) -> None:
         logger.info("Engine registration successful")
