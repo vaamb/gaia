@@ -31,7 +31,8 @@ class Events:
     """
     type = "raw"
 
-    def __init__(self, ecosystem_dict: dict[str, "Ecosystem"]) -> None:
+    def __init__(self, ecosystem_dict: dict[str, "Ecosystem"], **kwargs) -> None:
+        super().__init__(**kwargs)
         self.ecosystems = ecosystem_dict
         self._registered = False
         self._background_task = False

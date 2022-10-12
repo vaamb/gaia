@@ -69,7 +69,5 @@ class gaiaNamespace(socketio.ClientNamespace, Events):
     """
     type = "socketio"
 
-    def __init__(self, namespace, ecosystem_dict: dict[str, Ecosystem]):
-        # Dirty but it works
-        socketio.ClientNamespace.__init__(self, namespace=namespace)
-        Events.__init__(self, ecosystem_dict)
+    def __init__(self, namespace: str, ecosystem_dict: dict[str, Ecosystem]):
+        super().__init__(namespace=namespace, ecosystem_dict=ecosystem_dict)
