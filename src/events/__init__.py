@@ -20,7 +20,7 @@ if Config.USE_DATABASE:
     from src.database.models import SensorHistory
 
 
-logger = logging.getLogger(f"{Config.APP_NAME.lower()}.broker")
+
 
 
 class Events:
@@ -36,6 +36,7 @@ class Events:
         self.ecosystems = ecosystem_dict
         self._registered = False
         self._background_task = False
+        self.logger = logging.getLogger(f"{Config.APP_NAME.lower()}.broker")
         if Config.USE_DATABASE:
             from src.database import SQLAlchemyWrapper
             self.db = SQLAlchemyWrapper(Config)
@@ -58,9 +59,9 @@ class Events:
             ex_msg = e.args[1] if len(e.args) > 1 else e.args[0]
             # If socketio error when not connected, log to debug
             if "is not a connected namespace" in ex_msg:
-                logger.debug(log_msg)
+                self.logger.debug(log_msg)
             else:
-                logger.error(log_msg)
+                self.logger.error(log_msg)
 
     def background_task(self):
         scheduler.add_job(
@@ -111,22 +112,22 @@ class Events:
         self.send_health_data()
 
     def on_connect(self, environment) -> None:
-        logger.info("Connection successful")
+        self.logger.info("Connection successful")
         self.register()
 
     def on_disconnect(self, *args) -> None:
         if self._registered:
-            logger.warning("Disconnected from server")
+            self.logger.warning("Disconnected from server")
         else:
-            logger.error("Failed to register engine")
+            self.logger.error("Failed to register engine")
 
     def on_register(self, *args):
         self._registered = False
-        logger.info("Received registration request from server")
+        self.logger.info("Received registration request from server")
         self.register()
 
     def on_register_ack(self, *args) -> None:
-        logger.info("Engine registration successful")
+        self.logger.info("Engine registration successful")
         self._registered = True
         self.initialize_data_transfer()
 
@@ -154,7 +155,7 @@ class Events:
         return rv
 
     def send_config(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
-        logger.debug("Received send_config event")
+        self.logger.debug("Received send_config event")
         uids = self._get_uid_list(ecosystem_uids)
         [self.emit(cfg, data=self._get_specific_config(cfg, uids)) for cfg in
          ("base_info", "management", "environmental_parameters", "hardware")]
@@ -176,39 +177,30 @@ class Events:
         return rv
 
     def send_sensors_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
-        logger.debug("Received send_sensors_data event")
+        self.logger.debug("Received send_sensors_data event")
         data = self._get_data("sensors_data", ecosystem_uids=ecosystem_uids)
         if data:
             self.emit("sensors_data", data=data)
 
     def send_health_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
-        logger.debug("Received send_health_data event")
+        self.logger.debug("Received send_health_data event")
         data = self._get_data("plants_health", ecosystem_uids=ecosystem_uids)
         if data:
             self.emit("health_data", data=data)
 
     def send_light_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
-        logger.debug("Received send_light_data event")
+        self.logger.debug("Received send_light_data event")
         data = self._get_data("light_info", ecosystem_uids=ecosystem_uids)
         if data:
             self.emit("light_data", data=data)
 
     def on_turn_light(self, message: dict) -> None:
-        logger.debug("Received turn_light event")
-        ecosystem_uid: str = message["ecosystem"]
-        mode: str = message["mode"]
-        countdown: float = message.get("countdown", 0)
-        try:
-            self.ecosystems[ecosystem_uid].turn_actuator(
-                "light", mode=mode, countdown=countdown
-            )
-            self.send_light_data(ecosystem_uid)
-        # Except when subroutines are still loading
-        except KeyError:
-            print(f"{ecosystem_uid}'s light subroutine has not initialized yet")
+        self.logger.debug("Received turn_light event, sending to turn_actuator")
+        message["actuator"] = "light"
+        self.on_turn_actuator(message)
 
     def on_turn_actuator(self, message: dict) -> None:
-        logger.debug("Received turn_actuator event")
+        self.logger.debug("Received turn_actuator event")
         ecosystem_uid: str = message["ecosystem"]
         actuator: str = message["actuator"]
         mode: str = message["mode"]
@@ -219,7 +211,9 @@ class Events:
             )
         # Except when subroutines are still loading
         except KeyError:
-            print(f"{ecosystem_uid}'s {actuator} cannot be turned to {mode} yet")
+            self.logger.error(
+                f"{ecosystem_uid}'s {actuator} cannot be turned to {mode} yet"
+            )
         finally:
             if actuator == "light":
                 self.send_light_data(ecosystem_uid)
@@ -236,12 +230,14 @@ class Events:
                 data=self._get_specific_config("management", ecosystem_uid)
             )
         except KeyError:
-            print(f"{ecosystem_uid}'s management {management} cannot be turned "
-                  f"to {status} yet")
+            self.logger.error(
+                f"{ecosystem_uid}'s management {management} cannot be turned "
+                f"to {status} yet"
+            )
 
     def on_get_data_since(self, message: dict) -> None:
         if not self.db:
-            logger.error(
+            self.logger.error(
                 "Received 'get_data_since' event but USE_DATABASE is set to False"
             )
             return
