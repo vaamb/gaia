@@ -330,7 +330,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         def import_daytime_event(daytime_event: str) -> time:
             try:
                 my_time = datetime.strptime(
-                    sunrise[daytime_event], "%I:%M:%S %p").time()
+                    sunrise[daytime_event], "%I:%M:%S %p").astimezone().time()
                 local_time = utc_time_to_local_time(my_time)
                 return local_time
             except Exception:
@@ -393,7 +393,7 @@ class GeneralConfig(metaclass=SingletonMeta):
                     )
                     raise ConnectionError
                 else:
-                    self._last_sun_times_update = datetime.now()
+                    self._last_sun_times_update = datetime.now().astimezone()
                     payload = {
                         "last_update": self._last_sun_times_update,
                         "data": {"home": results},

@@ -58,7 +58,7 @@ class VirtualWorld(metaclass=SingletonMeta):
             if time_now:
                 now = time_now
             else:
-                now = datetime.now()
+                now = datetime.now().astimezone()
             self._dt = now
             yday = now.timetuple().tm_yday
             day_since_spring = (yday - 80) % 365

@@ -32,7 +32,7 @@ def _to_dt(_time: time) -> datetime:
 
 def _is_time_between(begin_time: time, end_time: time,
                      check_time=None) -> bool:
-    check_time = check_time or datetime.now().time()
+    check_time = check_time or datetime.now().astimezone().time()
     try:
         if begin_time < end_time:
             return begin_time <= check_time < end_time
@@ -237,7 +237,7 @@ class Light(SubroutineTemplate):
             self.manageable = False
 
     def _start(self):
-        now = datetime.now()
+        now = datetime.now().astimezone()
         if now.date() > self.ecosystem.config.general.last_sun_times_update.date():
             self.ecosystem.engine.refresh_sun_times()
         self._refresh_sun_times(send=True)
@@ -292,7 +292,7 @@ class Light(SubroutineTemplate):
 
     @ property
     def expected_status(self) -> bool:
-        now = datetime.now().time()
+        now = datetime.now().astimezone().time()
         if self._method == "elongate":
             # If time between lightning hours
             if (

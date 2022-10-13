@@ -107,7 +107,7 @@ class Sensors(SubroutineTemplate):
         """
         cache = {}
         average = {}
-        now = datetime.now().replace(microsecond=0)
+        now = datetime.now().astimezone().replace(microsecond=0)
         cache["datetime"] = now
         cache["data"] = []
         for uid in self.hardware:

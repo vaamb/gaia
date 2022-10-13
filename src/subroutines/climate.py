@@ -166,7 +166,7 @@ class Climate(SubroutineTemplate):
                     measure = data["name"]
                     if measure in self._regulated:
                         value = data["value"]
-                        now = datetime.now().time()
+                        now = datetime.now().astimezone().time()
                         tod = "day" if (
                                     self._sun_times["morning_start"] < now <=
                                     self._sun_times[

@@ -34,7 +34,7 @@ class PiCamera(Camera):
             camera.start_preview()
             # need at least 2 sec sleep for the camera to adapt to light level
             sleep(3)
-            current_datetime = datetime.now().strftime("%Y.%m.%d:%H.%M.%S")
+            current_datetime = datetime.now().astimezone().strftime("%Y.%m.%d:%H.%M.%S")
             picture_name = f"{self.ecosystem_uid}-{current_datetime}"
             picture_path = self.cam_dir / picture_name
             camera.capture(picture_path, format="jpg")

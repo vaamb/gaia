@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import io
 import typing as t
 
@@ -54,7 +54,7 @@ class Health(SubroutineTemplate):
             necrosis = random.uniform(5, 55)
             health_index = random.uniform(70, 97)
             self._plants_health = {
-                "datetime": datetime.datetime.now().replace(microsecond=0),
+                "datetime": datetime.now().astimezone().replace(microsecond=0),
                 "data": {
                     "green": green,
                     "necrosis": round(necrosis, 2),
