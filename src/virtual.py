@@ -73,9 +73,9 @@ class VirtualWorld(metaclass=SingletonMeta):
                 self._params["light"]["yearly_amp"] * season_factor
             )
 
-            sunrise = datetime.combine(now.date(), self._sunrise)
+            sunrise = datetime.combine(now.date(), self._sunrise).astimezone()
             sunrise = sunrise - (self._yearly_amp_sun_times * season_factor)
-            sunset = datetime.combine(now.date(), self._sunset)
+            sunset = datetime.combine(now.date(), self._sunset).astimezone()
             sunset = sunset + (self._yearly_amp_sun_times * season_factor)
             daytime = (sunset - sunrise).seconds
             nighttime = 24 * 3600 - daytime
