@@ -1,3 +1,5 @@
+import logging
+
 try:
     import socketio
 except ImportError:
@@ -12,7 +14,8 @@ import random
 from socketio.exceptions import BadNamespaceError
 from socketio.client import reconnecting_clients
 
-from . import Events, logger
+from . import Events
+from config import Config
 from src.ecosystem import Ecosystem
 
 
@@ -21,12 +24,13 @@ class RetryClient(socketio.Client):
     if could not reach it first.
     """
     def __init__(self, *args, **kwargs):
-        logger.debug("Starting socketIO client")
+        self.logger = logging.getLogger(f"{Config.APP_NAME.lower()}.socketio")
+        self.logger.debug("Starting socketIO client")
         super().__init__(*args, **kwargs)
         self.is_socketio = True  # Used by Gaia to choose the sleep method
 
     def connect(self, *args, **kwargs) -> None:
-        logger.info("Attempting to connect to the server")
+        self.logger.info("Attempting to connect to the server")
         reconnecting_clients.append(self)
         attempt_count = 0
         current_delay = self.reconnection_delay
