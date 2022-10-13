@@ -68,7 +68,7 @@ class SQLAlchemyWrapper:
             self._config = config_object
         else:
             raise TypeError("config_object can either be a str, a dict or a class")
-        if "SQLALCHEMY_DATABASE_URI" not in self._config:
+        if not self._config.get("SQLALCHEMY_DATABASE_URI"):
             db_file = base_dir / "gaia_data.db"
             uri = f"sqlite:///{db_file}"
             self._config["SQLALCHEMY_DATABASE_URI"] = uri

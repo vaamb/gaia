@@ -20,9 +20,6 @@ if Config.USE_DATABASE:
     from src.database.models import SensorHistory
 
 
-
-
-
 class Events:
     """A class holding all the events coming from either socketio or
     event-dispatcher

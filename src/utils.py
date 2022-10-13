@@ -24,8 +24,11 @@ from config import Config
 try:
     base_dir = pathlib.Path(Config.BASE_DIR)
     if not base_dir.exists():
-        raise RuntimeError("Base directory does not exist, please create it")
+        os.makedirs(base_dir)
 except AttributeError:
+    base_dir = pathlib.Path(__file__).absolute().parents[1]
+except TypeError:
+    print("Invalid BASE_DIR provided")
     base_dir = pathlib.Path(__file__).absolute().parents[1]
 
 yaml = ruamel.yaml.YAML()
