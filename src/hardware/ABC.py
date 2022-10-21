@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import logging
 import os
@@ -34,7 +36,7 @@ def str_to_hex(address: str) -> int:
 class Address:
     __slots__ = ("type", "main", "multiplexer", "multiplexer_channel")
 
-    def __init__(self, address_string: str):
+    def __init__(self, address_string: str) -> None:
         """
         :param address_string: str: address in form 'GPIO_1'
         """
@@ -47,7 +49,7 @@ class Address:
         self.multiplexer_channel: int = 0
         self._set_number(address_components[1])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.type == "i2c":
             rep_f = hex
         else:
@@ -60,7 +62,7 @@ class Address:
         else:
             return f"{self.type.upper()}_{rep_f(self.main)}"
 
-    def _set_number(self, str_number: str):
+    def _set_number(self, str_number: str) -> None:
         if self.type.lower() in ("board", "bcm", "gpio"):
             number = int(str_number)
             if self.type.lower() == "board":
@@ -82,7 +84,7 @@ class Address:
                 self.main = str_to_hex(i2c_components[0])
 
     @property
-    def is_multiplexed(self):
+    def is_multiplexed(self) -> bool:
         return self.multiplexer != 0
 
 
@@ -99,7 +101,7 @@ class Hardware:
     """
     def __init__(
             self,
-            subroutine: "SubroutineTemplate",
+            subroutine: "SubroutineTemplate" | None,
             uid: str,
             address: str,
             level: str,
@@ -107,15 +109,17 @@ class Hardware:
             model: str,
             **kwargs
     ) -> None:
+        self._subroutine: "SubroutineTemplate" | None
         if subroutine == "hardware_creation":
             self._subroutine = None
         else:
-            self._subroutine: "SubroutineTemplate" = weakref.proxy(subroutine)
+            self._subroutine = weakref.proxy(subroutine)
         self._uid: str = uid
+        self._level: str
         if level.lower() in ("environment", "environments"):
-            self._level: str = "environment"
+            self._level = "environment"
         elif level.lower() in ("plant", "plants"):
-            self._level: str = "plants"
+            self._level = "plants"
         else:  # pragma: no cover
             raise ValueError("level should be 'plant' or 'environment'")
         self._type: str = type
@@ -174,7 +178,7 @@ class Hardware:
         return self._type
 
     @property
-    def dict_repr(self) -> dict:
+    def dict_repr(self) -> dict[str, str]:
         return {
             "uid": self._uid,
             "name": self._name,
@@ -324,7 +328,7 @@ class BaseSensor(Hardware):
     def __init__(self, *args, **kwargs) -> None:
         kwargs["type"] = "sensor"
         super().__init__(*args, **kwargs)
-        self._measure = kwargs.pop("measure", [])
+        self._measure = kwargs.pop("measure") or []
 
     def get_data(self) -> list:
         raise NotImplementedError(

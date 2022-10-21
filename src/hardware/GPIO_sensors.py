@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from time import sleep
 import typing as t
 
@@ -32,14 +34,15 @@ class DHTSensor(gpioSensor):
         # Rem: don't use pulseio as it uses 100% of one core in Pi3
         # In Pi0: behaves correctly
         self._device = self._get_device()
-        self._raw_data = {}
 
     def _get_device(self):  # pragma: no cover
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    def _get_raw_data(self) -> tuple:
+    def _get_raw_data(self) -> tuple[float | None, float | None]:
+        humidity: float | None = None
+        temperature: float | None = None
         for retry in range(3):
             try:
                 self._device.measure()
@@ -58,7 +61,8 @@ class DHTSensor(gpioSensor):
                 raise RuntimeError
 
             else:
-                return humidity, temperature
+                break
+        return humidity, temperature
 
     def get_data(self) -> list:
         try:

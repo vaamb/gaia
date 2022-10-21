@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime, time
 from statistics import mean
 from threading import Event, Lock, Thread
@@ -15,7 +17,7 @@ from config import Config
 if t.TYPE_CHECKING:  # pragma: no cover
     from .climate import Climate
     from .sensors import Sensors
-    from ..hardware.ABC import Switch
+    from ..hardware.ABC import BaseSensor, Switch
 
 
 Kp = 0.05
@@ -46,14 +48,16 @@ def _is_time_between(begin_time: time, end_time: time,
 class Light(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.hardware: dict[str, "Switch"]
         self._status = {"current": False, "last": False}
         self._mode = "automatic"
-        self._dimmable_lights_uid = []
+        self._dimmable_lights_uid: list[str] = []
         self._pid = PID(Kp, Ki, Kd)
         self._sun_times = {"morning_start": time(8), "evening_end": time(20)}
         self._stop_event = Event()
         self._adjust_light_level_event = Event()
         self._timer: ctime.monotonic() = 0.0
+        self._method: str | None
         try:
             self._method = self.config.light_method
         except UndefinedParameter:
@@ -131,7 +135,7 @@ class Light(SubroutineTemplate):
         if self.ecosystem.event_handler and send:
             try:
                 self.ecosystem.event_handler.send_light_data(
-                    ecosystem_uids=(self._uid, )
+                    ecosystem_uids=[self._uid]
                 )
             except Exception as e:
                 msg = e.args[1] if len(e.args) > 1 else e.args[0]
@@ -196,7 +200,7 @@ class Light(SubroutineTemplate):
     def _light_level_loop(self) -> None:
         if self.ecosystem.get_subroutine_status("sensors"):
             sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
-            light_sensors = [
+            light_sensors: list[BaseSensor] = [
                 sensor for sensor in sensors_subroutine.hardware.values()
                 if sensor.model in I2C_LIGHT_SENSORS
             ]
@@ -260,7 +264,7 @@ class Light(SubroutineTemplate):
         hardware_uid = list(hardware_dict.keys())[0]
         try:
             hardware_dict[hardware_uid]["level"] = "environment"
-            hardware = self._add_hardware(hardware_dict, ACTUATORS)
+            hardware: "Switch" = self._add_hardware(hardware_dict, ACTUATORS)
             hardware.turn_off()
             self.hardware[hardware_uid] = hardware
             if "dimmable" in hardware.model:

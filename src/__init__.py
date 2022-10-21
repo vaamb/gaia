@@ -1,14 +1,24 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import sys
 import threading
 from time import sleep
+import typing as t
 
 from config import Config
 from src.config_parser import GeneralConfig
 from src.engine import Engine
 from src.shared_resources import scheduler, start_scheduler
 from src.utils import json
+
+
+if t.TYPE_CHECKING:
+    from dispatcher import KombuDispatcher
+
+    from .database import SQLAlchemyWrapper
+    from .events.socketio import RetryClient
 
 
 try:
@@ -29,16 +39,16 @@ class Gaia:
     ) -> None:
         self.logger = logging.getLogger("gaia")
         self.logger.info("Initializing Gaia")
-        self.connect_to_ouranos = connect_to_ouranos
+        self.connect_to_ouranos: bool = connect_to_ouranos
         self.use_database = use_database
         self.engine = Engine(GeneralConfig())
-        self.message_broker = None
+        self.message_broker: "KombuDispatcher" | "RetryClient" | None = None
         if self.connect_to_ouranos:
             self._init_message_broker()
-        self.db = None
+        self.db: "SQLAlchemyWrapper" | None = None
         if self.use_database:
             self._init_database()
-        self.started = False
+        self.started: bool = False
 
     def _init_message_broker(self) -> None:
         self.logger.info("Initialising the message broker")
@@ -73,18 +83,19 @@ class Gaia:
         self.engine.event_handler = events_handler
 
     def _connect_to_ouranos(self) -> None:
-        if hasattr(self.message_broker, "is_socketio"):
-            def thread_func():
-                self.logger.info("Starting socketIO client")
-                server_url = f"http{url[url.index('://'):]}"
-                self.message_broker.connect(
-                    server_url, transports="websocket", namespaces=['/gaia']
-                )
-            self._thread = threading.Thread(target=thread_func)
-            self._thread.name = "socketio.connection"
-            self._thread.start()
-        else:
-            self.message_broker.start()
+        if self.message_broker is not None:
+            if hasattr(self.message_broker, "is_socketio"):
+                def thread_func():
+                    self.logger.info("Starting socketIO client")
+                    server_url = f"http{url[url.index('://'):]}"
+                    self.message_broker.connect(
+                        server_url, transports="websocket", namespaces=['/gaia']
+                    )
+                self._thread = threading.Thread(target=thread_func)
+                self._thread.name = "socketio.connection"
+                self._thread.start()
+            else:
+                self.message_broker.start()
 
     def _init_database(self) -> None:
         self.logger.info("Initialising the database")
@@ -114,14 +125,12 @@ class Gaia:
         if self.started:
             self.logger.info("Running")
             while True:
-                sys.stdout.write("\r")
-                sys.stdout.write(next(spinner))
-                sys.stdout.write("\033[K")
-                sys.stdout.flush()
-                if hasattr(self.message_broker, "is_socketio"):
-                    self.message_broker.sleep(1)
-                else:
-                    sleep(1)
+                if Config.LOG_TO_STDOUT:
+                    sys.stdout.write("\r")
+                    sys.stdout.write(next(spinner))
+                    sys.stdout.write("\033[K")
+                    sys.stdout.flush()
+                sleep(1)
 
     def stop(self):
         if self.started:

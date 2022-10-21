@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 from json.decoder import JSONDecodeError
 import logging
 import logging.config
 import os
 from threading import Thread
-import typing as t
 import weakref
 
 from .config_parser import config_event, detach_config, GeneralConfig, get_IDs
@@ -34,8 +35,8 @@ class Engine(metaclass=SingletonMeta):
         self.logger.debug("Initializing")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = Config.UUID
-        self._run: bool = False
-        self._event_handler: t.Union[Events, None] = None
+        self._event_handler: Events | None = None
+        self._thread: Thread | None = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
@@ -68,10 +69,10 @@ class Engine(metaclass=SingletonMeta):
         self.refresh_ecosystems()
 
     def _loop(self) -> None:
-        while self._run:
+        while self.started:
             with config_event:
                 config_event.wait()
-            if not self._run:
+            if not self.started:
                 break
             self.refresh_ecosystems()
             if self.event_handler:
@@ -81,6 +82,10 @@ class Engine(metaclass=SingletonMeta):
     """
     API calls
     """
+    @property
+    def started(self) -> bool:
+        return self._thread is not None
+
     @property
     def ecosystems(self):
         return self._ecosystems
@@ -312,14 +317,13 @@ class Engine(metaclass=SingletonMeta):
         on the 'ecosystem.cfg' file and refresh the Ecosystems when changes are
         made in the file.
         """
-        if not self._run:
+        if not self.started:
             self.logger.info("Starting the Engine ...")
             self._start_background_tasks()
             self._engine_startup()
             self._thread = Thread(target=self._loop)
             self._thread.name = "engine"
             self._thread.start()
-            self._run = True
             self.logger.info("Engine started")
         else:  # pragma: no cover
             raise RuntimeError("Engine can only be started once")
@@ -330,11 +334,10 @@ class Engine(metaclass=SingletonMeta):
             clear_engine: bool = True
     ) -> None:
         """Stop the Engine"""
-        if self._run:
+        if self.started:
             self.logger.info("Stopping the Engine ...")
             if clear_engine:
                 stop_ecosystems = True
-            self._run = False
             # send a config signal so a last loops starts
             with config_event:
                 config_event.notify_all()

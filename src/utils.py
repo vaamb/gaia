@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 from datetime import date, datetime, time, timezone
 import hashlib
@@ -10,7 +12,6 @@ import pathlib
 import platform
 import secrets
 import socket
-import typing as t
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
@@ -35,15 +36,17 @@ yaml = ruamel.yaml.YAML()
 
 
 class datetimeJSONEncoder(_json.JSONEncoder):
-    def default(self, obj) -> str:
-        if isinstance(obj, (datetime, date)):
-            obj = obj.astimezone(tz=timezone.utc)
-            return obj.replace(microsecond=0).isoformat()
+    def default(self, obj: date | datetime | time) -> str:
+        if isinstance(obj, datetime):
+            return obj.astimezone(tz=timezone.utc).isoformat(timespec="seconds")
+        if isinstance(obj, date):
+            return obj.isoformat()
         if isinstance(obj, time):
-            obj = datetime.combine(date.today(), obj)
-            obj = obj.astimezone()
-            obj = obj.astimezone(tz=timezone.utc).time()
-            return obj.replace(microsecond=0).isoformat()
+            return (
+                datetime.combine(date.today(), obj)
+                .astimezone(tz=timezone.utc)
+                .isoformat(timespec="seconds")
+            )
 
 
 class json:
@@ -179,10 +182,10 @@ def pin_translation(pin: int, direction: str) -> int:
 
 
 def get_dew_point(
-        temp: t.Union[float, None],
-        hum: t.Union[float, None],
+        temp: float | None,
+        hum: float | None,
         precision_digit: int = 2
-) -> t.Union[float, None]:
+) -> float | None:
     """
     Returns the dew point temperature calculated using the Magnus formula.
     It uses the Sonntag1990 parameters which is valid from -45°C to 60°C
@@ -205,10 +208,10 @@ def get_dew_point(
 
 
 def get_absolute_humidity(
-        temp: t.Union[float, None],
-        hum: t.Union[float, None],
+        temp: float | None,
+        hum: float | None,
         precision_digit: int = 2
-) -> t.Union[float, None]:
+) -> float | None:
     """
     Calculates the absolute humidity. The formula used is given below
     :param temp: temperature in degree celsius
@@ -236,11 +239,11 @@ def get_absolute_humidity(
 
 
 def temperature_converter(
-        temp: t.Union[float, None],
+        temp: float | None,
         unit_in: str,
         unit_out: str,
         precision_digit: int = 2
-) -> t.Union[float, None]:
+) -> float | None:
     """
     :param temp: float, the temperature in Celsius degrees
     :param unit_in: str, unit among Celsius, Kelvin, Fahrenheit (with or without
@@ -350,7 +353,10 @@ def generate_uid_token(iterations: int = 160000) -> str:
     return f"pbkdf2:sha256:{iterations}${ssalt}${hkey}"
 
 
-def generate_secret_key_from_password(password: str, set_env: bool = False) -> str:
+def generate_secret_key_from_password(
+        password: str | bytes,
+        set_env: bool = False
+) -> str:
     if isinstance(password, str):
         password = password.encode("utf-8")
     kdf = PBKDF2HMAC(
@@ -381,9 +387,11 @@ def configure_logging(config_class):
     if LOG_TO_STDOUT:
         handlers.append("streamHandler")
 
+    log_dir = base_dir/".logs"
+    print(base_dir)
     if LOG_TO_FILE or LOG_ERROR:
-        if not os.path.exists(base_dir/"logs"):
-            os.mkdir(base_dir/"logs")
+        if not log_dir.exists():
+            log_dir.mkdir(parents=True)
 
     if LOG_TO_FILE:
         handlers.append("fileHandler")
@@ -420,7 +428,7 @@ def configure_logging(config_class):
                 "level": f"{'DEBUG' if DEBUG else 'INFO'}",
                 "formatter": "fileFormat",
                 "class": "logging.handlers.RotatingFileHandler",
-                'filename': f"{str(base_dir)}/logs/base.log",
+                'filename': f"{log_dir}/base.log",
                 "mode": "w+",
                 "maxBytes": 1024 * 512,
                 "backupCount": 5,
@@ -429,7 +437,7 @@ def configure_logging(config_class):
                 "level": "ERROR",
                 "formatter": "fileFormat",
                 "class": "logging.FileHandler",
-                "filename": f"{str(base_dir)}/logs/errors.log",
+                "filename": f"{log_dir}/errors.log",
                 "mode": "a",
             }
         },
@@ -461,7 +469,7 @@ def configure_logging(config_class):
 
 
 class SingletonMeta(type):
-    _instances = {}
+    _instances: dict[type, type] = {}
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:

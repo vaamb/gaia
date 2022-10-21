@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import namedtuple
 from contextlib import contextmanager
 from datetime import date, datetime, time
@@ -68,17 +70,20 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
         self._last_sun_times_update: datetime = datetime(1970, 1, 1)
-        self._hash_dict = {}
+        self._hash_dict: dict[str, str] = {}
         self._stop_event = Event()
         self._watchdog_pause = Event()
         self._watchdog_pause.set()
-        self._thread = None
-        self._started = False
+        self._thread: Thread | None = None
         for cfg in ("ecosystems", "private"):
             self._load_or_create_config(cfg)
 
     def __repr__(self) -> str:
-        return f"GeneralConfig(watchdog={self._started})"
+        return f"GeneralConfig(watchdog={self.started})"
+
+    @property
+    def started(self) -> bool:
+        return self._thread is not None
 
     def _load_config(self, cfg: str) -> None:
         config_path = self._base_dir / f"{cfg}.cfg"
@@ -130,7 +135,7 @@ class GeneralConfig(metaclass=SingletonMeta):
     def _watchdog_loop(self) -> None:
         while not self._stop_event.is_set():
             self._watchdog_pause.wait()
-            old_hash = dict(self._hash_dict)
+            old_hash = {**self._hash_dict}
             self._update_cfg_hash()
             reload_cfg = [
                 cfg for cfg in ("ecosystems", "private")
@@ -142,24 +147,22 @@ class GeneralConfig(metaclass=SingletonMeta):
             self._stop_event.wait(Config.CONFIG_WATCHER_PERIOD)
 
     def start_watchdog(self) -> None:
-        if not self._started:
+        if not self.started:
             logger.info("Starting the configuration files watchdog")
             self._update_cfg_hash()
             self._thread = Thread(target=self._watchdog_loop)
             self._thread.name = "config_watchdog"
             self._thread.start()
-            self._started = True
             logger.debug("Configuration files watchdog successfully started")
         else:  # pragma: no cover
             logger.debug("Configuration files watchdog is already running")
 
     def stop_watchdog(self) -> None:
-        if self._started:
+        if self.started:
             logger.info("Stopping the configuration files watchdog")
             self._stop_event.set()
             self._thread.join()
             self._thread = None
-            self._started = False
             logger.debug("Configuration files watchdog successfully stopped")
 
     @contextmanager
@@ -353,7 +356,7 @@ class GeneralConfig(metaclass=SingletonMeta):
             with sun_times_file.open("r") as file:
                 sun_times_data = json.loads(file.read())
                 last_update: str = sun_times_data["last_update"]
-                self._last_sun_times_update: datetime = \
+                self._last_sun_times_update = \
                     datetime.fromisoformat(last_update).astimezone()
         except (FileNotFoundError, JSONDecodeError):
             need_update = True
@@ -611,9 +614,9 @@ class SpecificConfig:
         model: str = "",
         type: str = "",
         level: str = "",
-        measure: list = [],
+        measure: list | None = None,
         plant: str = "",
-    ) -> Hardware:
+    ) -> dict[str, str]:
         """
         Create a new hardware
         :param name: str, the name of the hardware to create
@@ -707,7 +710,7 @@ class SpecificConfig:
 # ---------------------------------------------------------------------------
 #   Functions to interact with the module
 # ---------------------------------------------------------------------------
-_configs = {}
+_configs: dict[str, SpecificConfig] = {}
 
 
 def get_general_config() -> GeneralConfig:

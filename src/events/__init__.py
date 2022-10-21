@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 import logging
 from threading import Thread
@@ -33,9 +35,10 @@ class Events:
         self.ecosystems = ecosystem_dict
         self._registered = False
         self._background_task = False
+        self._thread: Thread | None = None
         self.logger = logging.getLogger(f"{Config.APP_NAME.lower()}.broker")
+        self.db: SQLAlchemyWrapper | None
         if Config.USE_DATABASE:
-            from src.database import SQLAlchemyWrapper
             self.db = SQLAlchemyWrapper(Config)
         else:
             self.db = None
@@ -128,10 +131,8 @@ class Events:
         self._registered = True
         self.initialize_data_transfer()
 
-    def _get_uid_list(self, ecosystem_uids: t.Union[str, tuple] = "all") -> list:
-        if isinstance(ecosystem_uids, str):
-            ecosystem_uids = ecosystem_uids.split(",")
-        if "all" in ecosystem_uids:
+    def _get_uid_list(self, ecosystem_uids: list[str] | None = None) -> list[str]:
+        if ecosystem_uids is None:
             return [e_uid for e_uid in self.ecosystems.keys()]
         else:
             return [e_uid for e_uid in ecosystem_uids
@@ -140,7 +141,7 @@ class Events:
     def _get_specific_config(
             self,
             config_type: str,
-            ecosystem_uids: t.Union[str, tuple, list] = "all"
+            ecosystem_uids: list[str] | None = None
     ) -> list[dict]:
         uids = self._get_uid_list(ecosystem_uids)
         rv = []
@@ -151,7 +152,7 @@ class Events:
                 rv.append(data)
         return rv
 
-    def send_config(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+    def send_config(self, ecosystem_uids: list[str] | None = None) -> None:
         self.logger.debug("Received send_config event")
         uids = self._get_uid_list(ecosystem_uids)
         [self.emit(cfg, data=self._get_specific_config(cfg, uids)) for cfg in
@@ -160,7 +161,7 @@ class Events:
     def _get_data(
             self,
             data_type: str,
-            ecosystem_uids: t.Union[str, tuple, list] = "all"
+            ecosystem_uids: list[str] | None = None
     ) -> list:
         rv = []
         for uid in self._get_uid_list(ecosystem_uids):
@@ -173,19 +174,19 @@ class Events:
                 pass
         return rv
 
-    def send_sensors_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+    def send_sensors_data(self, ecosystem_uids: list[str] | None = None) -> None:
         self.logger.debug("Received send_sensors_data event")
         data = self._get_data("sensors_data", ecosystem_uids=ecosystem_uids)
         if data:
             self.emit("sensors_data", data=data)
 
-    def send_health_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+    def send_health_data(self, ecosystem_uids: list[str] | None = None) -> None:
         self.logger.debug("Received send_health_data event")
         data = self._get_data("plants_health", ecosystem_uids=ecosystem_uids)
         if data:
             self.emit("health_data", data=data)
 
-    def send_light_data(self, ecosystem_uids: t.Union[str, tuple] = "all") -> None:
+    def send_light_data(self, ecosystem_uids: list[str] | None = None) -> None:
         self.logger.debug("Received send_light_data event")
         data = self._get_data("light_info", ecosystem_uids=ecosystem_uids)
         if data:
@@ -213,7 +214,7 @@ class Events:
             )
         finally:
             if actuator == "light":
-                self.send_light_data(ecosystem_uid)
+                self.send_light_data([ecosystem_uid])
 
     def on_change_management(self, message: dict) -> None:
         ecosystem_uid: str = message["ecosystem"]
@@ -224,7 +225,7 @@ class Events:
             self.ecosystems[ecosystem_uid].config.save()
             self.emit(
                 "management",
-                data=self._get_specific_config("management", ecosystem_uid)
+                data=self._get_specific_config("management", [ecosystem_uid])
             )
         except KeyError:
             self.logger.error(
@@ -233,23 +234,24 @@ class Events:
             )
 
     def on_get_data_since(self, message: dict) -> None:
-        if not self.db:
+        if self.db is not None:
+            ecosystem_uids: list[str] = message["ecosystems"]
+            uids: list[str] = self._get_uid_list(ecosystem_uids)
+            since_str: str = message["since"]
+            since: datetime = datetime.fromisoformat(since_str).astimezone()
+            with self.db.scoped_session() as session:
+                query = (
+                    select(SensorHistory)
+                        .where(SensorHistory.datetime >= since)
+                        .where(SensorHistory.ecosystem_uid.in_(uids))
+                )
+                results = session.execute(query).all().scalars()
+            self.emit(
+                "sensor_data_record",
+                [result.dict_repr for result in results]
+            )
+        else:
             self.logger.error(
                 "Received 'get_data_since' event but USE_DATABASE is set to False"
             )
             return
-        ecosystem_uids: str = message["ecosystems"]
-        uids: list = self._get_uid_list(ecosystem_uids)
-        since_str: str = message["since"]
-        since: datetime = datetime.fromisoformat(since_str).astimezone()
-        with self.db.scopped_session() as session:
-            query = (
-                select(SensorHistory)
-                    .where(SensorHistory.datetime >= since)
-                    .where(SensorHistory.ecosystem_uid.in_(uids))
-            )
-            results = session.execute(query).all().scalars()
-        self.emit(
-            "sensor_data_record",
-            [result.dict_repr for result in results]
-        )

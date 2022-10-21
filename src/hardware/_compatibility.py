@@ -98,9 +98,9 @@ class pwmio:
 
 class Pin:
     def __init__(self, bcm_nbr: int) -> None:
-        self._id = bcm_nbr
-        self._mode = 0
-        self._value = 0
+        self._id: int = bcm_nbr
+        self._mode: int = 0
+        self._value: int = 0
 
     def init(self, mode: int) -> None:
         self._mode = mode
@@ -160,11 +160,11 @@ class VEML7700(CompatibilityHardware):
 
 
 class Seesaw(CompatibilityHardware):
-    def moisture_read(self):
+    def moisture_read(self) -> float:
         random_sleep(0.02, 0.01)
         return get_moisture(self.ecosystem_uid)
 
-    def get_temp(self):
+    def get_temp(self) -> float:
         random_sleep(0.02, 0.01)
         return get_temperature(self.ecosystem_uid)
 

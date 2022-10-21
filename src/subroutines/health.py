@@ -1,6 +1,7 @@
 from datetime import datetime
 import io
 import typing as t
+from typing import Any
 
 from ..shared_resources import scheduler
 from ..subroutines.template import SubroutineTemplate
@@ -9,13 +10,14 @@ from config import Config
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from .light import Light
+    from src.hardware.ABC import Switch
 
 
 class Health(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-
-        self._plants_health = {}
+        self.hardware: dict[str, "Switch"]
+        self._plants_health: dict[str, Any] = {}
         self._imageIO = io.BytesIO
 
         self._finish__init__()

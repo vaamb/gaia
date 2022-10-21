@@ -6,7 +6,7 @@ import typing as t
 from simple_pid import PID
 
 from ..exceptions import StoppingSubroutine, UndefinedParameter
-from ..hardware import ACTUATORS, gpioDimmable, gpioSwitch
+from ..hardware import ACTUATORS, gpioDimmable
 from ..shared_resources import scheduler
 from ..subroutines.template import SubroutineTemplate
 
@@ -14,6 +14,7 @@ from ..subroutines.template import SubroutineTemplate
 if t.TYPE_CHECKING:  # pragma: no cover
     from .light import Light
     from .sensors import Sensors
+    from src.hardware.ABC import Switch
 
 
 RegulatorCouple = namedtuple("regulator_couple", ["increase", "decrease"])
@@ -39,7 +40,7 @@ class Climate(SubroutineTemplate):
         self._pids: dict[str, PID] = {}
         self._refresh_PIDs()
         self._refresh_hardware_dict()
-        self._regulated: t.Set[str] = set()
+        self._regulated: set[str] = set()
         self._targets: dict[str, dict[str, float]] = {}
         self._sun_times: dict[str, time] = {
             "morning_start": time(8, 0),
@@ -48,7 +49,7 @@ class Climate(SubroutineTemplate):
         self._finish__init__()
 
     def _refresh_hardware_dict(self) -> None:
-        self.hardware: dict[str, dict[str, gpioSwitch]] = {
+        self.hardware: dict[str, dict[str, "Switch"]] = {
             "heaters": {},
             "coolers": {},
             "humidifiers": {},
@@ -60,7 +61,7 @@ class Climate(SubroutineTemplate):
             self._pids[climate_param] = PID(Kp, Ki, Kd, output_limits=(-100, 100))
 
     def _update_regulated(self) -> None:
-        regulated: t.Set[str] = set()
+        regulated: set[str] = set()
         # Check if target values in config
         for climate_param in ("temperature", "humidity", "wind"):
             try:
@@ -70,7 +71,7 @@ class Climate(SubroutineTemplate):
             else:
                 regulated.add(climate_param)
         if not regulated:
-            self._regulated = []
+            self._regulated = set()
             self.logger.debug(
                 "No climate parameter found."
             )
@@ -84,7 +85,7 @@ class Climate(SubroutineTemplate):
                     if self.config.get_IO_group(regulator):
                         regulators.append(regulator)
         if not regulators:
-            self._regulated = []
+            self._regulated = set()
             self.logger.debug(
                 "No climate hardware detected."
             )
@@ -251,7 +252,7 @@ class Climate(SubroutineTemplate):
         hardware_uid = list(hardware_dict.keys())[0]
         try:
             hardware_dict[hardware_uid]["level"] = "environment"
-            hardware = self._add_hardware(hardware_dict, ACTUATORS)
+            hardware: "Switch" = self._add_hardware(hardware_dict, ACTUATORS)
             hardware.turn_off()
             self.hardware[f"{hardware.type}s"][hardware_uid] = hardware
             self.logger.debug(f"Regulator '{hardware.name}' has been set up")

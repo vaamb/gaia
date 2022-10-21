@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import logging
+import random
+from threading import Event
 
 try:
     import socketio
@@ -8,11 +12,9 @@ except ImportError:
         "to use socketio. Run `pip install python-socketio[client] "
         "websocket-client` in your virtual env"
     )
-
-import random
-
-from socketio.exceptions import BadNamespaceError
-from socketio.client import reconnecting_clients
+else:
+    from socketio.exceptions import BadNamespaceError
+    from socketio.client import reconnecting_clients
 
 from . import Events
 from config import Config
@@ -28,6 +30,7 @@ class RetryClient(socketio.Client):
         self.logger.debug("Starting socketIO client")
         super().__init__(*args, **kwargs)
         self.is_socketio = True  # Used by Gaia to choose the sleep method
+        self._connect_event: Event | None
 
     def connect(self, *args, **kwargs) -> None:
         self.logger.info("Attempting to connect to the server")

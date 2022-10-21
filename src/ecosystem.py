@@ -13,7 +13,7 @@ from config import Config
 if t.TYPE_CHECKING:  # pragma: no cover
     from .engine import Engine
     from .events import Events
-    from .subroutines import Climate, Health, Light, Sensors
+    from .subroutines import Climate, Health, Light, Sensors, SubroutineTemplate
 
 
 class Ecosystem:
@@ -35,7 +35,7 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
-        self.subroutines: SUBROUTINES = {}
+        self.subroutines:  dict[str, "SubroutineTemplate"] = {}
         for subroutine in SUBROUTINES:
             self.init_subroutine(subroutine)
         self._chaos: Chaos = Chaos(self, 0, 0, 1)
@@ -67,7 +67,6 @@ class Ecosystem:
     """
     API calls
     """
-
     @property
     def uid(self) -> str:
         return self._uid

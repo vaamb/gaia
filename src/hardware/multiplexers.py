@@ -1,4 +1,5 @@
 import typing as t
+from typing import Any
 
 from . import _IS_RASPI
 
@@ -8,7 +9,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_tca9548a import TCA9548A as tca
 
 
-_store = {}
+_store: dict[str, Any] = {}
 
 
 def get_i2c():
@@ -33,7 +34,9 @@ def get_multiplexer(multiplexer_address) -> "Multiplexer":
     try:
         return _store[multiplexer_address]
     except KeyError:
-        _store[multiplexer_address] = TCA9548A()  # TODO later: find a way to indicate proper class
+        multiplexer = TCA9548A()
+        _store[multiplexer_address] = multiplexer  # TODO later: find a way to indicate proper class
+        return multiplexer
 
 
 class Multiplexer:

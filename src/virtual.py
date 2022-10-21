@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, time, timedelta
 from time import monotonic
 import math
@@ -246,11 +248,11 @@ class VirtualEcosystem:
         raise AttributeError("uid cannot be set")
 
     @property
-    def temperature(self) -> float:
+    def temperature(self) -> float | None:
         return temperature_converter(self._temperature, "k", "c")
 
     @property
-    def humidity(self) -> float:
+    def humidity(self) -> float | None:
         return self._humidity
 
     @property
@@ -266,7 +268,7 @@ class VirtualEcosystem:
         return bool(self._start_time)
 
 
-_virtual_ecosystems = {}
+_virtual_ecosystems: dict[str, VirtualEcosystem] = {}
 
 
 def get_virtual_ecosystem(ecosystem: str, start=False) -> VirtualEcosystem:

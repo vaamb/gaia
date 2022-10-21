@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from time import sleep
 import typing as t
 
@@ -42,7 +44,7 @@ class VEML7700(i2cSensor):
         return _VEML7700(self._get_i2c(), self._address["main"].main)
 
     # To catch data fast from light routine
-    def _get_lux(self) -> float:
+    def _get_lux(self) -> float | None:
         try:
             return self._device.lux
         except Exception as e:
@@ -50,6 +52,7 @@ class VEML7700(i2cSensor):
                 f"Sensor {self._name} encountered an error. "
                 f"ERROR msg: `{e.__class__.__name__}: {e}`"
             )
+            return None
 
     def get_data(self) -> list:
         data = []
@@ -93,7 +96,9 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
             kwargs["measure"] = ["moisture", "temperature"]
         super().__init__(*args, **kwargs)
 
-    def _get_raw_data(self) -> tuple:
+    def _get_raw_data(self) -> tuple[float | None, float | None]:
+        moisture: float | None = None
+        temperature: float | None = None
         for retry in range(3):
             try:
                 moisture = self._device.moisture_read()
@@ -108,9 +113,10 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
-                raise RuntimeError
+                break
             else:
-                return moisture, temperature
+                break
+        return moisture, temperature
 
     def get_data(self) -> list[dict]:
         try:

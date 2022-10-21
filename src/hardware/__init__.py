@@ -1,6 +1,6 @@
 from adafruit_platformdetect import Board, Detector
 
-_IS_RASPI = Board(Detector()).any_raspberry_pi
+_IS_RASPI: bool = Board(Detector()).any_raspberry_pi  # noqa
 
 from .actuators import ACTUATORS, gpioDimmable, gpioSwitch
 from .GPIO_sensors import DHT11, DHT22, GPIO_SENSORS

@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from datetime import datetime
 from statistics import mean
 from threading import Event, Thread, Lock
 from time import monotonic
 import typing as t
+from typing import Any
 
 from ..hardware import SENSORS
 from ..hardware.ABC import BaseSensor
@@ -21,7 +24,7 @@ class Sensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._stop_event = Event()
-        self._data = {}
+        self._data: dict[str, Any] = {}
         self._finish__init__()
 
     def _sensors_loop(self) -> None:
@@ -72,8 +75,8 @@ class Sensors(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_dict: dict) -> BaseSensor:
-        hardware_uid = list(hardware_dict.keys())[0]
+    def add_hardware(self, hardware_dict: dict) -> BaseSensor | None:
+        hardware_uid: str = list(hardware_dict.keys())[0]
         try:
             model = hardware_dict[hardware_uid].get("model", None)
             if Config.VIRTUALIZATION:
@@ -88,6 +91,7 @@ class Sensors(SubroutineTemplate):
                 f"Encountered an exception while setting up sensor "
                 f"'{hardware_uid}'. ERROR msg: `{e.__class__.__name__}: {e}`."
             )
+            return None
 
     def remove_hardware(self, sensors_uid: str) -> None:
         try:
@@ -105,11 +109,11 @@ class Sensors(SubroutineTemplate):
         """
         Loops through all the sensors and stores the value in self._data
         """
-        cache = {}
-        average = {}
+        cache: dict[str, Any] = {}
+        to_average: dict[str, list] = {}
         now = datetime.now().astimezone().replace(microsecond=0)
-        cache["datetime"] = now
-        cache["data"] = []
+        cache["datetime"]: datetime = now
+        cache["data"]: list[dict] = []
         for uid in self.hardware:
             measures = self.hardware[uid].get_data()
             cache["data"].append(
@@ -117,11 +121,12 @@ class Sensors(SubroutineTemplate):
             )
             for measure in measures:
                 try:
-                    average[measure["name"]].append(measure["value"])
+                    to_average[measure["name"]].append(measure["value"])
                 except KeyError:
-                    average[measure["name"]] = [measure["value"]]
-        for measure in average:
-            average[measure] = round(mean(average[measure]), 2)
+                    to_average[measure["name"]] = [measure["value"]]
+        average: dict[str, float | int] = {}
+        for measure in to_average:
+            average[measure] = round(mean(to_average[measure]), 2)
         cache["average"] = [
             {"name": name, "value": value} for name, value in average.items()
         ]
