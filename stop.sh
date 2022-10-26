@@ -1,3 +1,5 @@
-if pgrep -x "gaia" > /dev/nul; then
+#!/bin/bash
+
+if pgrep -x "gaia" > /dev/null; then
   pkill -15 "gaia"
 fi
