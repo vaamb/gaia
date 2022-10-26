@@ -1,0 +1,3 @@
+[submodule "dispatcher"]
+	path = dispatcher
+	url = https://gitlab.com/eupla/dispatcher
