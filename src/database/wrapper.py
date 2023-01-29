@@ -97,7 +97,10 @@ class SQLAlchemyWrapper:
         assert self._config, "SQLAlchemyWrapper was not fully initialized"
         engine = self._engines.get(bind, None)
         if engine is None:
-            engine = create_engine(self._get_uri_for_bind(bind), convert_unicode=True)
+            engine = create_engine(
+                self._get_uri_for_bind(bind),
+                # convert_unicode=True
+            )
             self._engines[bind] = engine
         return engine
 
