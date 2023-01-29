@@ -169,7 +169,8 @@ class Events:
                 data = getattr(self.ecosystems[uid], data_type)
                 if data:
                     rv.append({**{"ecosystem_uid": uid}, **data})
-            # Except when subroutines are still loading
+            # Except when subroutines are still loading or received a message
+            #  for an ecosystem not on this engine
             except KeyError:
                 pass
         return rv
@@ -198,21 +199,16 @@ class Events:
         self.on_turn_actuator(message)
 
     def on_turn_actuator(self, message: dict) -> None:
-        self.logger.debug("Received turn_actuator event")
         ecosystem_uid: str = message["ecosystem"]
         actuator: str = message["actuator"]
         mode: str = message["mode"]
         countdown: float = message.get("countdown", 0.0)
-        try:
+        if ecosystem_uid in self.ecosystems:
+            self.logger.debug("Received turn_actuator event")
+
             self.ecosystems[ecosystem_uid].turn_actuator(
                 actuator=actuator, mode=mode, countdown=countdown
             )
-        # Except when subroutines are still loading
-        except KeyError:
-            self.logger.error(
-                f"{ecosystem_uid}'s {actuator} cannot be turned to {mode} yet"
-            )
-        finally:
             if actuator == "light":
                 self.send_light_data([ecosystem_uid])
 
@@ -220,17 +216,12 @@ class Events:
         ecosystem_uid: str = message["ecosystem"]
         management: str = message["management"]
         status: bool = message["status"]
-        try:
+        if ecosystem_uid in self.ecosystems:
             self.ecosystems[ecosystem_uid].config.set_management(management, status)
             self.ecosystems[ecosystem_uid].config.save()
             self.emit(
                 "management",
                 data=self._get_specific_config("management", [ecosystem_uid])
-            )
-        except KeyError:
-            self.logger.error(
-                f"{ecosystem_uid}'s management {management} cannot be turned "
-                f"to {status} yet"
             )
 
     def on_get_data_since(self, message: dict) -> None:
