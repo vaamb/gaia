@@ -18,12 +18,10 @@ class Config:
     # BASE_DIR = ~/Gaia
     UUID = os.environ.get("GAIA_UUID") or hex(uuid.getnode())[2:]
     VIRTUALIZATION = os.environ.get("GAIA_VIRTUALIZATION", False)
-    MESSAGE_BROKER_URL = os.environ.get("OURANOS_AGGREGATOR_URL") or "amqp://"  # "socketio://127.0.0.1:5000"
+    AGGREGATOR_COMMUNICATION_URL = os.environ.get("GAIA_COMMUNICATION_URL") or "amqp://"  # "socketio://127.0.0.1:5000"
     DATABASE_URI = os.environ.get("GAIA_DATABASE_URI", False)
     # If not provided, will be f"sqlite:///{base_dir/'gaia_data.db'}"
-    OURANOS_SECRET_KEY = os.environ.get("OURANOS_SECRET_KEY") or \
-        "BXhNmCEmNdoBNngyGXj6jJtooYAcKpt6"
-
+    OURANOS_SECRET_KEY = os.environ.get("OURANOS_SECRET_KEY") or "secret_key"
     HEALTH_LOGGING_TIME = "00h00"
     CONFIG_WATCHER_PERIOD = 10
     LIGHT_LOOP_PERIOD = 0.5

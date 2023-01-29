@@ -22,7 +22,7 @@ if t.TYPE_CHECKING:
 
 
 try:
-    url = Config.MESSAGE_BROKER_URL or "socketio://127.0.0.1:5000"
+    url = Config.AGGREGATOR_COMMUNICATION_URL or "socketio://127.0.0.1:5000"
 except AttributeError:
     url = "socketio://127.0.0.1:5000"
 server = url[:url.index("://")]
