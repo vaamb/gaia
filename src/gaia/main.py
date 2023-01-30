@@ -104,12 +104,13 @@ class Gaia:
         from gaia.database import routines, SQLAlchemyWrapper
         self.db = SQLAlchemyWrapper(get_config())
         self.db.create_all()
-        scheduler.add_job(
-            routines.log_sensors_data,
-            kwargs={"scoped_session": self.db.scoped_session, "engine": self.engine},
-            trigger="cron", minute="*", misfire_grace_time=10,
-            id="log_sensors_data",
-        )
+        if get_config().SENSORS_LOGGING_PERIOD:
+            scheduler.add_job(
+                routines.log_sensors_data,
+                kwargs={"scoped_session": self.db.scoped_session, "engine": self.engine},
+                trigger="cron", minute="*", misfire_grace_time=10,
+                id="log_sensors_data",
+            )
 
     def start(self) -> None:
         if not self.started:
