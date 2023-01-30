@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.database import SQLAlchemyWrapper
-from src.database.models import SensorHistory
+from src import SQLAlchemyWrapper
+from src import SensorHistory
 from config import Config
 
 

@@ -5,9 +5,9 @@ import pytest
 from .utils import ECOSYSTEM_UID
 
 if t.TYPE_CHECKING:
-    from src.config_parser import SpecificConfig
-    from src.ecosystem import Ecosystem
-    from src.engine import Engine
+    from src import SpecificConfig
+    from src import Ecosystem
+    from src import Engine
 
 
 def test_properties(

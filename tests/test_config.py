@@ -3,14 +3,14 @@ import typing as t
 
 import pytest
 
-from src.config_parser import GeneralConfig, get_IDs
-from src.exceptions import UndefinedParameter
+from src import GeneralConfig, get_IDs
+from src import UndefinedParameter
 
 from .utils import ECOSYSTEM_UID, TESTING_ECOSYSTEM_CFG
 
 
 if t.TYPE_CHECKING:
-    from src.config_parser import SpecificConfig
+    from src import SpecificConfig
 
 
 # ---------------------------------------------------------------------------

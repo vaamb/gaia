@@ -3,10 +3,10 @@ import shutil
 
 import pytest
 
-from src.config_parser import GeneralConfig, SpecificConfig
-from src.ecosystem import Ecosystem
-from src.engine import Engine
-from src.subroutines import Climate, Light, Sensors
+from src import GeneralConfig, SpecificConfig
+from src import Ecosystem
+from src import Engine
+from src import Climate, Light, Sensors
 from config import Config
 
 

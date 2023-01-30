@@ -1,7 +1,7 @@
 import typing as t
 
-from src.hardware.ABC import BaseSensor, PlantLevelHardware, Dimmer
-from src.hardware import (
+from src import BaseSensor, PlantLevelHardware, Dimmer
+from src import (
     ACTUATORS, GPIO_SENSORS, I2C_SENSORS, VIRTUAL_SENSORS
 )
 
@@ -9,8 +9,8 @@ from .utils import TESTING_ECOSYSTEM_CFG
 
 
 if t.TYPE_CHECKING:
-    from src.config_parser import GeneralConfig
-    from src.subroutines import Light
+    from src import GeneralConfig
+    from src import Light
 
 
 TEST_ADDRESS = "I2C_0x70#1.default:GPIO_18"

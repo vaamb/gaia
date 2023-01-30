@@ -2,7 +2,7 @@ import typing as t
 
 
 if t.TYPE_CHECKING:
-    from src.subroutines import Climate, Light, Sensors
+    from gaia.subroutines import Climate, Light, Sensors
 
 
 def test_not_manageable(

@@ -2,11 +2,11 @@ import typing as t
 
 import pytest
 
-from src.engine import Engine
+from src import Engine
 from .utils import ECOSYSTEM_UID
 
 if t.TYPE_CHECKING:
-    from src.config_parser import GeneralConfig
+    from src import GeneralConfig
 
 
 def test_engine_singleton(general_config: "GeneralConfig", engine: Engine):
