@@ -32,7 +32,7 @@ except TypeError:
     print("Invalid BASE_DIR provided")
     base_dir = pathlib.Path(__file__).absolute().parents[1]
 
-yaml = ruamel.yaml.YAML()
+yaml = ruamel.yaml.YAML(typ="safe")
 
 
 class datetimeJSONEncoder(_json.JSONEncoder):
