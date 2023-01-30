@@ -93,11 +93,12 @@ class Events:
     def register(self) -> None:
         if self.type == "socketio":
             data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
+            self.emit("register_engine", data=data)
         elif self.type == "dispatcher":
             data = {"engine_uid": get_config().UUID}
+            self.emit("register_engine", data=data, ttl=30)
         else:
             raise TypeError("Event type is invalid")
-        self.emit("register_engine", data=data)
 
     def initialize_data_transfer(self) -> None:
         if not self._background_task:
