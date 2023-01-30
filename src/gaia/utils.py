@@ -19,10 +19,10 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import geopy
 import ruamel.yaml
 
-from gaia.config import get_config, get_base_dir
+from gaia.config import get_base_dir, get_config, get_log_dir
 
 
-yaml = ruamel.yaml.YAML()
+yaml = ruamel.yaml.YAML(typ="safe")
 
 
 try:
@@ -381,11 +381,6 @@ def configure_logging(config_class):
     if LOG_TO_STDOUT:
         handlers.append("streamHandler")
 
-    log_dir = get_base_dir()/".logs"
-    if LOG_TO_FILE or LOG_ERROR:
-        if not log_dir.exists():
-            log_dir.mkdir(parents=True)
-
     if LOG_TO_FILE:
         handlers.append("fileHandler")
 
@@ -421,7 +416,7 @@ def configure_logging(config_class):
                 "level": f"{'DEBUG' if DEBUG else 'INFO'}",
                 "formatter": "fileFormat",
                 "class": "logging.handlers.RotatingFileHandler",
-                'filename': f"{log_dir}/base.log",
+                'filename': f"{get_log_dir()/'base.log'}",
                 "mode": "w+",
                 "maxBytes": 1024 * 512,
                 "backupCount": 5,
@@ -430,7 +425,7 @@ def configure_logging(config_class):
                 "level": "ERROR",
                 "formatter": "fileFormat",
                 "class": "logging.FileHandler",
-                "filename": f"{log_dir}/errors.log",
+                "filename": f"{get_log_dir()/'errors.log'}",
                 "mode": "a",
             }
         },

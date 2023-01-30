@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 from typing import Type
+import warnings
 
 from gaia.config.base import BaseConfig, DIR
 
@@ -60,3 +61,28 @@ def get_config() -> Type[GaiaConfig]:
     if _state["config"] is None:
         _state["config"] = _get_config()
     return _state["config"]
+
+
+def _get_dir(name: str, fallback_path: str) -> Path:
+    config: Type[GaiaConfig] = get_config()
+    path = getattr(config, name)
+    try:
+        dir_ = Path(path)
+    except ValueError:
+        warnings.warn(
+            f"The dir specified by {name} is not valid, using fallback path "
+            f"{fallback_path}"
+        )
+        base_dir = get_base_dir()
+        dir_ = base_dir / fallback_path
+    if not dir_.exists():
+        dir_.mkdir(parents=True)
+    return dir_
+
+
+def get_cache_dir() -> Path:
+    return _get_dir("CACHE_DIR", ".cache")
+
+
+def get_log_dir() -> Path:
+    return _get_dir("LOG_DIR", ".logs")

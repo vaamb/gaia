@@ -1,12 +1,12 @@
 from datetime import date, datetime, time, timedelta
 from json.decoder import JSONDecodeError
 from math import pi, sin
-import os
 from pathlib import Path
 import typing as t
 import random
 import weakref
 
+from gaia.config import get_cache_dir
 from gaia.utils import json
 
 
@@ -37,10 +37,7 @@ class Chaos:
         self.duration: int = max_duration
         self.intensity: float = max_intensity
         base_dir = self.ecosystem.config.general.base_dir
-        cache_dir = base_dir/"cache"
-        if not cache_dir.exists():
-            os.mkdir(cache_dir)
-        self._chaos_file: Path = cache_dir/"chaos.json"
+        self._chaos_file: Path = get_cache_dir()/"chaos.json"
         self._intensity_function: t.Callable = _intensity_function
         self._time_window: dict[str, datetime] = {}
         self._load_chaos()

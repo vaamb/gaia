@@ -3,11 +3,12 @@ from __future__ import annotations
 from json.decoder import JSONDecodeError
 import logging
 import logging.config
-import os
 from threading import Thread
 import weakref
 
-from gaia.config import GeneralEnvironmentConfig, get_config, get_environment_IDs
+from gaia.config import (
+    GeneralEnvironmentConfig, get_cache_dir, get_config, get_environment_IDs
+)
 from gaia.config.environments import config_event, detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.events import Events
@@ -44,9 +45,6 @@ class Engine(metaclass=SingletonMeta):
     def _start_background_tasks(self) -> None:
         self.logger.debug("Starting background tasks")
         self.config.start_watchdog()
-        cache_dir = self.config.base_dir/"cache"
-        if not cache_dir.exists():
-            os.mkdir(cache_dir)
         self.refresh_sun_times()
         scheduler.add_job(self.refresh_sun_times, "cron",
                           hour="1", misfire_grace_time=15 * 60,
@@ -298,7 +296,7 @@ class Engine(metaclass=SingletonMeta):
     def refresh_chaos(self):
         for ecosystem in self.ecosystems.values():
             ecosystem.refresh_chaos()
-        chaos_file = self.config.base_dir/"cache/chaos.json"
+        chaos_file = get_cache_dir()/"chaos.json"
         try:
             with chaos_file.open("r+") as file:
                 ecosystem_chaos = json.loads(file.read())

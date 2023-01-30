@@ -14,7 +14,9 @@ from threading import Condition, Event, Lock, Thread
 from typing import Union
 import weakref
 
-from gaia.config import get_base_dir, get_config as get_gaia_config
+from gaia.config import (
+    get_base_dir, get_cache_dir, get_config as get_gaia_config
+)
 from gaia.exceptions import HardwareNotFound, UndefinedParameter
 from gaia.hardware import HARDWARE_AVAILABLE
 from gaia.subroutines import SUBROUTINES
@@ -324,7 +326,7 @@ class GeneralConfig(metaclass=SingletonMeta):
     @property
     def sun_times(self) -> dict:
         try:
-            with open(self.base_dir/"cache/sunrise.json", "r") as file:
+            with open(get_cache_dir()/"sunrise.json", "r") as file:
                 payload = json.loads(file.read())
                 sunrise = payload["data"]["home"]
         except (OSError, JSONDecodeError, KeyError):
@@ -346,10 +348,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         }
 
     def download_sun_times(self) -> None:
-        cache_file = self.base_dir/"cache"
-        if not cache_file.exists():
-            os.mkdir(cache_file)
-        sun_times_file = cache_file/"sunrise.json"
+        sun_times_file = get_cache_dir()/"sunrise.json"
         # Determine if the file needs to be updated
         need_update = False
         try:
