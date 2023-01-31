@@ -1,4 +1,4 @@
-from collections import namedtuple
+from dataclasses import dataclass
 from datetime import datetime, time
 from threading import Event
 import typing as t
@@ -17,7 +17,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.sensors import Sensors
 
 
-RegulatorCouple = namedtuple("regulator_couple", ["increase", "decrease"])
+@dataclass(frozen=True)
+class RegulatorCouple:
+    increase: str
+    decrease: str
 
 
 REGULATORS = {

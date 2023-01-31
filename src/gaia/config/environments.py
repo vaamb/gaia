@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections import namedtuple
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date, datetime, time
 from json.decoder import JSONDecodeError
 import logging
@@ -33,7 +33,10 @@ _lock = Lock()
 logger = logging.getLogger("gaia.config.environments")
 
 
-IDsTuple = namedtuple("IDsTuple", ("uid", "name"))
+@dataclass(frozen=True)
+class IDsTuple:
+    uid: str
+    name: str
 
 
 # ---------------------------------------------------------------------------
