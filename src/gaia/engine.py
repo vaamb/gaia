@@ -35,7 +35,7 @@ class Engine(metaclass=SingletonMeta):
         )
         self.logger.debug("Initializing")
         self._ecosystems: dict[str, Ecosystem] = {}
-        self._uid: str = get_config().UUID
+        self._uid: str = get_config().ENGINE_UID
         self._event_handler: Events | None = None
         self._thread: Thread | None = None
 

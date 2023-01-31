@@ -34,7 +34,7 @@ class Gaia:
         configure_logging(config_cls)
         self.logger = logging.getLogger("gaia")
         self.logger.info("Initializing Gaia")
-        self.connect_to_ouranos: bool = config_cls.USE_BROKER
+        self.connect_to_ouranos: bool = config_cls.COMMUNICATE_WITH_OURANOS
         self.use_database = config_cls.USE_DATABASE
         self.engine = Engine(GeneralEnvironmentConfig())
         self._broker_url = config_cls.AGGREGATOR_COMMUNICATION_URL
@@ -65,7 +65,7 @@ class Gaia:
             from gaia.events.dispatcher_based_handler import DispatcherBasedGaiaEvents
             self.message_broker = KombuDispatcher(
                 "gaia", url=self._broker_url, queue_options={
-                    "name": f"gaia-{get_config().UUID}", "durable": True
+                    "name": f"gaia-{get_config().ENGINE_UID}", "durable": True
                 }
             )
             events_handler = DispatcherBasedGaiaEvents("aggregator", self.engine.ecosystems)

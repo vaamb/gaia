@@ -95,7 +95,7 @@ class Events:
             data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
             self.emit("register_engine", data=data)
         elif self.type == "dispatcher":
-            data = {"engine_uid": get_config().UUID}
+            data = {"engine_uid": get_config().ENGINE_UID}
             self.emit("register_engine", data=data, ttl=30)
         else:
             raise TypeError("Event type is invalid")

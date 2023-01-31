@@ -329,7 +329,7 @@ def encrypted_uid() -> str:
     h.update(get_config().OURANOS_SECRET_KEY.encode("utf-8"))
     key = base64.urlsafe_b64encode(h.finalize())
     f = Fernet(key=key)
-    return f.encrypt(get_config().UUID.encode("utf-8")).decode("utf-8")
+    return f.encrypt(get_config().ENGINE_UID.encode("utf-8")).decode("utf-8")
 
 
 def generate_uid_token(iterations: int = 160000) -> str:
@@ -342,7 +342,7 @@ def generate_uid_token(iterations: int = 160000) -> str:
         salt=bsalt,
         iterations=iterations,
     )
-    bkey = kdf.derive(get_config().UUID.encode())
+    bkey = kdf.derive(get_config().ENGINE_UID.encode())
     hkey = base64.b64encode(bkey).hex()
     return f"pbkdf2:sha256:{iterations}${ssalt}${hkey}"
 
