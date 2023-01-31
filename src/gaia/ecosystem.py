@@ -3,7 +3,7 @@ import logging.config
 import typing as t
 import weakref
 
-from gaia.config.environments import get_config, SpecificConfig
+from gaia.config import get_environment_config, SpecificEnvironmentConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
 from gaia.subroutines.chaos import Chaos
 from gaia.subroutines import SUBROUTINES
@@ -25,7 +25,7 @@ class Ecosystem:
                           'ecosystems.cfg'
     """
     def __init__(self, ecosystem_id: str, engine: "Engine"):
-        self._config: SpecificConfig = get_config(ecosystem_id)
+        self._config: SpecificEnvironmentConfig = get_environment_config(ecosystem_id)
         self._uid: str = self._config.uid
         self._name: str = self._config.name
         self._engine: "Engine" = weakref.proxy(engine)
@@ -79,7 +79,7 @@ class Ecosystem:
         return self._started
 
     @property
-    def config(self) -> SpecificConfig:
+    def config(self) -> SpecificEnvironmentConfig:
         return self._config
 
     @property

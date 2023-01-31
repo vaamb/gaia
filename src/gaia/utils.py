@@ -437,7 +437,7 @@ def configure_logging(config_class):
             },
             "apscheduler": {
                 "handlers": handlers,
-                "level": "WARNING"
+                "level": f"{'DEBUG' if DEBUG else 'WARNING'}"
             },
             "urllib3": {
                 "handlers": handlers,

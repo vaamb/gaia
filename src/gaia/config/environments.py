@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from json.decoder import JSONDecodeError
 import logging
-import os
 import pathlib
 import random
 import requests
@@ -282,7 +281,7 @@ class GeneralConfig(metaclass=SingletonMeta):
             "'ecosystem_id' parameter should either be an ecosystem uid or an "
             "ecosystem name present in the 'ecosystems.cfg' file. If you want "
             "to create a new ecosystem configuration use the function "
-            "'createConfig()'."
+            "`create_ecosystem()`."
         )
 
     """Private config parameters"""
@@ -721,8 +720,6 @@ def get_general_config() -> GeneralConfig:
 
 def get_config(ecosystem: str) -> SpecificConfig:
     """ Return the specificConfig object for the given ecosystem.
-
-    If no ecosystem is provided, return the globalConfig object instead
 
     :param ecosystem: str, an ecosystem uid or name. If left to none, will
                       return globalConfig object instead.
