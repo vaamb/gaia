@@ -22,6 +22,9 @@ class RegulatorCouple:
     increase: str
     decrease: str
 
+    def __iter__(self):
+        return iter((self.increase, self.decrease))
+
 
 REGULATORS = {
     "temperature": RegulatorCouple("heater", "cooler"),

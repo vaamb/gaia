@@ -37,6 +37,9 @@ class IDsTuple:
     uid: str
     name: str
 
+    def __iter__(self):
+        return iter((self.uid, self.name))
+
 
 # ---------------------------------------------------------------------------
 #   default ecosystem configuration
