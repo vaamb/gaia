@@ -3,6 +3,7 @@ import sys
 from typing import Type
 import warnings
 
+from gaia import __version__ as version
 from gaia.config.base import BaseConfig, DIR
 
 
@@ -18,7 +19,7 @@ _state: dict = {
 
 class AppInfo:
     APP_NAME = "Gaia"
-    VERSION = "0.5.3"
+    VERSION = version
 
 
 def get_base_dir() -> Path:

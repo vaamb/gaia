@@ -1,6 +1,23 @@
-[build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
+[project]
+name = "gaia"
+description = "An app to manage greenhouses, terrariums and aquariums"
+authors = [
+    {name = "Valentin Ambroise", email = "valentin.ambroise@outlook.com"}
 ]
+requires-python = ">=3.7"
+readme = "README.md"
+dynamic = ["version"]
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "gaia.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

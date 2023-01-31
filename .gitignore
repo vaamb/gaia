@@ -1,10 +1,14 @@
-__pycache__
-.idea
+__pycache__/
+.idea/
+.pytest_cache/
 
-cache
-logs
-venv
+.cache/
+.logs/
+migrations/
+venv/
 
 *.cfg
 *.db
-.coveragerc
+*.egg-info
+*.json
+*private*
