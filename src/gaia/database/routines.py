@@ -32,7 +32,7 @@ def log_sensors_data(scoped_session: "scoped_session", engine: "Engine"):
                                 sensor_uid=sensor_uid,
                                 ecosystem_uid=ecosystem_uid,
                                 measure=measure["name"],
-                                datetime=measurement_time,
+                                timestamp=measurement_time,
                                 value=measure["value"],
                             )
                             session.add(data_point)

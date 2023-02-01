@@ -234,7 +234,7 @@ class Events:
             with self.db.scoped_session() as session:
                 query = (
                     select(SensorHistory)
-                        .where(SensorHistory.datetime >= since)
+                        .where(SensorHistory.timestamp >= since)
                         .where(SensorHistory.ecosystem_uid.in_(uids))
                 )
                 results = session.execute(query).all().scalars()

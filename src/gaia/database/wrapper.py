@@ -7,7 +7,7 @@ from sqlalchemy.engine import create_engine, Engine
 from sqlalchemy.orm import DeclarativeMeta, scoped_session, sessionmaker
 
 from gaia.config import GaiaConfig, get_base_dir
-from gaia.database.models import base
+from gaia.database.models import Base
 
 
 def config_dict_from_class(obj) -> dict:
@@ -30,7 +30,7 @@ class SQLAlchemyWrapper:
     This will automatically create a scoped session and remove it at the end of
     the scope.
     """
-    _Model: DeclarativeMeta = base
+    _Model: DeclarativeMeta = Base
 
     def __init__(
             self,
