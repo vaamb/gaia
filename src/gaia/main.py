@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import itertools
 import logging
 import sys
 import threading
 from time import sleep
 import typing as t
 from typing import Type
-
-import psutil
 
 from gaia.config import GaiaConfig, GeneralEnvironmentConfig, get_config
 from gaia.engine import Engine
@@ -21,9 +18,6 @@ if t.TYPE_CHECKING:
 
     from gaia.database import SQLAlchemyWrapper
     from gaia.events.sio_based_handler import RetryClient
-
-
-spinner = itertools.cycle(["", ".", "..", "..."])
 
 
 class Gaia:
@@ -128,11 +122,6 @@ class Gaia:
         if self.started:
             self.logger.info("Running")
             while True:
-                if get_config().LOG_TO_STDOUT:
-                    sys.stdout.write("\r")
-                    sys.stdout.write(next(spinner))
-                    sys.stdout.write("\033[K")
-                    sys.stdout.flush()
                 sleep(1)
 
     def stop(self):
