@@ -7,6 +7,7 @@ __pycache__/
 migrations/
 venv/
 
+config.py
 *.cfg
 *.db
 *.egg-info
