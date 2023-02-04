@@ -80,8 +80,7 @@ source venv/bin/activate;
 
 echo "Installing required python packages";
 start_spinner;
-pip3 install --upgrade setuptools;
-pip3 install -r requirements.txt;
+pip3 install --upgrade pip setuptools wheel;
 stop_spinner;
 echo "Required python packages installed";
 
