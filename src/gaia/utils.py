@@ -16,7 +16,6 @@ from typing import Any
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-import geopy
 import ruamel.yaml
 
 from gaia.config import get_base_dir, get_config, get_log_dir
@@ -294,23 +293,6 @@ def temperature_converter(
         )
 
     return float(round(x, precision_digit))
-
-
-def get_coordinates(city: str) -> dict:
-    """Get the geocode of the given city using geopy API.
-
-    :param city: str, the name of a city.
-    :return: dict with the latitude and longitude of the given city.
-    """
-    geolocator = geopy.geocoders.Nominatim(user_agent="EP-gaia")
-    location = geolocator.geocode(city)
-    if not location:
-        raise LookupError
-    else:
-        return {
-            "latitude": location.latitude,
-            "longitude": location.longitude,
-        }
 
 
 def is_connected() -> bool:

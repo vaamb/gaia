@@ -20,8 +20,8 @@ from gaia.exceptions import HardwareNotFound, UndefinedParameter
 from gaia.hardware import HARDWARE_AVAILABLE
 from gaia.subroutines import SUBROUTINES
 from gaia.utils import (
-    file_hash, get_coordinates, human_time_parser, is_connected, json,
-    SingletonMeta, utc_time_to_local_time, yaml
+    file_hash, human_time_parser, is_connected, json, SingletonMeta,
+    utc_time_to_local_time, yaml
 )
 
 
@@ -307,14 +307,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         try:
             return self._private_config["places"]["home"]["coordinates"]
         except KeyError:
-            try:
-                coordinates = get_coordinates(self.home_city)
-                self._private_config["places"]["home"]["coordinates"] = \
-                    coordinates
-                self.save("private")  # save to not reuse geopy api
-                return coordinates
-            except LookupError:
-                raise UndefinedParameter
+            raise UndefinedParameter
 
     @home_coordinates.setter
     def home_coordinates(self, value: tuple) -> None:
