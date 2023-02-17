@@ -25,8 +25,15 @@ from gaia.utils import (
 )
 
 
-config_event = Condition()
-_lock = Lock()
+_store = {}
+
+
+def get_config_event():
+    try:
+        return _store["config_event"]
+    except KeyError:
+        _store["config_event"] = Condition()
+        return _store["config_event"]
 
 
 logger = logging.getLogger("gaia.config.environments")
@@ -78,6 +85,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._private_config: dict = {}
         self._last_sun_times_update: datetime = datetime(1970, 1, 1)
         self._hash_dict: dict[str, str] = {}
+        self._lock = Lock()
         self._stop_event = Event()
         self._watchdog_pause = Event()
         self._watchdog_pause.set()
@@ -174,7 +182,7 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     @contextmanager
     def pausing_watchdog(self):
-        with _lock:  # maybe use a semaphore?
+        with self._lock:  # maybe use a semaphore?
             try:
                 self._watchdog_pause.clear()
                 yield
@@ -189,6 +197,7 @@ class GeneralConfig(metaclass=SingletonMeta):
             logger.debug(f"Updating configuration file(s) {tuple(config)}")
             for cfg in config:
                 self._load_config(cfg=cfg)
+            config_event = get_config_event()
             with config_event:
                 config_event.notify_all()
 

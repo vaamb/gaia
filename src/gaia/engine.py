@@ -9,7 +9,7 @@ import weakref
 from gaia.config import (
     GeneralEnvironmentConfig, get_cache_dir, get_config, get_environment_IDs
 )
-from gaia.config.environments import config_event, detach_config
+from gaia.config.environments import get_config_event, detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.events import Events
 from gaia.exceptions import UndefinedParameter
@@ -67,6 +67,7 @@ class Engine(metaclass=SingletonMeta):
         self.refresh_ecosystems()
 
     def _loop(self) -> None:
+        config_event = get_config_event()
         while self.started:
             with config_event:
                 config_event.wait()
@@ -337,6 +338,7 @@ class Engine(metaclass=SingletonMeta):
             if clear_engine:
                 stop_ecosystems = True
             # send a config signal so a last loops starts
+            config_event = get_config_event()
             with config_event:
                 config_event.notify_all()
             self._thread.join()

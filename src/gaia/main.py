@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 import threading
 from time import sleep
 import typing as t
@@ -18,6 +17,23 @@ if t.TYPE_CHECKING:
 
     from gaia.database import SQLAlchemyWrapper
     from gaia.events.sio_based_handler import RetryClient
+
+
+def main():
+    import eventlet
+
+    eventlet.monkey_patch()
+
+    from setproctitle import setproctitle
+
+    setproctitle("gaia")
+
+    gaia = Gaia()
+    try:
+        gaia.start()
+        gaia.wait()
+    finally:
+        gaia.stop()
 
 
 class Gaia:

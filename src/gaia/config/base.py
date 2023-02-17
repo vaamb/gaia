@@ -9,7 +9,7 @@ class BaseConfig:
     DEBUG = False
     TESTING = False
 
-    LOG_DIR = os.environ.get("GAIA_LOG_DIR") or os.path.join(DIR, ".logs")
+    LOG_DIR = os.environ.get("GAIA_LOG_DIR") or os.path.join(DIR, "logs")
     CACHE_DIR = os.environ.get("GAIA_CACHE_DIR") or os.path.join(DIR, ".cache")
 
     LOG_TO_STDOUT = True

@@ -5,7 +5,8 @@ from gaia.config import BaseConfig
 
 class Config(BaseConfig):
     DEBUG = False
-    TESTING = True
+    DEVELOPMENT = True
+    TESTING = False
 
     VIRTUALIZATION = True
 
