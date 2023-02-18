@@ -20,10 +20,6 @@ if t.TYPE_CHECKING:
 
 
 def main():
-    import eventlet
-
-    eventlet.monkey_patch()
-
     from setproctitle import setproctitle
 
     setproctitle("gaia")

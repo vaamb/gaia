@@ -7,4 +7,4 @@ fi
 echo "Starting Gaia";
 cd "$GAIA_DIR" || echo "\$GAIA_DIR is not set, exiting" exit
 source python_venv/bin/activate
-python3 -m gaia
+python3 main.py

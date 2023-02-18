@@ -74,6 +74,7 @@ pip install -e .
 deactivate
 
 # Make Gaia scripts easily available
+cp main.py $GAIA_DIR/
 cp -r scripts/ $GAIA_DIR/
 
 cd "$GAIA_DIR/scripts/"
@@ -107,4 +108,4 @@ source $HOME/.bash_profile
 echo "Gaia installed."
 echo "It might be required to install extra python packages depending on the hardware used."
 echo "To do so, install the required packages as indicated in the log files or in the docs and restart Gaia."
-echo "To start Gaia, either use \`gaia start\` or go to the gaia directory, activate the virtual environment and run \`python main.py\` or \`python -m gaia\`"
+echo "To start Gaia, either use \`gaia start\` or go to the gaia directory, activate the virtual environment and run \`python main.py\`"
