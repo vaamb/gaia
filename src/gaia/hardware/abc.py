@@ -328,7 +328,10 @@ class BaseSensor(Hardware):
     def __init__(self, *args, **kwargs) -> None:
         kwargs["type"] = "sensor"
         super().__init__(*args, **kwargs)
-        self._measure = kwargs.pop("measure") or []
+        measures = kwargs.pop("measure") or []
+        if isinstance(measures, str):
+            measures = [measures, ]
+        self._measure = measures
 
     def get_data(self) -> list:
         raise NotImplementedError(
