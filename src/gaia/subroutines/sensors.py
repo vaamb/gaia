@@ -120,14 +120,14 @@ class Sensors(SubroutineTemplate):
             )
             for measure in measures:
                 try:
-                    to_average[measure["name"]].append(measure["value"])
+                    to_average[measure["measure"]].append(measure["value"])
                 except KeyError:
-                    to_average[measure["name"]] = [measure["value"]]
+                    to_average[measure["measure"]] = [measure["value"]]
         average: dict[str, float | int] = {}
         for measure in to_average:
             average[measure] = round(mean(to_average[measure]), 2)
         cache["average"] = [
-            {"name": name, "value": value} for name, value in average.items()
+            {"measure": measure, "value": value} for measure, value in average.items()
         ]
         with lock:
             self._data = cache

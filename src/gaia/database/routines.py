@@ -31,7 +31,7 @@ def log_sensors_data(scoped_session: "scoped_session", engine: "Engine"):
                             data_point = SensorHistory(
                                 sensor_uid=sensor_uid,
                                 ecosystem_uid=ecosystem_uid,
-                                measure=measure["name"],
+                                measure=measure["measure"],
                                 timestamp=measurement_time,
                                 value=measure["value"],
                             )

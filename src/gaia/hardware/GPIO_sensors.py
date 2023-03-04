@@ -72,25 +72,25 @@ class DHTSensor(gpioSensor):
         data = []
         if raw_humidity is not None and raw_temperature is not None:
             if "humidity" in self.measure:
-                data.append({"name": "humidity", "value": raw_humidity})
+                data.append({"measure": "humidity", "value": raw_humidity})
 
             if "temperature" in self.measure:
                 temperature = temperature_converter(
                                  raw_temperature, "celsius", self._unit
                 )
-                data.append({"name": "temperature", "value": temperature})
+                data.append({"measure": "temperature", "value": temperature})
 
             if "dew_point" in self.measure:
                 raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
                 dew_point = temperature_converter(
                     raw_dew_point, "celsius", self._unit
                 )
-                data.append({"name": "dew_point", "value": dew_point})
+                data.append({"measure": "dew_point", "value": dew_point})
 
             if "absolute_humidity" in self.measure:
                 raw_absolute_humidity = get_absolute_humidity(
                     raw_temperature, raw_humidity)
-                data.append({"name": "absolute_humidity", "value": raw_absolute_humidity})
+                data.append({"measure": "absolute_humidity", "value": raw_absolute_humidity})
         return data
 
 

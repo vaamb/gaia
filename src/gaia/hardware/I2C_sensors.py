@@ -57,7 +57,7 @@ class VEML7700(i2cSensor):
     def get_data(self) -> list:
         data = []
         if "lux" in self.measure or "light" in self.measure:
-            data.append({"name": "light", "value": self._get_lux()})
+            data.append({"measure": "light", "value": self._get_lux()})
         return data
 
 
@@ -125,13 +125,13 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
             moisture = raw_temperature = None
         data = []
         if "moisture" in self.measure:
-            data.append({"name": "moisture", "value": moisture})
+            data.append({"measure": "moisture", "value": moisture})
 
         if "temperature" in self.measure:
             temperature = temperature_converter(
                 raw_temperature, "celsius", self._unit
             )
-            data.append({"name": "temperature", "value": temperature})
+            data.append({"measure": "temperature", "value": temperature})
         return data
 
 

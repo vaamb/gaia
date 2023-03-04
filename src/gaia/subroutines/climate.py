@@ -170,7 +170,7 @@ class Climate(SubroutineTemplate):
                 self._sensor_miss += 1
             else:
                 for data in average:
-                    measure = data["name"]
+                    measure = data["measure"]
                     if measure in self._regulated:
                         value = data["value"]
                         now = datetime.now().astimezone().time()
