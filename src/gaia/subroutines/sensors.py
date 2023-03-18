@@ -7,6 +7,8 @@ from time import monotonic
 import typing as t
 from typing import Any
 
+from gaia_validators import Empty, SensorsData
+
 from gaia.config import get_config
 from gaia.hardware import SENSORS
 from gaia.hardware.abc import BaseSensor
@@ -19,11 +21,12 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 lock = Lock()
 
+
 class Sensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._stop_event = Event()
-        self._data: dict[str, Any] = {}
+        self._data: SensorsData | Empty = Empty()
         self._finish__init__()
 
     def _sensors_loop(self) -> None:
@@ -111,7 +114,7 @@ class Sensors(SubroutineTemplate):
         cache: dict[str, Any] = {}
         to_average: dict[str, list] = {}
         now = datetime.now().astimezone().replace(microsecond=0)
-        cache["datetime"]: datetime = now
+        cache["timestamp"]: datetime = now
         cache["data"]: list[dict] = []
         for uid in self.hardware:
             measures = self.hardware[uid].get_data()
@@ -130,14 +133,14 @@ class Sensors(SubroutineTemplate):
             {"measure": measure, "value": value} for measure, value in average.items()
         ]
         with lock:
-            self._data = cache
+            self._data = SensorsData(**cache)
 
     @property
-    def sensors_data(self) -> dict:
+    def sensors_data(self) -> SensorsData:
         """
         Get sensors data as a dict with the following format:
         {
-            "datetime": datetime.now(),
+            "timestamp": datetime.now(),
             "data": [
                 {
                     "sensor_uid": sensor1_uid,

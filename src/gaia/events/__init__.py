@@ -6,6 +6,11 @@ from threading import Thread
 from time import sleep
 import typing as t
 
+from gaia_validators import (
+    BaseInfoConfigPayload, Empty, EnvironmentConfigPayload, HardwareConfigPayload,
+    ManagementConfigPayload, ConfigPayload
+)
+
 from gaia.config import get_config
 from gaia.shared_resources import scheduler
 from gaia.utils import encrypted_uid, generate_uid_token
@@ -20,6 +25,14 @@ if get_config().USE_DATABASE:
 
     from gaia.database import SQLAlchemyWrapper
     from gaia.database.models import SensorHistory
+
+
+payload_classes: dict[str, ConfigPayload] = {
+    "base_info": BaseInfoConfigPayload,
+    "management": ManagementConfigPayload,
+    "environmental_parameters": EnvironmentConfigPayload,
+    "hardware": HardwareConfigPayload,
+}
 
 
 class Events:
@@ -53,7 +66,7 @@ class Events:
             func()
         except Exception as e:
             log_msg = (
-                f"Encountered an error while sending light data. "
+                f"Encountered an error while handling function `{func.__name__}`. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`"
             )
             ex_msg = e.args[1] if len(e.args) > 1 else e.args[0]
@@ -132,32 +145,33 @@ class Events:
         self._registered = True
         self.initialize_data_transfer()
 
-    def _get_uid_list(self, ecosystem_uids: list[str] | None = None) -> list[str]:
+    def filter_uids(self, ecosystem_uids: list[str] | None = None) -> list[str]:
         if ecosystem_uids is None:
             return [e_uid for e_uid in self.ecosystems.keys()]
         else:
             return [e_uid for e_uid in ecosystem_uids
                     if e_uid in self.ecosystems.keys()]
 
-    def _get_specific_config(
+    def _get_config(
             self,
             config_type: str,
             ecosystem_uids: list[str] | None = None
     ) -> list[dict]:
-        uids = self._get_uid_list(ecosystem_uids)
+        uids = self.filter_uids(ecosystem_uids)
         rv = []
         for uid in uids:
             data = getattr(self.ecosystems[uid], config_type)
-            if data:
-                data.update({"uid": uid})
-                rv.append(data)
+            payload_class = payload_classes[config_type]
+            payload = payload_class.from_base(uid, data)
+            rv.append(payload)
         return rv
 
     def send_config(self, ecosystem_uids: list[str] | None = None) -> None:
         self.logger.debug("Received send_config event")
-        uids = self._get_uid_list(ecosystem_uids)
-        [self.emit(cfg, data=self._get_specific_config(cfg, uids)) for cfg in
-         ("base_info", "management", "environmental_parameters", "hardware")]
+        uids = self.filter_uids(ecosystem_uids)
+        for cfg in ("base_info", "management", "environmental_parameters", "hardware"):
+            data = self._get_config(cfg, uids)
+            self.emit(cfg, data=data)
 
     def _get_data(
             self,
@@ -165,11 +179,12 @@ class Events:
             ecosystem_uids: list[str] | None = None
     ) -> list:
         rv = []
-        for uid in self._get_uid_list(ecosystem_uids):
+        for uid in self.filter_uids(ecosystem_uids):
             try:
                 data = getattr(self.ecosystems[uid], data_type)
-                if data:
-                    rv.append({**{"ecosystem_uid": uid}, **data})
+                if not isinstance(data, Empty):
+                    data.ecosystem_uid = uid
+                    rv.append(data)
             # Except when subroutines are still loading or received a message
             #  for an ecosystem not on this engine
             except KeyError:
@@ -222,13 +237,13 @@ class Events:
             self.ecosystems[ecosystem_uid].config.save()
             self.emit(
                 "management",
-                data=self._get_specific_config("management", [ecosystem_uid])
+                data=self._get_config("management", [ecosystem_uid])
             )
 
     def on_get_data_since(self, message: dict) -> None:
         if self.db is not None:
             ecosystem_uids: list[str] = message["ecosystems"]
-            uids: list[str] = self._get_uid_list(ecosystem_uids)
+            uids: list[str] = self.filter_uids(ecosystem_uids)
             since_str: str = message["since"]
             since: datetime = datetime.fromisoformat(since_str).astimezone()
             with self.db.scoped_session() as session:

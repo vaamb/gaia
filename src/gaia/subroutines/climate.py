@@ -1,8 +1,9 @@
-from dataclasses import dataclass
-from datetime import datetime, time
+from dataclasses import asdict, dataclass
+from datetime import datetime
 from threading import Event
 import typing as t
 
+from gaia_validators import ClimateParameterNames, LightingHours
 from simple_pid import PID
 
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
@@ -46,12 +47,9 @@ class Climate(SubroutineTemplate):
         self._pids: dict[str, PID] = {}
         self._refresh_PIDs()
         self._refresh_hardware_dict()
-        self._regulated: set[str] = set()
+        self._regulated: set[ClimateParameterNames] = set()
         self._targets: dict[str, dict[str, float]] = {}
-        self._sun_times: dict[str, time] = {
-            "morning_start": time(8, 0),
-            "evening_end": time(8, 0)
-        }
+        self._sun_times: LightingHours = LightingHours()
         self._finish__init__()
 
     def _refresh_hardware_dict(self) -> None:
@@ -67,7 +65,7 @@ class Climate(SubroutineTemplate):
             self._pids[climate_param] = PID(Kp, Ki, Kd, output_limits=(-100, 100))
 
     def _update_regulated(self) -> None:
-        regulated: set[str] = set()
+        regulated: set[ClimateParameterNames] = set()
         # Check if target values in config
         for climate_param in ("temperature", "humidity", "wind"):
             try:
@@ -137,20 +135,21 @@ class Climate(SubroutineTemplate):
         if self.ecosystem.get_subroutine_status("light"):
             light_subroutine: "Light" = self.ecosystem.subroutines["light"]
             try:
-                for tod in ("morning_start", "evening_end"):
-                    self._sun_times[tod] = \
-                        light_subroutine.lighting_hours[tod]
-            except (AttributeError, KeyError):
+                self._sun_times = LightingHours(
+                    morning_start=light_subroutine.lighting_hours.morning_start,
+                    evening_end=light_subroutine.lighting_hours.evening_end,
+                )
+            except AttributeError:
                 self.logger.error(
                     "Could not obtain time parameters from the Light subroutine, "
                     "using the config ones instead."
                 )
         else:
             try:
-                self._sun_times["morning_start"] = \
-                    self.config.time_parameters["day"]
-                self._sun_times["evening_end"] = \
-                    self.config.time_parameters["night"]
+                self._sun_times = LightingHours(
+                    morning_start=self.config.time_parameters.day,
+                    evening_end=self.config.time_parameters.night,
+                )
             except UndefinedParameter:
                 self.logger.error(
                     f"No day and night parameters set for ecosystem "
@@ -161,7 +160,7 @@ class Climate(SubroutineTemplate):
     def _climate_routine(self) -> None:
         if self.ecosystem.get_subroutine_status("sensors"):
             sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
-            average = sensors_subroutine.sensors_data.get("average")
+            average = sensors_subroutine.sensors_data.average
             if not average:
                 self.logger.debug(
                     f"No sensor data found, climate subroutine will try "
@@ -170,18 +169,16 @@ class Climate(SubroutineTemplate):
                 self._sensor_miss += 1
             else:
                 for data in average:
-                    measure = data["measure"]
+                    measure = data.measure
                     if measure in self._regulated:
-                        value = data["value"]
+                        value = data.value
                         now = datetime.now().astimezone().time()
-                        tod = "day" if (
-                                    self._sun_times["morning_start"] < now <=
-                                    self._sun_times[
-                                        "morning_start"]) else "night"
-                        target = self._targets[measure][
-                                     tod] * self.ecosystem.chaos.factor
-                        hysteresis = self._targets[measure].get("hysteresis",
-                                                                0)
+                        if self._sun_times.morning_start < now <= self._sun_times.evening_end:
+                            tod = "day"
+                        else:
+                            tod = "night"
+                        target = self._targets[measure][tod] * self.ecosystem.chaos.factor
+                        hysteresis = self._targets[measure].get("hysteresis", 0)
                         self._pids[measure].setpoint = target
                         if abs(target - value) < hysteresis:
                             self._pids[
@@ -230,8 +227,9 @@ class Climate(SubroutineTemplate):
 
     def _update_climate_targets(self) -> None:
         for regulated in self._regulated:
+            climate_parameter = asdict(self.config.get_climate_parameters(regulated))
             self._targets[regulated] = {
-                    tod: self.config.get_climate_parameters(regulated)[tod]
+                    tod: climate_parameter[tod]
                     for tod in ("day", "night")
             }
 
@@ -301,7 +299,7 @@ class Climate(SubroutineTemplate):
         self._update_climate_targets()
 
     @property
-    def regulated(self) -> t.Set[str]:
+    def regulated(self) -> set[ClimateParameterNames]:
         return self._regulated
 
     @property

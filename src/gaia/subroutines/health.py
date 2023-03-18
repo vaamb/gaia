@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 from datetime import datetime
 import io
 import typing as t
-from typing import Any
+
+from gaia_validators import Empty, HealthData, HealthRecord
 
 from gaia.config import get_config
 from gaia.shared_resources import scheduler
@@ -17,7 +20,7 @@ class Health(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, "Switch"]
-        self._plants_health: dict[str, Any] = {}
+        self._plants_health: HealthData | Empty = Empty()
         self._imageIO = io.BytesIO
 
         self._finish__init__()
@@ -55,14 +58,14 @@ class Health(SubroutineTemplate):
             green = random.randrange(12000, 1500000, 1000)
             necrosis = random.uniform(5, 55)
             health_index = random.uniform(70, 97)
-            self._plants_health = {
-                "datetime": datetime.now().astimezone().replace(microsecond=0),
-                "data": {
-                    "green": green,
-                    "necrosis": round(necrosis, 2),
-                    "index": round(health_index, 2),
-                },
-            }
+            self._plants_health = HealthData(
+                timestamp=datetime.now().astimezone().replace(microsecond=0),
+                data=HealthRecord(
+                    green=green,
+                    necrosis=round(necrosis, 2),
+                    index=round(health_index, 2),
+                ),
+            )
             self.logger.info(f"{self._ecosystem} picture successfully analysed, "
                              f"indexes computed")
         else:
@@ -124,5 +127,5 @@ class Health(SubroutineTemplate):
         pass
 
     @property
-    def plants_health(self):
+    def plants_health(self) -> HealthData | Empty:
         return self._plants_health

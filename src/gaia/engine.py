@@ -230,7 +230,7 @@ class Engine(metaclass=SingletonMeta):
 
     def refresh_ecosystems(self):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file"""
-        expected_started = set(self.config.get_ecosystems_expected_running())
+        expected_started = set(self.config.get_ecosystems_expected_to_run())
         to_delete = set(self.ecosystems.keys())
         for ecosystem_uid in self.config.ecosystems_uid:
             # create the Ecosystem if it doesn't exist
@@ -267,7 +267,7 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem in self.ecosystems:
             try:
                 if (
-                    self.ecosystems[ecosystem].config.light_method in
+                    self.ecosystems[ecosystem].config.light_method.value in
                     ("mimic", "elongate")
                     # And expected to be running
                     and self.ecosystems[ecosystem].config.status

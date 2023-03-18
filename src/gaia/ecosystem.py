@@ -1,18 +1,26 @@
+from __future__ import annotations
+
 import logging
 import logging.config
 import typing as t
 import weakref
 
+from gaia_validators import (
+    BaseInfoConfig, Empty, EnvironmentConfig,
+    HardwareConfig, HealthData, LightData, ManagementConfig, SensorsData
+)
+
 from gaia.config import get_environment_config, SpecificEnvironmentConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
 from gaia.subroutines.chaos import Chaos
-from gaia.subroutines import SUBROUTINES
+from gaia.subroutines import SUBROUTINES, SubroutineTypes
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
     from gaia.events import Events
-    from gaia.subroutines import Climate, Health, Light, Sensors, SubroutineTemplate
+    from gaia.subroutines import Climate, Health, Light, Sensors
+    subroutines: Climate | Health | Light | Sensors
 
 
 class Ecosystem:
@@ -34,7 +42,7 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
-        self.subroutines:  dict[str, "SubroutineTemplate"] = {}
+        self.subroutines:  dict[str, "subroutines"] = {}
         for subroutine in SUBROUTINES:
             self.init_subroutine(subroutine)
         self._chaos: Chaos = Chaos(self, 0, 0, 1)
@@ -102,15 +110,15 @@ class Ecosystem:
         ])
 
     @property
-    def base_info(self) -> dict:
-        return {
-            "uid": self.uid,
-            "name": self.name,
-            "status": self.status,
-        }
+    def base_info(self) -> BaseInfoConfig:
+        return BaseInfoConfig(
+            uid=self.uid,
+            name=self.name,
+            status=self.status,
+        )
 
     @property
-    def management(self) -> dict:
+    def management(self) -> ManagementConfig:
         """Return the subroutines' management corrected by whether they are
         manageable or not"""
         base_management = self.config.ecosystem_config["management"]
@@ -120,17 +128,19 @@ class Ecosystem:
                 management[m] = self.config.get_management(m) & self.subroutines[m].manageable
             except KeyError:
                 management[m] = self.config.get_management(m)
-        return management
+        return ManagementConfig(**management)
 
     @property
-    def environmental_parameters(self) -> dict:
-        return self.config.ecosystem_config.get("environment", {})
+    def environmental_parameters(self) -> EnvironmentConfig:
+        environment_dict = self.config.ecosystem_config.get("environment", {})
+        return EnvironmentConfig(**environment_dict)
 
     @property
-    def hardware(self) -> dict:
-        return self.config.ecosystem_config.get("IO", {})
+    def hardware(self) -> list[HardwareConfig]:
+        hardware_dict = self.config.ecosystem_config.get("IO", {})
+        return [HardwareConfig(uid=key, **value) for key, value in hardware_dict.items()]
 
-    def init_subroutine(self, subroutine_name: str) -> None:
+    def init_subroutine(self, subroutine_name: SubroutineTypes) -> None:
         """Initialize a Subroutines
 
         :param subroutine_name: The name of the Subroutines to initialize
@@ -173,11 +183,10 @@ class Ecosystem:
             values = self.config.chaos
         except UndefinedParameter:
             values = {}
-        finally:
-            self.chaos.frequency = values.get("frequency", 0)
-            self.chaos.duration = values.get("duration", 0)
-            self.chaos.intensity = values.get("intensity", 1)
-            self.chaos.update()
+        self.chaos.frequency = values.get("frequency", 0)
+        self.chaos.duration = values.get("duration", 0)
+        self.chaos.intensity = values.get("intensity", 1)
+        self.chaos.update()
 
     def start(self):
         """Start the Ecosystem
@@ -244,19 +253,19 @@ class Ecosystem:
 
     # Sensors
     @property
-    def sensors_data(self) -> dict:
+    def sensors_data(self) -> SensorsData | Empty:
         if self.get_subroutine_status("sensors"):
             sensors_subroutine: "Sensors" = self.subroutines["sensors"]
             return sensors_subroutine.sensors_data
-        return {}
+        return Empty()
 
     # Light
     @property
-    def light_info(self) -> dict:
+    def light_info(self) -> LightData | Empty:
         if self.get_subroutine_status("light"):
             light_subroutine: "Light" = self.subroutines["light"]
             return light_subroutine.light_info
-        return {}
+        return Empty()
 
     def refresh_sun_times(self, send=False) -> None:
         if self.get_subroutine_status("light"):
@@ -271,20 +280,20 @@ class Ecosystem:
 
     # Health
     @property
-    def plants_health(self) -> dict:
+    def plants_health(self) -> HealthData | Empty:
         if self.get_subroutine_status("health"):
             health_subroutine: "Health" = self.subroutines["health"]
             return health_subroutine.plants_health
-        return {}
+        return Empty()
 
     # Climate
-    def climate_parameters_regulated(self) -> t.Set[str]:
+    def climate_parameters_regulated(self) -> set[str]:
         if self.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.subroutines["climate"]
             return climate_subroutine.regulated
         return set()
 
-    def climate_targets(self) -> dict[str, t.Union[float, int]]:
+    def climate_targets(self) -> dict[str, float | int]:
         if self.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.subroutines["climate"]
             return climate_subroutine.targets

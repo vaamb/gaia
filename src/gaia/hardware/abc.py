@@ -7,6 +7,7 @@ import pathlib
 import typing as t
 import weakref
 
+from gaia_validators import HardwareLevelNames, HardwareTypeNames
 
 from gaia.hardware import _IS_RASPI
 from gaia.hardware.multiplexers import get_i2c, get_multiplexer
@@ -104,13 +105,13 @@ class Hardware:
             subroutine: "SubroutineTemplate" | None,
             uid: str,
             address: str,
-            level: str,
-            type: str,
+            level: HardwareLevelNames,
+            type: HardwareTypeNames,
             model: str,
             **kwargs
     ) -> None:
         self._subroutine: "SubroutineTemplate" | None
-        if subroutine == "hardware_creation":
+        if subroutine is None:
             self._subroutine = None
         else:
             self._subroutine = weakref.proxy(subroutine)

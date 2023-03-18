@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import date, datetime, time
 from statistics import mean
 from threading import Event, Lock, Thread
 import time as ctime
 import typing as t
 
+from gaia_validators import (
+    LightData, LightingHours, LightMethod, LightMode, SunTimes
+)
 from simple_pid import PID
 
 from gaia.config import get_config
@@ -50,34 +54,36 @@ class Light(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, "Switch"]
         self._status = {"current": False, "last": False}
-        self._mode = "automatic"
+        self._mode: LightMode = LightMode.automatic
         self._dimmable_lights_uid: list[str] = []
         self._pid = PID(Kp, Ki, Kd)
-        self._sun_times = {"morning_start": time(8), "evening_end": time(20)}
+        self._lighting_hours: LightingHours = LightingHours()
         self._stop_event = Event()
         self._adjust_light_level_event = Event()
         self._timer: ctime.monotonic() = 0.0
-        self._method: str | None
+        self._method: LightMethod | None
         try:
             self._method = self.config.light_method
         except UndefinedParameter:
             self._method = None
         self._finish__init__()
 
-    def _refresh_sun_times(self, send=True) -> None:
+    def _refresh_lighting_hours(self, send=True) -> None:
+        if self._method is None:
+            self.logger.error("Lighting method is not defined")
+            return
+
         self.logger.debug("Updating sun times")
-        try:
-            time_parameters = self.config.time_parameters
-        except UndefinedParameter:
-            time_parameters = {}
+        time_parameters = self.config.time_parameters
+        sun_times: SunTimes | None
         try:
             sun_times = self.config.sun_times
         except UndefinedParameter:
-            sun_times = {}
+            sun_times = None
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
-        if self._method == "fixed":
-            if not time_parameters.get("day", False):
+        if self._method == LightMethod.fixed:
+            if time_parameters.day is None or time_parameters.night is None:
                 self.logger.error(
                     "Cannot use method 'fixed' without time parameters set in "
                     "config. Turning out light"
@@ -85,40 +91,51 @@ class Light(SubroutineTemplate):
                 raise StoppingSubroutine
             else:
                 with lock:
-                    self._sun_times["morning_start"] = time_parameters["day"]
-                    self._sun_times["evening_end"] = time_parameters["night"]
+                    self._lighting_hours = LightingHours(
+                        morning_start=time_parameters.day,
+                        evening_end=time_parameters.night,
+                    )
 
-        elif self._method == "place":
-            if not sun_times.get("sunrise", False):
+        elif self._method == LightMethod.mimic:
+            if sun_times is None:
                 self.logger.error(
                     "Cannot use method 'place' without sun times available. "
                     "Using 'fixed' method instead."
                 )
-                self.method = "fixed"
-                self._refresh_sun_times()
+                self.method = LightMethod.fixed
+                self._refresh_lighting_hours()
             else:
                 with lock:
-                    self._sun_times["morning_start"] = sun_times["sunrise"]
-                    self._sun_times["evening_end"] = sun_times["sunset"]
+                    self._lighting_hours = LightingHours(
+                        morning_start=sun_times.sunrise,
+                        evening_end=sun_times.sunset,
+                    )
 
-        elif self._method == "elongate":
-            if not time_parameters.get("day", False) or not sun_times.get("sunrise", False):
+        elif self._method == LightMethod.elongate:
+            if (
+                    time_parameters.day is None
+                    or time_parameters.night is None
+                    or sun_times is None
+            ):
                 self.logger.error(
                     "Cannot use method 'elongate' without time parameters set in "
                     "config and sun times available. Using 'fixed' method instead."
                 )
-                self.method = "fixed"
-                self._refresh_sun_times()
+                self.method = LightMethod.fixed
+                self._refresh_lighting_hours()
             else:
-                sunrise = _to_dt(sun_times["sunrise"])
-                sunset = _to_dt(sun_times["sunset"])
-                twilight_begin = _to_dt(sun_times["twilight_begin"])
+                sunrise = _to_dt(sun_times.sunrise)
+                sunset = _to_dt(sun_times.sunset)
+                twilight_begin = _to_dt(sun_times.twilight_begin)
                 offset = sunrise - twilight_begin
                 with lock:
-                    self._sun_times["morning_start"] = time_parameters["day"]
-                    self._sun_times["morning_end"] = (sunrise + offset).time()
-                    self._sun_times["evening_start"] = (sunset - offset).time()
-                    self._sun_times["evening_end"] = time_parameters["night"]
+                    self._lighting_hours = LightingHours(
+                        morning_start=time_parameters.day,
+                        morning_end=(sunrise + offset).time(),
+                        evening_start=(sunset - offset).time(),
+                        evening_end=time_parameters.night,
+                    )
+
         else:
             raise StoppingSubroutine
 
@@ -155,7 +172,7 @@ class Light(SubroutineTemplate):
             if self._timer:
                 if self._timer < ctime.monotonic():
                     self._timer = 0
-                    self._mode = "automatic"
+                    self._mode = LightMode.automatic
             self._light_state_routine()
             self._stop_event.wait(cfg.LIGHT_LOOP_PERIOD)
 
@@ -169,7 +186,7 @@ class Light(SubroutineTemplate):
                 self._status["current"] = True
                 for light in self.hardware.values():
                     light.turn_on()
-                if self._mode == "automatic":
+                if self._mode == LightMode.automatic:
                     self.logger.info("Lights have been automatically turned on")
                     send_data = True
         # If lighting == False, lights should be off
@@ -179,7 +196,7 @@ class Light(SubroutineTemplate):
                 self._status["current"] = False
                 for light in self.hardware.values():
                     light.turn_off()
-                if self._mode == "automatic":
+                if self._mode == LightMode.automatic:
                     self.logger.info("Lights have been automatically turned off")
                     send_data = True
         if send_data and self.ecosystem.event_handler:
@@ -219,7 +236,7 @@ class Light(SubroutineTemplate):
     """Functions to switch the light on/off either manually or automatically"""
     @property
     def _lighting(self) -> bool:
-        if self._mode == "automatic":
+        if self._mode == LightMode.automatic:
             return self.expected_status
         else:  # self._mode == "manual"
             if self._status["current"]:
@@ -245,7 +262,7 @@ class Light(SubroutineTemplate):
         now = datetime.now().astimezone()
         if now.date() > self.ecosystem.config.general.last_sun_times_update.date():
             self.ecosystem.engine.refresh_sun_times()
-        self._refresh_sun_times(send=True)
+        self._refresh_lighting_hours(send=True)
         self.refresh_hardware()
         self._light_loop_thread = Thread(
             target=self._light_state_loop, args=()
@@ -291,7 +308,7 @@ class Light(SubroutineTemplate):
 
     def refresh_sun_times(self, send=True):
         try:
-            self._refresh_sun_times(send)
+            self._refresh_lighting_hours(send)
         except StoppingSubroutine:
             self.stop()
 
@@ -301,17 +318,17 @@ class Light(SubroutineTemplate):
         if self._method == "elongate":
             # If time between lightning hours
             if (
-                self._sun_times["morning_start"] <= now <= self._sun_times["morning_end"]
+                self._lighting_hours.morning_start <= now <= self._lighting_hours.morning_end
                 or
-                self._sun_times["evening_start"] <= now <= self._sun_times["evening_end"]
+                self._lighting_hours.evening_start <= now <= self._lighting_hours.evening_end
             ):
                 return True
             else:
                 return False
         else:
             return _is_time_between(
-                self._sun_times["morning_start"],
-                self._sun_times["evening_end"],
+                self._lighting_hours.morning_start,
+                self._lighting_hours.evening_end,
                 check_time=now
             )
 
@@ -320,33 +337,26 @@ class Light(SubroutineTemplate):
         return self._status["current"]
 
     @property
-    def mode(self) -> str:
+    def mode(self) -> LightMode:
         return self._mode
 
     @mode.setter
-    def mode(self, value: str) -> None:
-        assert value in ("automatic", "manual")
+    def mode(self, value: LightMode) -> None:
         self._mode = value
 
     @property
-    def method(self) -> str:
+    def method(self) -> LightMethod:
         return self._method
 
     @method.setter
-    def method(self, value: str) -> None:
-        assert value in ("elongate", "fixed", "mimic")
-        if value in ("elongate", "mimic"):
-            self.refresh_sun_times(send=True)
+    def method(self, value: LightMethod) -> None:
         self._method = value
+        if value in (LightMethod.elongate, LightMethod.mimic):
+            self.refresh_sun_times(send=True)
 
     @property
-    def lighting_hours(self) -> dict:
-        return {
-            "morning_start": self._sun_times["morning_start"],
-            "morning_end": self._sun_times.get("morning_end", None),
-            "evening_start": self._sun_times.get("evening_start", None),
-            "evening_end": self._sun_times["evening_end"]
-        }
+    def lighting_hours(self) -> LightingHours:
+        return self._lighting_hours
 
     @property
     def timer(self) -> float:
@@ -356,19 +366,14 @@ class Light(SubroutineTemplate):
         return 0.0
 
     @property
-    def light_info(self) -> dict:
-        return {
-            **{
-                "status": (
-                    self.light_status if self.mode == "manual"
-                    else self.expected_status
-                ),
-                "mode": self.mode,
-                "method": self.method,
-                "timer": self.timer,
-            },
-            **self.lighting_hours
-        }
+    def light_info(self) -> LightData:
+        return LightData(
+            status=self.light_status if self.mode == "manual" else self.expected_status,
+            mode=self.mode,
+            method=self.method,
+            timer=self.timer,
+            **asdict(self.lighting_hours)
+        )
 
     def turn_light(self, mode="automatic", countdown: float = 0.0):
         if self._started:
