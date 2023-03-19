@@ -20,7 +20,7 @@ class BaseConfig:
     VIRTUALIZATION = os.environ.get("GAIA_VIRTUALIZATION", False)
 
     USE_DATABASE = False
-    DATABASE_URI = (
+    SQLALCHEMY_DATABASE_URI = (
         os.environ.get("GAIA_DATABASE_URI") or
         "sqlite:///" + os.path.join(DIR, "gaia_data.db")
     )

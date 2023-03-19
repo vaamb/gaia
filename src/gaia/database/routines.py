@@ -27,7 +27,7 @@ def log_sensors_data(scoped_session: "scoped_session", engine: "Engine"):
                 measurement_time: datetime = sensors_data.timestamp
                 measurement_time = measurement_time.astimezone(timezone.utc)
                 if measurement_time.minute % sensors_logging_period == 0:
-                    for sensor in sensors_data.data:
+                    for sensor in sensors_data.records:
                         sensor_uid = sensor.sensor_uid
                         for measure in sensor.measures:
                             data_point = SensorHistory(

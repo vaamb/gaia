@@ -1,14 +1,15 @@
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy_wrapper import SQLAlchemyWrapper
 
 
-class Base(DeclarativeBase):
-    pass
+db = SQLAlchemyWrapper()
+base = db.Model
 
 
-class SensorHistory(Base):
+class SensorHistory(base):
     __tablename__ = "sensors_history"
 
     id: Mapped[int] = mapped_column(nullable=False, primary_key=True)

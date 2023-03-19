@@ -45,11 +45,11 @@ class Gaia:
         self.engine = Engine(GeneralEnvironmentConfig())
         self._broker_url = config_cls.AGGREGATOR_COMMUNICATION_URL
         self.message_broker: "KombuDispatcher" | "RetryClient" | None = None
-        if self.connect_to_ouranos:
-            self._init_message_broker()
         self.db: "SQLAlchemyWrapper" | None = None
         if self.use_database:
             self._init_database()
+        if self.connect_to_ouranos:
+            self._init_message_broker()
         self.started: bool = False
 
     def _init_message_broker(self) -> None:
@@ -107,8 +107,9 @@ class Gaia:
 
     def _init_database(self) -> None:
         self.logger.info("Initialising the database")
-        from gaia.database import routines, SQLAlchemyWrapper
-        self.db = SQLAlchemyWrapper(get_config())
+        from gaia.database import routines, db
+        self.db = db
+        self.db.init(get_config())
         self.db.create_all()
         if get_config().SENSORS_LOGGING_PERIOD:
             scheduler.add_job(

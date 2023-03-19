@@ -6,6 +6,5 @@ except ImportError:
         "`pip install sqlalchemy` in your virtual env"
     )
 
-from gaia.database import models
-from gaia.database import routines
-from gaia.database.wrapper import SQLAlchemyWrapper
+from gaia.database import models, routines
+from gaia.database.models import db

@@ -42,8 +42,6 @@ def _get_config() -> Type[GaiaConfig]:
 
         class GaiaConfig(AppInfo, BaseConfig):
             pass
-        return GaiaConfig
-
     else:
         if not issubclass(Config, BaseConfig):
             raise RuntimeError(
@@ -53,8 +51,7 @@ def _get_config() -> Type[GaiaConfig]:
 
         class GaiaConfig(AppInfo, Config):
             pass
-
-        return GaiaConfig
+    return GaiaConfig
 
 
 def get_config() -> Type[GaiaConfig]:

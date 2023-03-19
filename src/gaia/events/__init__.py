@@ -23,8 +23,8 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 if get_config().USE_DATABASE:
     from sqlalchemy import select
+    from sqlalchemy_wrapper import SQLAlchemyWrapper
 
-    from gaia.database import SQLAlchemyWrapper
     from gaia.database.models import SensorHistory
 
 
@@ -54,9 +54,12 @@ class Events:
         self._background_task = False
         self._thread: Thread | None = None
         self.logger = logging.getLogger(f"gaia.broker")
-        self.db: SQLAlchemyWrapper | None
+        self.db: "SQLAlchemyWrapper" | None
         if get_config().USE_DATABASE:
-            self.db = SQLAlchemyWrapper(get_config())
+            from gaia.database.models import db
+            self.db = db
+            self.db.init(get_config())
+            self.db.create_all()
         else:
             self.db = None
 
