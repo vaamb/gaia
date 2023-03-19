@@ -7,8 +7,9 @@ from time import sleep
 import typing as t
 
 from gaia_validators import (
-    BaseInfoConfigPayload, Empty, EnvironmentConfigPayload, HardwareConfigPayload,
-    ManagementConfigPayload, ConfigPayload
+    BaseInfoConfigPayload, BrokerPayload, Empty, EnvironmentConfigPayload,
+    HardwareConfigPayload, HealthDataPayload, LightDataPayload,
+    ManagementConfigPayload, SensorsDataPayload
 )
 
 from gaia.config import get_config
@@ -27,11 +28,14 @@ if get_config().USE_DATABASE:
     from gaia.database.models import SensorHistory
 
 
-payload_classes: dict[str, ConfigPayload] = {
+payload_classes: dict[str, BrokerPayload] = {
     "base_info": BaseInfoConfigPayload,
     "management": ManagementConfigPayload,
     "environmental_parameters": EnvironmentConfigPayload,
     "hardware": HardwareConfigPayload,
+    "sensors_data": SensorsDataPayload,
+    "health_data": HealthDataPayload,
+    "light_data": LightDataPayload,
 }
 
 
@@ -147,65 +151,53 @@ class Events:
 
     def filter_uids(self, ecosystem_uids: list[str] | None = None) -> list[str]:
         if ecosystem_uids is None:
-            return [e_uid for e_uid in self.ecosystems.keys()]
+            return [uid for uid in self.ecosystems.keys()]
         else:
-            return [e_uid for e_uid in ecosystem_uids
-                    if e_uid in self.ecosystems.keys()]
+            return [
+                uid for uid in ecosystem_uids
+                if uid in self.ecosystems.keys()
+            ]
 
-    def _get_config(
+    def get_payload(
             self,
-            config_type: str,
+            payload_type: str,
             ecosystem_uids: list[str] | None = None
     ) -> list[dict]:
-        uids = self.filter_uids(ecosystem_uids)
-        rv = []
-        for uid in uids:
-            data = getattr(self.ecosystems[uid], config_type)
-            payload_class = payload_classes[config_type]
-            payload = payload_class.from_base(uid, data)
-            rv.append(payload)
-        return rv
-
-    def send_config(self, ecosystem_uids: list[str] | None = None) -> None:
-        self.logger.debug("Received send_config event")
-        uids = self.filter_uids(ecosystem_uids)
-        for cfg in ("base_info", "management", "environmental_parameters", "hardware"):
-            data = self._get_config(cfg, uids)
-            self.emit(cfg, data=data)
-
-    def _get_data(
-            self,
-            data_type: str,
-            ecosystem_uids: list[str] | None = None
-    ) -> list:
         rv = []
         for uid in self.filter_uids(ecosystem_uids):
             try:
-                data = getattr(self.ecosystems[uid], data_type)
+                data = getattr(self.ecosystems[uid], payload_type)
                 if not isinstance(data, Empty):
-                    data.ecosystem_uid = uid
-                    rv.append(data)
+                    payload_class = payload_classes[payload_type]
+                    payload = payload_class.from_base(uid, data)
+                    rv.append(payload)
             # Except when subroutines are still loading or received a message
             #  for an ecosystem not on this engine
             except KeyError:
                 pass
         return rv
 
+    def send_config(self, ecosystem_uids: list[str] | None = None) -> None:
+        self.logger.debug("Received send_config event")
+        for cfg in ("base_info", "management", "environmental_parameters", "hardware"):
+            data = self.get_payload(cfg, ecosystem_uids=ecosystem_uids)
+            self.emit(cfg, data=data)
+
     def send_sensors_data(self, ecosystem_uids: list[str] | None = None) -> None:
         self.logger.debug("Received send_sensors_data event")
-        data = self._get_data("sensors_data", ecosystem_uids=ecosystem_uids)
+        data = self.get_payload("sensors_data", ecosystem_uids=ecosystem_uids)
         if data:
             self.emit("sensors_data", data=data)
 
     def send_health_data(self, ecosystem_uids: list[str] | None = None) -> None:
         self.logger.debug("Received send_health_data event")
-        data = self._get_data("plants_health", ecosystem_uids=ecosystem_uids)
+        data = self.get_payload("plants_health", ecosystem_uids=ecosystem_uids)
         if data:
             self.emit("health_data", data=data)
 
     def send_light_data(self, ecosystem_uids: list[str] | None = None) -> None:
         self.logger.debug("Received send_light_data event")
-        data = self._get_data("light_info", ecosystem_uids=ecosystem_uids)
+        data = self.get_payload("light_info", ecosystem_uids=ecosystem_uids)
         if data:
             self.emit("light_data", data=data)
 
@@ -237,7 +229,7 @@ class Events:
             self.ecosystems[ecosystem_uid].config.save()
             self.emit(
                 "management",
-                data=self._get_config("management", [ecosystem_uid])
+                data=self.get_payload("management", [ecosystem_uid])
             )
 
     def on_get_data_since(self, message: dict) -> None:

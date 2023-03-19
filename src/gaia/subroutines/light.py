@@ -8,7 +8,7 @@ import time as ctime
 import typing as t
 
 from gaia_validators import (
-    LightData, LightingHours, LightMethod, LightMode, SunTimes
+    ActuatorMode, LightData, LightingHours, LightMethod, SunTimes
 )
 from simple_pid import PID
 
@@ -54,7 +54,7 @@ class Light(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, "Switch"]
         self._status = {"current": False, "last": False}
-        self._mode: LightMode = LightMode.automatic
+        self._mode: ActuatorMode = ActuatorMode.automatic
         self._dimmable_lights_uid: list[str] = []
         self._pid = PID(Kp, Ki, Kd)
         self._lighting_hours: LightingHours = LightingHours()
@@ -172,7 +172,7 @@ class Light(SubroutineTemplate):
             if self._timer:
                 if self._timer < ctime.monotonic():
                     self._timer = 0
-                    self._mode = LightMode.automatic
+                    self._mode = ActuatorMode.automatic
             self._light_state_routine()
             self._stop_event.wait(cfg.LIGHT_LOOP_PERIOD)
 
@@ -186,7 +186,7 @@ class Light(SubroutineTemplate):
                 self._status["current"] = True
                 for light in self.hardware.values():
                     light.turn_on()
-                if self._mode == LightMode.automatic:
+                if self._mode == ActuatorMode.automatic:
                     self.logger.info("Lights have been automatically turned on")
                     send_data = True
         # If lighting == False, lights should be off
@@ -196,7 +196,7 @@ class Light(SubroutineTemplate):
                 self._status["current"] = False
                 for light in self.hardware.values():
                     light.turn_off()
-                if self._mode == LightMode.automatic:
+                if self._mode == ActuatorMode.automatic:
                     self.logger.info("Lights have been automatically turned off")
                     send_data = True
         if send_data and self.ecosystem.event_handler:
@@ -236,7 +236,7 @@ class Light(SubroutineTemplate):
     """Functions to switch the light on/off either manually or automatically"""
     @property
     def _lighting(self) -> bool:
-        if self._mode == LightMode.automatic:
+        if self._mode == ActuatorMode.automatic:
             return self.expected_status
         else:  # self._mode == "manual"
             if self._status["current"]:
@@ -337,11 +337,11 @@ class Light(SubroutineTemplate):
         return self._status["current"]
 
     @property
-    def mode(self) -> LightMode:
+    def mode(self) -> ActuatorMode:
         return self._mode
 
     @mode.setter
-    def mode(self, value: LightMode) -> None:
+    def mode(self, value: ActuatorMode) -> None:
         self._mode = value
 
     @property

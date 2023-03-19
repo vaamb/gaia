@@ -8,4 +8,3 @@ from gaia.config.environments import (
     GeneralConfig as GeneralEnvironmentConfig, get_config as get_environment_config,
     get_IDs as get_environment_IDs, SpecificConfig as SpecificEnvironmentConfig
 )
-

@@ -82,6 +82,10 @@ class Engine(metaclass=SingletonMeta):
     API calls
     """
     @property
+    def uid(self) -> str:
+        return self._uid
+
+    @property
     def started(self) -> bool:
         return self._thread is not None
 

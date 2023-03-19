@@ -115,10 +115,10 @@ class Sensors(SubroutineTemplate):
         to_average: dict[str, list] = {}
         now = datetime.now().astimezone().replace(microsecond=0)
         cache["timestamp"]: datetime = now
-        cache["data"]: list[dict] = []
+        cache["records"]: list[dict] = []
         for uid in self.hardware:
             measures = self.hardware[uid].get_data()
-            cache["data"].append(
+            cache["records"].append(
                 {"sensor_uid": uid, "measures": measures}
             )
             for measure in measures:

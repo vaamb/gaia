@@ -115,6 +115,7 @@ class Ecosystem:
             uid=self.uid,
             name=self.name,
             status=self.status,
+            engine_uid=self.engine.uid,
         )
 
     @property
