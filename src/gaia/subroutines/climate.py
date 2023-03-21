@@ -3,8 +3,9 @@ from datetime import datetime
 from threading import Event
 import typing as t
 
-from gaia_validators import ClimateParameterNames, LightingHours
 from simple_pid import PID
+
+from gaia_validators import ClimateParameterNames, Empty, LightingHours
 
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
 from gaia.hardware import ACTUATORS, gpioDimmable
@@ -161,7 +162,7 @@ class Climate(SubroutineTemplate):
         if self.ecosystem.get_subroutine_status("sensors"):
             sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
             average = sensors_subroutine.sensors_data.average
-            if not average:
+            if isinstance(average, Empty):
                 self.logger.debug(
                     f"No sensor data found, climate subroutine will try "
                     f"again {5 - self._sensor_miss} times before stopping."
@@ -258,7 +259,7 @@ class Climate(SubroutineTemplate):
             hardware_dict[hardware_uid]["level"] = "environment"
             hardware: "Switch" = self._add_hardware(hardware_dict, ACTUATORS)
             hardware.turn_off()
-            self.hardware[f"{hardware.type}s"][hardware_uid] = hardware
+            self.hardware[f"{hardware.type.value}s"][hardware_uid] = hardware
             self.logger.debug(f"Regulator '{hardware.name}' has been set up")
             return hardware
         except Exception as e:

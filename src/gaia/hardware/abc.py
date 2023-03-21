@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import io
 import logging
 import os
-import pathlib
+from pathlib import Path
 import typing as t
+from typing import cast, Self, TypedDict
 import weakref
 
-from gaia_validators import HardwareLevelNames, HardwareTypeNames
+from gaia_validators import (
+    safe_enum_from_name, HardwareLevel, HardwareLevelNames, HardwareType,
+    HardwareTypeNames
+)
 
 from gaia.hardware import _IS_RASPI
 from gaia.hardware.multiplexers import get_i2c, get_multiplexer
@@ -89,7 +94,18 @@ class Address:
         return self.multiplexer != 0
 
 
-class Hardware:
+class _MetaHardware(type):
+    instances: dict[str, Self] = {}
+
+    def __call__(cls, *args, **kwargs):
+        uid = kwargs.get("uid")
+        if uid not in cls.instances and uid is not None:
+            cls.instances[uid] = cls.__new__(cls, *args, **kwargs)
+            cls.instances[uid].__init__(*args, **kwargs)
+        return cls.instances[uid]
+
+
+class Hardware(metaclass=_MetaHardware):
     """
     Base class for all hardware config creation and when creating hardware
     object from config file.
@@ -108,6 +124,7 @@ class Hardware:
             level: HardwareLevelNames,
             type: HardwareTypeNames,
             model: str,
+            name: str | None = None,
             **kwargs
     ) -> None:
         self._subroutine: "SubroutineTemplate" | None
@@ -116,27 +133,41 @@ class Hardware:
         else:
             self._subroutine = weakref.proxy(subroutine)
         self._uid: str = uid
-        self._level: str
-        if level.lower() in ("environment", "environments"):
-            self._level = "environment"
-        elif level.lower() in ("plant", "plants"):
-            self._level = "plants"
-        else:  # pragma: no cover
-            raise ValueError("level should be 'plant' or 'environment'")
-        self._type: str = type
+        self._level: HardwareLevel = cast(
+            HardwareLevel, safe_enum_from_name(HardwareLevel, level))
+        self._type: HardwareType = cast(
+            HardwareType, safe_enum_from_name(HardwareType, type))
         self._model: str = model
-        self._name: str = kwargs.pop("name", self._uid)
+        self._name: str = name or uid
         address_list: list = address.split(":")
-        self._address: dict[str, Address] = {
-            "main": Address(address_list[0])
-        }
-        try:
+        self._address: dict[str, Address] = {"main": Address(address_list[0])}
+        if len(address_list) == 2:
             self._address.update({"secondary": Address(address_list[1])})
-        except IndexError:
-            pass
+
+    def __del__(self):
+        del _MetaHardware.instances[self._uid]
 
     def __repr__(self):
-        return f"<{self._uid} | {self._name} | {self._model}>"
+        return (
+            f"<{self.__class__.__name__}({self._uid}, name={self._name}, "
+            f"model={self._model})>"
+        )
+
+    @classmethod
+    def get_actives_by_type(cls, type: HardwareType | str):
+        type = safe_enum_from_name(HardwareType, type)
+        return {
+            uid: hardware for uid, hardware in _MetaHardware.instances.items()
+            if hardware._type is type
+        }
+
+    @classmethod
+    def get_actives_by_level(cls, level: HardwareLevel):
+        level = safe_enum_from_name(HardwareLevel, level)
+        return {
+            uid: hardware for uid, hardware in _MetaHardware.instances.items()
+            if hardware._level is level
+        }
 
     @property
     def uid(self) -> str:
@@ -159,7 +190,7 @@ class Hardware:
         return self._address
 
     @property
-    def address_repr(self):
+    def address_repr(self) -> str:
         sec = self._address.get("secondary", None)
         if sec:
             return f"{self._address['main']}:{sec}"
@@ -171,15 +202,15 @@ class Hardware:
         return self._model
 
     @property
-    def level(self) -> str:
+    def level(self) -> HardwareLevel:
         return self._level
 
     @property
-    def type(self) -> str:
+    def type(self) -> HardwareType:
         return self._type
 
     @property
-    def dict_repr(self) -> dict[str, str]:
+    def dict_repr(self) -> dict:
         return {
             "uid": self._uid,
             "name": self._name,
@@ -387,7 +418,7 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def take_picture(self) -> pathlib.Path:
+    def take_picture(self) -> Path:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
