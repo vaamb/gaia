@@ -4,7 +4,7 @@ from datetime import datetime
 import io
 import typing as t
 
-from gaia_validators import Empty, HealthData, HealthRecord
+from gaia_validators import Empty, HardwareConfigDict, HealthData
 
 from gaia.config import get_config
 from gaia.shared_resources import scheduler
@@ -28,7 +28,7 @@ class Health(SubroutineTemplate):
     def _start_scheduler(self):
         h, m = get_config().HEALTH_LOGGING_TIME.split("h")
         scheduler.add_job(
-            self._health_routine,
+            self.health_routine,
             trigger="cron", hour=h, minute=m, misfire_grace_time=15 * 60,
             id=f"{self._ecosystem_name}-health"
         )
@@ -38,19 +38,7 @@ class Health(SubroutineTemplate):
         scheduler.remove_job(f"{self._ecosystem_name}-health")
         self.logger.info("The tasks scheduler was closed properly")
 
-    def _take_picture(self):
-        try:
-            self.logger.info(f"Taking picture of {self._ecosystem_name}")
-            self.take_picture()
-            self.logger.debug(
-                f"Picture of {self._ecosystem_name} successfully taken")
-        except Exception as e:
-            self.logger.error(
-                f"Failed to take picture of {self._ecosystem_name}. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`."
-            )
-
-    def _analyse_picture(self):
+    def analyse_picture(self):
         self.logger.info(f"Starting analysis of {self._ecosystem} image")
         # If got an image, analyse it
         if self._imageIO.getbuffer().nbytes:
@@ -60,11 +48,9 @@ class Health(SubroutineTemplate):
             health_index = random.uniform(70, 97)
             self._plants_health = HealthData(
                 timestamp=datetime.now().astimezone().replace(microsecond=0),
-                data=HealthRecord(
-                    green=green,
-                    necrosis=round(necrosis, 2),
-                    index=round(health_index, 2),
-                ),
+                green=green,
+                necrosis=round(necrosis, 2),
+                index=round(health_index, 2),
             )
             self.logger.info(f"{self._ecosystem} picture successfully analysed, "
                              f"indexes computed")
@@ -72,7 +58,7 @@ class Health(SubroutineTemplate):
             # TODO: change Exception
             raise Exception
 
-    def _health_routine(self):
+    def health_routine(self):
         # If webcam: turn it off and restart after
         light_running = self.ecosystem.get_subroutine_status("light")
         if light_running:
@@ -80,7 +66,7 @@ class Health(SubroutineTemplate):
             light_mode = light_subroutine.mode
             light_status = light_subroutine.light_status
             light_subroutine.turn_light("on")
-            self._take_picture()
+            self.take_picture()
             if light_mode == "automatic":
                 light_subroutine.turn_light("automatic")
             else:
@@ -89,16 +75,27 @@ class Health(SubroutineTemplate):
                 else:
                     light_subroutine.turn_light("off")
         else:
-            self._take_picture()
-        self._analyse_picture()
+            self.take_picture()
+        self.analyse_picture()
 
     def _update_manageable(self) -> None:
-        if self.config.get_IO_group("camera"):
+        def check_manageable() -> bool:
+            cameras_uid = self.config.get_IO_group_uids("camera")
+            if cameras_uid:
+                for camera_uid in cameras_uid:
+                    camera_dict = self.config.get_hardware_config(camera_uid)
+                    measures = camera_dict.get("measure", [])
+                    if "health" in measures:
+                        return True
+            return False
+
+        manageable = check_manageable()
+        if manageable:
             self.manageable = True
         else:
             self.config.set_management("health", False)
             self.logger.warning(
-                "No camera detected, disabling Health subroutine"
+                "No health camera detected, disabling Health subroutine"
             )
             self.manageable = False
 
@@ -114,13 +111,11 @@ class Health(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_dict: dict):
-        pass
+    def add_hardware(self, hardware_dict: HardwareConfigDict) -> None:
+        self._add_hardware(hardware_dict, CAMERA)
 
-    def remove_hardware(self, hardware_uid: str) -> None:
-        pass
-
-    def refresh_hardware(self) -> None:
+    def get_hardware_needed_uid(self) -> set[str]:
+        # TODO
         pass
 
     def take_picture(self):

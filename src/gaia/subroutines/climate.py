@@ -2,19 +2,21 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from threading import Event
 import typing as t
+from typing import cast
 
 from simple_pid import PID
 
-from gaia_validators import ClimateParameterNames, Empty, LightingHours
+from gaia_validators import (
+    ClimateParameterNames, Empty, HardwareConfigDict, LightingHours
+)
 
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
-from gaia.hardware import ACTUATORS, gpioDimmable
+from gaia.hardware import ACTUATORS, Dimmer, Switch
 from gaia.shared_resources import scheduler
 from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware.abc import Switch
     from gaia.subroutines.light import Light
     from gaia.subroutines.sensors import Sensors
 
@@ -47,18 +49,19 @@ class Climate(SubroutineTemplate):
         self._sensor_miss: int = 0
         self._pids: dict[str, PID] = {}
         self._refresh_PIDs()
-        self._refresh_hardware_dict()
+        self._regulators: dict[str, set] = {}
+        self._refresh_regulators_dict()
         self._regulated: set[ClimateParameterNames] = set()
         self._targets: dict[str, dict[str, float]] = {}
         self._sun_times: LightingHours = LightingHours()
         self._finish__init__()
 
-    def _refresh_hardware_dict(self) -> None:
-        self.hardware: dict[str, dict[str, "Switch"]] = {
-            "heaters": {},
-            "coolers": {},
-            "humidifiers": {},
-            "dehumidifiers": {},
+    def _refresh_regulators_dict(self) -> None:
+        self._regulators = {
+            "heater": set(),
+            "cooler": set(),
+            "humidifier": set(),
+            "dehumidifier": set(),
         }
 
     def _refresh_PIDs(self) -> None:
@@ -87,7 +90,7 @@ class Climate(SubroutineTemplate):
         for climate_param in REGULATORS:
             if climate_param in regulated:
                 for regulator in REGULATORS[climate_param]:
-                    if self.config.get_IO_group(regulator):
+                    if self.config.get_IO_group_uids(regulator):
                         regulators.append(regulator)
         if not regulators:
             self._regulated = set()
@@ -101,9 +104,9 @@ class Climate(SubroutineTemplate):
 
         # Check if Sensors taking regulated params are available
         measures: t.Set[str] = set()
-        sensor_uid = self.config.get_IO_group("sensor")
+        sensor_uid = self.config.get_IO_group_uids("sensor")
         for uid in sensor_uid:
-            hardware = self.config.get_IO(uid)
+            hardware = self.config.get_hardware_config(uid)
             m = hardware.get("measure", [])
             if isinstance(m, str):
                 measures.add(m)
@@ -188,22 +191,30 @@ class Climate(SubroutineTemplate):
                         else:
                             output = self._pids[measure](value)
                         if output > 0:
-                            hardware_type = f"{REGULATORS[measure].increase}s"
-                            for hardware in self.hardware[hardware_type].values():
+                            regulator_increase = REGULATORS[measure].increase
+                            for hardware_uid in self._regulators[regulator_increase]:
+                                hardware = cast(
+                                    Switch, self.hardware[hardware_uid])
                                 hardware.turn_on()
-                                if isinstance(hardware, gpioDimmable):
+                                if isinstance(hardware, Dimmer):
                                     hardware.set_pwm_level(output)
-                            hardware_type = f"{REGULATORS[measure].decrease}s"
-                            for hardware in self.hardware[hardware_type].values():
+                            regulator_decrease = REGULATORS[measure].decrease
+                            for hardware_uid in self._regulators[regulator_decrease]:
+                                hardware = cast(
+                                    Switch, self.hardware[hardware_uid])
                                 hardware.turn_off()
                         elif output < 0:
-                            hardware_type = f"{REGULATORS[measure].increase}s"
-                            for hardware in self.hardware[hardware_type].values():
+                            regulator_increase = REGULATORS[measure].increase
+                            for hardware_uid in self._regulators[regulator_increase]:
+                                hardware = cast(
+                                    Switch, self.hardware[hardware_uid])
                                 hardware.turn_off()
-                            hardware_type = f"{REGULATORS[measure].decrease}s"
-                            for hardware in self.hardware[hardware_type].values():
+                            regulator_decrease = REGULATORS[measure].decrease
+                            for hardware_uid in self._regulators[regulator_decrease]:
+                                hardware = cast(
+                                    Switch, self.hardware[hardware_uid])
                                 hardware.turn_on()
-                                if isinstance(hardware, gpioDimmable):
+                                if isinstance(hardware, Dimmer):
                                     hardware.set_pwm_level(-output)
         else:
             if not self.config.get_management("sensors"):
@@ -250,44 +261,26 @@ class Climate(SubroutineTemplate):
     def _stop(self):
         scheduler.remove_job(job_id=f"{self._ecosystem_name}-climate")
         self._refresh_PIDs()
-        self._refresh_hardware_dict()
+        self._refresh_regulators_dict()
 
     """API calls"""
-    def add_hardware(self, hardware_dict: dict):
-        hardware_uid = list(hardware_dict.keys())[0]
-        try:
-            hardware_dict[hardware_uid]["level"] = "environment"
-            hardware: "Switch" = self._add_hardware(hardware_dict, ACTUATORS)
-            hardware.turn_off()
-            self.hardware[f"{hardware.type.value}s"][hardware_uid] = hardware
-            self.logger.debug(f"Regulator '{hardware.name}' has been set up")
-            return hardware
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an exception while setting up regulator "
-                f"'{hardware_uid}'. ERROR msg: `{e.__class__.__name__}: {e}`."
-            )
+    def add_hardware(self, hardware_dict: HardwareConfigDict) -> None:
+        self._add_hardware(hardware_dict, ACTUATORS)
 
     def remove_hardware(self, hardware_uid: str) -> None:
-        for regulator_type in self.hardware:
-            if hardware_uid in self.hardware[regulator_type]:
-                del self.hardware[regulator_type][hardware_uid]
-                return
-        self.logger.error(f"Regulator '{hardware_uid}' does not exist")
+        try:
+            del self.hardware[hardware_uid]
+        except KeyError:
+            self.logger.error(f"Regulator '{hardware_uid}' does not exist")
 
-    def refresh_hardware(self) -> None:
+    def get_hardware_needed_uid(self) -> set[str]:
         self.update_climate_parameters()
-        for regulator_type in self.hardware:
-            IO_type = regulator_type[:-1] if regulator_type.endswith("s") \
-                else regulator_type
-            regulators_needed = set(self.config.get_IO_group(IO_type))
-            regulators_existing = set(self.hardware[regulator_type])
-            for hardware_uid in regulators_needed - regulators_existing:
-                self.add_hardware(
-                    {hardware_uid: self.config.IO_dict[hardware_uid]}
-                )
-            for hardware_uid in regulators_existing - regulators_needed:
-                self.remove_hardware(hardware_uid)
+        hardware_needed = set()
+        for couple in REGULATORS.values():
+            for IO_type in couple:
+                extra = set(self.config.get_IO_group_uids(IO_type))
+                hardware_needed = hardware_needed | extra
+        return hardware_needed
 
     def update_time_parameters(self):
         try:

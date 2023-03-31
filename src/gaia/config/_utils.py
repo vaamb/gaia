@@ -7,10 +7,6 @@ from gaia import __version__ as version
 from gaia.config.base import BaseConfig, DIR
 
 
-class GaiaConfig(BaseConfig):
-    pass
-
-
 _state: dict = {
     "base_dir": None,
     "config": None,
@@ -20,6 +16,10 @@ _state: dict = {
 class AppInfo:
     APP_NAME = "Gaia"
     VERSION = version
+
+
+class GaiaConfig(AppInfo, BaseConfig):
+    pass
 
 
 def get_base_dir() -> Path:

@@ -24,7 +24,7 @@ from gaia.config import (
     get_base_dir, get_cache_dir, get_config as get_gaia_config
 )
 from gaia.exceptions import HardwareNotFound, UndefinedParameter
-from gaia.hardware import HARDWARE_AVAILABLE
+from gaia.hardware import HARDWARE
 from gaia.subroutines import SUBROUTINES
 from gaia.utils import (
     file_hash, is_connected, json, SingletonMeta, utc_time_to_local_time, yaml
@@ -552,17 +552,20 @@ class SpecificConfig:
             self.ecosystem_config["IO"] = {}
             return self.ecosystem_config["IO"]
 
-    def get_IO_group(self,
-                     IO_type: str,
-                     level: tuple = ("environment", "plants")
-                     ) -> list:
+    def get_IO_group_uids(
+            self,
+            IO_type: str,
+            level: tuple = ("environment", "plants")
+    ) -> list[str]:
         return [uid for uid in self.IO_dict
                 if self.IO_dict[uid]["type"].lower() == IO_type
                 and self.IO_dict[uid]["level"].lower() in level]
 
-    def get_IO(self, uid: str) -> dict:
+    def get_hardware_config(self, uid: str) -> HardwareConfigDict:
         try:
-            return self.IO_dict[uid]
+            hardware_config = self.IO_dict[uid]
+            hardware_config["uid"] = uid
+            return hardware_config
         except KeyError:
             raise HardwareNotFound
 
@@ -607,12 +610,12 @@ class SpecificConfig:
         """
         if address in self._used_addresses():
             raise ValueError(f"Address {address} already used")
-        if model not in HARDWARE_AVAILABLE:
+        if model not in HARDWARE:
             raise ValueError(
                 "This hardware model is not supported. Use "
                 "'SpecificConfig.supported_hardware()' to see supported hardware"
             )
-        h = HARDWARE_AVAILABLE[model]
+        h = HARDWARE[model]
         uid = self._create_new_IO_uid()
         new_hardware = h(
             subroutine=None,  # Just need the dict repr
@@ -643,7 +646,7 @@ class SpecificConfig:
 
     @staticmethod
     def supported_hardware() -> list:
-        return [h for h in HARDWARE_AVAILABLE]
+        return [h for h in HARDWARE]
 
     """Parameters related to time"""
     @property

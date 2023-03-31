@@ -4,7 +4,9 @@ from time import sleep
 import typing as t
 
 from gaia.hardware import _IS_RASPI
-from gaia.hardware.abc import i2cSensor, PlantLevelHardware, sensorLogger
+from gaia.hardware.abc import (
+    i2cSensor, LightSensor, PlantLevelHardware, sensorLogger
+)
 from gaia.utils import temperature_converter
 
 
@@ -21,7 +23,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   I2C sensors
 # ---------------------------------------------------------------------------
-class VEML7700(i2cSensor):
+class VEML7700(i2cSensor, LightSensor):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if not kwargs.get("measure", ()):

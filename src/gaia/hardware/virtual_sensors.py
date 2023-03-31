@@ -1,7 +1,7 @@
 import typing as t
 
 from gaia.config import get_config
-from gaia.hardware.abc import BaseSensor
+from gaia.hardware.abc import BaseSensor, LightSensor
 from gaia.hardware.GPIO_sensors import DHTSensor
 from gaia.hardware.I2C_sensors import VEML7700, CapacitiveMoisture
 
@@ -45,7 +45,7 @@ class virtualDHT22(virtualDHT):
         return _DHT22(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
-class virtualVEML7700(VEML7700, virtualSensor):
+class virtualVEML7700(VEML7700, virtualSensor, LightSensor):
     def _get_device(self) -> "_VEML7700":
         from gaia.hardware._compatibility import VEML7700 as _VEML7700
         return _VEML7700(ecosystem_uid=self.subroutine.ecosystem.uid)

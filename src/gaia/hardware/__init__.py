@@ -4,7 +4,7 @@ from adafruit_platformdetect import Board, Detector
 
 _IS_RASPI: bool = Board(Detector()).any_raspberry_pi  # noqa
 
-from gaia.hardware.abc import Hardware
+from gaia.hardware.abc import BaseSensor, Dimmer, Hardware, LightSensor, Switch
 from gaia.hardware.actuators import ACTUATORS, gpioDimmable, gpioSwitch
 from gaia.hardware.GPIO_sensors import DHT11, DHT22, GPIO_SENSORS
 from gaia.hardware.I2C_sensors import CapacitiveMoisture, I2C_SENSORS, VEML7700
@@ -14,20 +14,20 @@ from gaia.hardware.virtual_sensors import (
     virtualVEML7700
 )
 
-I2C_LIGHT_SENSORS: dict[str, Type[Hardware]] = {
+I2C_LIGHT_SENSORS: dict[str, Type[LightSensor]] = {
     hardware.__name__: hardware for hardware in [
         VEML7700,
         virtualVEML7700,
     ]
 }
 
-SENSORS: dict[str, Type[Hardware]] = {
+SENSORS: dict[str, Type[BaseSensor]] = {
     **VIRTUAL_SENSORS,
     **GPIO_SENSORS,
     **I2C_SENSORS,
 }
 
-HARDWARE_AVAILABLE: dict[str, Type[Hardware]] = {
+HARDWARE: dict[str, Type[Hardware]] = {
     **ACTUATORS,
     **SENSORS,
 }

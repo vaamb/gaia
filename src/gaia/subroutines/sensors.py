@@ -7,7 +7,7 @@ from time import monotonic
 import typing as t
 from typing import Any
 
-from gaia_validators import Empty, SensorsData
+from gaia_validators import Empty, HardwareConfigDict, SensorsData
 
 from gaia.config import get_config
 from gaia.hardware import SENSORS
@@ -49,7 +49,7 @@ class Sensors(SubroutineTemplate):
             self._stop_event.wait(sleep_time)
 
     def _update_manageable(self) -> None:
-        if self.config.get_IO_group("sensor"):
+        if self.config.get_IO_group_uids("sensor"):
             self.manageable = True
         else:
             self.logger.warning(
@@ -77,32 +77,18 @@ class Sensors(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_dict: dict) -> BaseSensor | None:
-        hardware_uid: str = list(hardware_dict.keys())[0]
-        try:
-            model = hardware_dict[hardware_uid].get("model", None)
-            if get_config().VIRTUALIZATION:
-                if not model.startswith("virtual"):
-                    hardware_dict[hardware_uid]["model"] = f"virtual{model}"
-            hardware = self._add_hardware(hardware_dict, SENSORS)
-            self.hardware[hardware_uid] = hardware
-            self.logger.debug(f"Sensor {hardware.name} has been set up")
-            return hardware
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an exception while setting up sensor "
-                f"'{hardware_uid}'. ERROR msg: `{e.__class__.__name__}: {e}`."
-            )
-            return None
+    def add_hardware(self, hardware_dict: HardwareConfigDict) -> BaseSensor:
+        model = hardware_dict.get("model", None)
+        if get_config().VIRTUALIZATION:
+            if not model.startswith("virtual"):
+                hardware_dict["model"] = f"virtual{model}"
+        return self._add_hardware(hardware_dict, SENSORS)
 
-    def remove_hardware(self, sensors_uid: str) -> None:
-        try:
-            del self.hardware[sensors_uid]
-        except KeyError:
-            self.logger.error(f"Sensor '{sensors_uid}' does not exist")
+    def get_hardware_needed_uid(self) -> set[str]:
+        return set(self.config.get_IO_group_uids("sensor"))
 
     def refresh_hardware(self) -> None:
-        self._refresh_hardware("sensor")
+        super().refresh_hardware()
         if self.ecosystem.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.refresh_hardware()

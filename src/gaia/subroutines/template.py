@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 import logging
 import typing as t
+from typing import Type
 import weakref
 
+from gaia_validators import HardwareConfigDict
+
 from gaia.exceptions import HardwareNotFound
-from gaia.hardware.abc import BaseSensor, Dimmer, Hardware, Switch
+from gaia.hardware.abc import BaseSensor, Camera, Dimmer, Hardware, Switch
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -37,31 +42,33 @@ class SubroutineTemplate(ABC):
 
     def _add_hardware(
             self,
-            hardware_dict: dict[str, dict[str, str]],
-            hardware_choice: dict[str, t.Type[Hardware]],
-    ) -> t.Union[BaseSensor, Dimmer, Hardware, Switch]:
-        hardware_uid: str = list(hardware_dict.keys())[0]
-        hardware_info: dict = hardware_dict[hardware_uid]
-        model: str = hardware_info.get("model", None)
-        if model not in hardware_choice:
-            raise HardwareNotFound(
-                f"{model} is not in the list of the hardware available."
+            hardware_dict: HardwareConfigDict,
+            hardware_choice: dict[str, Type[Hardware]],
+    ) -> BaseSensor | Camera | Dimmer | Hardware | Switch | None:
+        try:
+            model: str = hardware_dict.get("model", None)
+            if model not in hardware_choice:
+                raise HardwareNotFound(
+                    f"{model} is not in the list of the hardware available."
+                )
+            hardware_class: Type[Hardware] = hardware_choice[model]
+            hardware = hardware_class(
+                subroutine=self,
+                **hardware_dict
             )
-        hardware_class: t.Type[Hardware] = hardware_choice[model]
-        hardware = hardware_class(
-            subroutine=self,
-            uid=hardware_uid,
-            **hardware_info
-        )
-        return hardware
-
-    def _refresh_hardware(self, hardware_group: str) -> None:
-        hardware_needed: t.Set[str] = set(self.config.get_IO_group(hardware_group))
-        hardware_existing: t.Set[str] = set(self.hardware)
-        for hardware_uid in hardware_needed - hardware_existing:
-            self.add_hardware({hardware_uid: self.config.IO_dict[hardware_uid]})
-        for hardware_uid in hardware_existing - hardware_needed:
-            self.remove_hardware(hardware_uid)
+            if isinstance(hardware, Switch):
+                hardware.turn_off()
+            if isinstance(hardware, Dimmer):
+                hardware.set_pwm_level(0)
+            self.logger.debug(f"Hardware {hardware.name} has been set up")
+            self.hardware[hardware.uid] = hardware
+            return hardware
+        except Exception as e:
+            uid = hardware_dict["uid"]
+            self.logger.error(
+                f"Encountered an exception while setting up hardware '{uid}'. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
 
     @abstractmethod
     def _update_manageable(self) -> None:
@@ -107,22 +114,31 @@ class SubroutineTemplate(ABC):
         self.config.set_management(self.name, value)
 
     @abstractmethod
-    def add_hardware(self, hardware_dict: dict) -> t.Union[BaseSensor, Dimmer, Hardware, Switch]:
+    def add_hardware(self, hardware_dict: HardwareConfigDict) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    @abstractmethod
     def remove_hardware(self, hardware_uid: str) -> None:
+        try:
+            del self.hardware[hardware_uid]
+        except KeyError:
+            self.logger.error(f"Hardware '{hardware_uid}' does not exist")
+
+    @abstractmethod
+    def get_hardware_needed_uid(self) -> set[str]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    @abstractmethod
     def refresh_hardware(self) -> None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        hardware_needed: set[str] = self.get_hardware_needed_uid()
+        hardware_existing: set[str] = set(self.hardware)
+        for hardware_uid in hardware_needed - hardware_existing:
+            hardware_dict = self.config.get_hardware_config(hardware_uid)
+            self.add_hardware(hardware_dict)
+        for hardware_uid in hardware_existing - hardware_needed:
+            self.remove_hardware(hardware_uid)
 
     def update_manageable(self) -> None:
         if self.management:

@@ -7,19 +7,21 @@ from threading import Event, Lock, Thread
 import time as ctime
 import typing as t
 
-from gaia_validators import (
-    ActuatorMode, LightData, LightingHours, LightMethod, SunTimes
-)
 from simple_pid import PID
+
+from gaia_validators import (
+    ActuatorMode, HardwareConfigDict, LightData, LightingHours, LightMethod,
+    SunTimes
+)
 
 from gaia.config import get_config
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
 from gaia.hardware import ACTUATORS, I2C_LIGHT_SENSORS
+from gaia.hardware.abc import BaseSensor, Dimmer, LightSensor, Switch
 from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware.abc import BaseSensor, Switch
     from gaia.subroutines.climate import Climate
     from gaia.subroutines.sensors import Sensors
 
@@ -55,7 +57,7 @@ class Light(SubroutineTemplate):
         self.hardware: dict[str, "Switch"]
         self._status = {"current": False, "last": False}
         self._mode: ActuatorMode = ActuatorMode.automatic
-        self._dimmable_lights_uid: list[str] = []
+        self._dimmers: set[str] = set()
         self._pid = PID(Kp, Ki, Kd)
         self._lighting_hours: LightingHours = LightingHours()
         self._stop_event = Event()
@@ -218,7 +220,7 @@ class Light(SubroutineTemplate):
     def _light_level_loop(self) -> None:
         if self.ecosystem.get_subroutine_status("sensors"):
             sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
-            light_sensors: list[BaseSensor] = [
+            light_sensors: list[LightSensor] = [
                 sensor for sensor in sensors_subroutine.hardware.values()
                 if sensor.model in I2C_LIGHT_SENSORS
             ]
@@ -249,7 +251,7 @@ class Light(SubroutineTemplate):
             time_parameters = bool(self.config.time_parameters)
         except UndefinedParameter:
             time_parameters = False
-        if all((self.config.get_IO_group("light"), self.method, time_parameters)):
+        if all((self.config.get_IO_group_uids("light"), self.method, time_parameters)):
             self.manageable = True
         else:
             self.logger.warning(
@@ -278,33 +280,21 @@ class Light(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_dict: dict) -> "Switch":
-        hardware_uid = list(hardware_dict.keys())[0]
-        try:
-            hardware_dict[hardware_uid]["level"] = "environment"
-            hardware: "Switch" = self._add_hardware(hardware_dict, ACTUATORS)
-            hardware.turn_off()
-            self.hardware[hardware_uid] = hardware
-            if "dimmable" in hardware.model:
-                self._dimmable_lights_uid.append(hardware_uid)
-            self.logger.debug(f"Light '{hardware.name}' has been set up")
-            return hardware
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an exception while setting up light "
-                f"'{hardware_uid}'. ERROR msg: `{e.__class__.__name__}: {e}`."
-            )
+    def add_hardware(self, hardware_dict: HardwareConfigDict):
+        hardware: Switch = self._add_hardware(hardware_dict, ACTUATORS)
+        if isinstance(hardware, Dimmer):
+            self._dimmers.add(hardware.uid)
 
     def remove_hardware(self, hardware_uid: str) -> None:
         try:
-            if "dimmable" in self.hardware[hardware_uid].model:
-                self._dimmable_lights_uid.remove(hardware_uid)
+            if isinstance(self.hardware[hardware_uid], Dimmer):
+                self._dimmers.remove(hardware_uid)
             del self.hardware[hardware_uid]
         except KeyError:
             self.logger.error(f"Light '{hardware_uid}' does not exist")
 
-    def refresh_hardware(self) -> None:
-        self._refresh_hardware("light")
+    def get_hardware_needed_uid(self) -> set[str]:
+        return set(self.config.get_IO_group_uids("light"))
 
     def refresh_sun_times(self, send=True):
         try:

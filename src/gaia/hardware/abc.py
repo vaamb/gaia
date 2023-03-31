@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import io
 import logging
 import os
 from pathlib import Path
 import typing as t
-from typing import cast, Self, TypedDict
+from typing import cast, Self
 import weakref
 
 from gaia_validators import (
@@ -385,6 +384,13 @@ class BaseSensor(Hardware):
     @measure.setter
     def measure(self, new_measure: list) -> None:
         self._measure = new_measure
+
+
+class LightSensor(BaseSensor):
+    def _get_lux(self) -> float:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )
 
 
 class gpioSensor(BaseSensor, gpioHardware):
