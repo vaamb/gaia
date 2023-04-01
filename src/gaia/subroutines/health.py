@@ -4,7 +4,7 @@ from datetime import datetime
 import io
 import typing as t
 
-from gaia_validators import Empty, HardwareConfigDict, HealthData
+from gaia_validators import ActuatorMode, Empty, HardwareConfigDict, HealthData
 
 from gaia.config import get_config
 from gaia.shared_resources import scheduler
@@ -19,10 +19,9 @@ if t.TYPE_CHECKING:  # pragma: no cover
 class Health(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.hardware: dict[str, "Switch"]
+        self.hardware: dict[str, Camera]
         self._plants_health: HealthData | Empty = Empty()
         self._imageIO = io.BytesIO
-
         self._finish__init__()
 
     def _start_scheduler(self):
@@ -67,7 +66,7 @@ class Health(SubroutineTemplate):
             light_status = light_subroutine.light_status
             light_subroutine.turn_light("on")
             self.take_picture()
-            if light_mode == "automatic":
+            if light_mode is ActuatorMode.automatic:
                 light_subroutine.turn_light("automatic")
             else:
                 if light_status:

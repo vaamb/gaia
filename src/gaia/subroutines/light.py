@@ -10,8 +10,8 @@ import typing as t
 from simple_pid import PID
 
 from gaia_validators import (
-    ActuatorMode, HardwareConfigDict, LightData, LightingHours, LightMethod,
-    SunTimes
+    ActuatorMode, ActuatorTurnTo, HardwareConfigDict, LightData, LightingHours,
+    LightMethod, SunTimes
 )
 
 from gaia.config import get_config
@@ -238,9 +238,9 @@ class Light(SubroutineTemplate):
     """Functions to switch the light on/off either manually or automatically"""
     @property
     def _lighting(self) -> bool:
-        if self._mode == ActuatorMode.automatic:
+        if self._mode is ActuatorMode.automatic:
             return self.expected_status
-        else:  # self._mode == "manual"
+        else:
             if self._status["current"]:
                 return True
             else:
@@ -357,34 +357,40 @@ class Light(SubroutineTemplate):
 
     @property
     def light_info(self) -> LightData:
+        if self.mode is ActuatorMode.automatic:
+            status = self.expected_status
+        else:
+            status = self.light_status
         return LightData(
-            status=self.light_status if self.mode == "manual" else self.expected_status,
+            status=status,
             mode=self.mode,
             method=self.method,
             timer=self.timer,
             **asdict(self.lighting_hours)
         )
 
-    def turn_light(self, mode="automatic", countdown: float = 0.0):
+    def turn_light(
+            self,
+            turn_to: ActuatorTurnTo = "automatic",
+            countdown: float = 0.0
+    ) -> None:
         if self._started:
-            if mode == "automatic":
-                self._mode = "automatic"
+            if turn_to == "automatic":
+                self.mode = ActuatorMode.automatic
                 self.logger.info("Lights have been turned to automatic mode")
-            elif mode in ("on", "off"):
-                self._mode = "manual"
-                new_status = False
-                if mode == "on":
-                    new_status = True
-                self._status["current"] = new_status
-                additional_message = ""
-                if countdown:
-                    self._timer = ctime.monotonic() + countdown
-                    additional_message = f" for {countdown} seconds"
-                self.logger.info(
-                    f"Lights have been manually turned {mode}"
-                    f"{additional_message}")
             else:
-                raise ValueError("mode must be 'on', 'off' or 'automatic'")
+                self.mode = ActuatorMode.manual
+                if turn_to == "on":
+                    self._status["current"] = True
+                else:
+                    self._status["current"] = False
+            additional_message = ""
+            if countdown:
+                self._timer = ctime.monotonic() + countdown
+                additional_message = f" for {countdown} seconds"
+            self.logger.info(
+                f"Lights have been manually turned {turn_to}"
+                f"{additional_message}")
         else:
             raise RuntimeError(f"{self.name} is not started in "
                                f"engine {self.ecosystem}")

@@ -48,15 +48,15 @@ class Climate(SubroutineTemplate):
         self._stop_event: Event = Event()
         self._sensor_miss: int = 0
         self._pids: dict[str, PID] = {}
-        self._refresh_PIDs()
+        self._reset_PIDs()
         self._regulators: dict[str, set] = {}
-        self._refresh_regulators_dict()
+        self._reset_regulators_dict()
         self._regulated: set[ClimateParameterNames] = set()
         self._targets: dict[str, dict[str, float]] = {}
         self._sun_times: LightingHours = LightingHours()
         self._finish__init__()
 
-    def _refresh_regulators_dict(self) -> None:
+    def _reset_regulators_dict(self) -> None:
         self._regulators = {
             "heater": set(),
             "cooler": set(),
@@ -64,7 +64,7 @@ class Climate(SubroutineTemplate):
             "dehumidifier": set(),
         }
 
-    def _refresh_PIDs(self) -> None:
+    def _reset_PIDs(self) -> None:
         for climate_param in REGULATORS:
             self._pids[climate_param] = PID(Kp, Ki, Kd, output_limits=(-100, 100))
 
@@ -260,8 +260,8 @@ class Climate(SubroutineTemplate):
 
     def _stop(self):
         scheduler.remove_job(job_id=f"{self._ecosystem_name}-climate")
-        self._refresh_PIDs()
-        self._refresh_regulators_dict()
+        self._reset_PIDs()
+        self._reset_regulators_dict()
 
     """API calls"""
     def add_hardware(self, hardware_dict: HardwareConfigDict) -> None:

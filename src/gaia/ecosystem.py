@@ -242,7 +242,7 @@ class Ecosystem:
                 if self.get_subroutine_status("light"):
                     light_subroutine: "Light" = self.subroutines["light"]
                     light_subroutine.turn_light(
-                        mode=mode, countdown=countdown
+                        turn_to=mode, countdown=countdown
                     )
             else:
                 raise ValueError

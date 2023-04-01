@@ -174,6 +174,8 @@ class SubroutineTemplate(ABC):
             self.logger.debug(f"Stopping the subroutine")
             try:
                 self._stop()
+                for hardware_uid in [*self.hardware.keys()]:
+                    self.remove_hardware(hardware_uid)
                 self._started = False
                 self.logger.debug("Successfully stopped")
             except Exception as e:
