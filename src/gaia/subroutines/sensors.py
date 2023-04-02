@@ -10,7 +10,7 @@ from typing import Any
 from gaia_validators import Empty, HardwareConfigDict, SensorsData
 
 from gaia.config import get_config
-from gaia.hardware import SENSORS
+from gaia.hardware import sensor_models
 from gaia.hardware.abc import BaseSensor
 from gaia.subroutines.template import SubroutineTemplate
 
@@ -82,7 +82,7 @@ class Sensors(SubroutineTemplate):
         if get_config().VIRTUALIZATION:
             if not model.startswith("virtual"):
                 hardware_dict["model"] = f"virtual{model}"
-        return self._add_hardware(hardware_dict, SENSORS)
+        return self._add_hardware(hardware_dict, sensor_models)
 
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids("sensor"))

@@ -11,7 +11,8 @@ from gaia_validators import (
 )
 
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
-from gaia.hardware import ACTUATORS, Dimmer, Switch
+from gaia.hardware import actuator_models
+from gaia.hardware.abc import Dimmer, Switch
 from gaia.shared_resources import scheduler
 from gaia.subroutines.template import SubroutineTemplate
 
@@ -265,7 +266,7 @@ class Climate(SubroutineTemplate):
 
     """API calls"""
     def add_hardware(self, hardware_dict: HardwareConfigDict) -> None:
-        self._add_hardware(hardware_dict, ACTUATORS)
+        self._add_hardware(hardware_dict, actuator_models)
 
     def remove_hardware(self, hardware_uid: str) -> None:
         try:

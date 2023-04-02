@@ -67,7 +67,7 @@ class PiCamera(Camera):
             self.device.stop()
 
 
-CAMERA: dict[str, Type[Camera]] = {
+camera_models: dict[str, Type[Camera]] = {
     hardware.__name__: hardware for hardware in [
         PiCamera
     ]

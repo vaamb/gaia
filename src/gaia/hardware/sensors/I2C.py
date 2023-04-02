@@ -16,7 +16,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_seesaw.seesaw import Seesaw
     else:
         from gaia.hardware._compatibility import (
-            DHT11 as _DHT11, DHT22 as _DHT22, Seesaw, VEML7700 as _VEML7700
+            Seesaw, VEML7700 as _VEML7700
         )
 
 
@@ -137,7 +137,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         return data
 
 
-I2C_SENSORS = {
+i1c_sensor_models = {
     hardware.__name__: hardware for hardware in [
         CapacitiveMoisture,
         VEML7700,

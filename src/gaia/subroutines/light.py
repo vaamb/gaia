@@ -10,20 +10,19 @@ import typing as t
 from simple_pid import PID
 
 from gaia_validators import (
-    ActuatorMode, ActuatorTurnTo, HardwareConfigDict, LightData, LightingHours,
-    LightMethod, SunTimes
+    ActuatorMode, ActuatorTurnTo, HardwareConfigDict, HardwareType,
+    LightData, LightingHours, LightMethod, SunTimes
 )
 
 from gaia.config import get_config
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
-from gaia.hardware import ACTUATORS, I2C_LIGHT_SENSORS
-from gaia.hardware.abc import BaseSensor, Dimmer, LightSensor, Switch
+from gaia.hardware import actuator_models
+from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
 from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.climate import Climate
-    from gaia.subroutines.sensors import Sensors
 
 
 Kp = 0.05
@@ -219,20 +218,22 @@ class Light(SubroutineTemplate):
     # TODO: add a second loop for light level, only used if light is on and dimmable
     def _light_level_loop(self) -> None:
         if self.ecosystem.get_subroutine_status("sensors"):
-            sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
-            light_sensors: list[LightSensor] = [
-                sensor for sensor in sensors_subroutine.hardware.values()
-                if sensor.model in I2C_LIGHT_SENSORS
-            ]
             while not self._adjust_light_level_event.is_set():
-                light_level = []
+                light_sensors: list[LightSensor] = [
+                    sensor for sensor in
+                    Hardware.get_actives_by_type(HardwareType.sensor)
+                    if isinstance(sensor, LightSensor)
+                ]
+                light_level: list[float] = []
                 for light_sensor in light_sensors:
-                    light_level.append(light_sensor._get_lux())
+                    light = light_sensor._get_lux()
+                    if light is not None:
+                        light_level.append(light)
                 mean_light = mean(light_level)
                 self._light_level_routine(mean_light)
                 self._adjust_light_level_event.wait(1)
 
-    def _light_level_routine(self, light_level) -> None:
+    def _light_level_routine(self, light_level: float) -> None:
         pass
 
     """Functions to switch the light on/off either manually or automatically"""
@@ -281,7 +282,7 @@ class Light(SubroutineTemplate):
 
     """API calls"""
     def add_hardware(self, hardware_dict: HardwareConfigDict):
-        hardware: Switch = self._add_hardware(hardware_dict, ACTUATORS)
+        hardware: Switch = self._add_hardware(hardware_dict, actuator_models)
         if isinstance(hardware, Dimmer):
             self._dimmers.add(hardware.uid)
 

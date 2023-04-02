@@ -24,7 +24,7 @@ from gaia.config import (
     get_base_dir, get_cache_dir, get_config as get_gaia_config
 )
 from gaia.exceptions import HardwareNotFound, UndefinedParameter
-from gaia.hardware import HARDWARE
+from gaia.hardware import hardware_models
 from gaia.subroutines import SUBROUTINES
 from gaia.utils import (
     file_hash, is_connected, json, SingletonMeta, utc_time_to_local_time, yaml
@@ -610,12 +610,12 @@ class SpecificConfig:
         """
         if address in self._used_addresses():
             raise ValueError(f"Address {address} already used")
-        if model not in HARDWARE:
+        if model not in hardware_models:
             raise ValueError(
                 "This hardware model is not supported. Use "
                 "'SpecificConfig.supported_hardware()' to see supported hardware"
             )
-        h = HARDWARE[model]
+        h = hardware_models[model]
         uid = self._create_new_IO_uid()
         new_hardware = h(
             subroutine=None,  # Just need the dict repr
@@ -646,7 +646,7 @@ class SpecificConfig:
 
     @staticmethod
     def supported_hardware() -> list:
-        return [h for h in HARDWARE]
+        return [h for h in hardware_models]
 
     """Parameters related to time"""
     @property

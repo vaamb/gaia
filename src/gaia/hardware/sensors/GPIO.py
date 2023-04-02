@@ -126,7 +126,7 @@ class DHT22(DHTSensor):
         return _DHT22(self._pin, use_pulseio=False)
 
 
-GPIO_SENSORS = {
+gpio_sensor_models = {
     hardware.__name__: hardware for hardware in [
         DHT11,
         DHT22,

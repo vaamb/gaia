@@ -1,9 +1,10 @@
 import typing as t
+from typing import Type
 
 from gaia.config import get_config
 from gaia.hardware.abc import BaseSensor, LightSensor
-from gaia.hardware.GPIO_sensors import DHTSensor
-from gaia.hardware.I2C_sensors import VEML7700, CapacitiveMoisture
+from gaia.hardware.sensors.GPIO import DHTSensor
+from gaia.hardware.sensors.I2C import VEML7700, CapacitiveMoisture
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -57,7 +58,7 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
         return Seesaw(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
-VIRTUAL_SENSORS = {
+virtual_sensor_models:  dict[str, Type[virtualSensor]]= {
     hardware.__name__: hardware for hardware in [
         virtualDHT11,
         virtualDHT22,

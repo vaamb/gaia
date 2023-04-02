@@ -26,7 +26,7 @@ class gpioDimmable(gpioSwitch, gpioDimmer):
     pass
 
 
-ACTUATORS = {
+actuator_models = {
     hardware.__name__: hardware for hardware in [
         gpioDimmable,
         gpioSwitch,
