@@ -169,13 +169,34 @@ class Seesaw(CompatibilityHardware):
         return get_temperature(self.ecosystem_uid)
 
 
-class _basePiCamera:
-    pass
-
-
-class Camera:
-    def __enter__(self):
-        return _basePiCamera()
-
-    def __exit__(self, *args):
+class PiCamera:
+    def create_preview_configuration(self):
         pass
+
+    def create_still_configuration(self):
+        pass
+
+    def create_video_configuration(self):
+        pass
+
+    def capture_array(self, *args):
+        pass
+
+    def configure(self, camera_config):
+        pass
+
+    def start_preview(self, preview: "Preview"):
+        pass
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def capture_file(self, name, format="jpg"):
+        pass
+
+
+class Preview:
+    QTGL = None

@@ -7,6 +7,8 @@ import typing as t
 from gaia_validators import ActuatorMode, Empty, HardwareConfigDict, HealthData
 
 from gaia.config import get_config
+from gaia.hardware import CAMERA
+from gaia.hardware.abc import Camera
 from gaia.shared_resources import scheduler
 from gaia.subroutines.template import SubroutineTemplate
 

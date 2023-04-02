@@ -6,6 +6,7 @@ _IS_RASPI: bool = Board(Detector()).any_raspberry_pi  # noqa
 
 from gaia.hardware.abc import BaseSensor, Dimmer, Hardware, LightSensor, Switch
 from gaia.hardware.actuators import ACTUATORS, gpioDimmable, gpioSwitch
+from gaia.hardware.camera import CAMERA
 from gaia.hardware.GPIO_sensors import DHT11, DHT22, GPIO_SENSORS
 from gaia.hardware.I2C_sensors import CapacitiveMoisture, I2C_SENSORS, VEML7700
 from gaia.hardware.multiplexers import MULTIPLEXERS, TCA9548A
@@ -27,7 +28,12 @@ SENSORS: dict[str, Type[BaseSensor]] = {
     **I2C_SENSORS,
 }
 
+CAMERA: dict[str, Type[Hardware]] = {
+
+}
+
 HARDWARE: dict[str, Type[Hardware]] = {
     **ACTUATORS,
+    **CAMERA,
     **SENSORS,
 }

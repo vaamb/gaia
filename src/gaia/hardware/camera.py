@@ -1,45 +1,74 @@
+from __future__ import annotations
+
 from datetime import datetime
-from pathlib import Path
 from time import sleep
 import typing as t
+from typing import Type, Generator
 
 from gaia.hardware import _IS_RASPI
-from gaia.hardware.abc import Camera
+from gaia.hardware.abc import Camera, Image
 
 
 if t.TYPE_CHECKING:
     if _IS_RASPI:  # pragma: no cover
-        from picamera import PiCamera as _PiCamera
+        from picamera2 import PiCamera2 as _PiCamera, Preview
     else:
-        from gaia.hardware._compatibility import PiCamera as _PiCamera
+        from gaia.hardware._compatibility import PiCamera as _PiCamera, Preview
 
 
 class PiCamera(Camera):
-    def _get_camera(self) -> "_PiCamera":
+    def _get_device(self) -> "_PiCamera":
         if _IS_RASPI:  # pragma: no cover
             try:
-                from picamera import PiCamera as _PiCamera
+                from picamera import PiCamera as _PiCamera, Preview
             except ImportError:
                 raise RuntimeError(
                     "picamera package is required. Run `pip install "
                     "picamera` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import PiCamera as _PiCamera
-        return _PiCamera
+            from gaia.hardware._compatibility import PiCamera as _PiCamera, Preview
+        return _PiCamera()
 
-    def take_picture(self) -> Path:
-        with self._get_camera() as camera:
-            camera.resolution = (3280, 2464)
-            camera.start_preview()
-            # need at least 2 sec sleep for the camera to adapt to light level
-            sleep(3)
-            current_datetime = datetime.now().astimezone().strftime("%Y.%m.%d:%H.%M.%S")
-            picture_name = f"{self.ecosystem_uid}-{current_datetime}"
-            picture_path = self.cam_dir / picture_name
-            camera.capture(picture_path, format="jpg")
-        return picture_path
+    def get_image(self) -> Image | None:
+        camera_config = self.device.create_still_configuration()
+        self.device.configure(camera_config)
+        self.device.start_preview(Preview.QTGL)
+        self.device.start()
+        # need at least 2 sec sleep for the camera to adapt to light level
+        sleep(2)
+        for retry in range(3):
+            try:
+                now = datetime.now().astimezone()
+                array = self.device.capture_array("main")
+                self.device.stop()
+                return Image(array=array, timestamp=now)
+            except Exception as e:
+                print(e)
 
-    def take_video(self):
-        pass
-        # yield
+    def get_timelapse(
+            self,
+            frequency: int | float = 0.5
+    ) -> Generator[Image, None, None]:
+        if frequency > 2.0:
+            frequency = 2.0
+        camera_config = self.device.create_still_configuration()
+        self.device.configure(camera_config)
+        self.device.start_preview(Preview.QTGL)
+        self.device.start()
+        sleep(2)
+        try:
+            while True:
+                now = datetime.now().astimezone()
+                array = self.device.capture_array("main")
+                yield Image(array=array, timestamp=now)
+                sleep(1/frequency)
+        finally:
+            self.device.stop()
+
+
+CAMERA: dict[str, Type[Camera]] = {
+    hardware.__name__: hardware for hardware in [
+        PiCamera
+    ]
+}

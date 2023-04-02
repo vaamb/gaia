@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 import io
 import logging
 import os
@@ -8,11 +10,15 @@ import typing as t
 from typing import cast, Self
 import weakref
 
+import numpy as np
+from PIL import Image as _Image
+
 from gaia_validators import (
     safe_enum_from_name, HardwareLevel, HardwareLevelNames, HardwareType,
     HardwareTypeNames
 )
 
+from gaia.config import get_base_dir
 from gaia.hardware import _IS_RASPI
 from gaia.hardware.multiplexers import get_i2c, get_multiplexer
 from gaia.utils import (
@@ -36,6 +42,12 @@ def str_to_hex(address: str) -> int:
     if address.lower() in ("def", "default"):
         return 0
     return int(address, base=16)
+
+
+@dataclass
+class Image:
+    array: np.array
+    timestamp: datetime
 
 
 class Address:
@@ -306,7 +318,7 @@ class gpioDimmer(gpioHardware, Dimmer):
             from gaia.hardware._compatibility import pwmio
         return pwmio.PWMOut(self._PWMPin, frequency=100, duty_cycle=0)
 
-    def set_pwm_level(self, duty_cycle_in_percent: t.Union[float, int]) -> None:
+    def set_pwm_level(self, duty_cycle_in_percent: float | int) -> None:
         duty_cycle_in_16_bit = duty_cycle_in_percent / 100 * (2**16 - 1)
         self._dimmer.duty_cycle = duty_cycle_in_16_bit
 
@@ -410,26 +422,47 @@ class i2cSensor(BaseSensor, i2cHardware):
 class Camera(Hardware):
     def __init__(self, *args, **kwargs):
         kwargs["level"] = "environment"
-        base_dir = self.subroutine.config.general.base_dir
-        self.cam_dir = base_dir/f"camera/{self.subroutine.ecosystem_uid}"
-        if not self.cam_dir.exists():
-            os.mkdir(self.cam_dir)
-        self.running = False
         super().__init__(*args, **kwargs)
-        self.ecosystem_uid = self.subroutine.config.uid
         self._device = self._get_device()
+        self._camera_dir: Path | None = None
+        self.running: bool = False
 
     def _get_device(self):
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    def take_picture(self) -> Path:
+    @property
+    def camera_dir(self) -> Path:
+        if self._camera_dir is None:
+            base_dir = get_base_dir()
+            self._camera_dir = base_dir / f"camera/{self.subroutine.ecosystem_uid}"
+            if not self._camera_dir.exists():
+                os.mkdir(self._camera_dir)
+        return self._camera_dir
+
+    @property
+    def device(self):
+        return self._device
+
+    def get_image(self) -> Image:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    def take_video(self) -> io.BytesIO:
+    def save_image(
+            self,
+            image: Image,
+            name: str | None = None,
+    ) -> Path:
+        if name is None:
+            name = f"{self.uid}-{image.timestamp.isoformat(timespec='seconds')}"
+        path = self.camera_dir/name
+        img = _Image.fromarray(image.array)
+        img.save(path)
+        return path
+
+    def get_video(self) -> io.BytesIO:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
