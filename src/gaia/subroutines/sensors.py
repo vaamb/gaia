@@ -25,6 +25,7 @@ lock = Lock()
 class Sensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self._thread: Thread | None = None
         self._stop_event = Event()
         self._data: SensorsData | Empty = Empty()
         self._finish__init__()
@@ -62,20 +63,31 @@ class Sensors(SubroutineTemplate):
             f"Starting sensors loop. It will run every {get_config().SENSORS_TIMEOUT} s"
         )
         self._thread = Thread(target=self._sensors_loop, args=())
-        self._thread.name = f"{self._uid}-sensors_loop"
-        self._thread.start()
+        self.thread.name = f"{self._uid}-sensors_loop"
+        self.thread.start()
         self.logger.debug(f"Sensors loop successfully started")
 
     def _stop(self):
         self.logger.info(f"Stopping sensors loop")
         self._stop_event.set()
-        self._thread.join()
+        self.thread.join()
         if self.ecosystem.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.stop()
         self.hardware = {}
 
     """API calls"""
+    @property
+    def thread(self) -> Thread:
+        if self._thread is None:
+            raise RuntimeError("Thread has not been set up")
+        else:
+            return self._thread
+
+    @thread.setter
+    def thread(self, thread: Thread | None):
+        self._thread = thread
+
     def add_hardware(self, hardware_config: HardwareConfig) -> BaseSensor:
         model = hardware_config.model
         if get_config().VIRTUALIZATION:

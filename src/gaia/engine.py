@@ -105,6 +105,17 @@ class Engine(metaclass=SingletonMeta):
         ])
 
     @property
+    def thread(self) -> Thread:
+        if self._thread is None:
+            raise RuntimeError("Thread has not been set up")
+        else:
+            return self._thread
+
+    @thread.setter
+    def thread(self, thread: Thread | None):
+        self._thread = thread
+
+    @property
     def event_handler(self):
         """Return the event handler
 
@@ -324,9 +335,9 @@ class Engine(metaclass=SingletonMeta):
             self.logger.info("Starting the Engine ...")
             self._start_background_tasks()
             self._engine_startup()
-            self._thread = Thread(target=self._loop)
-            self._thread.name = "engine"
-            self._thread.start()
+            self.thread = Thread(target=self._loop)
+            self.thread.name = "engine"
+            self.thread.start()
             self.logger.info("Engine started")
         else:  # pragma: no cover
             raise RuntimeError("Engine can only be started once")
@@ -345,8 +356,8 @@ class Engine(metaclass=SingletonMeta):
             config_event = get_config_event()
             with config_event:
                 config_event.notify_all()
-            self._thread.join()
-            self._thread = None
+            self.thread.join()
+            self.thread = None
 
             if stop_ecosystems:
                 for ecosystem_uid in set(self.ecosystems_started):

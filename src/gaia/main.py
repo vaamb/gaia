@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-import threading
+from threading import Thread
 from time import sleep
 import typing as t
 from typing import Type
@@ -42,6 +42,7 @@ class Gaia:
         self.logger.info("Initializing Gaia")
         self.connect_to_ouranos: bool = config_cls.COMMUNICATE_WITH_OURANOS
         self.use_database = config_cls.USE_DATABASE
+        self._thread: Thread | None = None
         self.engine = Engine(GeneralEnvironmentConfig())
         self._broker_url = config_cls.AGGREGATOR_COMMUNICATION_URL
         self.message_broker: "KombuDispatcher" | "RetryClient" | None = None
@@ -98,9 +99,9 @@ class Gaia:
                     self.message_broker.connect(
                         server_url, transports="websocket", namespaces=['/gaia']
                     )
-                self._thread = threading.Thread(target=thread_func)
-                self._thread.name = "socketio.connection"
-                self._thread.start()
+                self.thread = Thread(target=thread_func)
+                self.thread.name = "socketio.connection"
+                self.thread.start()
             else:
                 self.logger.info("Starting the dispatcher")
                 self.message_broker.start()
@@ -118,6 +119,17 @@ class Gaia:
                 trigger="cron", minute="*", misfire_grace_time=10,
                 id="log_sensors_data",
             )
+
+    @property
+    def thread(self) -> Thread:
+        if self._thread is None:
+            raise RuntimeError("Thread has not been set up")
+        else:
+            return self._thread
+
+    @thread.setter
+    def thread(self, thread: Thread | None):
+        self._thread = thread
 
     def start(self) -> None:
         if not self.started:

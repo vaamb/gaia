@@ -157,13 +157,24 @@ class GeneralConfig(metaclass=SingletonMeta):
                 self.reload(reload_cfg)
             self._stop_event.wait(get_gaia_config().CONFIG_WATCHER_PERIOD)
 
+    @property
+    def thread(self) -> Thread:
+        if self._thread is None:
+            raise RuntimeError("Thread has not been set up")
+        else:
+            return self._thread
+
+    @thread.setter
+    def thread(self, thread: Thread | None):
+        self._thread = thread
+
     def start_watchdog(self) -> None:
         if not self.started:
             logger.info("Starting the configuration files watchdog")
             self._update_cfg_hash()
-            self._thread = Thread(target=self._watchdog_loop)
-            self._thread.name = "config_watchdog"
-            self._thread.start()
+            self.thread = Thread(target=self._watchdog_loop)
+            self.thread.name = "config_watchdog"
+            self.thread.start()
             logger.debug("Configuration files watchdog successfully started")
         else:  # pragma: no cover
             logger.debug("Configuration files watchdog is already running")
@@ -172,8 +183,8 @@ class GeneralConfig(metaclass=SingletonMeta):
         if self.started:
             logger.info("Stopping the configuration files watchdog")
             self._stop_event.set()
-            self._thread.join()
-            self._thread = None
+            self.thread.join()
+            self.thread = None
             logger.debug("Configuration files watchdog successfully stopped")
 
     @contextmanager

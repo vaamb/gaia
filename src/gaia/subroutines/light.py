@@ -54,6 +54,7 @@ class Light(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, "Switch"]
+        self._light_loop_thread: Thread | None = None
         self._status = {"current": False, "last": False}
         self._mode: ActuatorMode = ActuatorMode.automatic
         self._dimmers: set[str] = set()
@@ -266,20 +267,31 @@ class Light(SubroutineTemplate):
         if now.date() > self.ecosystem.config.general.last_sun_times_update.date():
             self.ecosystem.engine.refresh_sun_times()
         self._refresh_lighting_hours(send=True)
-        self._light_loop_thread = Thread(
+        self.light_loop_thread = Thread(
             target=self._light_state_loop, args=()
         )
-        self._light_loop_thread.name = f"{self._uid}-light_loop"
-        self._light_loop_thread.start()
+        self.light_loop_thread.name = f"{self._uid}-light_loop"
+        self.light_loop_thread.start()
 
     def _stop(self):
         self.logger.info("Stopping light loop")
         self._stop_event.set()
         self._adjust_light_level_event.set()
-        self._light_loop_thread.join()
+        self.light_loop_thread.join()
         self.hardware = {}
 
     """API calls"""
+    @property
+    def light_loop_thread(self) -> Thread:
+        if self._light_loop_thread is None:
+            raise RuntimeError("Thread has not been set up")
+        else:
+            return self._light_loop_thread
+
+    @light_loop_thread.setter
+    def light_loop_thread(self, thread: Thread | None):
+        self._light_loop_thread = thread
+
     def add_hardware(self, hardware_config: HardwareConfig):
         hardware: Switch = self._add_hardware(hardware_config, actuator_models)
         if isinstance(hardware, Dimmer):
