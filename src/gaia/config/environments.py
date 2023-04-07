@@ -320,11 +320,18 @@ class GeneralConfig(metaclass=SingletonMeta):
 
         :param value: A tuple with (latitude, longitude)
         """
+        places = self._private_config.get("places")
+        if not places:
+            self._private_config["places"] = {}
         home = self._private_config["places"].get("home", {})
         if not home:
             self._private_config["places"]["home"] = {}
         coordinates = {"latitude": value[0], "longitude": value[1]}
         self._private_config["places"]["home"]["coordinates"] = coordinates
+
+    @property
+    def units(self):
+        return self._private_config.get("units", {})
 
     @property
     def sun_times(self) -> SunTimes:

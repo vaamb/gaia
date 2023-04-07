@@ -7,7 +7,7 @@ from gaia.hardware import _IS_RASPI
 from gaia.hardware.abc import (
     i2cSensor, LightSensor, PlantLevelHardware, hardware_logger
 )
-from gaia.utils import temperature_converter
+from gaia.utils import get_unit, temperature_converter
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -73,8 +73,6 @@ class CapacitiveSensor(i2cSensor):
         super().__init__(*args, **kwargs)
         if not self._address["main"].main:
             self._address["main"].main = 0x36
-        self._unit = kwargs.pop("unit", "celsius")
-        self._device = self._get_device()
 
     def _get_device(self) -> "Seesaw":
         if _IS_RASPI:
@@ -138,7 +136,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
 
         if "temperature" in self.measures:
             temperature = temperature_converter(
-                raw_temperature, "celsius", self._unit
+                raw_temperature, "celsius", get_unit("temperature", "celsius")
             )
             data.append({"measure": "temperature", "value": temperature})
         return data

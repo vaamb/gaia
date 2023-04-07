@@ -6,7 +6,7 @@ import typing as t
 from gaia.hardware import _IS_RASPI
 from gaia.hardware.abc import gpioSensor, hardware_logger
 from gaia.utils import (
-    get_absolute_humidity, get_dew_point, temperature_converter
+    get_absolute_humidity, get_dew_point, get_unit, temperature_converter
 )
 
 
@@ -27,9 +27,6 @@ class DHTSensor(gpioSensor):
         if not kwargs.get("measures"):
             kwargs["measures"] = ["temperature", "humidity"]
         super().__init__(*args, **kwargs)
-
-        self._unit = kwargs.pop("unit", "celsius")
-
         # Load dht device.
         # Rem: don't use pulseio as it uses 100% of one core in Pi3
         # In Pi0: behaves correctly
@@ -80,14 +77,14 @@ class DHTSensor(gpioSensor):
 
             if "temperature" in self.measures:
                 temperature = temperature_converter(
-                                 raw_temperature, "celsius", self._unit
+                    raw_temperature, "celsius", get_unit("temperature", "celsius")
                 )
                 data.append({"measure": "temperature", "value": temperature})
 
             if "dew_point" in self.measures:
                 raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
                 dew_point = temperature_converter(
-                    raw_dew_point, "celsius", self._unit
+                    raw_dew_point, "celsius", get_unit("temperature", "celsius")
                 )
                 data.append({"measure": "dew_point", "value": dew_point})
 

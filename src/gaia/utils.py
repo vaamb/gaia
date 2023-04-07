@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import ruamel.yaml
 
-from gaia.config import get_base_dir, get_config, get_log_dir
+from gaia.config import get_config, get_log_dir
 
 
 yaml = ruamel.yaml.YAML(typ="safe")
@@ -293,6 +293,11 @@ def temperature_converter(
         )
 
     return float(round(x, precision_digit))
+
+
+def get_unit(measure: str, default: str) -> str:
+    from gaia.config.environments import get_general_config
+    return get_general_config().units.get(measure, default)
 
 
 def is_connected() -> bool:
