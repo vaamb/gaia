@@ -15,9 +15,9 @@ import weakref
 
 from gaia_validators import (
     ClimateParameterNames, ClimateConfig, DayConfig, EnvironmentConfig,
-    EnvironmentConfigDict, safe_enum_from_name, IDs, HardwareConfigDict,
-    HardwareLevelNames, HardwareTypeNames, LightMethod, LightMethodNames,
-    ManagementConfig, ManagementNames, SunTimes
+    EnvironmentConfigDict, safe_enum_from_name, IDs, HardwareConfig,
+    HardwareConfigDict, HardwareLevelNames, HardwareTypeNames, LightMethod,
+    LightMethodNames, ManagementConfig, ManagementNames, SunTimes
 )
 
 from gaia.config import (
@@ -561,11 +561,11 @@ class SpecificConfig:
                 if self.IO_dict[uid]["type"].lower() == IO_type
                 and self.IO_dict[uid]["level"].lower() in level]
 
-    def get_hardware_config(self, uid: str) -> HardwareConfigDict:
+    def get_hardware_config(self, uid: str) -> HardwareConfig:
         try:
             hardware_config = self.IO_dict[uid]
             hardware_config["uid"] = uid
-            return hardware_config
+            return HardwareConfig(**hardware_config)
         except KeyError:
             raise HardwareNotFound
 
@@ -595,8 +595,8 @@ class SpecificConfig:
         model: str,
         type: HardwareTypeNames,
         level: HardwareLevelNames,
-        measure: list | None = None,
-        plant: str | None = None,
+        measures: list | None = None,
+        plants: list | None = None,
     ) -> None:
         """
         Create a new hardware
@@ -605,8 +605,8 @@ class SpecificConfig:
         :param model: str: the name of the model of the hardware to create
         :param type: str: the type of hardware to create ('sensor', 'light' ...)
         :param level: str: either 'environment' or 'plants'
-        :param measure: list: the list of the measures taken
-        :param plant: str: the name of the plant linked to the hardware
+        :param measures: list: the list of the measures taken
+        :param plants: list: the name of the plant linked to the hardware
         """
         if address in self._used_addresses():
             raise ValueError(f"Address {address} already used")
@@ -615,20 +615,20 @@ class SpecificConfig:
                 "This hardware model is not supported. Use "
                 "'SpecificConfig.supported_hardware()' to see supported hardware"
             )
-        h = hardware_models[model]
         uid = self._create_new_IO_uid()
-        new_hardware = h(
-            subroutine=None,  # Just need the dict repr
+        h = hardware_models[model]
+        hardware_config = HardwareConfig(
             uid=uid,
             name=name,
             address=address,
-            model=model,
             type=type,
             level=level,
-            measure=measure,
-            plant=plant,
+            model=model,
+            measures=measures,
+            plants=plants
         )
-        hardware_repr = new_hardware.dict_repr
+        new_hardware = h.from_hardware_config(hardware_config, None)
+        hardware_repr = new_hardware.dict_repr(shorten=True)
         hardware_repr.pop("uid")
         self.IO_dict.update({uid: hardware_repr})
         self.save()

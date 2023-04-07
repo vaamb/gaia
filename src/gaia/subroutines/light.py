@@ -10,7 +10,7 @@ import typing as t
 from simple_pid import PID
 
 from gaia_validators import (
-    ActuatorMode, ActuatorTurnTo, HardwareConfigDict, HardwareType,
+    ActuatorMode, ActuatorTurnTo, HardwareConfig, HardwareType,
     LightData, LightingHours, LightMethod, SunTimes
 )
 
@@ -281,8 +281,8 @@ class Light(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_dict: HardwareConfigDict):
-        hardware: Switch = self._add_hardware(hardware_dict, actuator_models)
+    def add_hardware(self, hardware_config: HardwareConfig):
+        hardware: Switch = self._add_hardware(hardware_config, actuator_models)
         if isinstance(hardware, Dimmer):
             self._dimmers.add(hardware.uid)
 

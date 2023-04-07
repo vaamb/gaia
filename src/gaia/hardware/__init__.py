@@ -12,7 +12,7 @@ from gaia.hardware.sensors.GPIO import DHT11, DHT22, gpio_sensor_models
 from gaia.hardware.sensors.I2C import (
     CapacitiveMoisture, i1c_sensor_models, VEML7700
 )
-from gaia.hardware.multiplexers import MultiplexerModels, TCA9548A
+from gaia.hardware.multiplexers import multiplexer_models, TCA9548A
 from gaia.hardware.sensors.virtual import (
     virtualCapacitiveMoisture, virtualDHT11, virtualDHT22, virtual_sensor_models,
     virtualVEML7700

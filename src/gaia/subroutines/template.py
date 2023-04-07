@@ -6,7 +6,7 @@ import typing as t
 from typing import Type
 import weakref
 
-from gaia_validators import HardwareConfigDict
+from gaia_validators import HardwareConfig
 
 from gaia.exceptions import HardwareNotFound
 from gaia.hardware.abc import BaseSensor, Camera, Dimmer, Hardware, Switch
@@ -42,20 +42,17 @@ class SubroutineTemplate(ABC):
 
     def _add_hardware(
             self,
-            hardware_dict: HardwareConfigDict,
+            hardware_config: HardwareConfig,
             hardware_choice: dict[str, Type[Hardware]],
     ) -> BaseSensor | Camera | Dimmer | Hardware | Switch | None:
         try:
-            model: str = hardware_dict.get("model", None)
+            model: str = hardware_config.model
             if model not in hardware_choice:
                 raise HardwareNotFound(
                     f"{model} is not in the list of the hardware available."
                 )
             hardware_class: Type[Hardware] = hardware_choice[model]
-            hardware = hardware_class(
-                subroutine=self,
-                **hardware_dict
-            )
+            hardware = hardware_class.from_hardware_config(hardware_config, self)
             if isinstance(hardware, Switch):
                 hardware.turn_off()
             if isinstance(hardware, Dimmer):
@@ -64,7 +61,7 @@ class SubroutineTemplate(ABC):
             self.hardware[hardware.uid] = hardware
             return hardware
         except Exception as e:
-            uid = hardware_dict["uid"]
+            uid = hardware_config.uid
             self.logger.error(
                 f"Encountered an exception while setting up hardware '{uid}'. "
                 f"ERROR msg: `{e.__class__.__name__}: {e}`."
@@ -114,7 +111,7 @@ class SubroutineTemplate(ABC):
         self.config.set_management(self.name, value)
 
     @abstractmethod
-    def add_hardware(self, hardware_dict: HardwareConfigDict) -> None:
+    def add_hardware(self, hardware_config: HardwareConfig) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -135,17 +132,14 @@ class SubroutineTemplate(ABC):
         hardware_needed: set[str] = self.get_hardware_needed_uid()
         hardware_existing: set[str] = set(self.hardware)
         for hardware_uid in hardware_needed - hardware_existing:
-            hardware_dict = self.config.get_hardware_config(hardware_uid)
-            self.add_hardware(hardware_dict)
+            hardware_config = self.config.get_hardware_config(hardware_uid)
+            self.add_hardware(hardware_config)
         for hardware_uid in hardware_existing - hardware_needed:
             self.remove_hardware(hardware_uid)
 
     def update_manageable(self) -> None:
         if self.management:
             self._update_manageable()
-
-    def set_management(self, value):
-        self.config.set_management(self.name, value)
 
     def start(self) -> None:
         if self.manageable:

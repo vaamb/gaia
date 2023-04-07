@@ -4,10 +4,10 @@ from datetime import datetime
 import io
 import typing as t
 
-from gaia_validators import ActuatorMode, Empty, HardwareConfigDict, HealthData
+from gaia_validators import ActuatorMode, Empty, HardwareConfig, HealthData
 
 from gaia.config import get_config
-from gaia.hardware import CAMERA
+from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
 from gaia.shared_resources import scheduler
 from gaia.subroutines.template import SubroutineTemplate
@@ -112,8 +112,8 @@ class Health(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_dict: HardwareConfigDict) -> None:
-        self._add_hardware(hardware_dict, CAMERA)
+    def add_hardware(self, hardware_config: HardwareConfig) -> None:
+        self._add_hardware(hardware_config, camera_models)
 
     def get_hardware_needed_uid(self) -> set[str]:
         # TODO

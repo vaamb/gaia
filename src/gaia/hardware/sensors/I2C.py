@@ -5,7 +5,7 @@ import typing as t
 
 from gaia.hardware import _IS_RASPI
 from gaia.hardware.abc import (
-    i2cSensor, LightSensor, PlantLevelHardware, sensorLogger
+    i2cSensor, LightSensor, PlantLevelHardware, hardware_logger
 )
 from gaia.utils import temperature_converter
 
@@ -25,12 +25,11 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 class VEML7700(i2cSensor, LightSensor):
     def __init__(self, *args, **kwargs) -> None:
+        if not kwargs.get("measures"):
+            kwargs["measures"] = ["lux"]
         super().__init__(*args, **kwargs)
-        if not kwargs.get("measure", ()):
-            kwargs["measure"] = ["lux"]
         if not self._address["main"].main:
             self._address["main"].main = 0x10
-        self._device = self._get_device()
 
     def _get_device(self) -> "_VEML7700":
         if _IS_RASPI:
@@ -48,26 +47,30 @@ class VEML7700(i2cSensor, LightSensor):
     # To catch data fast from light routine
     def _get_lux(self) -> float | None:
         try:
-            return self._device.lux
+            return self.device.lux
         except Exception as e:
-            sensorLogger.error(
+            hardware_logger.error(
                 f"Sensor {self._name} encountered an error. "
                 f"ERROR msg: `{e.__class__.__name__}: {e}`"
             )
             return None
 
+    @property
+    def device(self):
+        return self._get_device()
+
     def get_data(self) -> list:
         data = []
-        if "lux" in self.measure or "light" in self.measure:
+        if "lux" in self.measures or "light" in self.measures:
             data.append({"measure": "light", "value": self._get_lux()})
         return data
 
 
 class CapacitiveSensor(i2cSensor):
     def __init__(self, *args, **kwargs) -> None:
+        if not kwargs.get("measures"):
+            kwargs["measures"] = ["capacitive"]
         super().__init__(*args, **kwargs)
-        if not kwargs.get("measure", ()):
-            kwargs["measure"] = ["capacitive"]
         if not self._address["main"].main:
             self._address["main"].main = 0x36
         self._unit = kwargs.pop("unit", "celsius")
@@ -86,6 +89,10 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self._address["main"].main)
 
+    @property
+    def device(self):
+        return self._get_device()
+
     def get_data(self) -> list[dict]:  # pragma: no cover
         raise NotImplementedError(
             "This method must be implemented in a subclass"
@@ -94,8 +101,8 @@ class CapacitiveSensor(i2cSensor):
 
 class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measure", ()):
-            kwargs["measure"] = ["moisture", "temperature"]
+        if not kwargs.get("measures"):
+            kwargs["measures"] = ["moisture", "temperature"]
         super().__init__(*args, **kwargs)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
@@ -103,15 +110,15 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         temperature: float | None = None
         for retry in range(3):
             try:
-                moisture = self._device.moisture_read()
-                temperature = self._device.get_temp()
+                moisture = self.device.moisture_read()
+                temperature = self.device.get_temp()
 
             except RuntimeError:
                 sleep(0.5)
                 continue
 
             except Exception as e:
-                sensorLogger.error(
+                hardware_logger.error(
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
@@ -126,10 +133,10 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         except RuntimeError:
             moisture = raw_temperature = None
         data = []
-        if "moisture" in self.measure:
+        if "moisture" in self.measures:
             data.append({"measure": "moisture", "value": moisture})
 
-        if "temperature" in self.measure:
+        if "temperature" in self.measures:
             temperature = temperature_converter(
                 raw_temperature, "celsius", self._unit
             )

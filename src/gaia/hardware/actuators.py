@@ -9,15 +9,15 @@ if get_config().VIRTUALIZATION:
 class gpioSwitch(gpioHardware, Switch):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._pin.init(mode=self.OUT)
+        self.pin.init(mode=self.OUT)
 
     def turn_on(self) -> None:
-        self._pin.value(val=1)
+        self.pin.value(val=1)
         if get_config().VIRTUALIZATION:
             get_virtual_ecosystem(self.subroutine.ecosystem.uid)._light = True
 
     def turn_off(self) -> None:
-        self._pin.value(val=0)
+        self.pin.value(val=0)
         if get_config().VIRTUALIZATION:
             get_virtual_ecosystem(self.subroutine.ecosystem.uid)._light = False
 

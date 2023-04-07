@@ -7,7 +7,7 @@ from typing import cast
 from simple_pid import PID
 
 from gaia_validators import (
-    ClimateParameterNames, Empty, HardwareConfigDict, LightingHours
+    ClimateParameterNames, Empty, HardwareConfig, LightingHours
 )
 
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
@@ -108,7 +108,7 @@ class Climate(SubroutineTemplate):
         sensor_uid = self.config.get_IO_group_uids("sensor")
         for uid in sensor_uid:
             hardware = self.config.get_hardware_config(uid)
-            m = hardware.get("measure", [])
+            m = hardware.measures
             if isinstance(m, str):
                 measures.add(m)
             else:
@@ -265,8 +265,8 @@ class Climate(SubroutineTemplate):
         self._reset_regulators_dict()
 
     """API calls"""
-    def add_hardware(self, hardware_dict: HardwareConfigDict) -> None:
-        self._add_hardware(hardware_dict, actuator_models)
+    def add_hardware(self, hardware_config: HardwareConfig) -> None:
+        self._add_hardware(hardware_config, actuator_models)
 
     def remove_hardware(self, hardware_uid: str) -> None:
         try:

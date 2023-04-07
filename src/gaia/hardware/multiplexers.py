@@ -79,7 +79,7 @@ class TCA9548A(Multiplexer):
         return tca(get_i2c(), self._address)
 
 
-MultiplexerModels = {
+multiplexer_models = {
     hardware.__name__: hardware for hardware in [
         TCA9548A,
     ]

@@ -7,7 +7,7 @@ from time import monotonic
 import typing as t
 from typing import Any
 
-from gaia_validators import Empty, HardwareConfigDict, SensorsData
+from gaia_validators import Empty, HardwareConfig, SensorsData
 
 from gaia.config import get_config
 from gaia.hardware import sensor_models
@@ -77,12 +77,12 @@ class Sensors(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_dict: HardwareConfigDict) -> BaseSensor:
-        model = hardware_dict.get("model", None)
+    def add_hardware(self, hardware_config: HardwareConfig) -> BaseSensor:
+        model = hardware_config.model
         if get_config().VIRTUALIZATION:
             if not model.startswith("virtual"):
-                hardware_dict["model"] = f"virtual{model}"
-        return self._add_hardware(hardware_dict, sensor_models)
+                hardware_config.model = f"virtual{model}"
+        return self._add_hardware(hardware_config, sensor_models)
 
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids("sensor"))

@@ -4,7 +4,7 @@ from time import sleep
 import typing as t
 
 from gaia.hardware import _IS_RASPI
-from gaia.hardware.abc import gpioSensor, sensorLogger
+from gaia.hardware.abc import gpioSensor, hardware_logger
 from gaia.utils import (
     get_absolute_humidity, get_dew_point, temperature_converter
 )
@@ -24,8 +24,8 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 class DHTSensor(gpioSensor):
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measure", ()):
-            kwargs["measure"] = ["temperature", "humidity"]
+        if not kwargs.get("measures"):
+            kwargs["measures"] = ["temperature", "humidity"]
         super().__init__(*args, **kwargs)
 
         self._unit = kwargs.pop("unit", "celsius")
@@ -33,7 +33,7 @@ class DHTSensor(gpioSensor):
         # Load dht device.
         # Rem: don't use pulseio as it uses 100% of one core in Pi3
         # In Pi0: behaves correctly
-        self._device = self._get_device()
+
 
     def _get_device(self):  # pragma: no cover
         raise NotImplementedError(
@@ -45,16 +45,16 @@ class DHTSensor(gpioSensor):
         temperature: float | None = None
         for retry in range(3):
             try:
-                self._device.measure()
-                humidity = round(self._device.humidity, 2)
-                temperature = round(self._device.temperature, 2)
+                self.device.measure()
+                humidity = round(self.device.humidity, 2)
+                temperature = round(self.device.temperature, 2)
 
             except RuntimeError:
                 sleep(0.5)
                 continue
 
             except Exception as e:
-                sensorLogger.error(
+                hardware_logger.error(
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
@@ -64,6 +64,10 @@ class DHTSensor(gpioSensor):
                 break
         return humidity, temperature
 
+    @property
+    def device(self):
+        return self._get_device()
+
     def get_data(self) -> list:
         try:
             raw_humidity, raw_temperature = self._get_raw_data()
@@ -71,23 +75,23 @@ class DHTSensor(gpioSensor):
             raw_humidity = raw_temperature = None
         data = []
         if raw_humidity is not None and raw_temperature is not None:
-            if "humidity" in self.measure:
+            if "humidity" in self.measures:
                 data.append({"measure": "humidity", "value": raw_humidity})
 
-            if "temperature" in self.measure:
+            if "temperature" in self.measures:
                 temperature = temperature_converter(
                                  raw_temperature, "celsius", self._unit
                 )
                 data.append({"measure": "temperature", "value": temperature})
 
-            if "dew_point" in self.measure:
+            if "dew_point" in self.measures:
                 raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
                 dew_point = temperature_converter(
                     raw_dew_point, "celsius", self._unit
                 )
                 data.append({"measure": "dew_point", "value": dew_point})
 
-            if "absolute_humidity" in self.measure:
+            if "absolute_humidity" in self.measures:
                 raw_absolute_humidity = get_absolute_humidity(
                     raw_temperature, raw_humidity)
                 data.append({"measure": "absolute_humidity", "value": raw_absolute_humidity})
@@ -107,7 +111,7 @@ class DHT11(DHTSensor):
                 )
         else:
             from gaia.hardware._compatibility import DHT11 as _DHT11
-        return _DHT11(self._pin, use_pulseio=False)
+        return _DHT11(self.pin, use_pulseio=False)
 
 
 class DHT22(DHTSensor):
@@ -123,7 +127,7 @@ class DHT22(DHTSensor):
                 )
         else:
             from gaia.hardware._compatibility import DHT22 as _DHT22
-        return _DHT22(self._pin, use_pulseio=False)
+        return _DHT22(self.pin, use_pulseio=False)
 
 
 gpio_sensor_models = {
