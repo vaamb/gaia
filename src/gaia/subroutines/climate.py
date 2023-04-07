@@ -249,7 +249,6 @@ class Climate(SubroutineTemplate):
     def _start(self):
         self._update_time_parameters()
         self._update_climate_targets()
-        self.refresh_hardware()
         self.logger.info(
             f"Starting climate routine. It will run every minute"
         )

@@ -146,6 +146,7 @@ class SubroutineTemplate(ABC):
             if not self._started:
                 self.logger.debug("Starting the subroutine")
                 try:
+                    self.refresh_hardware()
                     self._start()
                     self.logger.debug("Successfully started")
                     self._started = True

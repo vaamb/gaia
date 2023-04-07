@@ -58,7 +58,6 @@ class Sensors(SubroutineTemplate):
             self.manageable = False
 
     def _start(self):
-        self.refresh_hardware()
         self.logger.info(
             f"Starting sensors loop. It will run every {get_config().SENSORS_TIMEOUT} s"
         )

@@ -266,7 +266,6 @@ class Light(SubroutineTemplate):
         if now.date() > self.ecosystem.config.general.last_sun_times_update.date():
             self.ecosystem.engine.refresh_sun_times()
         self._refresh_lighting_hours(send=True)
-        self.refresh_hardware()
         self._light_loop_thread = Thread(
             target=self._light_state_loop, args=()
         )
