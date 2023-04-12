@@ -191,7 +191,8 @@ def get_dew_point(
     """
     if temp is None or hum is None:
         return None
-
+    if hum == 0.0:
+        hum = 0.1
     b = 17.62
     c = 243.12
     al = log(hum / 100) + (temp * b / (c + temp))
