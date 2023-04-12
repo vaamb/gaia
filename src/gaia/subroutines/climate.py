@@ -104,11 +104,11 @@ class Climate(SubroutineTemplate):
                 regulated.remove(climate_param)
 
         # Check if Sensors taking regulated params are available
-        measures: t.Set[str] = set()
+        measures: set[str] = set()
         sensor_uid = self.config.get_IO_group_uids("sensor")
         for uid in sensor_uid:
-            hardware = self.config.get_hardware_config(uid)
-            m = hardware.measures
+            hardware_config = self.config.get_hardware_config(uid)
+            m = hardware_config.measures
             if isinstance(m, str):
                 measures.add(m)
             else:

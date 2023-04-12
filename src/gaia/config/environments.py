@@ -14,10 +14,11 @@ from typing import cast, TypedDict, Union
 import weakref
 
 from gaia_validators import (
-    ClimateParameterNames, ClimateConfig, DayConfig, EnvironmentConfig,
-    EnvironmentConfigDict, safe_enum_from_name, IDs, HardwareConfig,
-    HardwareConfigDict, HardwareLevelNames, HardwareTypeNames, LightMethod,
-    LightMethodNames, ManagementConfig, ManagementNames, SunTimes
+    ChaosConfig, ClimateParameterNames, ClimateConfig, DayConfig,
+    EnvironmentConfig, EnvironmentConfigDict, safe_enum_from_name, IDs,
+    HardwareConfig, HardwareConfigDict, HardwareLevelNames, HardwareTypeNames,
+    LightMethod, LightMethodNames, ManagementConfig, ManagementNames, SunTimes,
+    SkyConfigDict
 )
 
 from gaia.config import (
@@ -491,9 +492,31 @@ class SpecificConfig:
 
     """EnvironmentConfig related parameters"""
     @property
+    def environment(self) -> EnvironmentConfigDict:
+        """
+        Returns the environment config for the ecosystem
+        """
+        try:
+            return self.ecosystem_config["environment"]
+        except KeyError:
+            self.ecosystem_config["environment"] = EnvironmentConfigDict()
+            return self.ecosystem_config["environment"]
+
+    @property
+    def sky(self) -> SkyConfigDict:
+        """
+        Returns the sky config for the ecosystem
+        """
+        try:
+            return self.environment["sky"]
+        except KeyError:
+            self.environment["sky"] = SkyConfigDict()
+            return self.environment["sky"]
+
+    @property
     def light_method(self) -> LightMethod:
         try:
-            method = self.ecosystem_config["environment"]["sky"]["lighting"]
+            method = self.sky["lighting"]
             if method in ("elongate", "mimic"):
                 if not is_connected():
                     if self._first_connection_error:
@@ -511,14 +534,12 @@ class SpecificConfig:
 
     @light_method.setter
     def light_method(self, method: LightMethodNames) -> None:
-        if not self.ecosystem_config["environment"].get("sky"):
-            self.ecosystem_config["environment"]["sky"] = {}
-        self.ecosystem_config["environment"]["sky"]["lighting"] = method.value
+        self.sky["lighting"] = method.value
 
     @property
-    def chaos(self) -> dict:
+    def chaos(self) -> ChaosConfig:
         try:
-            return self.ecosystem_config["environment"]["chaos"]
+            return ChaosConfig(**self.environment["chaos"])
         except KeyError:
             raise UndefinedParameter
 
@@ -529,34 +550,30 @@ class SpecificConfig:
         :param values: A dict with the entries 'frequency': int,
                        'duration': int and 'intensity': float.
         """
-        environment = self.ecosystem_config["environment"]
-        if not environment.get("chaos"):
-            environment["chaos"] = {}
-        frequency = environment["chaos"].get("frequency", 0)
-        duration = environment["chaos"].get("duration", 0)
-        intensity = environment["chaos"].get("intensity", 1.0)
-        self.ecosystem_config["environment"]["chaos"]["frequency"] = \
-            values.get("frequency", frequency)
-        self.ecosystem_config["environment"]["chaos"]["duration"] = \
-            values.get("duration", duration)
-        self.ecosystem_config["environment"]["chaos"]["intensity"] = \
-            values.get("intensity", intensity)
+        chaos = ChaosConfig(**values)
+        self.environment["chaos"] = asdict(chaos)
 
-    # TODO: use Literal for parameter
-    def get_climate_parameters(self, parameter: ClimateParameterNames) -> ClimateConfig:
-        environment = self.ecosystem_config["environment"]
+    @property
+    def climate(self) -> dict[ClimateParameterNames, dict]:
+        """
+        Returns the sky config for the ecosystem
+        """
         try:
-            data = environment["climate"][parameter]
+            return self.environment["climate"]
+        except KeyError:
+            self.environment["climate"] = {}
+            return self.environment["climate"]
+
+    def get_climate_parameters(self, parameter: ClimateParameterNames) -> ClimateConfig:
+        try:
+            data = self.climate[parameter]
             return ClimateConfig(parameter=parameter, **data)
         except KeyError:
             raise UndefinedParameter
 
     # TODO: use Literal for parameter and value
     def set_climate_parameters(self, parameter: ClimateParameterNames, value: dict) -> None:
-        environment = self.ecosystem_config["environment"]
-        if not environment.get("climate"):
-            environment["climate"] = {}
-        environment["climate"][parameter] = value
+        self.climate[parameter] = value
 
     """Parameters related to IO"""    
     @property
@@ -582,8 +599,7 @@ class SpecificConfig:
     def get_hardware_config(self, uid: str) -> HardwareConfig:
         try:
             hardware_config = self.IO_dict[uid]
-            hardware_config["uid"] = uid
-            return HardwareConfig(**hardware_config)
+            return HardwareConfig(uid, **hardware_config)
         except KeyError:
             raise HardwareNotFound
 

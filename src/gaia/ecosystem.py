@@ -6,7 +6,7 @@ import typing as t
 import weakref
 
 from gaia_validators import (
-    BaseInfoConfig, Empty, EnvironmentConfig,
+    BaseInfoConfig, ChaosConfig, Empty, EnvironmentConfig,
     HardwareConfig, HealthData, LightData, ManagementConfig, SensorsData
 )
 
@@ -138,7 +138,7 @@ class Ecosystem:
 
     @property
     def hardware(self) -> list[HardwareConfig]:
-        hardware_dict = self.config.ecosystem_config.get("IO", {})
+        hardware_dict = self.config.IO_dict
         return [HardwareConfig(uid=key, **value) for key, value in hardware_dict.items()]
 
     def init_subroutine(self, subroutine_name: SubroutineTypes) -> None:
@@ -183,10 +183,10 @@ class Ecosystem:
         try:
             values = self.config.chaos
         except UndefinedParameter:
-            values = {}
-        self.chaos.frequency = values.get("frequency", 0)
-        self.chaos.duration = values.get("duration", 0)
-        self.chaos.intensity = values.get("intensity", 1)
+            values = ChaosConfig()
+        self.chaos.frequency = values.frequency
+        self.chaos.duration = values.duration
+        self.chaos.intensity = values.intensity
         self.chaos.update()
 
     def start(self):
