@@ -378,7 +378,7 @@ class Light(SubroutineTemplate):
             mode=self.mode,
             method=self.method,
             timer=self.timer,
-            **asdict(self.lighting_hours)
+            **self.lighting_hours.dict()
         )
 
     def turn_light(

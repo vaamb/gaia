@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import asdict
 from datetime import date, datetime, time
 from json.decoder import JSONDecodeError
 import logging
@@ -60,8 +59,8 @@ class EcosystemDict(TypedDict):
 DEFAULT_ECOSYSTEM_CFG = EcosystemDict(
     name="",
     status=False,
-    management=cast(dict[ManagementNames, bool], asdict(ManagementConfig())),
-    environment=cast(EnvironmentConfigDict, asdict(EnvironmentConfig())),
+    management=cast(dict[ManagementNames, bool], ManagementConfig().dict()),
+    environment=cast(EnvironmentConfigDict, EnvironmentConfig().dict()),
     IO={},
 )
 
@@ -551,7 +550,7 @@ class SpecificConfig:
                        'duration': int and 'intensity': float.
         """
         chaos = ChaosConfig(**values)
-        self.environment["chaos"] = asdict(chaos)
+        self.environment["chaos"] = chaos.dict()
 
     @property
     def climate(self) -> dict[ClimateParameterNames, dict]:
@@ -599,7 +598,7 @@ class SpecificConfig:
     def get_hardware_config(self, uid: str) -> HardwareConfig:
         try:
             hardware_config = self.IO_dict[uid]
-            return HardwareConfig(uid, **hardware_config)
+            return HardwareConfig(uid=uid, **hardware_config)
         except KeyError:
             raise HardwareNotFound
 

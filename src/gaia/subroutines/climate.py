@@ -240,7 +240,7 @@ class Climate(SubroutineTemplate):
 
     def _update_climate_targets(self) -> None:
         for regulated in self._regulated:
-            climate_parameter = asdict(self.config.get_climate_parameters(regulated))
+            climate_parameter = self.config.get_climate_parameters(regulated).dict()
             self._targets[regulated] = {
                     tod: climate_parameter[tod]
                     for tod in ("day", "night")
