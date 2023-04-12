@@ -7,7 +7,7 @@ from typing import cast
 from simple_pid import PID
 
 from gaia_validators import (
-    ClimateParameterNames, Empty, HardwareConfig, LightingHours
+    ClimateParameterNames, Empty, HardwareConfig, LightingHours, SensorsData
 )
 
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
@@ -165,14 +165,15 @@ class Climate(SubroutineTemplate):
     def _climate_routine(self) -> None:
         if self.ecosystem.get_subroutine_status("sensors"):
             sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
-            average = sensors_subroutine.sensors_data.average
-            if isinstance(average, Empty):
+            sensors_data = sensors_subroutine.sensors_data
+            if isinstance(sensors_data, Empty):
                 self.logger.debug(
                     f"No sensor data found, climate subroutine will try "
                     f"again {5 - self._sensor_miss} times before stopping."
                 )
                 self._sensor_miss += 1
             else:
+                average = sensors_data.average
                 for data in average:
                     measure = data.measure
                     if measure in self._regulated:

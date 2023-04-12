@@ -133,7 +133,7 @@ class Sensors(SubroutineTemplate):
             self._data = SensorsData(**cache)
 
     @property
-    def sensors_data(self) -> SensorsData:
+    def sensors_data(self) -> SensorsData | Empty:
         """
         Get sensors data as a dict with the following format:
         {
