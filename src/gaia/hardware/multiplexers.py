@@ -1,7 +1,7 @@
 import typing as t
 from typing import Any
 
-from gaia.hardware import _IS_RASPI
+from gaia.hardware.utils import _IS_RASPI, get_i2c
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -10,24 +10,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 _store: dict[str, Any] = {}
-
-
-def get_i2c():
-    try:
-        return _store["I2C"]
-    except KeyError:
-        if _IS_RASPI:
-            try:
-                from adafruit_blinka import board, busio
-            except ImportError:
-                raise RuntimeError(
-                    "Adafruit blinka package is required. Run `pip install "
-                    "adafruit-blinka` in your virtual env`."
-                )
-        else:
-            from gaia.hardware._compatibility import board, busio
-        _store["I2C"] = busio.I2C(board.SCL, board.SDA)
-        return _store["I2C"]
 
 
 def get_multiplexer(multiplexer_address) -> "Multiplexer":

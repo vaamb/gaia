@@ -1,9 +1,5 @@
 from typing import Type
 
-from adafruit_platformdetect import Board, Detector
-
-_IS_RASPI: bool = Board(Detector()).any_raspberry_pi  # noqa
-
 from gaia.hardware.abc import Hardware
 from gaia.hardware.actuators import actuator_models, gpioDimmable, gpioSwitch
 from gaia.hardware.camera import camera_models

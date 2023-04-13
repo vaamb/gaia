@@ -19,8 +19,8 @@ from gaia_validators import (
 )
 
 from gaia.config import get_base_dir
-from gaia.hardware import _IS_RASPI
-from gaia.hardware.multiplexers import get_i2c, get_multiplexer
+from gaia.hardware.multiplexers import get_multiplexer
+from gaia.hardware.utils import _IS_RASPI, get_i2c
 from gaia.utils import (
     pin_bcm_to_board, pin_board_to_bcm, pin_translation
 )
@@ -129,7 +129,7 @@ class Hardware(metaclass=_MetaHardware):
     """
     __slots__ = (
         "_subroutine", "_uid", "_name", "_address", "_level", "_type",
-        "_model", "_measures", "_plants"
+        "_model", "_measures", "_multiplexer_model", "_plants"
     )
 
     def __init__(
@@ -259,6 +259,10 @@ class Hardware(metaclass=_MetaHardware):
     @property
     def plants(self) -> list:
         return self._plants
+
+    @property
+    def multiplexer_model(self):
+        return self._multiplexer_model
 
     @property
     def dict_repr(self, shorten: bool = False) -> dict:

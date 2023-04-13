@@ -3,7 +3,7 @@ import time
 import warnings
 
 from gaia.config import get_config
-from gaia.hardware import _IS_RASPI
+from gaia.hardware.utils import _IS_RASPI
 
 
 if not _IS_RASPI:

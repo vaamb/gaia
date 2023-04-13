@@ -5,8 +5,8 @@ from time import sleep
 import typing as t
 from typing import Type, Generator
 
-from gaia.hardware import _IS_RASPI
 from gaia.hardware.abc import Camera, Image
+from gaia.hardware.utils import _IS_RASPI
 
 
 if t.TYPE_CHECKING:
