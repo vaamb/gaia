@@ -19,7 +19,7 @@ from gaia_validators import (
 )
 
 from gaia.config import get_base_dir
-from gaia.hardware.multiplexers import get_multiplexer
+from gaia.hardware.multiplexers import multiplexer_models
 from gaia.hardware.utils import _IS_RASPI, get_i2c
 from gaia.utils import (
     pin_bcm_to_board, pin_board_to_bcm, pin_translation
@@ -109,11 +109,14 @@ class _MetaHardware(type):
     instances: dict[str, Self] = {}
 
     def __call__(cls, *args, **kwargs):
-        uid = kwargs.get("uid")
-        if uid not in cls.instances and uid is not None:
-            cls.instances[uid] = cls.__new__(cls, *args, **kwargs)
-            cls.instances[uid].__init__(*args, **kwargs)
-        return cls.instances[uid]
+        uid = kwargs["uid"]
+        try:
+            return cls.instances[uid]
+        except KeyError:
+            hardware = cls.__new__(cls, *args, **kwargs)
+            hardware.__init__(*args, **kwargs)
+            cls.instances[uid] = hardware
+            return hardware
 
 
 class Hardware(metaclass=_MetaHardware):
@@ -143,6 +146,7 @@ class Hardware(metaclass=_MetaHardware):
             name: str | None = None,
             measures: list | None = None,
             plants: list or None = None,
+            multiplexer_model: str | None = None,
     ) -> None:
         self._subroutine: "SubroutineTemplate" | None
         if subroutine is None:
@@ -168,6 +172,7 @@ class Hardware(metaclass=_MetaHardware):
         if isinstance(plants, str):
             plants = [plants]
         self._plants = plants
+        self._multiplexer_model = multiplexer_model
 
     def __del__(self):
         del _MetaHardware.instances[self._uid]
@@ -210,6 +215,7 @@ class Hardware(metaclass=_MetaHardware):
             model=hardware_config.model,
             measures=hardware_config.measures,
             plants=hardware_config.plants,
+            multiplexer_model=hardware_config.multiplexer_model,
         )
 
     @property
@@ -396,7 +402,8 @@ class i2cHardware(Hardware):
         if self.address[address].is_multiplexed:
             multiplexer_address = self.address[address].multiplexer
             multiplexer_channel = self.address[address].multiplexer_channel
-            multiplexer = get_multiplexer(multiplexer_address)
+            multiplexer_class = multiplexer_models[self.multiplexer_model]
+            multiplexer = multiplexer_class(multiplexer_address)
             return multiplexer.get_channel(multiplexer_channel)
         else:
             return get_i2c()
