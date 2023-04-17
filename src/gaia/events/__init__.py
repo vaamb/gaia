@@ -165,14 +165,14 @@ class Events:
             self,
             payload_type: str,
             ecosystem_uids: list[str] | None = None
-    ) -> list[dict]:
+    ) -> list[BrokerPayload]:
         rv = []
         for uid in self.filter_uids(ecosystem_uids):
             try:
                 data = getattr(self.ecosystems[uid], payload_type)
                 if not isinstance(data, Empty):
                     payload_class = payload_classes[payload_type]
-                    payload = payload_class.from_base(uid, data)
+                    payload: BrokerPayload = payload_class.from_base(uid, data)
                     rv.append(payload)
             # Except when subroutines are still loading or received a message
             #  for an ecosystem not on this engine
