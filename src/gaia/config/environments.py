@@ -229,7 +229,7 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     def create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
-        ecosystem_cfg: dict[str, EcosystemDict] = {uid: DEFAULT_ECOSYSTEM_CFG}
+        ecosystem_cfg: dict[str, EcosystemDict] = {uid: DEFAULT_ECOSYSTEM_CFG()}
         ecosystem_cfg[uid]["name"] = ecosystem_name
         self._ecosystems_config.update(ecosystem_cfg)
 
