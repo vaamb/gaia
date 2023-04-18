@@ -117,6 +117,14 @@ class Events:
             self.ping()
             sleep(15)
 
+    def start_background_task(self):
+        if not self._background_task:
+            thread = Thread(target=self.background_task)
+            thread.name = "ping"
+            thread.start()
+            self._thread = thread
+            self._background_task = True
+
     def ping(self) -> None:
         ecosystems = [ecosystem.uid for ecosystem in self.ecosystems.values()]
         if self.type == "socketio":
@@ -133,24 +141,23 @@ class Events:
                 "engine_uid": get_config().ENGINE_UID,
                 "address": local_ip_address(),
             }
-            self.emit("register_engine", data=data, ttl=30)
+            self.emit("register_engine", data=data, ttl=2)
         else:
             raise TypeError("Event type is invalid")
 
-    def initialize_data_transfer(self) -> None:
-        if not self._background_task:
-            thread = Thread(target=self.background_task)
-            thread.name = "ping"
-            thread.start()
-            self._thread = thread
-            self._background_task = True
+    def sending_ecosystems_info(self) -> None:
         self.send_full_config()
         self.send_sensors_data()
         self.send_light_data()
         self.send_health_data()
 
     def on_connect(self, environment) -> None:
-        self.logger.info("Connection successful")
+        if self.type == "socketio":
+            self.logger.info("Connection to Ouranos successful")
+        elif self.type == "dispatcher":
+            self.logger.info("Connection to dispatcher successful")
+        else:
+            raise TypeError("Event type is invalid")
         self.register()
 
     def on_disconnect(self, *args) -> None:
@@ -165,9 +172,12 @@ class Events:
         self.register()
 
     def on_register_ack(self, *args) -> None:
-        self.logger.info("Engine registration successful")
+        self.logger.info(
+            "Engine registration successful, sending initial ecosystems info")
         self._registered = True
-        self.initialize_data_transfer()
+        self.start_background_task()
+        self.sending_ecosystems_info()
+        self.logger.info("Initial ecosystems info sent")
 
     def filter_uids(self, ecosystem_uids: list[str] | None = None) -> list[str]:
         if ecosystem_uids is None:
