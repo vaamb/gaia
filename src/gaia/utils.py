@@ -157,6 +157,16 @@ def human_time_parser(human_time: str) -> time:
     return time(int(hours), int(minutes))
 
 
+def humanize_list(lst: list) -> str:
+    list_length = len(lst)
+    if list_length == 0:
+        return ""
+    elif list_length == 1:
+        return lst[0]
+    else:
+        return f"{', '.join(lst[:list_length-1])} and {lst[list_length-1]}"
+
+
 def pin_translation(pin: int, direction: str) -> int:
     """Tool to translate Raspberry Pi pin number
     Translates Raspberry Pi pin numbering from BCM number to board number 

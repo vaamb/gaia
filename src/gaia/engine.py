@@ -75,7 +75,7 @@ class Engine(metaclass=SingletonMeta):
                 break
             self.refresh_ecosystems()
             if self.event_handler:
-                self.event_handler.send_config()
+                self.event_handler.send_full_config()
                 self.event_handler.send_light_data()
 
     """
