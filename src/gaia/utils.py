@@ -302,14 +302,28 @@ def get_unit(measure: str, default: str) -> str:
 
 
 def is_connected() -> bool:
+    _is_connected = False
+    host = get_config().TEST_CONNECTION_IP
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(2)
     try:
-        host = socket.gethostbyname(get_config().TEST_CONNECTION_IP)
-        s = socket.create_connection((host, 80), 2)
+        s.connect((host, 80))
+        _is_connected = True
+    finally:
         s.close()
-        return True
-    except Exception as ex:
-        print(ex)
-    return False
+    return _is_connected
+
+
+def local_ip_address() -> str:
+    address = "127.0.0.1"
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0.1)
+    try:
+        s.connect(("192.168.0.1", 80))
+        address = s.getsockname()[0]
+    finally:
+        s.close()
+    return address
 
 
 def encrypted_uid() -> str:

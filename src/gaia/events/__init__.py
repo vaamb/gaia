@@ -14,7 +14,7 @@ from gaia_validators import (
 
 from gaia.config import get_config
 from gaia.shared_resources import scheduler
-from gaia.utils import encrypted_uid, generate_uid_token
+from gaia.utils import encrypted_uid, generate_uid_token, local_ip_address
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -115,7 +115,10 @@ class Events:
             data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
             self.emit("register_engine", data=data)
         elif self.type == "dispatcher":
-            data = {"engine_uid": get_config().ENGINE_UID}
+            data = {
+                "engine_uid": get_config().ENGINE_UID,
+                "address": local_ip_address(),
+            }
             self.emit("register_engine", data=data, ttl=30)
         else:
             raise TypeError("Event type is invalid")
