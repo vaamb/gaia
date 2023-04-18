@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import io
-import logging
 import os
 from pathlib import Path
 import typing as t
@@ -20,7 +19,7 @@ from gaia_validators import (
 
 from gaia.config import get_base_dir
 from gaia.hardware.multiplexers import multiplexer_models
-from gaia.hardware.utils import _IS_RASPI, get_i2c
+from gaia.hardware.utils import _IS_RASPI, get_i2c, hardware_logger
 from gaia.utils import (
     pin_bcm_to_board, pin_board_to_bcm, pin_translation
 )
@@ -33,9 +32,6 @@ if t.TYPE_CHECKING and 0:  # pragma: no cover
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
     else:
         from gaia.hardware._compatibility import Pin, pwmio
-
-
-hardware_logger = logging.getLogger("engine.hardware_lib")
 
 
 def str_to_hex(address: str) -> int:

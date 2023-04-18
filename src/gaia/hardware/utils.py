@@ -1,11 +1,14 @@
+import logging
 from typing import Any
 
 from adafruit_platformdetect import Board, Detector
 
-_IS_RASPI: bool = Board(Detector()).any_raspberry_pi  # noqa
-
 
 _store: dict[str, Any] = {}
+
+_IS_RASPI: bool = Board(Detector()).any_raspberry_pi  # noqa
+
+hardware_logger = logging.getLogger("engine.hardware_lib")
 
 
 def get_i2c():

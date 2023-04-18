@@ -1,25 +1,23 @@
 import random
 import time
-import warnings
 
 from gaia.config import get_config
-from gaia.hardware.utils import _IS_RASPI
+from gaia.hardware.utils import _IS_RASPI, hardware_logger
 
 
 if not _IS_RASPI:
-    def custom_format_warning(msg, *args, **kwargs):
-        return str(msg) + '\n'
-
-    format_warning = warnings.formatwarning
-    warnings.formatwarning = custom_format_warning
-    warnings.warn(
-        "The platform used is not a Raspberry Pi, using compatibility modules"
-    )
-    warnings.formatwarning = format_warning
+    hardware_logger.warning(
+        "The platform used is not a Raspberry Pi, using compatibility modules")
+else:
+    hardware_logger.warning(
+        "hardware._compatibility module has been loaded although the platform "
+        "used is a Raspberry Pi")
 
 
 if get_config().VIRTUALIZATION:
     from gaia.virtual import get_virtual_ecosystem
+
+    hardware_logger.info("Using ecosystem virtualization")
 
     def _add_noise(measure):
         return measure * random.gauss(1, 0.01)
