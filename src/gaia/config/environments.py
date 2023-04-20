@@ -9,15 +9,16 @@ import random
 import requests
 import string
 from threading import Condition, Event, Lock, Thread
-from typing import cast, TypedDict, Union
+from typing import cast, TypedDict
 import weakref
 
+from pydantic import BaseModel, Field, ValidationError, validator
+
 from gaia_validators import (
-    ChaosConfig, ClimateParameterNames, ClimateConfig, DayConfig,
-    EnvironmentConfig, EnvironmentConfigDict, safe_enum_from_name, IDs,
-    HardwareConfig, HardwareConfigDict, HardwareLevelNames, HardwareTypeNames,
-    LightMethod, LightMethodNames, ManagementConfig, ManagementNames, SunTimes,
-    SkyConfigDict
+    ChaosConfig, ChaosConfigDict, ClimateParameterNames, ClimateConfig, DayConfig,
+    safe_enum_from_name, IDs, HardwareConfig, HardwareLevelNames,
+    HardwareTypeNames, LightMethod, LightMethodNames, ManagementConfig,
+    ManagementNames, SunTimes, SkyConfig, SkyConfigDict
 )
 
 from gaia.config import (
@@ -46,23 +47,125 @@ logger = logging.getLogger("gaia.config.environments")
 
 
 # ---------------------------------------------------------------------------
-#   default ecosystem configuration
+#   Common config models
 # ---------------------------------------------------------------------------
-class EcosystemDict(TypedDict):
+class Coordinates(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class Place(BaseModel):
+    name: str
+    coordinates: Coordinates
+
+
+class CoordinatesDict(TypedDict):
+    latitude: float
+    longitude: float
+
+
+class PlaceDict(TypedDict):
+    name: str
+    coordinates: tuple[float, float]
+
+
+# ---------------------------------------------------------------------------
+#   Ecosystem config models
+# ---------------------------------------------------------------------------
+# Custom models for Hardware, Climate and Environment configs as some of their
+#  parameters are used as keys in ecosystems.cfg
+class _HardwareConfig(BaseModel):
+    name: str
+    address: str
+    type: str
+    level: str
+    model: str
+    measures: list[str] = Field(default_factory=list, alias="measure")
+    plants: list[str] = Field(default_factory=list, alias="plant")
+    multiplexer_model: str | None = Field(default=None, alias="multiplexer")
+
+    class Config:
+        allow_population_by_field_name = True
+
+    @validator("measures", "plants", pre=True)
+    def parse_to_list(cls, value: str | list | None):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        return value
+
+    @validator("address", "type", "level", "measures", pre=True)
+    def lower_str(cls, value: str | list | None):
+        if isinstance(value, str):
+            return value.lower()
+        if isinstance(value, list):
+            accumulator = []
+            for v in value:
+                if isinstance(v, str):
+                    v = v.lower()
+                accumulator.append(v)
+            return accumulator
+        return value
+
+
+class _HardwareConfigDict(TypedDict):
+    name: str
+    address: str
+    type: str
+    level: str
+    model: str
+    measures: list[str]
+    plants: list[str]
+    multiplexer_model: str | None
+
+
+class _ClimateConfig(BaseModel):
+    day: float
+    night: float
+    hysteresis: float
+
+
+class _ClimateConfigDict(TypedDict):
+    day: float
+    night: float
+    hysteresis: float
+
+
+class _EnvironmentConfig(BaseModel):
+    chaos: ChaosConfig = Field(default_factory=ChaosConfig)
+    sky: SkyConfig = Field(default_factory=SkyConfig)
+    climate: dict[ClimateParameterNames, _ClimateConfig] = Field(default_factory=dict)
+
+    @validator("climate", pre=True)
+    def dict_to_climate(cls, value: dict):
+        return {k: _ClimateConfig(**v) for k, v in value.items()}
+
+
+class _EnvironmentConfigDict(TypedDict):
+    chaos: ChaosConfigDict
+    sky: SkyConfigDict
+    climate: dict[str, _ClimateConfigDict]
+
+
+class EcosystemConfig(BaseModel):
+    name: str
+    status: bool = False
+    management: ManagementConfig = Field(default_factory=ManagementConfig)
+    environment: _EnvironmentConfig = Field(default_factory=_EnvironmentConfig)
+    IO: dict[str, _HardwareConfig] = Field(default_factory=dict)
+
+
+class EcosystemConfigDict(TypedDict):
     name: str
     status: bool
     management: dict[ManagementNames, bool]
-    environment: EnvironmentConfigDict
-    IO: dict[str, HardwareConfigDict]
+    environment: _EnvironmentConfigDict
+    IO: dict[str, _HardwareConfig]
 
 
-DEFAULT_ECOSYSTEM_CFG = EcosystemDict(
-    name="",
-    status=False,
-    management=cast(dict[ManagementNames, bool], ManagementConfig().dict()),
-    environment=cast(EnvironmentConfigDict, EnvironmentConfig().dict()),
-    IO={},
-)
+class _EcosystemsConfig(BaseModel):
+    config: dict[str, EcosystemConfig]
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +203,14 @@ class GeneralConfig(metaclass=SingletonMeta):
         config_path = self._base_dir / f"{cfg}.cfg"
         if cfg == "ecosystems":
             with open(config_path, "r") as file:
-                self._ecosystems_config = yaml.load(file)
+                raw = {"config": yaml.load(file)}
+                try:
+                    cleaned = _EcosystemsConfig(**raw).dict()
+                except ValidationError as e:
+                    # TODO: log formatted error message
+                    raise e
+                else:
+                    self._ecosystems_config = cleaned["config"]
         elif cfg == "private":
             with open(config_path, "r") as file:
                 self._private_config = yaml.load(file)
@@ -135,7 +245,7 @@ class GeneralConfig(metaclass=SingletonMeta):
                     "There is currently no custom private configuration file. "
                     "Using the default settings instead"
                 )
-                self._private_config = {"places": {}}
+                self._private_config = {}
                 self.save("private")
 
     def _update_cfg_hash(self) -> None:
@@ -197,7 +307,7 @@ class GeneralConfig(metaclass=SingletonMeta):
                 self._update_cfg_hash()
                 self._watchdog_pause.set()
 
-    def reload(self, config: Union[list, str, tuple] = ("ecosystems", "private")) -> None:
+    def reload(self, config: list | str | tuple = ("ecosystems", "private")) -> None:
         with self.pausing_watchdog():
             if isinstance(config, str):
                 config = (config, )
@@ -208,7 +318,7 @@ class GeneralConfig(metaclass=SingletonMeta):
             with config_event:
                 config_event.notify_all()
 
-    def save(self, config: Union[list, str, tuple]) -> None:
+    def save(self, config: list | str | tuple) -> None:
         with self.pausing_watchdog():
             if isinstance(config, str):
                 config = (config, )
@@ -229,12 +339,11 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     def create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
-        ecosystem_cfg: dict[str, EcosystemDict] = {uid: DEFAULT_ECOSYSTEM_CFG()}
-        ecosystem_cfg[uid]["name"] = ecosystem_name
-        self._ecosystems_config.update(ecosystem_cfg)
+        ecosystem_cfg = EcosystemConfig(name=ecosystem_name).dict()
+        self._ecosystems_config.update({uid: ecosystem_cfg})
 
     @property
-    def ecosystems_config(self) -> dict[str, EcosystemDict]:
+    def ecosystems_config(self) -> dict[str, EcosystemConfigDict]:
         return self._ecosystems_config
 
     @ecosystems_config.setter
@@ -305,40 +414,38 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     """Private config parameters"""
     @property
-    def home_city(self) -> str:
+    def places(self) -> dict:
         try:
-            return self._private_config["places"]["home"]["city"]
+            return self._private_config["places"]
+        except KeyError:
+            self._private_config["places"] = {}
+            return self._private_config["places"]
+
+    def get_place(self, place_name: str) -> Place:
+        try:
+            place = self.places[place_name]
+            return Place(**place)
         except KeyError:
             raise UndefinedParameter
 
-    @home_city.setter
-    def home_city(self, city_name: str) -> None:
-        home = self._private_config["places"].get("home", {})
-        if not home:
-            self._private_config["places"]["home"] = {}
-        self._private_config["places"]["home"]["city"] = city_name
+    def set_place(self, place_name: str, place_value: PlaceDict):
+        self.places[place_name] = place_value
 
     @property
-    def home_coordinates(self) -> dict:
-        try:
-            return self._private_config["places"]["home"]["coordinates"]
-        except KeyError:
-            raise UndefinedParameter
+    def home(self) -> Place:
+        return self.get_place("home")
 
-    @home_coordinates.setter
-    def home_coordinates(self, value: tuple) -> None:
-        """Set home coordinates
+    @home.setter
+    def home(self, value: PlaceDict):
+        self.set_place("home", place_value=value)
 
-        :param value: A tuple with (latitude, longitude)
-        """
-        places = self._private_config.get("places")
-        if not places:
-            self._private_config["places"] = {}
-        home = self._private_config["places"].get("home", {})
-        if not home:
-            self._private_config["places"]["home"] = {}
-        coordinates = {"latitude": value[0], "longitude": value[1]}
-        self._private_config["places"]["home"]["coordinates"] = coordinates
+    @property
+    def home_name(self) -> str:
+        return self.home.name
+
+    @property
+    def home_coordinates(self) -> Coordinates:
+        return self.home.coordinates
 
     @property
     def units(self):
@@ -395,18 +502,17 @@ class GeneralConfig(metaclass=SingletonMeta):
                     "'private.cfg' in order to update sun times."
                 )
             else:
-                latitude = home_coordinates["latitude"]
-                longitude = home_coordinates["longitude"]
                 try:
                     logger.debug(
                         "Trying to update sunrise and sunset times on "
-                        "sunrise-sunset.org"
-                    )
+                        "sunrise-sunset.org")
                     response = requests.get(
                         url=f"https://api.sunrise-sunset.org/json",
-                        params={"lat": latitude, "lng": longitude},
+                        params={
+                            "lat": home_coordinates.latitude,
+                            "lng": home_coordinates.longitude
+                        },
                         timeout=3.0,
-                        verify=False,  # TODO: change when renewed
                     )
                     data = response.json()
                     results = data["results"]
@@ -437,7 +543,7 @@ class SpecificConfig:
         ids = self._general_config.get_IDs(ecosystem)
         self.uid = ids.uid
         self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
-        self.logger.debug(f"Initializing SpecificConfig")
+        self.logger.debug(f"Initializing SpecificConfig for {ids.name}")
         self._first_connection_error = True
 
     def __repr__(self) -> str:
@@ -449,11 +555,11 @@ class SpecificConfig:
         return self._general_config
 
     @property
-    def ecosystem_config(self) -> EcosystemDict:
+    def ecosystem_config(self) -> EcosystemConfigDict:
         return self._general_config.ecosystems_config[self.uid]
 
     @ecosystem_config.setter
-    def ecosystem_config(self, value: EcosystemDict):
+    def ecosystem_config(self, value: EcosystemConfigDict):
         if get_gaia_config().TESTING:
             self._general_config.ecosystems_config[self.uid] = value
         else:
@@ -491,14 +597,14 @@ class SpecificConfig:
 
     """EnvironmentConfig related parameters"""
     @property
-    def environment(self) -> EnvironmentConfigDict:
+    def environment(self) -> _EnvironmentConfigDict:
         """
         Returns the environment config for the ecosystem
         """
         try:
             return self.ecosystem_config["environment"]
         except KeyError:
-            self.ecosystem_config["environment"] = EnvironmentConfigDict()
+            self.ecosystem_config["environment"] = _EnvironmentConfig().dict()
             return self.ecosystem_config["environment"]
 
     @property
@@ -509,7 +615,7 @@ class SpecificConfig:
         try:
             return self.environment["sky"]
         except KeyError:
-            self.environment["sky"] = SkyConfigDict()
+            self.environment["sky"] = SkyConfig().dict()
             return self.environment["sky"]
 
     @property
@@ -528,7 +634,7 @@ class SpecificConfig:
             return cast(LightMethod, safe_enum_from_name(LightMethod, method))
         except KeyError:  # pragma: no cover
             raise UndefinedParameter(
-                "Define ['environment']['light'] or remove light management"
+                "Define ['environment']['sky']['lighting'] or remove light management"
             )
 
     @light_method.setter
@@ -553,7 +659,7 @@ class SpecificConfig:
         self.environment["chaos"] = chaos.dict()
 
     @property
-    def climate(self) -> dict[ClimateParameterNames, dict]:
+    def climate(self) -> dict[ClimateParameterNames, _ClimateConfigDict]:
         """
         Returns the sky config for the ecosystem
         """
@@ -570,8 +676,11 @@ class SpecificConfig:
         except KeyError:
             raise UndefinedParameter
 
-    # TODO: use Literal for parameter and value
-    def set_climate_parameters(self, parameter: ClimateParameterNames, value: dict) -> None:
+    def set_climate_parameters(
+            self,
+            parameter: ClimateParameterNames,
+            value: _ClimateConfigDict
+    ) -> None:
         self.climate[parameter] = value
 
     """Parameters related to IO"""    
@@ -686,8 +795,8 @@ class SpecificConfig:
     def time_parameters(self) -> DayConfig:
         try:
             return DayConfig(
-                day=self.ecosystem_config["environment"]["sky"]["day"],
-                night=self.ecosystem_config["environment"]["sky"]["night"],
+                day=self.sky["day"],
+                night=self.sky["night"],
             )
         except (KeyError, AttributeError):
             raise UndefinedParameter
@@ -704,10 +813,8 @@ class SpecificConfig:
                 "and values equal to string representing a human readable time, "
                 "such as '20h00'"
             )
-        if not self.ecosystem_config["environment"].get("sky"):
-            self.ecosystem_config["environment"]["sky"] = {}
         for tod in ("day", "night"):
-            self.ecosystem_config["environment"]["sky"][tod] = value[tod]
+            self.sky[tod] = value[tod]
 
     @property
     def sun_times(self) -> SunTimes:
