@@ -6,10 +6,10 @@ from sqlalchemy_wrapper import SQLAlchemyWrapper
 
 
 db = SQLAlchemyWrapper()
-base = db.Model
+Base = db.Model
 
 
-class SensorHistory(base):
+class SensorHistory(Base):
     __tablename__ = "sensors_history"
 
     id: Mapped[int] = mapped_column(nullable=False, primary_key=True)

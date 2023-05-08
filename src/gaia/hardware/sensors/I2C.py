@@ -4,8 +4,7 @@ from time import sleep
 import typing as t
 
 from gaia.hardware.abc import (
-    i2cSensor, LightSensor, PlantLevelHardware, hardware_logger
-)
+    i2cSensor, LightSensor, PlantLevelHardware, hardware_logger)
 from gaia.hardware.utils import _IS_RASPI
 from gaia.utils import get_unit, temperature_converter
 
@@ -16,8 +15,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_seesaw.seesaw import Seesaw
     else:
         from gaia.hardware._compatibility import (
-            Seesaw, VEML7700 as _VEML7700
-        )
+            Seesaw, VEML7700 as _VEML7700)
 
 
 # ---------------------------------------------------------------------------

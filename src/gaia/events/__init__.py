@@ -8,16 +8,14 @@ import typing as t
 from typing import Type
 
 from gaia_validators import (
-    BaseInfoConfigPayload, BrokerPayload, Empty, EnvironmentConfigPayload,
-    HardwareConfigPayload, HealthDataPayload, LightDataPayload,
-    ManagementConfigPayload, SensorsDataPayload
-)
+    BaseInfoConfigPayload, EcosystemPayload, Empty, EnginePayload,
+    EnvironmentConfigPayload, HardwareConfigPayload, HealthDataPayload,
+    LightDataPayload, ManagementConfigPayload, SensorsDataPayload)
 
 from gaia.config import get_config
 from gaia.shared_resources import scheduler
 from gaia.utils import (
-    encrypted_uid, generate_uid_token, humanize_list, local_ip_address
-)
+    encrypted_uid, generate_uid_token, humanize_list, local_ip_address)
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -31,7 +29,7 @@ if get_config().USE_DATABASE:
     from gaia.database.models import SensorHistory
 
 
-payload_classes: dict[str, Type[BrokerPayload]] = {
+payload_classes: dict[str, Type[EcosystemPayload]] = {
     "base_info": BaseInfoConfigPayload,
     "management": ManagementConfigPayload,
     "environmental_parameters": EnvironmentConfigPayload,
@@ -137,10 +135,10 @@ class Events:
             data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
             self.emit("register_engine", data=data)
         elif self.type == "dispatcher":
-            data = {
-                "engine_uid": get_config().ENGINE_UID,
-                "address": local_ip_address(),
-            }
+            data = EnginePayload(
+                engine_uid=get_config().ENGINE_UID,
+                address=local_ip_address(),
+            )
             self.emit("register_engine", data=data, ttl=2)
         else:
             raise TypeError("Event type is invalid")
@@ -192,7 +190,7 @@ class Events:
             self,
             event_name: str,
             ecosystem_uids: list[str] | None = None
-    ) -> list[BrokerPayload]:
+    ) -> list[EcosystemPayload]:
         rv = []
         attr_name = attr_for_event.get(event_name, None)
         if attr_name is None:
@@ -205,7 +203,7 @@ class Events:
             data = getattr(self.ecosystems[uid], attr_name)
             if not isinstance(data, Empty):
                 payload_class = payload_classes[event_name]
-                payload: BrokerPayload = payload_class.from_base(uid, data)
+                payload: EcosystemPayload = payload_class.from_base(uid, data)
                 rv.append(payload)
         return rv
 

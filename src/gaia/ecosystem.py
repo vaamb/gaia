@@ -7,8 +7,7 @@ import weakref
 
 from gaia_validators import (
     BaseInfoConfig, ChaosConfig, Empty, EnvironmentConfig,
-    HardwareConfig, HealthData, LightData, ManagementConfig, SensorsData
-)
+    HardwareConfig, HealthData, LightData, ManagementConfig, SensorsData)
 
 from gaia.config import get_environment_config, SpecificEnvironmentConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter

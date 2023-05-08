@@ -7,8 +7,7 @@ from typing import cast
 from simple_pid import PID
 
 from gaia_validators import (
-    ClimateParameterNames, Empty, HardwareConfig, LightingHours, SensorsData
-)
+    ClimateParameterNames, Empty, HardwareConfig, LightingHours)
 
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
 from gaia.hardware import actuator_models

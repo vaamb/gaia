@@ -10,8 +10,7 @@ from gaia.hardware.sensors.I2C import VEML7700, CapacitiveMoisture
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.hardware._compatibility import (
         DHTBase as _DHTBase, DHT11 as _DHT11, DHT22 as _DHT22,
-        Seesaw, VEML7700 as _VEML7700
-    )
+        Seesaw, VEML7700 as _VEML7700)
 
 
 class virtualSensor(BaseSensor):

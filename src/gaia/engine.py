@@ -7,8 +7,7 @@ from threading import Thread
 import weakref
 
 from gaia.config import (
-    GeneralEnvironmentConfig, get_cache_dir, get_config, get_environment_IDs
-)
+    GeneralEnvironmentConfig, get_cache_dir, get_config, get_environment_IDs)
 from gaia.config.environments import get_config_event, detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.events import Events

@@ -11,8 +11,7 @@ from simple_pid import PID
 
 from gaia_validators import (
     ActuatorMode, ActuatorTurnTo, HardwareConfig, HardwareType,
-    LightData, LightingHours, LightMethod, SunTimes
-)
+    LightData, LightingHours, LightMethod, SunTimes)
 
 from gaia.config import get_config
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter

@@ -15,7 +15,6 @@ from gaia.subroutines.template import SubroutineTemplate
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.light import Light
-    from gaia.hardware.abc import Switch
 
 
 class Health(SubroutineTemplate):

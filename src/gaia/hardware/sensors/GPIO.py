@@ -6,8 +6,7 @@ import typing as t
 from gaia.hardware.abc import gpioSensor, hardware_logger
 from gaia.hardware.utils import _IS_RASPI
 from gaia.utils import (
-    get_absolute_humidity, get_dew_point, get_unit, temperature_converter
-)
+    get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -15,8 +14,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_dht import DHT11 as _DHT11, DHT22 as _DHT22
     else:
         from gaia.hardware._compatibility import (
-            DHT11 as _DHT11, DHT22 as _DHT22
-        )
+            DHT11 as _DHT11, DHT22 as _DHT22)
 
 
 # ---------------------------------------------------------------------------
