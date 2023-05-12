@@ -169,7 +169,7 @@ class Events:
         self.logger.info("Received registration request from server")
         self.register()
 
-    def on_register_ack(self, *args) -> None:
+    def on_registration_ack(self, *args, **kwargs) -> None:
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info")
         self._registered = True
