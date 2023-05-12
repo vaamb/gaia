@@ -6,7 +6,7 @@ a plant growth chamber or any other enclosed environment such as an aquarium or
 a terrarium.
 
 While Gaia is a standalone app, it can connect to 
-[Ouranos](https://gitlab.com/eupla/ouranos.git), a small server that can be used
+[Ouranos](https://github.com/vaamb/ouranos.git), a small server that can be used
 to more easily configure Gaia with a graphical user interface, log the data, draw
 graphs ...
 
