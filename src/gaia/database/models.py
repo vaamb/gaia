@@ -2,10 +2,18 @@ from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
+
 from sqlalchemy_wrapper import SQLAlchemyWrapper
 
+from gaia.utils import json
 
-db = SQLAlchemyWrapper()
+
+db = SQLAlchemyWrapper(
+    engine_options={
+        "json_serializer": json.dumps,
+        "json_deserializer": json.loads,
+    },
+)
 Base = db.Model
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from statistics import mean
 from threading import Event, Thread, Lock
 from time import monotonic
@@ -110,8 +110,7 @@ class Sensors(SubroutineTemplate):
         """
         cache: dict[str, Any] = {}
         to_average: dict[str, list] = {}
-        now = datetime.now().astimezone().replace(microsecond=0)
-        cache["timestamp"]: datetime = now
+        cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
         cache["records"]: list[dict] = []
         for uid in self.hardware:
             measures = self.hardware[uid].get_data()
