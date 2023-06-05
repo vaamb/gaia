@@ -130,7 +130,7 @@ pin_bcm_to_board = {
 
 def file_hash(file_path: pathlib.Path) -> str:
     try:
-        h = hashlib.md5()
+        h = hashlib.md5(usedforsecurity=False)
         with open(file_path, "rb") as f:
             for block in iter(lambda: f.read(4096), b""):
                 h.update(block)

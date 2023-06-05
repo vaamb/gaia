@@ -33,7 +33,15 @@ if get_config().VIRTUALIZATION:
         return round(_add_noise(virtual_ecosystem.lux))
 
     def get_moisture(ecosystem_uid, *args, **kwargs) -> float:
-        return round(random.uniform(10, 55), 2)
+        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
+        virtual_ecosystem.measure()
+        moisture_at_42_deg = (virtual_ecosystem.humidity * 0.2) + 6
+        slope = (moisture_at_42_deg - 100) / (42 - 5)
+        intercept = 100 - (slope * 5)
+        moisture = (slope * virtual_ecosystem.temperature) + intercept
+        if moisture > 98.3:
+            moisture = 98.3
+        return round(_add_noise(moisture), 2)
 
     def get_temperature(ecosystem_uid, *args, **kwargs) -> float:
         virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
@@ -119,27 +127,16 @@ class CompatibilityHardware:
 
 
 class DHTBase(CompatibilityHardware):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._last_called = 0
-        self._temperature = 0
-        self._humidity = 0
-
     def measure(self):
-        timer = time.monotonic()
-        if (timer - self._last_called) > 2:
-            self._last_called = timer
-            random_sleep()
-            self._temperature = get_temperature(self.ecosystem_uid)
-            self._humidity = get_humidity(self.ecosystem_uid)
+        random_sleep()
 
     @property
     def temperature(self):
-        return self._temperature
+        return get_temperature(self.ecosystem_uid)
 
     @property
     def humidity(self):
-        return self._humidity
+        return get_humidity(self.ecosystem_uid)
 
 
 class DHT11(DHTBase):
