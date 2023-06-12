@@ -6,8 +6,9 @@ import typing as t
 import weakref
 
 from gaia_validators import (
-    BaseInfoConfig, ChaosConfig, Empty, EnvironmentConfig,
-    HardwareConfig, HealthData, LightData, ManagementConfig, SensorsData)
+    ActuatorModePayload, ActuatorState, ActuatorsDataDict, BaseInfoConfig,
+    ChaosConfig, Empty, EnvironmentConfig, HardwareConfig, HardwareType,
+    HealthData, LightData, ManagementConfig, safe_enum_from_name, SensorsData)
 
 from gaia.config import get_environment_config, SpecificEnvironmentConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
@@ -41,6 +42,7 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
+        self._actuators_state: ActuatorsDataDict = self._generate_actuators_state_dict()
         self.subroutines:  dict[str, "subroutines"] = {}
         for subroutine in SUBROUTINES:
             self.init_subroutine(subroutine)
@@ -69,6 +71,13 @@ class Ecosystem:
         to_start = subroutines_needed - self.subroutines_started
         for subroutine in to_start:
             self.start_subroutine(subroutine)
+
+    def _generate_actuators_state_dict(self) -> ActuatorsDataDict:
+        return {
+            actuator: ActuatorState().dict()
+            for actuator in [
+                "light", "cooler", "heater", "humidifier", "dehumidifier"]
+        }
 
     """
     API calls
@@ -236,15 +245,20 @@ class Ecosystem:
         :param countdown: the delay before which the actuator will be turned to
                           the specified mode.
         """
+        actuator: HardwareType = safe_enum_from_name(
+            HardwareType, actuator)
+        mode: ActuatorModePayload = safe_enum_from_name(
+            ActuatorModePayload, mode)
         try:
-            if actuator.lower() == "light":
+            if actuator == HardwareType.light:
                 if self.get_subroutine_status("light"):
                     light_subroutine: "Light" = self.subroutines["light"]
                     light_subroutine.turn_light(
-                        turn_to=mode, countdown=countdown
-                    )
+                        turn_to=mode, countdown=countdown)
             else:
-                raise ValueError
+                raise ValueError(
+                    f"Actuator '{actuator.value}' is not currently supported"
+                )
         except RuntimeError:
             self.logger.error(
                 f"Cannot turn {actuator} to {mode} as the subroutine managing it "
@@ -258,6 +272,11 @@ class Ecosystem:
             sensors_subroutine: "Sensors" = self.subroutines["sensors"]
             return sensors_subroutine.sensors_data
         return Empty()
+
+    # Actuators
+    @property
+    def actuator_info(self) -> ActuatorsDataDict:
+        return self._actuators_state
 
     # Light
     @property

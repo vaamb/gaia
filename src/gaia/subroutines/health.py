@@ -4,7 +4,8 @@ from datetime import datetime
 import io
 import typing as t
 
-from gaia_validators import ActuatorMode, Empty, HardwareConfig, HealthData
+from gaia_validators import (
+    ActuatorMode, ActuatorModePayload, Empty, HardwareConfig, HealthData)
 
 from gaia.config import get_config
 from gaia.hardware import camera_models
@@ -63,17 +64,17 @@ class Health(SubroutineTemplate):
         light_running = self.ecosystem.get_subroutine_status("light")
         if light_running:
             light_subroutine: "Light" = self.ecosystem.subroutines["light"]
-            light_mode = light_subroutine.mode
+            light_mode = light_subroutine.light_mode
             light_status = light_subroutine.light_status
-            light_subroutine.turn_light("on")
+            light_subroutine.turn_light(ActuatorModePayload.on)
             self.take_picture()
             if light_mode is ActuatorMode.automatic:
-                light_subroutine.turn_light("automatic")
+                light_subroutine.turn_light(ActuatorModePayload.automatic)
             else:
                 if light_status:
-                    light_subroutine.turn_light("on")
+                    light_subroutine.turn_light(ActuatorModePayload.on)
                 else:
-                    light_subroutine.turn_light("off")
+                    light_subroutine.turn_light(ActuatorModePayload.off)
         else:
             self.take_picture()
         self.analyse_picture()

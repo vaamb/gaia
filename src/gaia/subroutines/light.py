@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from datetime import date, datetime, time
 from statistics import mean
 from threading import Event, Lock, Thread
@@ -54,8 +53,7 @@ class Light(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, "Switch"]
         self._light_loop_thread: Thread | None = None
-        self._status = {"current": False, "last": False}
-        self._mode: ActuatorMode = ActuatorMode.automatic
+        self._last_status = False
         self._dimmers: set[str] = set()
         self._pid = PID(Kp, Ki, Kd)
         self._lighting_hours: LightingHours = LightingHours()
@@ -68,6 +66,22 @@ class Light(SubroutineTemplate):
         except UndefinedParameter:
             self._method = None
         self._finish__init__()
+
+    @property
+    def light_mode(self) -> ActuatorMode:
+        return self.ecosystem._actuators_state["light"]["mode"]
+
+    @light_mode.setter
+    def light_mode(self, value: ActuatorMode):
+        self.ecosystem._actuators_state["light"]["mode"] = value
+
+    @property
+    def light_status(self) -> bool:
+        return self.ecosystem._actuators_state["light"]["status"]
+
+    @light_status.setter
+    def light_status(self, value: bool):
+        self.ecosystem._actuators_state["light"]["status"] = value
 
     def _refresh_lighting_hours(self, send=True) -> None:
         if self._method is None:
@@ -173,7 +187,7 @@ class Light(SubroutineTemplate):
             if self._timer:
                 if self._timer < ctime.monotonic():
                     self._timer = 0
-                    self._mode = ActuatorMode.automatic
+                    self.light_mode = ActuatorMode.automatic
             self._light_state_routine()
             self._stop_event.wait(cfg.LIGHT_LOOP_PERIOD)
 
@@ -182,22 +196,22 @@ class Light(SubroutineTemplate):
         send_data = False
         if self._lighting:
             # If lights were closed, turn them on
-            if not self._status["last"]:
+            if not self._last_status:
                 # Reset pid so there is no internal value overshoot
-                self._status["current"] = True
+                self.light_status = True
                 for light in self.hardware.values():
                     light.turn_on()
-                if self._mode == ActuatorMode.automatic:
+                if self.light_mode == ActuatorMode.automatic:
                     self.logger.info("Lights have been automatically turned on")
                     send_data = True
         # If lighting == False, lights should be off
         else:
             # If lights were opened, turn them off
-            if self._status["last"]:
-                self._status["current"] = False
+            if self._last_status:
+                self.light_status = False
                 for light in self.hardware.values():
                     light.turn_off()
-                if self._mode == ActuatorMode.automatic:
+                if self.light_mode == ActuatorMode.automatic:
                     self.logger.info("Lights have been automatically turned off")
                     send_data = True
         if send_data and self.ecosystem.event_handler:
@@ -213,7 +227,7 @@ class Light(SubroutineTemplate):
                     f"Encountered an error while sending light data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
                 )
-        self._status["last"] = self._status["current"]
+        self._last_status = self.light_status
 
     # TODO: add a second loop for light level, only used if light is on and dimmable
     def _light_level_loop(self) -> None:
@@ -239,10 +253,10 @@ class Light(SubroutineTemplate):
     """Functions to switch the light on/off either manually or automatically"""
     @property
     def _lighting(self) -> bool:
-        if self._mode is ActuatorMode.automatic:
+        if self.light_mode is ActuatorMode.automatic:
             return self.expected_status
         else:
-            if self._status["current"]:
+            if self.light_status:
                 return True
             else:
                 return False
@@ -271,12 +285,14 @@ class Light(SubroutineTemplate):
         )
         self.light_loop_thread.name = f"{self._uid}-light_loop"
         self.light_loop_thread.start()
+        self.ecosystem._actuators_state["light"]["active"] = True
 
     def _stop(self):
         self.logger.info("Stopping light loop")
         self._stop_event.set()
         self._adjust_light_level_event.set()
         self.light_loop_thread.join()
+        self.ecosystem._actuators_state["light"]["active"] = False
         self.hardware = {}
 
     """API calls"""
@@ -334,18 +350,6 @@ class Light(SubroutineTemplate):
             )
 
     @property
-    def light_status(self) -> bool:
-        return self._status["current"]
-
-    @property
-    def mode(self) -> ActuatorMode:
-        return self._mode
-
-    @mode.setter
-    def mode(self, value: ActuatorMode) -> None:
-        self._mode = value
-
-    @property
     def method(self) -> LightMethod:
         return self._method
 
@@ -368,13 +372,13 @@ class Light(SubroutineTemplate):
 
     @property
     def light_info(self) -> LightData:
-        if self.mode is ActuatorMode.automatic:
+        if self.light_mode is ActuatorMode.automatic:
             status = self.expected_status
         else:
             status = self.light_status
         return LightData(
             status=status,
-            mode=self.mode,
+            mode=self.light_mode,
             method=self.method,
             timer=self.timer,
             **self.lighting_hours.dict()
@@ -387,24 +391,23 @@ class Light(SubroutineTemplate):
     ) -> None:
         if self._started:
             if turn_to == ActuatorModePayload.automatic:
-                self.mode = ActuatorMode.automatic
-                self.logger.info("Lights have been turned to automatic mode")
+                self.light_mode = ActuatorMode.automatic
             else:
-                self.mode = ActuatorMode.manual
+                self.light_mode = ActuatorMode.manual
                 if turn_to == ActuatorModePayload.on:
-                    self._status["current"] = True
+                    self.light_status = True
                 else:
-                    self._status["current"] = False
+                    self.light_status = False
             additional_message = ""
             if countdown:
                 self._timer = ctime.monotonic() + countdown
                 additional_message = f" for {countdown} seconds"
             self.logger.info(
-                f"Lights have been manually turned {turn_to}"
+                f"Lights have been manually turned to '{turn_to.value}'"
                 f"{additional_message}")
         else:
-            raise RuntimeError(f"{self.name} is not started in "
-                               f"engine {self.ecosystem}")
+            raise RuntimeError(
+                f"{self.name} is not started in engine {self.ecosystem}")
 
     def get_countdown(self) -> float:
         return round(self._timer - ctime.monotonic(), 2)
