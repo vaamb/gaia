@@ -241,7 +241,7 @@ class Events:
         self.on_turn_actuator(message)
 
     def on_turn_actuator(self, message: dict) -> None:
-        ecosystem_uid: str = message["ecosystem"]
+        ecosystem_uid: str = message["ecosystem_uid"]
         actuator: str = message["actuator"]
         mode: str = message["mode"]
         countdown: float = message.get("countdown", 0.0)

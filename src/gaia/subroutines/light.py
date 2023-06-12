@@ -10,7 +10,7 @@ import typing as t
 from simple_pid import PID
 
 from gaia_validators import (
-    ActuatorMode, ActuatorTurnTo, HardwareConfig, HardwareType,
+    ActuatorMode, ActuatorModePayload, HardwareConfig, HardwareType,
     LightData, LightingHours, LightMethod, SunTimes)
 
 from gaia.config import get_config
@@ -382,16 +382,16 @@ class Light(SubroutineTemplate):
 
     def turn_light(
             self,
-            turn_to: ActuatorTurnTo = "automatic",
+            turn_to: ActuatorModePayload = ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
         if self._started:
-            if turn_to == "automatic":
+            if turn_to == ActuatorModePayload.automatic:
                 self.mode = ActuatorMode.automatic
                 self.logger.info("Lights have been turned to automatic mode")
             else:
                 self.mode = ActuatorMode.manual
-                if turn_to == "on":
+                if turn_to == ActuatorModePayload.on:
                     self._status["current"] = True
                 else:
                     self._status["current"] = False
