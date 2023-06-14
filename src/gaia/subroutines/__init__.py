@@ -7,7 +7,7 @@ from gaia.subroutines.sensors import Sensors
 from gaia.subroutines.template import SubroutineTemplate
 
 
-SubroutineTypes = Literal["sensors", "light", "climate"]
+SubroutineTypes = Literal["sensors", "light", "climate", "health"]
 
 
 SUBROUTINES: dict[SubroutineTypes, type(SubroutineTemplate)] = {

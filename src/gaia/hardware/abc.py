@@ -178,7 +178,7 @@ class Hardware(metaclass=_MetaHardware):
         )
 
     @classmethod
-    def get_actives_by_type(cls, type: HardwareType | str):
+    def get_actives_by_type(cls, type: HardwareType | str) -> dict[str, Self]:
         type = safe_enum_from_name(HardwareType, type)
         return {
             uid: hardware for uid, hardware in _MetaHardware.instances.items()
@@ -186,7 +186,7 @@ class Hardware(metaclass=_MetaHardware):
         }
 
     @classmethod
-    def get_actives_by_level(cls, level: HardwareLevel):
+    def get_actives_by_level(cls, level: HardwareLevel) -> dict[str, Self]:
         level = safe_enum_from_name(HardwareLevel, level)
         return {
             uid: hardware for uid, hardware in _MetaHardware.instances.items()
@@ -253,11 +253,11 @@ class Hardware(metaclass=_MetaHardware):
         return self._type
 
     @property
-    def measures(self) -> list:
+    def measures(self) -> list[str]:
         return self._measures
 
     @property
-    def plants(self) -> list:
+    def plants(self) -> list[str]:
         return self._plants
 
     @property

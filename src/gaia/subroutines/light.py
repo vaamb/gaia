@@ -368,4 +368,4 @@ class Light(SubroutineTemplate):
     @PID_tunings.setter
     def PID_tunings(self, tunings: tuple) -> None:
         """:param tunings: tuple (Kp, Ki, Kd)"""
-        self._pid.tunings(tunings)
+        self._pid.tunings = tunings
