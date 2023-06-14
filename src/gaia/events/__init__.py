@@ -5,12 +5,13 @@ import logging
 from threading import Thread
 from time import sleep
 import typing as t
-from typing import Type
+from typing import Literal, Type
 
 from gaia_validators import (
-    BaseInfoConfigPayload, EcosystemPayload, Empty, EnginePayload,
-    EnvironmentConfigPayload, HardwareConfigPayload, HealthDataPayload,
-    LightDataPayload, ManagementConfigPayload, SensorsDataPayload)
+    ActuatorsDataPayload, BaseInfoConfigPayload, EcosystemPayload, Empty,
+    EnginePayload, EnvironmentConfigPayload, HardwareConfigPayload,
+    HealthDataPayload, LightDataPayload, ManagementConfigPayload,
+    SensorsDataPayload)
 
 from gaia.config import get_config
 from gaia.shared_resources import scheduler
@@ -29,7 +30,12 @@ if get_config().USE_DATABASE:
     from gaia.database.models import SensorHistory
 
 
-payload_classes: dict[str, Type[EcosystemPayload]] = {
+EventNames = Literal[
+    "base_info", "management", "environmental_parameters", "hardware",
+    "sensors_data", "health_data", "light_data", "actuator_data"]
+
+
+payload_classes: dict[EventNames, Type[EcosystemPayload]] = {
     "base_info": BaseInfoConfigPayload,
     "management": ManagementConfigPayload,
     "environmental_parameters": EnvironmentConfigPayload,
@@ -37,10 +43,11 @@ payload_classes: dict[str, Type[EcosystemPayload]] = {
     "sensors_data": SensorsDataPayload,
     "health_data": HealthDataPayload,
     "light_data": LightDataPayload,
+    "actuator_data": ActuatorsDataPayload,
 }
 
 
-attr_for_event: dict[str, str] = {
+attr_for_event: dict[EventNames, str] = {
     "base_info": "base_info",
     "management": "management",
     "environmental_parameters": "environmental_parameters",
@@ -48,6 +55,7 @@ attr_for_event: dict[str, str] = {
     "sensors_data": "sensors_data",
     "health_data": "plants_health",
     "light_data": "light_info",
+    "actuator_data": "actuator_info"
 }
 
 
@@ -146,6 +154,7 @@ class Events:
     def sending_ecosystems_info(self) -> None:
         self.send_full_config()
         self.send_sensors_data()
+        self.send_actuator_data()
         self.send_light_data()
         self.send_health_data()
 
@@ -235,6 +244,9 @@ class Events:
 
     def send_light_data(self, ecosystem_uids: list[str] | None = None) -> None:
         self.emit_event("light_data", ecosystem_uids)
+
+    def send_actuator_data(self, ecosystem_uids: list[str] | None = None) -> None:
+        self.emit_event("actuator_data", ecosystem_uids)
 
     def on_turn_light(self, message: dict) -> None:
         message["actuator"] = "light"

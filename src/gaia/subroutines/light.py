@@ -341,11 +341,7 @@ class Light(SubroutineTemplate):
     @property
     def light_info(self) -> LightData:
         return LightData(
-            status=self.actuator.compute_expected_status(
-                method=self.method, lighting_hours=self.lighting_hours),
-            mode=self.actuator.mode,
             method=self.method,
-            timer=self.actuator.countdown,
             **self.lighting_hours.dict()
         )
 

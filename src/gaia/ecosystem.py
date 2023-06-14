@@ -105,7 +105,7 @@ class Ecosystem:
         return self._engine
 
     @property
-    def event_handler(self) -> "Events":
+    def event_handler(self) -> "Events" | None:
         return self._engine.event_handler
 
     @property
@@ -278,6 +278,19 @@ class Ecosystem:
                 f"Cannot turn {actuator} to {mode} as the subroutine managing it "
                 f"is not currently running"
             )
+        else:
+            if self.event_handler is not None:
+                try:
+                    self.event_handler.send_actuator_data(
+                        ecosystem_uids=[self._uid])
+                except Exception as e:
+                    msg = e.args[1] if len(e.args) > 1 else e.args[0]
+                    if "is not a connected namespace" in msg:
+                        return
+                    self.logger.error(
+                        f"Encountered an error while sending actuator data. "
+                        f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                    )
 
     # Sensors
     @property
