@@ -12,8 +12,9 @@ from gaia_validators import (
 
 from gaia.config import get_environment_config, SpecificEnvironmentConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
-from gaia.subroutines.chaos import Chaos
 from gaia.subroutines import SUBROUTINES, SubroutineTypes
+from gaia.subroutines.chaos import Chaos
+from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -21,6 +22,14 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.events import Events
     from gaia.subroutines import Climate, Health, Light, Sensors
     subroutines: Climate | Health | Light | Sensors
+
+
+def _generate_actuators_state_dict() -> ActuatorsDataDict:
+    return {
+        actuator: ActuatorState().dict()
+        for actuator in [
+            "light", "cooler", "heater", "humidifier", "dehumidifier"]
+    }
 
 
 class Ecosystem:
@@ -42,8 +51,8 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
-        self._actuators_state: ActuatorsDataDict = self._generate_actuators_state_dict()
-        self.subroutines:  dict[str, "subroutines"] = {}
+        self._actuators_state: ActuatorsDataDict = _generate_actuators_state_dict()
+        self.subroutines:  dict[SubroutineTypes, "subroutines"] = {}
         for subroutine in SUBROUTINES:
             self.init_subroutine(subroutine)
         self._chaos: Chaos = Chaos(self, 0, 0, 1)
@@ -71,13 +80,6 @@ class Ecosystem:
         to_start = subroutines_needed - self.subroutines_started
         for subroutine in to_start:
             self.start_subroutine(subroutine)
-
-    def _generate_actuators_state_dict(self) -> ActuatorsDataDict:
-        return {
-            actuator: ActuatorState().dict()
-            for actuator in [
-                "light", "cooler", "heater", "humidifier", "dehumidifier"]
-        }
 
     """
     API calls
@@ -156,14 +158,14 @@ class Ecosystem:
         """
         self.subroutines[subroutine_name] = SUBROUTINES[subroutine_name](self)
 
-    def start_subroutine(self, subroutine_name: str) -> None:
+    def start_subroutine(self, subroutine_name: SubroutineTypes) -> None:
         """Start a Subroutines
 
         :param subroutine_name: The name of the Subroutines to start
         """
         self.subroutines[subroutine_name].start()
 
-    def stop_subroutine(self, subroutine_name: str) -> None:
+    def stop_subroutine(self, subroutine_name: SubroutineTypes) -> None:
         """Stop a Subroutines
 
         :param subroutine_name: The name of the Subroutines to stop
@@ -181,7 +183,7 @@ class Ecosystem:
                 self.logger.info("No subroutine are running, stopping the Ecosystem")
                 self.stop()
 
-    def get_subroutine_status(self, subroutine_name: str) -> bool:
+    def get_subroutine_status(self, subroutine_name: SubroutineTypes) -> bool:
         try:
             return self.subroutines[subroutine_name].status
         except KeyError:
@@ -255,6 +257,18 @@ class Ecosystem:
                     light_subroutine: "Light" = self.subroutines["light"]
                     light_subroutine.turn_light(
                         turn_to=mode, countdown=countdown)
+                else:
+                    raise RuntimeError
+            elif actuator in [
+                HardwareType.heater, HardwareType.cooler, HardwareType.humidifier,
+                HardwareType.dehumidifier
+            ]:
+                if self.get_subroutine_status("climate"):
+                    light_subroutine: "Climate" = self.subroutines["climate"]
+                    light_subroutine.turn_climate_actuator(
+                        climate_actuator=actuator, turn_to=mode, countdown=countdown)
+                else:
+                    raise RuntimeError
             else:
                 raise ValueError(
                     f"Actuator '{actuator.value}' is not currently supported"
@@ -312,7 +326,7 @@ class Ecosystem:
             return climate_subroutine.regulated
         return set()
 
-    def climate_targets(self) -> dict[str, float | int]:
+    def climate_targets(self) -> dict[ClimateParameterNames, ClimateTarget]:
         if self.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.subroutines["climate"]
             return climate_subroutine.targets

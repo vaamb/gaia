@@ -16,6 +16,7 @@ from gaia.config import get_config
 from gaia.exceptions import StoppingSubroutine, UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
+from gaia.subroutines.actuator_handler import ActuatorHandler
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -35,8 +36,11 @@ def _to_dt(_time: time) -> datetime:
     return datetime.combine(_date, _time)
 
 
-def _is_time_between(begin_time: time, end_time: time,
-                     check_time=None) -> bool:
+def _is_time_between(
+        begin_time: time,
+        end_time: time,
+        check_time: time | None = None
+) -> bool:
     check_time = check_time or datetime.now().astimezone().time()
     try:
         if begin_time < end_time:
@@ -53,41 +57,46 @@ class Light(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, "Switch"]
         self._light_loop_thread: Thread | None = None
-        self._last_status = False
+        self.actuator: ActuatorHandler = ActuatorHandler(
+            self, HardwareType.light, self.expected_status)
+        self._last_light_status = self.actuator.status
         self._dimmers: set[str] = set()
         self._pid = PID(Kp, Ki, Kd)
         self._lighting_hours: LightingHours = LightingHours()
         self._stop_event = Event()
         self._adjust_light_level_event = Event()
-        self._timer: ctime.monotonic() = 0.0
-        self._method: LightMethod | None
+        self._method: LightMethod
         try:
             self._method = self.config.light_method
         except UndefinedParameter:
-            self._method = None
+            self._method = LightMethod.fixed
         self._finish__init__()
 
-    @property
-    def light_mode(self) -> ActuatorMode:
-        return self.ecosystem._actuators_state["light"]["mode"]
-
-    @light_mode.setter
-    def light_mode(self, value: ActuatorMode):
-        self.ecosystem._actuators_state["light"]["mode"] = value
-
-    @property
-    def light_status(self) -> bool:
-        return self.ecosystem._actuators_state["light"]["status"]
-
-    @light_status.setter
-    def light_status(self, value: bool):
-        self.ecosystem._actuators_state["light"]["status"] = value
+    @staticmethod
+    def expected_status(
+            *,
+            method: LightMethod,
+            lighting_hours: LightingHours
+    ) -> bool:
+        now: time = datetime.now().astimezone().time()
+        if method == LightMethod.elongate:
+            # If time between lightning hours
+            if (
+                lighting_hours.morning_start <= now <= lighting_hours.morning_end
+                or
+                lighting_hours.evening_start <= now <= lighting_hours.evening_end
+            ):
+                return True
+            else:
+                return False
+        else:
+            return _is_time_between(
+                lighting_hours.morning_start,
+                lighting_hours.evening_end,
+                check_time=now
+            )
 
     def _refresh_lighting_hours(self, send=True) -> None:
-        if self._method is None:
-            self.logger.error("Lighting method is not defined")
-            return
-
         self.logger.debug("Updating sun times")
         time_parameters = self.config.time_parameters
         sun_times: SunTimes | None
@@ -181,37 +190,34 @@ class Light(SubroutineTemplate):
     def _light_state_loop(self) -> None:
         cfg = get_config()
         self.logger.info(
-            f"Starting light loop at a frequency of {1/cfg.LIGHT_LOOP_PERIOD} Hz"
-        )
+            f"Starting light loop at a frequency of {1/cfg.LIGHT_LOOP_PERIOD} Hz")
         while not self._stop_event.is_set():
-            if self._timer:
-                if self._timer < ctime.monotonic():
-                    self._timer = 0
-                    self.light_mode = ActuatorMode.automatic
             self._light_state_routine()
             self._stop_event.wait(cfg.LIGHT_LOOP_PERIOD)
 
     def _light_state_routine(self) -> None:
         # If lighting == True, lights should be on
         send_data = False
-        if self._lighting:
+        lighting = self.actuator.compute_expected_status(
+            method=self.method, lighting_hours=self.lighting_hours)
+        if lighting:
             # If lights were closed, turn them on
-            if not self._last_status:
+            if not self._last_light_status:
                 # Reset pid so there is no internal value overshoot
-                self.light_status = True
+                self.actuator.status = True
                 for light in self.hardware.values():
                     light.turn_on()
-                if self.light_mode == ActuatorMode.automatic:
+                if self.actuator.mode == ActuatorMode.automatic:
                     self.logger.info("Lights have been automatically turned on")
                     send_data = True
         # If lighting == False, lights should be off
         else:
             # If lights were opened, turn them off
-            if self._last_status:
-                self.light_status = False
+            if self._last_light_status:
+                self.actuator.status = False
                 for light in self.hardware.values():
                     light.turn_off()
-                if self.light_mode == ActuatorMode.automatic:
+                if self.actuator.mode == ActuatorMode.automatic:
                     self.logger.info("Lights have been automatically turned off")
                     send_data = True
         if send_data and self.ecosystem.event_handler:
@@ -227,7 +233,7 @@ class Light(SubroutineTemplate):
                     f"Encountered an error while sending light data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
                 )
-        self._last_status = self.light_status
+        self._last_light_status = self.actuator.status
 
     # TODO: add a second loop for light level, only used if light is on and dimmable
     def _light_level_loop(self) -> None:
@@ -251,16 +257,6 @@ class Light(SubroutineTemplate):
         pass
 
     """Functions to switch the light on/off either manually or automatically"""
-    @property
-    def _lighting(self) -> bool:
-        if self.light_mode is ActuatorMode.automatic:
-            return self.expected_status
-        else:
-            if self.light_status:
-                return True
-            else:
-                return False
-
     def _update_manageable(self) -> None:
         try:
             time_parameters = bool(self.config.time_parameters)
@@ -281,18 +277,17 @@ class Light(SubroutineTemplate):
             self.ecosystem.engine.refresh_sun_times()
         self._refresh_lighting_hours(send=True)
         self.light_loop_thread = Thread(
-            target=self._light_state_loop, args=()
-        )
+            target=self._light_state_loop, args=())
         self.light_loop_thread.name = f"{self._uid}-light_loop"
         self.light_loop_thread.start()
-        self.ecosystem._actuators_state["light"]["active"] = True
+        self.actuator.active = True
 
     def _stop(self):
         self.logger.info("Stopping light loop")
         self._stop_event.set()
         self._adjust_light_level_event.set()
         self.light_loop_thread.join()
-        self.ecosystem._actuators_state["light"]["active"] = False
+        self.actuator.active = False
         self.hardware = {}
 
     """API calls"""
@@ -329,26 +324,6 @@ class Light(SubroutineTemplate):
         except StoppingSubroutine:
             self.stop()
 
-    @ property
-    def expected_status(self) -> bool:
-        now = datetime.now().astimezone().time()
-        if self._method == "elongate":
-            # If time between lightning hours
-            if (
-                self._lighting_hours.morning_start <= now <= self._lighting_hours.morning_end
-                or
-                self._lighting_hours.evening_start <= now <= self._lighting_hours.evening_end
-            ):
-                return True
-            else:
-                return False
-        else:
-            return _is_time_between(
-                self._lighting_hours.morning_start,
-                self._lighting_hours.evening_end,
-                check_time=now
-            )
-
     @property
     def method(self) -> LightMethod:
         return self._method
@@ -364,23 +339,13 @@ class Light(SubroutineTemplate):
         return self._lighting_hours
 
     @property
-    def timer(self) -> float:
-        if self._timer:
-            if self._timer > ctime.monotonic():
-                return ctime.monotonic() - self._timer
-        return 0.0
-
-    @property
     def light_info(self) -> LightData:
-        if self.light_mode is ActuatorMode.automatic:
-            status = self.expected_status
-        else:
-            status = self.light_status
         return LightData(
-            status=status,
-            mode=self.light_mode,
+            status=self.actuator.compute_expected_status(
+                method=self.method, lighting_hours=self.lighting_hours),
+            mode=self.actuator.mode,
             method=self.method,
-            timer=self.timer,
+            timer=self.actuator.countdown,
             **self.lighting_hours.dict()
         )
 
@@ -390,43 +355,10 @@ class Light(SubroutineTemplate):
             countdown: float = 0.0
     ) -> None:
         if self._started:
-            if turn_to == ActuatorModePayload.automatic:
-                self.light_mode = ActuatorMode.automatic
-            else:
-                self.light_mode = ActuatorMode.manual
-                if turn_to == ActuatorModePayload.on:
-                    self.light_status = True
-                else:
-                    self.light_status = False
-            additional_message = ""
-            if countdown:
-                self._timer = ctime.monotonic() + countdown
-                additional_message = f" for {countdown} seconds"
-            self.logger.info(
-                f"Lights have been manually turned to '{turn_to.value}'"
-                f"{additional_message}")
+            self.actuator.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
                 f"{self.name} is not started in engine {self.ecosystem}")
-
-    def get_countdown(self) -> float:
-        return round(self._timer - ctime.monotonic(), 2)
-
-    def increase_countdown(self, additional_time: float) -> None:
-        if self._timer:
-            self.logger.info(f"Increasing timer by {additional_time} seconds")
-            self._timer += additional_time
-        else:
-            self._timer = ctime.monotonic() + additional_time
-
-    def decrease_countdown(self, decrease_time: float) -> None:
-        if self._timer:
-            self.logger.info(f"Decreasing timer by {decrease_time} seconds")
-            self._timer -= decrease_time
-            if self._timer <= 0:
-                self._timer = 0
-        else:
-            raise AttributeError("No timer set, you cannot reduce the countdown")
 
     @property
     def PID_tunings(self) -> tuple:
@@ -436,4 +368,4 @@ class Light(SubroutineTemplate):
     @PID_tunings.setter
     def PID_tunings(self, tunings: tuple) -> None:
         """:param tunings: tuple (Kp, Ki, Kd)"""
-        self._pid.tunings(tunings)
+        self._pid.tunings = tunings
