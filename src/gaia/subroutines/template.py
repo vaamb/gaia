@@ -34,7 +34,6 @@ class SubroutineTemplate(ABC):
         self._started: bool = False
 
     def _finish__init__(self) -> None:
-        self.update_manageable()
         self.logger.debug("Initialization successfully")
 
     def __repr__(self) -> str:
@@ -142,6 +141,7 @@ class SubroutineTemplate(ABC):
             self._update_manageable()
 
     def start(self) -> None:
+        self.update_manageable()
         if self.manageable:
             if not self._started:
                 self.logger.debug("Starting the subroutine")

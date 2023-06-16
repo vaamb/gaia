@@ -66,6 +66,11 @@ class ClimateParameter(ClimateTarget):
     regulated: bool
 
 
+class ClimateParameters(TypedDict):
+    temperature: ClimateParameter
+    humidity: ClimateParameter
+
+
 def _climate_param_template() -> ClimateParameter:
     return {
         "regulated": True,
@@ -75,9 +80,11 @@ def _climate_param_template() -> ClimateParameter:
     }
 
 
-class ClimateParameters(TypedDict):
-    temperature: ClimateParameter
-    humidity: ClimateParameter
+def climate_parameters_template() -> ClimateParameters:
+    return {
+        "temperature": _climate_param_template(),
+        "humidity": _climate_param_template(),
+    }
 
 
 class ClimatePIDs(TypedDict):
@@ -100,7 +107,7 @@ class Climate(SubroutineTemplate):
         self._sensor_miss: int = 0
         self.actuators: ClimateActuators = self._setup_actuators()
         self._pids: ClimatePIDs = self._setup_pids()
-        self._parameters: ClimateParameters = self._compute_parameters()
+        self._parameters: ClimateParameters = climate_parameters_template()
         self._lighting_hours: LightingHours = LightingHours()
         self._finish__init__()
 
@@ -151,10 +158,9 @@ class Climate(SubroutineTemplate):
         return any([parameter["regulated"] for parameter in parameters.values()])
 
     def _compute_parameters(self) -> ClimateParameters:
-        parameters: ClimateParameters = {
-            "temperature": _climate_param_template(),
-            "humidity": _climate_param_template(),
-        }
+        parameters = climate_parameters_template()
+        for actuator_handler in self.actuators.values():
+            actuator_handler.active = False
 
         # Check if target values in config
         for climate_param in parameters.keys():
@@ -172,36 +178,41 @@ class Climate(SubroutineTemplate):
                 "No climate parameter found.")
             return parameters
 
-        # Check if regulators available
-        regulators: list[str] = []
-        for climate_param, value in parameters.items():
-            climate_param: ClimateParameterNames
-            if not value:
-                continue
-            regulator_couple: ActuatorCouple = REGULATORS[climate_param]
-            if not any([
-                *self.config.get_IO_group_uids(regulator_couple.increase),
-                *self.config.get_IO_group_uids(regulator_couple.decrease),
-            ]):
-                parameters[climate_param]["regulated"] = False
-        if self._any_regulated(parameters):
-            self.logger.debug(
-                "No climatic actuator detected.")
-            return parameters
-
         # Check if sensors taking regulated params are available
         measures: set[str] = set()
-        for hardware in Hardware.get_actives_by_type(HardwareType.sensor).values():
-            measures.update(hardware.measures)
+        if self.config.get_management("sensors"):
+            for hardware_uid in self.config.get_IO_group_uids("sensor"):
+                hardware = self.config.get_hardware_config(hardware_uid)
+                measures.update(hardware.measures)
         for climate_param, value in parameters.items():
             climate_param: ClimateParameterNames
-            if not value:
+            if not value["regulated"]:
                 continue
             if climate_param not in measures:
                 parameters[climate_param]["regulated"] = False
         if not self._any_regulated(parameters):
             self.logger.debug(
                 "No sensor measuring regulated parameters detected.")
+            return parameters
+
+        # Check if regulators available
+        for climate_param, value in parameters.items():
+            climate_param: ClimateParameterNames
+            if not value:
+                continue
+            regulator_couple: ActuatorCouple = REGULATORS[climate_param]
+            any_regulator = False
+            for direction in regulator_couple:
+                direction: ClimateActuatorNames
+                if self.config.get_IO_group_uids(direction):
+                    self.actuators[direction].active = True
+                    any_regulator = True
+            if not any_regulator:
+                parameters[climate_param]["regulated"] = False
+        if not self._any_regulated(parameters):
+            self.logger.debug(
+                "No climatic actuator detected.")
+            return parameters
         return parameters
 
     def _update_manageable(self) -> None:
@@ -294,9 +305,10 @@ class Climate(SubroutineTemplate):
 
         average = sensors_data.average
         for data in average:
-            climate_param = cast(ClimateParameterNames, data.measure)
-            if climate_param not in self._parameters:
+            climate_param = data.measure
+            if not self._parameters.get(climate_param, {}).get("regulated"):
                 continue
+            climate_param = cast(ClimateParameterNames, climate_param)
             current_value = data.value
             target_value, hysteresis = self._compute_target(
                 self._parameters[climate_param], self._lighting_hours,
@@ -309,6 +321,8 @@ class Climate(SubroutineTemplate):
                 actuator_name: ClimateActuatorNames = getattr(
                     actuator_couple, actuator_direction)
                 actuator_handler: ActuatorHandler = self.actuators[actuator_name]
+                if not actuator_handler.active:
+                    continue
                 expected_status = actuator_handler.compute_expected_status(
                     current_value=current_value, target_value=target_value,
                     hysteresis=hysteresis)
