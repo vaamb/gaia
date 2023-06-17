@@ -108,7 +108,6 @@ class Climate(SubroutineTemplate):
         self.actuators: ClimateActuators = self._setup_actuators()
         self._pids: ClimatePIDs = self._setup_pids()
         self._parameters: ClimateParameters = climate_parameters_template()
-        self._lighting_hours: LightingHours = LightingHours()
         self._finish__init__()
 
     @staticmethod
@@ -138,6 +137,10 @@ class Climate(SubroutineTemplate):
             return False
         else:
             return True
+
+    @property
+    def _lighting_hours(self):
+        return self.ecosystem.light_info
 
     def _setup_actuators(self) -> ClimateActuators:
         return {
@@ -225,35 +228,6 @@ class Climate(SubroutineTemplate):
             self.manageable = False
         else:
             self.manageable = True
-
-    def _update_time_parameters(self):
-        updated = False
-        if self.ecosystem.get_subroutine_status("light"):
-            light_subroutine: "Light" = self.ecosystem.subroutines["light"]
-            try:
-                self._lighting_hours = LightingHours(
-                    morning_start=light_subroutine.lighting_hours.morning_start,
-                    evening_end=light_subroutine.lighting_hours.evening_end,
-                )
-            except AttributeError:
-                self.logger.error(
-                    "Could not obtain time parameters from the Light subroutine, "
-                    "using the config ones instead."
-                )
-            else:
-                updated = True
-        if not updated:
-            try:
-                self._lighting_hours = LightingHours(
-                    morning_start=self.config.time_parameters.day,
-                    evening_end=self.config.time_parameters.night,
-                )
-            except UndefinedParameter:
-                self.logger.error(
-                    f"No day and night parameters set for ecosystem "
-                    f"{self._ecosystem_name}. Stopping the climate subroutine."
-                )
-                raise StoppingSubroutine
 
     def _climate_routine(self) -> None:
         if not self.ecosystem.get_subroutine_status("sensors"):
@@ -347,7 +321,6 @@ class Climate(SubroutineTemplate):
             self.stop()
 
     def _start(self):
-        self._update_time_parameters()
         self._parameters = self._compute_parameters()
         self.logger.info(
             f"Starting climate routine. It will run every minute"
@@ -388,12 +361,6 @@ class Climate(SubroutineTemplate):
             mode: ActuatorModePayload
     ) -> None:
         pass
-
-    def update_time_parameters(self) -> None:
-        try:
-            self._update_time_parameters()
-        except StoppingSubroutine:
-            self.stop()
 
     def update_climate_parameters(self) -> None:
         self._parameters = self._compute_parameters()

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from datetime import date, datetime, time
 import logging
 import logging.config
+from threading import Lock
 import typing as t
 import weakref
 
 from gaia_validators import (
     ActuatorModePayload, ActuatorState, ActuatorsDataDict, BaseInfoConfig,
     ChaosConfig, Empty, EnvironmentConfig, HardwareConfig, HardwareType,
-    HealthData, LightData, ManagementConfig, safe_enum_from_name, SensorsData)
+    HealthData, LightData, LightingHours, LightMethod, ManagementConfig,
+    safe_enum_from_name, SensorsData, SunTimes)
 
 from gaia.config import get_environment_config, SpecificEnvironmentConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
@@ -22,6 +25,15 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.events import Events
     from gaia.subroutines import Climate, Health, Light, Sensors
     subroutines: Climate | Health | Light | Sensors
+
+
+lock = Lock()
+
+
+def _to_dt(_time: time) -> datetime:
+    # Transforms time to today's datetime. Needed to use timedelta
+    _date = date.today()
+    return datetime.combine(_date, _time)
 
 
 def _generate_actuators_state_dict() -> ActuatorsDataDict:
@@ -51,6 +63,10 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
+        self.lighting_hours = LightingHours(
+            morning_start=self.config.time_parameters.day,
+            evening_end=self.config.time_parameters.night,
+        )
         self._actuators_state: ActuatorsDataDict = _generate_actuators_state_dict()
         self.subroutines:  dict[SubroutineTypes, "subroutines"] = {}
         for subroutine in SUBROUTINES:
@@ -127,6 +143,27 @@ class Ecosystem:
             status=self.status,
             engine_uid=self.engine.uid,
         )
+
+    @property
+    def light_info(self) -> LightData:
+        return LightData(
+            method=self.config.light_method,
+            morning_start=self.config.time_parameters.day,
+            evening_end=self.config.time_parameters.night,
+        )
+
+    @property
+    def light_method(self) -> LightMethod:
+        try:
+            return self.config.light_method
+        except UndefinedParameter:
+            return LightMethod.fixed
+
+    @light_method.setter
+    def light_method(self, value: LightMethod) -> None:
+        self.config.light_method = value
+        if value in (LightMethod.elongate, LightMethod.mimic):
+            self.refresh_sun_times(send=True)
 
     @property
     def management(self) -> ManagementConfig:
@@ -207,6 +244,7 @@ class Ecosystem:
         """
         if not self.status:
             try:
+                self.refresh_sun_times()
                 self.logger.info("Starting the Ecosystem")
                 self._refresh_subroutines()
                 self.logger.debug(f"Ecosystem successfully started")
@@ -233,6 +271,10 @@ class Ecosystem:
             self._started = False
 
     # Actuator
+    @property
+    def actuator_info(self) -> ActuatorsDataDict:
+        return self._actuators_state
+
     def turn_actuator(
             self,
             actuator: str,
@@ -300,29 +342,77 @@ class Ecosystem:
             return sensors_subroutine.sensors_data
         return Empty()
 
-    # Actuators
-    @property
-    def actuator_info(self) -> ActuatorsDataDict:
-        return self._actuators_state
-
     # Light
-    @property
-    def light_info(self) -> LightData | Empty:
-        if self.get_subroutine_status("light"):
-            light_subroutine: "Light" = self.subroutines["light"]
-            return light_subroutine.light_info
-        return Empty()
+    def refresh_sun_times(self, send=True) -> None:
+        self.logger.debug("Refreshing sun times")
+        time_parameters = self.config.time_parameters
+        sun_times: SunTimes | None
+        try:
+            sun_times = self.config.sun_times
+        except UndefinedParameter:
+            sun_times = None
+        # Check we've got the info required
+        # Then update info using lock as the whole dict should be transformed at the "same time"
+        if self.config.light_method == LightMethod.fixed:
+            with lock:
+                self.lighting_hours = LightingHours(
+                    morning_start=time_parameters.day,
+                    evening_end=time_parameters.night,
+                )
 
-    def refresh_sun_times(self, send=False) -> None:
-        if self.get_subroutine_status("light"):
-            self.logger.debug("Updating sun times")
-            light_subroutine: "Light" = self.subroutines["light"]
-            light_subroutine.refresh_sun_times(send=send)
-        else:
-            RuntimeError(
-                "Cannot update sun times as the light subroutine is not "
-                "currently running"
-            )
+        elif self.config.light_method == LightMethod.mimic:
+            if sun_times is None:
+                self.logger.error(
+                    "Cannot use method 'place' without sun times available. "
+                    "Using 'fixed' method instead."
+                )
+                self.config.light_method = LightMethod.fixed
+                self.refresh_sun_times()
+            else:
+                with lock:
+                    self.lighting_hours = LightingHours(
+                        morning_start=sun_times.sunrise,
+                        evening_end=sun_times.sunset,
+                    )
+
+        elif self.config.light_method == LightMethod.elongate:
+            if (
+                    time_parameters.day is None
+                    or time_parameters.night is None
+                    or sun_times is None
+            ):
+                self.logger.error(
+                    "Cannot use method 'elongate' without time parameters set in "
+                    "config and sun times available. Using 'fixed' method instead."
+                )
+                self.config.light_method = LightMethod.fixed
+                self.refresh_sun_times()
+            else:
+                sunrise = _to_dt(sun_times.sunrise)
+                sunset = _to_dt(sun_times.sunset)
+                twilight_begin = _to_dt(sun_times.twilight_begin)
+                offset = sunrise - twilight_begin
+                with lock:
+                    self.lighting_hours = LightingHours(
+                        morning_start=time_parameters.day,
+                        morning_end=(sunrise + offset).time(),
+                        evening_start=(sunset - offset).time(),
+                        evening_end=time_parameters.night,
+                    )
+
+        if self.event_handler and send:
+            try:
+                self.event_handler.send_light_data(
+                    ecosystem_uids=[self._uid]
+                )
+            except Exception as e:
+                msg = e.args[1] if len(e.args) > 1 else e.args[0]
+                if "is not a connected namespace" in msg:
+                    return  # TODO: find a way to catch if many errors
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                )
 
     # Health
     @property

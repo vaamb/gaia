@@ -790,13 +790,10 @@ class SpecificConfig:
     """Parameters related to time"""
     @property
     def time_parameters(self) -> DayConfig:
-        try:
-            return DayConfig(
-                day=self.sky["day"],
-                night=self.sky["night"],
-            )
-        except (KeyError, AttributeError):
-            raise UndefinedParameter
+        return DayConfig(
+            day=self.sky["day"],
+            night=self.sky["night"],
+        )
 
     @time_parameters.setter
     def time_parameters(self, value: dict[str, str]) -> None:

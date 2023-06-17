@@ -44,12 +44,6 @@ def test_actuators(ecosystem: "Ecosystem"):
         ecosystem.turn_actuator("light", "WrongMode")
 
 
-def test_light_calls(ecosystem: "Ecosystem"):
-    assert ecosystem.light_info == {}
-    with pytest.raises(RuntimeError):
-        ecosystem.refresh_sun_times()
-
-
 def test_sensors_calls(ecosystem: "Ecosystem"):
     assert ecosystem.sensors_data == {}
 
