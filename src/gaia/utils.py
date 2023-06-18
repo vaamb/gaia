@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from enum import Enum
 from datetime import date, datetime, time, timezone
 import hashlib
 import logging
@@ -17,11 +18,26 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import ruamel.yaml
+from ruamel.yaml import SafeRepresenter, ScalarNode
 
 from gaia.config import get_config, get_log_dir
 
 
 yaml = ruamel.yaml.YAML(typ="safe")
+
+
+def _repr_time(self: SafeRepresenter, data: time) -> ScalarNode:
+    time_repr = str(data).split(".")[0]
+    return self.represent_scalar('tag:yaml.org,2002:str', time_repr)
+
+
+def _repr_enum(self: SafeRepresenter, data: Enum) -> ScalarNode:
+    print(data)
+    return self.represent_scalar('tag:yaml.org,2002:str', data.value)
+
+
+ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
+ruamel.yaml.add_multi_representer(Enum, _repr_enum, yaml.representer)
 
 
 try:
