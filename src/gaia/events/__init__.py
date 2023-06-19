@@ -260,10 +260,7 @@ class Events:
         if ecosystem_uid in self.ecosystems:
             self.logger.debug("Received turn_actuator event")
             self.ecosystems[ecosystem_uid].turn_actuator(
-                actuator=actuator, mode=mode, countdown=countdown
-            )
-            if actuator == "light":
-                self.emit_event("light_data", ecosystem_uids=[ecosystem_uid])
+                actuator=actuator, mode=mode, countdown=countdown)
 
     def on_change_management(self, message: dict) -> None:
         ecosystem_uid: str = message["ecosystem"]

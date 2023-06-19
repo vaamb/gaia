@@ -30,6 +30,8 @@ class ActuatorHandler:
         self._timer_on: bool = False
         self._time_limit: float = 0.0
         self._expected_status_function: Callable[..., bool] = expected_status_function
+        self.last_mode: ActuatorMode = self.mode
+        self.last_status: bool = self.status
 
     @property
     def active(self) -> bool:
@@ -43,17 +45,35 @@ class ActuatorHandler:
     def mode(self) -> ActuatorMode:
         return self.subroutine.ecosystem._actuators_state[self.type.value]["mode"]
 
+    def _set_mode_no_update(self, value: ActuatorMode):
+        self.subroutine.ecosystem._actuators_state[self.type.value]["mode"] = value
+
     @mode.setter
     def mode(self, value: ActuatorMode) -> None:
-        self.subroutine.ecosystem._actuators_state[self.type.value]["mode"] = value
+        self._set_mode_no_update(value)
+        if self.mode != self.last_mode:
+            self.subroutine.logger.info(
+                f"{self.type.value.capitalize()} has been set to "
+                f"'{self.mode.value}' mode")
+            self.send_actuators_state()
+        self.last_mode = self.mode
 
     @property
     def status(self) -> bool:
         return self.subroutine.ecosystem._actuators_state[self.type.value]["status"]
 
+    def _set_status_no_update(self, value: bool):
+        self.subroutine.ecosystem._actuators_state[self.type.value]["status"] = value
+
     @status.setter
     def status(self, value: bool) -> None:
-        self.subroutine.ecosystem._actuators_state[self.type.value]["status"] = value
+        self._set_status_no_update(value)
+        if self.status != self.last_status:
+            self.subroutine.logger.info(
+                f"{self.type.value.capitalize()} has been turned "
+                f"{'on' if self.status else 'off'}")
+            self.send_actuators_state()
+        self.last_status = self.status
 
     @property
     def countdown(self) -> float | None:
@@ -91,21 +111,45 @@ class ActuatorHandler:
             countdown: float = 0.0
     ):
         if turn_to == ActuatorModePayload.automatic:
-            self.mode = ActuatorMode.automatic
+            self._set_mode_no_update(ActuatorMode.automatic)
         else:
-            self.mode = ActuatorMode.manual
+            self._set_mode_no_update(ActuatorMode.manual)
             if turn_to == ActuatorModePayload.on:
-                self.status = True
+                self._set_status_no_update(True)
             else:  # turn_to == ActuatorModePayload.off
-                self.status = False
+                self._set_status_no_update(False)
         additional_message = ""
         if countdown:
             self._time_limit = 0.0
             self.increase_countdown(countdown)
             additional_message = f" for {countdown} seconds"
         self.subroutine.logger.info(
-            f"{self.type.value} have been manually turned to '{turn_to.value}'"
+            f"{self.type.value} has been manually turned to '{turn_to.value}'"
             f"{additional_message}")
+        if self.status != self.last_status or self.mode != self.last_mode:
+            self.subroutine.logger.info(
+                f"{self.type.value.capitalize()} has been turned "
+                f"{'on' if self.status else 'off'} with '{self.mode.value}' mode")
+            self.send_actuators_state()
+        self.last_mode = self.mode
+        self.last_status = self.status
+
+
+    def send_actuators_state(self):
+        if self.subroutine.ecosystem.event_handler:
+            self.subroutine.ecosystem.logger.debug(
+                "Sending actuators data to Ouranos")
+            try:
+                self.subroutine.ecosystem.event_handler.send_actuator_data(
+                    ecosystem_uids=self.subroutine.config.uid)
+            except Exception as e:
+                msg = e.args[1] if len(e.args) > 1 else e.args[0]
+                if "is not a connected namespace" in msg:
+                    pass
+                self.subroutine.logger.error(
+                    f"Encountered an error while sending actuator data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                )
 
     def compute_expected_status(self, **kwargs) -> bool:
         countdown = self.countdown

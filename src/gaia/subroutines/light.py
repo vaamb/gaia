@@ -94,42 +94,20 @@ class Light(SubroutineTemplate):
 
     def _light_state_routine(self) -> None:
         # If lighting == True, lights should be on
-        send_data = False
         lighting = self.actuator.compute_expected_status(
             method=self.ecosystem.light_method, lighting_hours=self.lighting_hours)
         if lighting:
-            # If lights were closed, turn them on
-            if not self._last_light_status:
-                # Reset pid so there is no internal value overshoot
-                self.actuator.status = True
-                for light in self.hardware.values():
-                    light.turn_on()
-                if self.actuator.mode == ActuatorMode.automatic:
-                    self.logger.info("Lights have been automatically turned on")
-                    send_data = True
+            # Reset pid so there is no internal value overshoot
+            if not self.actuator.last_status:
+                self._pid.reset()
+            self.actuator.status = True
+            for light in self.hardware.values():
+                light.turn_on()
         # If lighting == False, lights should be off
         else:
-            # If lights were opened, turn them off
-            if self._last_light_status:
-                self.actuator.status = False
-                for light in self.hardware.values():
-                    light.turn_off()
-                if self.actuator.mode == ActuatorMode.automatic:
-                    self.logger.info("Lights have been automatically turned off")
-                    send_data = True
-        if send_data and self.ecosystem.event_handler:
-            try:
-                self.ecosystem.event_handler.send_light_data(
-                    ecosystem_uids=self.config.uid
-                )
-            except Exception as e:
-                msg = e.args[1] if len(e.args) > 1 else e.args[0]
-                if "is not a connected namespace" in msg:
-                    pass
-                self.logger.error(
-                    f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
-                )
+            self.actuator.status = False
+            for light in self.hardware.values():
+                light.turn_off()
         self._last_light_status = self.actuator.status
 
     # TODO: add a second loop for light level, only used if light is on and dimmable
