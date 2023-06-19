@@ -36,6 +36,9 @@ test = [
     "pytest~=7.1.2"
 ]
 
+[project.urls]
+repository  = "https://github.com/vaamb/gaia.git"
+
 [build-system]
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"

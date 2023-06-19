@@ -56,7 +56,7 @@ mkdir -p "lib"; cd "lib"
 # Get Gaia and install the package
 if [ ! -d "gaia" ]; then
   echo "Getting Gaia repository"
-  git clone --branch stable https://gitlab.com/eupla/gaia.git "gaia" > /dev/null
+  git clone --branch stable https://github.com/vaamb/gaia.git "gaia" > /dev/null
   if [ $? = 0 ] ; then
     cd "gaia"
   else
@@ -80,8 +80,8 @@ cp -r scripts/ $GAIA_DIR/
 cd "$GAIA_DIR/scripts/"
 chmod +x start.sh stop.sh update.sh
 
-if [ $(grep -ic "#>>>Gaia variables>>>" $HOME/.bash_profile) -eq 1 ]; then
-  sed -i "/#>>>Gaia variables>>>/,/#<<<Gaia variables<<</d" $HOME/.bash_profile;
+if [ $(grep -ic "#>>>Gaia variables>>>" $HOME/.bashrc) -eq 1 ]; then
+  sed -i "/#>>>Gaia variables>>>/,/#<<<Gaia variables<<</d" $HOME/.bashrc;
 fi
 
 echo "
@@ -101,9 +101,9 @@ gaia() {
 }
 complete -W 'start stop stdout update' gaia
 #<<<Gaia variables<<<
-" >> $HOME/.bash_profile;
+" >> $HOME/.bashrc;
 
-source $HOME/.bash_profile
+source $HOME/.bashrc
 
 echo "Gaia installed."
 echo "It might be required to install extra python packages depending on the hardware used."
