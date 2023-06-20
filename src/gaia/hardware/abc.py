@@ -9,9 +9,6 @@ import typing as t
 from typing import cast, Self
 import weakref
 
-import numpy as np
-from PIL import Image as _Image
-
 from gaia_validators import (
     safe_enum_from_name, HardwareConfig, HardwareLevel, HardwareLevelNames,
     HardwareType, HardwareTypeNames)
@@ -24,6 +21,8 @@ from gaia.utils import (
 
 
 if t.TYPE_CHECKING and 0:  # pragma: no cover
+    import numpy as np
+
     from gaia.subroutines.template import SubroutineTemplate
     if _IS_RASPI:
         from adafruit_blinka import pwmio
@@ -40,7 +39,7 @@ def str_to_hex(address: str) -> int:
 
 @dataclass
 class Image:
-    array: np.array
+    array: "np.array"
     timestamp: datetime
 
 
@@ -453,6 +452,8 @@ class i2cSensor(BaseSensor, i2cHardware):
 
 class Camera(Hardware):
     def __init__(self, *args, **kwargs):
+        import numpy as np
+        from PIL import Image as _Image
         super().__init__(*args, **kwargs)
         self._camera_dir: Path | None = None
         self.running: bool = False
