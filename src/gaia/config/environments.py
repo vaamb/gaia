@@ -26,7 +26,7 @@ from gaia.exceptions import HardwareNotFound, UndefinedParameter
 from gaia.hardware import hardware_models
 from gaia.subroutines import SUBROUTINES
 from gaia.utils import (
-    file_hash, is_connected, json, SingletonMeta, utc_time_to_local_time, yaml)
+    file_hash, json, SingletonMeta, utc_time_to_local_time, yaml)
 
 
 _store = {}
@@ -46,7 +46,28 @@ logger = logging.getLogger("gaia.config.environments")
 # ---------------------------------------------------------------------------
 #   Common config models
 # ---------------------------------------------------------------------------
+class SunTimesDict(TypedDict):
+    civil_twilight_begin: str
+    sunrise: str
+    sunset: str
+    civil_twilight_end: str
+
+
+class _SunTimesFileHomeDict(TypedDict):
+    home: SunTimesDict
+
+
+class SunTimesFileDict(TypedDict):
+    last_update: str
+    data: _SunTimesFileHomeDict
+
+
 class Coordinates(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class CoordinatesDict(TypedDict):
     latitude: float
     longitude: float
 
@@ -54,11 +75,6 @@ class Coordinates(BaseModel):
 class Place(BaseModel):
     name: str
     coordinates: Coordinates
-
-
-class CoordinatesDict(TypedDict):
-    latitude: float
-    longitude: float
 
 
 class PlaceDict(TypedDict):
@@ -179,7 +195,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._base_dir = pathlib.Path(base_dir)
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
-        self._last_sun_times_update: datetime = datetime(1970, 1, 1)
+        self._sun_times: SunTimes | None = None
         self._hash_dict: dict[str, str] = {}
         self._lock = Lock()
         self._stop_event = Event()
@@ -366,10 +382,6 @@ class GeneralConfig(metaclass=SingletonMeta):
         return self._base_dir
 
     @property
-    def last_sun_times_update(self) -> datetime:
-        return self._last_sun_times_update
-
-    @property
     def ecosystems_uid(self) -> list[str]:
         return [i for i in self._ecosystems_config.keys()]
 
@@ -449,86 +461,89 @@ class GeneralConfig(metaclass=SingletonMeta):
         return self._private_config.get("units", {})
 
     @property
-    def sun_times(self) -> SunTimes:
-        try:
-            with open(get_cache_dir()/"sunrise.json", "r") as file:
-                payload = json.loads(file.read())
-                sunrise = payload["data"]["home"]
-        except (OSError, JSONDecodeError, KeyError):
-            raise UndefinedParameter
+    def sun_times(self) -> SunTimes | None:
+        return self._sun_times
 
-        def import_daytime_event(daytime_event: str) -> time:
-            try:
-                my_time = datetime.strptime(
-                    sunrise[daytime_event], "%I:%M:%S %p").astimezone().time()
-                local_time = utc_time_to_local_time(my_time)
-                return local_time
-            except Exception:
-                raise UndefinedParameter
-        return SunTimes(
-            twilight_begin=import_daytime_event("civil_twilight_begin"),
-            sunrise=import_daytime_event("sunrise"),
-            sunset=import_daytime_event("sunset"),
-            twilight_end=import_daytime_event("civil_twilight_end"),
-        )
-
-    def download_sun_times(self) -> None:
+    def refresh_sun_times(self) -> None:
         sun_times_file = get_cache_dir()/"sunrise.json"
         # Determine if the file needs to be updated
-        need_update = False
+        sun_times_data: SunTimesDict | None = None
         try:
             with sun_times_file.open("r") as file:
-                sun_times_data = json.loads(file.read())
-                last_update: str = sun_times_data["last_update"]
-                self._last_sun_times_update = \
-                    datetime.fromisoformat(last_update).astimezone()
-        except (FileNotFoundError, JSONDecodeError):
-            need_update = True
+                payload: SunTimesFileDict = json.loads(file.read())
+                last_update: datetime = \
+                    datetime.fromisoformat(payload["last_update"]).astimezone()
+        except (FileNotFoundError, JSONDecodeError, KeyError):
+            pass
         else:
-            if self._last_sun_times_update.date() < date.today():
-                need_update = True
-            else:
+            if last_update.date() >= date.today():
+                sun_times_data = payload["data"]["home"]
                 logger.debug("Sun times already up to date")
-        if need_update:
-            logger.info("Refreshing sun times")
-            try:
-                home_coordinates = self.home_coordinates
-            except UndefinedParameter:
-                logger.error(
-                    "You need to define your home city coordinates in "
-                    "'private.cfg' in order to update sun times."
-                )
-            else:
+        if sun_times_data is None:
+            sun_times_data = self.download_sun_times()
+
+        if sun_times_data is not None:
+            def import_daytime_event(daytime_event: str) -> time:
                 try:
-                    logger.debug(
-                        "Trying to update sunrise and sunset times on "
-                        "sunrise-sunset.org")
-                    response = requests.get(
-                        url=f"https://api.sunrise-sunset.org/json",
-                        params={
-                            "lat": home_coordinates.latitude,
-                            "lng": home_coordinates.longitude
-                        },
-                        timeout=3.0,
-                    )
-                    data = response.json()
-                    results = data["results"]
-                except requests.exceptions.ConnectionError:
-                    logger.debug(
-                        "Failed to update sunrise and sunset times"
-                    )
-                    raise ConnectionError
-                else:
-                    self._last_sun_times_update = datetime.now().astimezone()
-                    payload = {
-                        "last_update": self._last_sun_times_update,
-                        "data": {"home": results},
-                    }
-                    with open(sun_times_file, "w") as file:
-                        file.write(json.dumps(payload))
-                    logger.info(
-                        "Sunrise and sunset times successfully updated"
-                    )
+                    my_time = datetime.strptime(
+                        sun_times_data[daytime_event], "%I:%M:%S %p").astimezone().time()
+                    local_time = utc_time_to_local_time(my_time)
+                    return local_time
+                except Exception:
+                    raise UndefinedParameter
+
+            self._sun_times = SunTimes(
+                twilight_begin=import_daytime_event("civil_twilight_begin"),
+                sunrise=import_daytime_event("sunrise"),
+                sunset=import_daytime_event("sunset"),
+                twilight_end=import_daytime_event("civil_twilight_end"),
+            )
+
+        else:
+            self._sun_times = None
+
+    def download_sun_times(self) -> SunTimesDict | None:
+        sun_times_file = get_cache_dir()/"sunrise.json"
+        logger.info("Refreshing sun times")
+        try:
+            home_coordinates = self.home_coordinates
+        except UndefinedParameter:
+            logger.error(
+                "You need to define your home city coordinates in "
+                "'private.cfg' in order to update sun times."
+            )
+            return None
+        else:
+            try:
+                logger.debug(
+                    "Trying to update sunrise and sunset times on "
+                    "sunrise-sunset.org")
+                response = requests.get(
+                    url=f"https://api.sunrise-sunset.org/json",
+                    params={
+                        "lat": home_coordinates.latitude,
+                        "lng": home_coordinates.longitude
+                    },
+                    timeout=3.0,
+                )
+                data = response.json()
+                results: SunTimesDict = data["results"]
+            except requests.exceptions.ConnectionError:
+                logger.debug(
+                    "Failed to update sunrise and sunset times"
+                )
+                return None
+            else:
+                self._last_sun_times_update = datetime.now().astimezone()
+                payload: SunTimesFileDict = {
+                    "last_update": self._last_sun_times_update.isoformat(),
+                    "data": {"home": results},
+                }
+                with open(sun_times_file, "w") as file:
+                    file.write(json.dumps(payload))
+                logger.info(
+                    "Sunrise and sunset times successfully updated")
+                return results
 
 
 # ---------------------------------------------------------------------------
@@ -617,22 +632,9 @@ class SpecificConfig:
 
     @property
     def light_method(self) -> LightMethod:
-        try:
-            method = self.sky["lighting"]
-            if method in ("elongate", "mimic"):
-                if not is_connected():
-                    if self._first_connection_error:
-                        self.logger.warning(
-                            "Not connected to the internet, light method "
-                            "automatically turned to 'fixed'"
-                        )
-                        self._first_connection_error = False
-                    return LightMethod.fixed
-            return cast(LightMethod, safe_enum_from_name(LightMethod, method))
-        except KeyError:  # pragma: no cover
-            raise UndefinedParameter(
-                "Define ['environment']['sky']['lighting'] or remove light management"
-            )
+        if self.sun_times is None:
+            return LightMethod.fixed
+        return safe_enum_from_name(LightMethod, self.sky["lighting"])
 
     @light_method.setter
     def light_method(self, method: LightMethodNames) -> None:
@@ -811,7 +813,7 @@ class SpecificConfig:
             self.sky[tod] = value[tod]
 
     @property
-    def sun_times(self) -> SunTimes:
+    def sun_times(self) -> SunTimes | None:
         return self.general.sun_times
 
 

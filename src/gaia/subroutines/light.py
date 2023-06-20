@@ -1,27 +1,22 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import datetime, time
 from statistics import mean
 from threading import Event, Lock, Thread
-import time as ctime
 import typing as t
 
 from simple_pid import PID
 
 from gaia_validators import (
-    ActuatorMode, ActuatorModePayload, HardwareConfig, HardwareType,
-    LightData, LightingHours, LightMethod, SunTimes)
+    ActuatorModePayload, HardwareConfig, HardwareType, LightingHours,
+    LightMethod)
 
 from gaia.config import get_config
-from gaia.exceptions import StoppingSubroutine, UndefinedParameter
+from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
 from gaia.subroutines.actuator_handler import ActuatorHandler
 from gaia.subroutines.template import SubroutineTemplate
-
-
-if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.subroutines.climate import Climate
 
 
 Kp = 0.05

@@ -11,7 +11,7 @@ from gaia_validators import (
     ActuatorModePayload, ActuatorState, ActuatorsDataDict, BaseInfoConfig,
     ChaosConfig, Empty, EnvironmentConfig, HardwareConfig, HardwareType,
     HealthData, LightData, LightingHours, LightMethod, ManagementConfig,
-    safe_enum_from_name, SensorsData, SunTimes)
+    safe_enum_from_name, SensorsData)
 
 from gaia.config import get_environment_config, SpecificEnvironmentConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
@@ -161,9 +161,8 @@ class Ecosystem:
 
     @light_method.setter
     def light_method(self, value: LightMethod) -> None:
-        self.config.light_method = value
         if value in (LightMethod.elongate, LightMethod.mimic):
-            self.refresh_sun_times(send=True)
+            self.refresh_lighting_hours(send=True)
 
     @property
     def management(self) -> ManagementConfig:
@@ -244,7 +243,7 @@ class Ecosystem:
         """
         if not self.status:
             try:
-                self.refresh_sun_times()
+                self.refresh_lighting_hours()
                 self.logger.info("Starting the Ecosystem")
                 self._refresh_subroutines()
                 if self.event_handler._registered:
@@ -345,14 +344,9 @@ class Ecosystem:
         return Empty()
 
     # Light
-    def refresh_sun_times(self, send=True) -> None:
+    def refresh_lighting_hours(self, send=True) -> None:
         self.logger.debug("Refreshing sun times")
         time_parameters = self.config.time_parameters
-        sun_times: SunTimes | None
-        try:
-            sun_times = self.config.sun_times
-        except UndefinedParameter:
-            sun_times = None
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
         if self.config.light_method == LightMethod.fixed:
@@ -363,36 +357,36 @@ class Ecosystem:
                 )
 
         elif self.config.light_method == LightMethod.mimic:
-            if sun_times is None:
+            if self.config.sun_times is None:
                 self.logger.error(
                     "Cannot use method 'place' without sun times available. "
                     "Using 'fixed' method instead."
                 )
                 self.config.light_method = LightMethod.fixed
-                self.refresh_sun_times(send=send)
+                self.refresh_lighting_hours(send=send)
             else:
                 with lock:
                     self.lighting_hours = LightingHours(
-                        morning_start=sun_times.sunrise,
-                        evening_end=sun_times.sunset,
+                        morning_start=self.config.sun_times.sunrise,
+                        evening_end=self.config.sun_times.sunset,
                     )
 
         elif self.config.light_method == LightMethod.elongate:
             if (
                     time_parameters.day is None
                     or time_parameters.night is None
-                    or sun_times is None
+                    or self.config.sun_times is None
             ):
                 self.logger.error(
                     "Cannot use method 'elongate' without time parameters set in "
                     "config and sun times available. Using 'fixed' method instead."
                 )
                 self.config.light_method = LightMethod.fixed
-                self.refresh_sun_times(send=send)
+                self.refresh_lighting_hours(send=send)
             else:
-                sunrise = _to_dt(sun_times.sunrise)
-                sunset = _to_dt(sun_times.sunset)
-                twilight_begin = _to_dt(sun_times.twilight_begin)
+                sunrise = _to_dt(self.config.sun_times.sunrise)
+                sunset = _to_dt(self.config.sun_times.sunset)
+                twilight_begin = _to_dt(self.config.sun_times.twilight_begin)
                 offset = sunrise - twilight_begin
                 with lock:
                     self.lighting_hours = LightingHours(

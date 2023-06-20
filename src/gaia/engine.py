@@ -189,9 +189,6 @@ class Engine(metaclass=SingletonMeta):
                     self.dismount_ecosystem(ecosystem_uid)
                 self.logger.info(
                     f"Ecosystem {ecosystem_name} has been stopped")
-                # If no more ecosystem running, stop background routines
-                if not self.ecosystems_started:
-                    self._stop_background_tasks()
         else:
             raise RuntimeError(
                 f"Cannot stop Ecosystem {ecosystem_id} as it has not been "
@@ -276,8 +273,11 @@ class Engine(metaclass=SingletonMeta):
 
     def refresh_sun_times(self) -> None:
         """Download sunrise and sunset times if needed by an Ecosystem"""
-        self.logger.debug("Check if sun times need to be refreshed")
-        need = []
+        self.logger.debug("Refreshing sun times")
+        self.config.refresh_sun_times()
+        if self.config.sun_times is None:
+            return
+        need_refresh = []
         for ecosystem in self.ecosystems:
             try:
                 if (
@@ -286,27 +286,17 @@ class Engine(metaclass=SingletonMeta):
                     # And expected to be running
                     and self.ecosystems[ecosystem].config.status
                 ):
-                    need.append(ecosystem)
+                    need_refresh.append(ecosystem)
             except UndefinedParameter:
                 # Bad configuration file
                 pass
-        if any(need):
+        for ecosystem in need_refresh:
             try:
-                self.config.download_sun_times()
-            except ConnectionError:
-                self.logger.error("The Engine could not download sun times")
-                for ecosystem in need:
-                    self.ecosystems[ecosystem].config.light_method = "fixed"
-            else:
-                for ecosystem in need:
-                    try:
-                        if self.ecosystems[ecosystem].status:
-                            self.ecosystems[ecosystem].refresh_sun_times()
-                    except KeyError:
-                        # Occur
-                        pass
-        else:
-            self.logger.debug("No need to refresh sun times")
+                if self.ecosystems[ecosystem].status:
+                    self.ecosystems[ecosystem].refresh_lighting_hours()
+            except KeyError:
+                # Occur
+                pass
 
     def refresh_chaos(self):
         for ecosystem in self.ecosystems.values():
@@ -365,5 +355,5 @@ class Engine(metaclass=SingletonMeta):
                 to_delete = set(self.ecosystems.keys())
                 for ecosystem in to_delete:
                     self.dismount_ecosystem(ecosystem)
-
+            self._stop_background_tasks()
             self.logger.info("The Engine has stopped")
