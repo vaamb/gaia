@@ -50,13 +50,13 @@ class ActuatorHandler:
 
     @mode.setter
     def mode(self, value: ActuatorMode) -> None:
-        self._set_mode_no_update(value)
         if self.mode != self.last_mode:
+            self._set_mode_no_update(value)
             self.subroutine.logger.info(
                 f"{self.type.value.capitalize()} has been set to "
                 f"'{self.mode.value}' mode")
             self.send_actuators_state()
-        self.last_mode = self.mode
+            self.last_mode = self.mode
 
     @property
     def status(self) -> bool:
@@ -67,13 +67,13 @@ class ActuatorHandler:
 
     @status.setter
     def status(self, value: bool) -> None:
-        self._set_status_no_update(value)
         if self.status != self.last_status:
+            self._set_status_no_update(value)
             self.subroutine.logger.info(
                 f"{self.type.value.capitalize()} has been turned "
                 f"{'on' if self.status else 'off'}")
             self.send_actuators_state()
-        self.last_status = self.status
+            self.last_status = self.status
 
     @property
     def countdown(self) -> float | None:
@@ -134,9 +134,11 @@ class ActuatorHandler:
         self.last_mode = self.mode
         self.last_status = self.status
 
-
     def send_actuators_state(self):
-        if self.subroutine.ecosystem.event_handler:
+        if (
+                self.subroutine.ecosystem.event_handler
+                and self.subroutine.ecosystem.event_handler._registered
+        ):
             self.subroutine.ecosystem.logger.debug(
                 "Sending actuators data to Ouranos")
             try:

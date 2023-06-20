@@ -151,14 +151,18 @@ class Events:
         else:
             raise TypeError("Event type is invalid")
 
-    def sending_ecosystems_info(self) -> None:
-        self.send_full_config()
-        self.send_sensors_data()
-        self.send_actuator_data()
-        self.send_light_data()
-        self.send_health_data()
+    def send_ecosystems_info(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> None:
+        uids = self.filter_uids(ecosystem_uids)
+        self.send_full_config(uids)
+        self.send_sensors_data(uids)
+        self.send_actuator_data(uids)
+        self.send_light_data(uids)
+        self.send_health_data(uids)
 
-    def on_connect(self, environment) -> None:
+    def on_connect(self, environment) -> None:  # noqa
         if self.type == "socketio":
             self.logger.info("Connection to Ouranos successful")
         elif self.type == "dispatcher":
@@ -167,29 +171,34 @@ class Events:
             raise TypeError("Event type is invalid")
         self.register()
 
-    def on_disconnect(self, *args) -> None:
+    def on_disconnect(self, *args) -> None:  # noqa
         if self._registered:
             self.logger.warning("Disconnected from server")
         else:
             self.logger.error("Failed to register engine")
 
-    def on_register(self, *args):
+    def on_register(self, *args) -> None:  # noqa
         self._registered = False
         self.logger.info("Received registration request from server")
         self.register()
 
-    def on_registration_ack(self, *args, **kwargs) -> None:
+    def on_registration_ack(self, *args, **kwargs) -> None:  # noqa
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info")
-        self._registered = True
         self.start_background_task()
-        self.sending_ecosystems_info()
+        self.send_ecosystems_info()
+        self._registered = True
         self.logger.info("Initial ecosystems info sent")
 
-    def filter_uids(self, ecosystem_uids: list[str] | None = None) -> list[str]:
+    def filter_uids(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> list[str]:
         if ecosystem_uids is None:
             return [uid for uid in self.ecosystems.keys()]
         else:
+            if isinstance(ecosystem_uids, str):
+                ecosystem_uids = [ecosystem_uids]
             return [
                 uid for uid in ecosystem_uids
                 if uid in self.ecosystems.keys()
@@ -197,8 +206,8 @@ class Events:
 
     def get_event_payload(
             self,
-            event_name: str,
-            ecosystem_uids: list[str] | None = None
+            event_name: EventNames,
+            ecosystem_uids: str | list[str] | None = None
     ) -> list[EcosystemPayload]:
         rv = []
         attr_name = attr_for_event.get(event_name, None)
@@ -218,8 +227,8 @@ class Events:
 
     def emit_event(
             self,
-            event_name: str,
-            ecosystem_uids: list[str] | None = None
+            event_name: EventNames,
+            ecosystem_uids: str | list[str] | None = None
     ) -> None:
         self.logger.debug(f"Sending event {event_name} requested")
         payload = self.get_event_payload(event_name, ecosystem_uids)
@@ -231,21 +240,34 @@ class Events:
 
     def send_full_config(
             self,
-            ecosystem_uids: list[str] | None = None
+            ecosystem_uids: str | list[str] | None = None
     ) -> None:
         for cfg in ("base_info", "management", "environmental_parameters", "hardware"):
+            cfg: EventNames
             self.emit_event(cfg, ecosystem_uids)
 
-    def send_sensors_data(self, ecosystem_uids: list[str] | None = None) -> None:
+    def send_sensors_data(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> None:
         self.emit_event("sensors_data", ecosystem_uids)
 
-    def send_health_data(self, ecosystem_uids: list[str] | None = None) -> None:
+    def send_health_data(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> None:
         self.emit_event("health_data", ecosystem_uids)
 
-    def send_light_data(self, ecosystem_uids: list[str] | None = None) -> None:
+    def send_light_data(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> None:
         self.emit_event("light_data", ecosystem_uids)
 
-    def send_actuator_data(self, ecosystem_uids: list[str] | None = None) -> None:
+    def send_actuator_data(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> None:
         self.emit_event("actuator_data", ecosystem_uids)
 
     def on_turn_light(self, message: dict) -> None:

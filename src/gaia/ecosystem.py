@@ -247,6 +247,8 @@ class Ecosystem:
                 self.refresh_sun_times()
                 self.logger.info("Starting the Ecosystem")
                 self._refresh_subroutines()
+                if self.event_handler._registered:
+                    self.event_handler.send_ecosystems_info(self.uid)
                 self.logger.debug(f"Ecosystem successfully started")
                 self._started = True
             except StoppingEcosystem:
@@ -367,7 +369,7 @@ class Ecosystem:
                     "Using 'fixed' method instead."
                 )
                 self.config.light_method = LightMethod.fixed
-                self.refresh_sun_times()
+                self.refresh_sun_times(send=send)
             else:
                 with lock:
                     self.lighting_hours = LightingHours(
@@ -386,7 +388,7 @@ class Ecosystem:
                     "config and sun times available. Using 'fixed' method instead."
                 )
                 self.config.light_method = LightMethod.fixed
-                self.refresh_sun_times()
+                self.refresh_sun_times(send=send)
             else:
                 sunrise = _to_dt(sun_times.sunrise)
                 sunset = _to_dt(sun_times.sunset)
@@ -400,11 +402,14 @@ class Ecosystem:
                         evening_end=time_parameters.night,
                     )
 
-        if self.event_handler and send:
+        if (
+                self.event_handler
+                and self.event_handler._registered
+                and send
+        ):
             try:
                 self.event_handler.send_light_data(
-                    ecosystem_uids=[self._uid]
-                )
+                    ecosystem_uids=[self._uid])
             except Exception as e:
                 msg = e.args[1] if len(e.args) > 1 else e.args[0]
                 if "is not a connected namespace" in msg:
