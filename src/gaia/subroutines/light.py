@@ -116,7 +116,7 @@ class Light(SubroutineTemplate):
                 ]
                 light_level: list[float] = []
                 for light_sensor in light_sensors:
-                    light = light_sensor._get_lux()
+                    light = light_sensor.get_lux()
                     if light is not None:
                         light_level.append(light)
                 mean_light = mean(light_level)

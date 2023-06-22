@@ -123,20 +123,31 @@ class Pin:
 # ---------------------------------------------------------------------------
 class CompatibilityHardware:
     def __init__(self, *args, **kwargs):
-        self.ecosystem_uid = kwargs.pop("ecosystem_uid", "")
+        self.ecosystem_uid = kwargs.get("ecosystem_uid", "")
 
 
-class DHTBase(CompatibilityHardware):
-    def measure(self):
-        random_sleep()
-
+class LightCompatibility(CompatibilityHardware):
     @property
-    def temperature(self):
+    def lux(self) -> float:
+        random_sleep(0.02, 0.01)
+        return get_light(self.ecosystem_uid)
+
+
+class TemperatureCompatibility(CompatibilityHardware):
+    @property
+    def temperature(self) -> float:
         return get_temperature(self.ecosystem_uid)
 
+
+class HumidityCompatibility(CompatibilityHardware):
     @property
-    def humidity(self):
+    def humidity(self) -> float:
         return get_humidity(self.ecosystem_uid)
+
+
+class DHTBase(TemperatureCompatibility, HumidityCompatibility):
+    def measure(self) -> None:
+        random_sleep()
 
 
 class DHT11(DHTBase):
@@ -147,11 +158,8 @@ class DHT22(DHTBase):
     pass
 
 
-class VEML7700(CompatibilityHardware):
-    @property
-    def lux(self):
-        random_sleep(0.02, 0.01)
-        return get_light(self.ecosystem_uid)
+class VEML7700(LightCompatibility):
+    pass
 
 
 class Seesaw(CompatibilityHardware):

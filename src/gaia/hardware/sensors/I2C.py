@@ -3,6 +3,8 @@ from __future__ import annotations
 from time import sleep
 import typing as t
 
+from gaia_validators import MeasureRecord
+
 from gaia.hardware.abc import (
     i2cSensor, LightSensor, PlantLevelHardware, hardware_logger)
 from gaia.hardware.utils import _IS_RASPI
@@ -43,7 +45,7 @@ class VEML7700(i2cSensor, LightSensor):
         return _VEML7700(self._get_i2c(), self._address["main"].main)
 
     # To catch data fast from light routine
-    def _get_lux(self) -> float | None:
+    def get_lux(self) -> float | None:
         try:
             return self.device.lux
         except Exception as e:
@@ -53,14 +55,10 @@ class VEML7700(i2cSensor, LightSensor):
             )
             return None
 
-    @property
-    def device(self):
-        return self._get_device()
-
-    def get_data(self) -> list:
+    def get_data(self) -> list[MeasureRecord]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
-            data.append({"measure": "light", "value": self._get_lux()})
+            data.append({"measure": "light", "value": self.get_lux()})
         return data
 
 
@@ -85,11 +83,7 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self._address["main"].main)
 
-    @property
-    def device(self):
-        return self._get_device()
-
-    def get_data(self) -> list[dict]:  # pragma: no cover
+    def get_data(self) -> list[MeasureRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -123,7 +117,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                 break
         return moisture, temperature
 
-    def get_data(self) -> list[dict]:
+    def get_data(self) -> list[MeasureRecord]:
         try:
             moisture, raw_temperature = self._get_raw_data()
         except RuntimeError:

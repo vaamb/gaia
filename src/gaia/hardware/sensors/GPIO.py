@@ -29,12 +29,6 @@ class DHTSensor(gpioSensor):
         # Rem: don't use pulseio as it uses 100% of one core in Pi3
         # In Pi0: behaves correctly
 
-
-    def _get_device(self):  # pragma: no cover
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
-
     def _get_raw_data(self) -> tuple[float | None, float | None]:
         humidity: float | None = None
         temperature: float | None = None
@@ -57,10 +51,6 @@ class DHTSensor(gpioSensor):
             else:
                 break
         return humidity, temperature
-
-    @property
-    def device(self):
-        return self._get_device()
 
     def get_data(self) -> list:
         try:

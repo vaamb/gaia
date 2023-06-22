@@ -20,17 +20,9 @@ class virtualSensor(BaseSensor):
             from gaia.virtual import get_virtual_ecosystem
             get_virtual_ecosystem(self.subroutine.ecosystem.uid, start=True)
 
-    def get_data(self) -> list:  # pragma: no cover
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
-
 
 class virtualDHT(DHTSensor, virtualSensor):
-    def _get_device(self) -> "_DHTBase":  # pragma: no cover
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+    pass
 
 
 class virtualDHT11(virtualDHT):

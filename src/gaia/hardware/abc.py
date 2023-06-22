@@ -6,12 +6,12 @@ import io
 import os
 from pathlib import Path
 import typing as t
-from typing import cast, Self
+from typing import Any, cast, Self
 import weakref
 
 from gaia_validators import (
     safe_enum_from_name, HardwareConfig, HardwareLevel, HardwareLevelNames,
-    HardwareType, HardwareTypeNames)
+    HardwareType, HardwareTypeNames, MeasureRecord)
 
 from gaia.config import get_base_dir
 from gaia.hardware.multiplexers import multiplexer_models
@@ -417,15 +417,21 @@ class BaseSensor(Hardware):
     def __init__(self, *args, **kwargs) -> None:
         kwargs["type"] = HardwareType.sensor
         super().__init__(*args, **kwargs)
+        self.device: Any = self._get_device()
 
-    def get_data(self) -> list:
+    def _get_device(self) -> Any:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )
+
+    def get_data(self) -> list[MeasureRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class LightSensor(BaseSensor):
-    def _get_lux(self) -> float:
+    def get_lux(self) -> float:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -455,10 +461,21 @@ class Camera(Hardware):
         import numpy as np
         from PIL import Image as _Image
         super().__init__(*args, **kwargs)
+        self.device: Any = self._get_device()
         self._camera_dir: Path | None = None
         self.running: bool = False
 
-    def _get_device(self):
+    def _get_device(self) -> Any:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )
+
+    def get_image(self) -> Image:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )
+
+    def get_video(self) -> io.BytesIO:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -472,15 +489,6 @@ class Camera(Hardware):
                 os.mkdir(self._camera_dir)
         return self._camera_dir
 
-    @property
-    def device(self):
-        return self._get_device()
-
-    def get_image(self) -> Image:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
-
     def save_image(
             self,
             image: Image,
@@ -492,8 +500,3 @@ class Camera(Hardware):
         img = _Image.fromarray(image.array)
         img.save(path)
         return path
-
-    def get_video(self) -> io.BytesIO:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
