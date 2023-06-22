@@ -13,16 +13,53 @@ from gaia.utils import get_unit, temperature_converter
 
 if t.TYPE_CHECKING:  # pragma: no cover
     if _IS_RASPI:
-        from adafruit_veml7700 import VEML7700 as _VEML7700
+        from adafruit_ahtx0 import AHTx0
         from adafruit_seesaw.seesaw import Seesaw
+        from adafruit_veml7700 import VEML7700 as _VEML7700
     else:
         from gaia.hardware._compatibility import (
-            Seesaw, VEML7700 as _VEML7700)
-
+            AHTx0, Seesaw, VEML7700 as _VEML7700)
 
 # ---------------------------------------------------------------------------
 #   I2C sensors
 # ---------------------------------------------------------------------------
+class AHT20(i2cSensor):
+    def __init__(self, *args, **kwargs) -> None:
+        if not kwargs.get("measures"):
+            kwargs["measures"] = ["temperature", "humidity"]
+        super().__init__(*args, **kwargs)
+        if not self._address["main"].main:
+            self._address["main"].main = 0x38
+
+    def _get_device(self) -> "AHTx0":
+        if _IS_RASPI:
+            try:
+                from adafruit_ahtx0 import AHTx0
+            except ImportError:
+                raise RuntimeError(
+                    "Adafruit veml7700 package is required. Run `pip install "
+                    "adafruit-circuitpython-veml7700` in your virtual env."
+                )
+        else:
+            from gaia.hardware._compatibility import AHTx0
+        return AHTx0(self._get_i2c(), self._address["main"].main)
+
+    def get_data(self) -> list[MeasureRecord]:
+        data = []
+        if "temperature" in self.measures:
+            temperature = temperature_converter(
+                self.device.temperature,
+                "celsius",
+                get_unit("temperature", "celsius")
+            )
+            data.append({"measure": "temperature", "value": temperature})
+        if "humidity" in self.measures:
+            data.append(
+                {"measure": "moisture", "value": self.device.relative_humidity}
+            )
+        return data
+
+
 class VEML7700(i2cSensor, LightSensor):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):

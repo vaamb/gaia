@@ -2,15 +2,15 @@ import typing as t
 from typing import Type
 
 from gaia.config import get_config
-from gaia.hardware.abc import BaseSensor, LightSensor
+from gaia.hardware.abc import BaseSensor
 from gaia.hardware.sensors.GPIO import DHTSensor
-from gaia.hardware.sensors.I2C import VEML7700, CapacitiveMoisture
+from gaia.hardware.sensors.I2C import (
+    AHT20, CapacitiveMoisture, VEML7700)
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.hardware._compatibility import (
-        DHTBase as _DHTBase, DHT11 as _DHT11, DHT22 as _DHT22,
-        Seesaw, VEML7700 as _VEML7700)
+        AHTx0, DHT11 as _DHT11, DHT22 as _DHT22, Seesaw, VEML7700 as _VEML7700)
 
 
 class virtualSensor(BaseSensor):
@@ -37,7 +37,13 @@ class virtualDHT22(virtualDHT):
         return _DHT22(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
-class virtualVEML7700(VEML7700, virtualSensor, LightSensor):
+class virtualAHT20(AHT20, virtualSensor):
+    def _get_device(self) -> "AHTx0":
+        from gaia.hardware._compatibility import AHTx0
+        return AHTx0(ecosystem_uid=self.subroutine.ecosystem.uid)
+
+
+class virtualVEML7700(VEML7700, virtualSensor):
     def _get_device(self) -> "_VEML7700":
         from gaia.hardware._compatibility import VEML7700 as _VEML7700
         return _VEML7700(ecosystem_uid=self.subroutine.ecosystem.uid)

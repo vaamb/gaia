@@ -158,6 +158,10 @@ class DHT22(DHTBase):
     pass
 
 
+class AHTx0(TemperatureCompatibility, HumidityCompatibility):
+    pass
+
+
 class VEML7700(LightCompatibility):
     pass
 
