@@ -16,9 +16,11 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_ahtx0 import AHTx0
         from adafruit_seesaw.seesaw import Seesaw
         from adafruit_veml7700 import VEML7700 as _VEML7700
+        from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
     else:
         from gaia.hardware._compatibility import (
-            AHTx0, Seesaw, VEML7700 as _VEML7700)
+            AHTx0, Seesaw, VEML7700 as _VEML7700, VCNL4040 as _VCNL4040)
+
 
 # ---------------------------------------------------------------------------
 #   I2C sensors
@@ -80,6 +82,45 @@ class VEML7700(i2cSensor, LightSensor):
         else:
             from gaia.hardware._compatibility import VEML7700 as _VEML7700
         return _VEML7700(self._get_i2c(), self._address["main"].main)
+
+    # To catch data fast from light routine
+    def get_lux(self) -> float | None:
+        try:
+            return self.device.lux
+        except Exception as e:
+            hardware_logger.error(
+                f"Sensor {self._name} encountered an error. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+            )
+            return None
+
+    def get_data(self) -> list[MeasureRecord]:
+        data = []
+        if "lux" in self.measures or "light" in self.measures:
+            data.append({"measure": "light", "value": self.get_lux()})
+        return data
+
+
+class VCNL4040(i2cSensor, LightSensor):
+    def __init__(self, *args, **kwargs) -> None:
+        if not kwargs.get("measures"):
+            kwargs["measures"] = ["lux"]
+        super().__init__(*args, **kwargs)
+        if not self._address["main"].main:
+            self._address["main"].main = 0x60
+
+    def _get_device(self) -> "_VCNL4040":
+        if _IS_RASPI:
+            try:
+                from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
+            except ImportError:
+                raise RuntimeError(
+                    "Adafruit veml7700 package is required. Run `pip install "
+                    "adafruit-circuitpython-veml7700` in your virtual env."
+                )
+        else:
+            from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
+        return _VCNL4040(self._get_i2c(), self._address["main"].main)
 
     # To catch data fast from light routine
     def get_lux(self) -> float | None:

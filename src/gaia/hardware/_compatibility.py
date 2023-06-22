@@ -166,6 +166,10 @@ class VEML7700(LightCompatibility):
     pass
 
 
+class VCNL4040(LightCompatibility):
+    pass
+
+
 class Seesaw(CompatibilityHardware):
     def moisture_read(self) -> float:
         random_sleep(0.02, 0.01)
