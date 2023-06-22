@@ -246,7 +246,7 @@ class Ecosystem:
                 self.refresh_lighting_hours()
                 self.logger.info("Starting the Ecosystem")
                 self._refresh_subroutines()
-                if self.event_handler._registered:
+                if self.event_handler and self.event_handler._registered:
                     self.event_handler.send_ecosystems_info(self.uid)
                 self.logger.debug(f"Ecosystem successfully started")
                 self._started = True

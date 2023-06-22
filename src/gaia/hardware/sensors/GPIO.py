@@ -46,14 +46,13 @@ class DHTSensor(gpioSensor):
 
             except RuntimeError:
                 sleep(0.5)
-                continue
 
             except Exception as e:
                 hardware_logger.error(
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
-                raise RuntimeError
+                sleep(0.5)
 
             else:
                 break
