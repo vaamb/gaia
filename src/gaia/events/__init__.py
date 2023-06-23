@@ -6,6 +6,7 @@ from threading import Thread
 from time import sleep
 import typing as t
 from typing import Literal, Type
+import weakref
 
 from gaia_validators import (
     ActuatorsDataPayload, BaseInfoConfigPayload, EcosystemPayload, Empty,
@@ -18,16 +19,16 @@ from gaia.shared_resources import scheduler
 from gaia.utils import (
     encrypted_uid, generate_uid_token, humanize_list, local_ip_address)
 
-
-if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.ecosystem import Ecosystem
-
-
 if get_config().USE_DATABASE:
     from sqlalchemy import select
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
     from gaia.database.models import SensorHistory
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia.ecosystem import Ecosystem
+    from gaia.engine import Engine
 
 
 EventNames = Literal[
@@ -63,14 +64,15 @@ class Events:
     """A class holding all the events coming from either socketio or
     event-dispatcher
 
-    :param ecosystem_dict: a dict holding all the Ecosystem instances
+    :param engine: an `Engine` instance
     """
     type = "raw"
 
-    def __init__(self, ecosystem_dict: dict[str, "Ecosystem"], **kwargs) -> None:
+    def __init__(self, engine: "Engine", **kwargs) -> None:
         super().__init__(**kwargs)
-        self.ecosystems = ecosystem_dict
-        self._registered = False
+        self.engine: "Engine" = weakref.proxy(engine)
+        self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
+        self.registered = False
         self._background_task = False
         self._thread: Thread | None = None
         self.logger = logging.getLogger(f"gaia.broker")
@@ -172,13 +174,13 @@ class Events:
         self.register()
 
     def on_disconnect(self, *args) -> None:  # noqa
-        if self._registered:
+        if self.registered:
             self.logger.warning("Disconnected from server")
         else:
             self.logger.error("Failed to register engine")
 
     def on_register(self, *args) -> None:  # noqa
-        self._registered = False
+        self.registered = False
         self.logger.info("Received registration request from server")
         self.register()
 
@@ -187,7 +189,7 @@ class Events:
             "Engine registration successful, sending initial ecosystems info")
         self.start_background_task()
         self.send_ecosystems_info()
-        self._registered = True
+        self.registered = True
         self.logger.info("Initial ecosystems info sent")
 
     def filter_uids(

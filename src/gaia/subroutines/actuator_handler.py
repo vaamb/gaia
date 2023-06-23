@@ -137,7 +137,7 @@ class ActuatorHandler:
     def send_actuators_state(self):
         if (
                 self.subroutine.ecosystem.event_handler
-                and self.subroutine.ecosystem.event_handler._registered
+                and self.subroutine.ecosystem.event_handler.registered
         ):
             self.subroutine.ecosystem.logger.debug(
                 "Sending actuators data to Ouranos")

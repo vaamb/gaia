@@ -15,7 +15,8 @@ from gaia.utils import configure_logging, json
 if t.TYPE_CHECKING:
     from dispatcher import KombuDispatcher
 
-    from gaia.database import SQLAlchemyWrapper
+    from sqlalchemy_wrapper import SQLAlchemyWrapper
+
     from gaia.events.sio_based_handler import RetryClient
 
 
@@ -61,8 +62,7 @@ class Gaia:
             from gaia.events.sio_based_handler import SioBasedGaiaEvents, RetryClient
             self.message_broker = RetryClient(json=json, logger=get_config().DEBUG)
             namespace = SioBasedGaiaEvents(
-                ecosystem_dict=self.engine.ecosystems, namespace="/gaia"
-            )
+                namespace="/gaia", engine=self.engine)
             self.message_broker.register_namespace(namespace)
             events_handler = self.message_broker.namespace_handlers["/gaia"]
 
@@ -75,7 +75,8 @@ class Gaia:
                     "name": f"gaia-{get_config().ENGINE_UID}", "durable": True
                 }
             )
-            events_handler = DispatcherBasedGaiaEvents("aggregator", self.engine.ecosystems)
+            events_handler = DispatcherBasedGaiaEvents(
+                namespace="aggregator", engine=self.engine)
             self.message_broker.register_event_handler(events_handler)
 
         else:

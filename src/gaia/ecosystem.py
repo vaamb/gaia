@@ -50,7 +50,7 @@ class Ecosystem:
     The Ecosystem will take care of creating, starting and stopping the required
     subroutines that will themselves act on the physical ecosystem parameters
 
-    : param ecosystem_id: The name or the uid of an ecosystem, as written in
+    :param ecosystem_id: The name or the uid of an ecosystem, as written in
                           'ecosystems.cfg'
     """
     def __init__(self, ecosystem_id: str, engine: "Engine"):
@@ -246,7 +246,7 @@ class Ecosystem:
                 self.refresh_lighting_hours()
                 self.logger.info("Starting the Ecosystem")
                 self._refresh_subroutines()
-                if self.event_handler and self.event_handler._registered:
+                if self.event_handler and self.event_handler.registered:
                     self.event_handler.send_ecosystems_info(self.uid)
                 self.logger.debug(f"Ecosystem successfully started")
                 self._started = True
@@ -398,7 +398,7 @@ class Ecosystem:
 
         if (
                 self.event_handler
-                and self.event_handler._registered
+                and self.event_handler.registered
                 and send
         ):
             try:
