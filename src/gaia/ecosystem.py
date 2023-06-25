@@ -278,8 +278,8 @@ class Ecosystem:
 
     def turn_actuator(
             self,
-            actuator: str,
-            mode: str = "automatic",
+            actuator: HardwareType | str,
+            mode: ActuatorModePayload | str = ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
         """Turn the actuator to the specified mode

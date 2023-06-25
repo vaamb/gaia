@@ -2,17 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 import logging
+import inspect
 from threading import Thread
 from time import sleep
 import typing as t
 from typing import Literal, Type
 import weakref
 
-from gaia_validators import (
-    ActuatorsDataPayload, BaseInfoConfigPayload, EcosystemPayload, Empty,
-    EnginePayload, EnvironmentConfigPayload, HardwareConfigPayload,
-    HealthDataPayload, LightDataPayload, ManagementConfigPayload,
-    SensorsDataPayload)
+from pydantic import BaseModel, ValidationError
+
+from gaia_validators import *
 
 from gaia.config import get_config
 from gaia.shared_resources import scheduler
@@ -89,6 +88,29 @@ class Events:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
+
+    def validate_payload(
+            self,
+            data: dict,
+            model_cls: Type[BaseModel],
+    ) -> dict:
+        if not data:
+            event = inspect.stack()[1].function.lstrip("on_")
+            self.logger.error(
+                f"Encountered an error while validating '{event}' data. Error "
+                f"msg: Empty data."
+            )
+            raise ValidationError
+        try:
+            return model_cls(**data).dict()
+        except ValidationError as e:
+            event = inspect.stack()[1].function.lstrip("on_")
+            msg_list = [f"{error['loc'][0]}: {error['msg']}" for error in e.errors()]
+            self.logger.error(
+                f"Encountered an error while validating '{event}' data. Error "
+                f"msg: {', '.join(msg_list)}"
+            )
+            raise
 
     def _try_func(self, func):
         try:
@@ -179,12 +201,12 @@ class Events:
         else:
             self.logger.error("Failed to register engine")
 
-    def on_register(self, *args) -> None:  # noqa
+    def on_register(self) -> None:
         self.registered = False
         self.logger.info("Received registration request from server")
         self.register()
 
-    def on_registration_ack(self, *args, **kwargs) -> None:  # noqa
+    def on_registration_ack(self) -> None:
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info")
         self.start_background_task()
@@ -273,47 +295,49 @@ class Events:
         self.emit_event("actuator_data", ecosystem_uids)
 
     def on_turn_light(self, message: dict) -> None:
-        message["actuator"] = "light"
+        message["actuator"] = HardwareType.light
         self.on_turn_actuator(message)
 
-    def on_turn_actuator(self, message: dict) -> None:
-        ecosystem_uid: str = message["ecosystem_uid"]
-        actuator: str = message["actuator"]
-        mode: str = message["mode"]
-        countdown: float = message.get("countdown", 0.0)
+    def on_turn_actuator(self, message: TurnActuatorPayloadDict) -> None:
+        data: TurnActuatorPayloadDict = self.validate_payload(
+            message, TurnActuatorPayload)
+        ecosystem_uid: str = data["ecosystem_uid"]
         if ecosystem_uid in self.ecosystems:
             self.logger.debug("Received turn_actuator event")
             self.ecosystems[ecosystem_uid].turn_actuator(
-                actuator=actuator, mode=mode, countdown=countdown)
+                actuator=data["actuator"],
+                mode=data["mode"],
+                countdown=message.get("countdown", 0.0)
+            )
 
-    def on_change_management(self, message: dict) -> None:
-        ecosystem_uid: str = message["ecosystem"]
-        management: str = message["management"]
-        status: bool = message["status"]
+    def on_change_management(self, message: ManagementConfigPayloadDict) -> None:
+        data: ManagementConfigPayloadDict = self.validate_payload(
+            message, ManagementConfigPayload)
+        ecosystem_uid: str = data["uid"]
         if ecosystem_uid in self.ecosystems:
-            self.ecosystems[ecosystem_uid].config.set_management(management, status)
+            for management, status in data["data"].items():
+                self.ecosystems[ecosystem_uid].config.set_management(management, status)
             self.ecosystems[ecosystem_uid].config.save()
             self.emit_event("management", ecosystem_uids=[ecosystem_uid])
 
-    def on_get_data_since(self, message: dict) -> None:
-        if self.db is not None:
-            ecosystem_uids: list[str] = message["ecosystems"]
-            uids: list[str] = self.filter_uids(ecosystem_uids)
-            since_str: str = message["since"]
-            since: datetime = datetime.fromisoformat(since_str).astimezone()
-            with self.db.scoped_session() as session:
-                query = (
-                    select(SensorHistory)
-                    .where(SensorHistory.timestamp >= since)
-                    .where(SensorHistory.ecosystem_uid.in_(uids))
-                )
-                results = session.execute(query).all().scalars()
-            self.emit(
-                "sensor_data_record",
-                [result.dict_repr for result in results]
-            )
-        else:
+    def on_get_data_since(self, message: SynchronisationPayloadDict) -> None:
+        if self.db is None:
             self.logger.error(
                 "Received 'get_data_since' event but USE_DATABASE is set to False"
             )
             return
+        message: SynchronisationPayloadDict = self.validate_payload(
+            message, SynchronisationPayload)
+        uids: list[str] = self.filter_uids(message["ecosystems"])
+        since: datetime = message["since"]
+        with self.db.scoped_session() as session:
+            query = (
+                select(SensorHistory)
+                .where(SensorHistory.timestamp >= since)
+                .where(SensorHistory.ecosystem_uid.in_(uids))
+            )
+            results = session.execute(query).all().scalars()
+        self.emit(
+            "sensor_data_record",
+            [result.dict_repr for result in results]
+        )
