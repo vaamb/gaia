@@ -121,7 +121,7 @@ class Ecosystem:
         return self._engine
 
     @property
-    def event_handler(self) -> "Events" | None:
+    def event_handler(self) -> "Events":
         return self._engine.event_handler
 
     @property
@@ -246,7 +246,7 @@ class Ecosystem:
                 self.refresh_lighting_hours()
                 self.logger.info("Starting the Ecosystem")
                 self._refresh_subroutines()
-                if self.event_handler and self.event_handler.registered:
+                if self.engine.use_message_broker and self.event_handler.registered:
                     self.event_handler.send_ecosystems_info(self.uid)
                 self.logger.debug(f"Ecosystem successfully started")
                 self._started = True
@@ -322,7 +322,7 @@ class Ecosystem:
                 f"is not currently running"
             )
         else:
-            if self.event_handler is not None:
+            if self.engine.use_message_broker and self.event_handler.registered:
                 try:
                     self.event_handler.send_actuator_data(
                         ecosystem_uids=[self._uid])
@@ -397,9 +397,9 @@ class Ecosystem:
                     )
 
         if (
-                self.event_handler
+                send
+                and self.engine.use_message_broker
                 and self.event_handler.registered
-                and send
         ):
             try:
                 self.event_handler.send_light_data(
