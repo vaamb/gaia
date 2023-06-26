@@ -1,3 +1,7 @@
+class EcosystemNotFound(ValueError):
+    pass
+
+
 class HardwareNotFound(ValueError):
     pass
 

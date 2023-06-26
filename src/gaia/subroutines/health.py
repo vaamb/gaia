@@ -85,7 +85,7 @@ class Health(SubroutineTemplate):
             if cameras_uid:
                 for camera_uid in cameras_uid:
                     camera_dict = self.config.get_hardware_config(camera_uid)
-                    measures = camera_dict.get("measure", [])
+                    measures = camera_dict.measures
                     if "health" in measures:
                         return True
             return False
