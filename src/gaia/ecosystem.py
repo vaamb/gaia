@@ -358,8 +358,8 @@ class Ecosystem:
 
         elif self.config.light_method == LightMethod.mimic:
             if self.config.sun_times is None:
-                self.logger.error(
-                    "Cannot use method 'place' without sun times available. "
+                self.logger.warning(
+                    "Cannot use lighting method 'place' without sun times available. "
                     "Using 'fixed' method instead."
                 )
                 self.config.light_method = LightMethod.fixed
@@ -377,8 +377,8 @@ class Ecosystem:
                     or time_parameters.night is None
                     or self.config.sun_times is None
             ):
-                self.logger.error(
-                    "Cannot use method 'elongate' without time parameters set in "
+                self.logger.warning(
+                    "Cannot use lighting method 'elongate' without time parameters set in "
                     "config and sun times available. Using 'fixed' method instead."
                 )
                 self.config.light_method = LightMethod.fixed

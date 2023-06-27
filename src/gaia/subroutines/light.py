@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, time
 from statistics import mean
 from threading import Event, Lock, Thread
-import typing as t
 
 from simple_pid import PID
 
