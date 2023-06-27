@@ -152,6 +152,8 @@ class Ecosystem:
             evening_end=self.config.time_parameters.night,
         )
 
+    light_data = light_info
+
     @property
     def light_method(self) -> LightMethod:
         try:
@@ -275,6 +277,8 @@ class Ecosystem:
     @property
     def actuator_info(self) -> ActuatorsDataDict:
         return self._actuators_state
+
+    actuator_data = actuator_info
 
     def turn_actuator(
             self,
@@ -420,6 +424,8 @@ class Ecosystem:
             health_subroutine: "Health" = self.subroutines["health"]
             return health_subroutine.plants_health
         return Empty()
+
+    health_data = plants_health
 
     # Climate
     def climate_parameters_regulated(self) -> set[str]:

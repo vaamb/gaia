@@ -47,18 +47,6 @@ payload_classes: dict[EventNames, Type[EcosystemPayload]] = {
 }
 
 
-attr_for_event: dict[EventNames, str] = {
-    "base_info": "base_info",
-    "management": "management",
-    "environmental_parameters": "environmental_parameters",
-    "hardware": "hardware",
-    "sensors_data": "sensors_data",
-    "health_data": "plants_health",
-    "light_data": "light_info",
-    "actuator_data": "actuator_info"
-}
-
-
 class Events:
     """A class holding all the events coming from either socketio or
     event-dispatcher
@@ -234,15 +222,15 @@ class Events:
             ecosystem_uids: str | list[str] | None = None
     ) -> list[EcosystemPayload]:
         rv = []
-        attr_name = attr_for_event.get(event_name, None)
-        if attr_name is None:
-            self.logger.error(f"Payload for event {event_name} is not defined")
-            return rv
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
             f"Getting '{event_name}' payload for {humanize_list(uids)}")
         for uid in uids:
-            data = getattr(self.ecosystems[uid], attr_name)
+            if hasattr(self.ecosystems[uid], event_name):
+                data = getattr(self.ecosystems[uid], event_name)
+            else:
+                self.logger.error(f"Payload for event {event_name} is not defined")
+                return rv
             if not isinstance(data, Empty):
                 payload_class = payload_classes[event_name]
                 payload: EcosystemPayload = payload_class.from_base(uid, data)
