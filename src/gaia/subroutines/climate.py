@@ -168,7 +168,7 @@ class Climate(SubroutineTemplate):
         for climate_param in parameters.keys():
             climate_param: ClimateParameterNames
             try:
-                param_cfg = self.config.get_climate_parameters(climate_param)
+                param_cfg = self.config.get_climate_parameter(climate_param)
             except UndefinedParameter:
                 parameters[climate_param]["regulated"] = False
             else:

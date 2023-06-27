@@ -6,14 +6,14 @@ import inspect
 from threading import Thread
 from time import sleep
 import typing as t
-from typing import Literal, Type
+from typing import Callable, Literal, Type
 import weakref
 
 from pydantic import BaseModel, ValidationError
 
 from gaia_validators import *
 
-from gaia.config import get_config
+from gaia.config import get_config, get_environment_config
 from gaia.shared_resources import scheduler
 from gaia.utils import (
     encrypted_uid, generate_uid_token, humanize_list, local_ip_address)
@@ -307,6 +307,76 @@ class Events:
                 self.ecosystems[ecosystem_uid].config.set_management(management, status)
             self.ecosystems[ecosystem_uid].config.save()
             self.emit_event("management", ecosystem_uids=[ecosystem_uid])
+
+    def get_crud_function(
+            self,
+            crud_key: str,
+            ecosystem_uid: str | None = None
+    ) -> Callable:
+        if (
+                not "ecosystem" in crud_key
+                and ecosystem_uid is None
+        ):
+            raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
+
+        def assign(property_setter):
+            def inner(payload: dict):
+                property_setter = payload  # noqa
+
+            return inner
+
+        return {
+            # Ecosystem creation/deletion
+            "create_ecosystem": self.engine.config.create_ecosystem,
+            "delete_ecosystem": self.engine.config.delete_ecosystem,
+            # Ecosystem update
+            "update_light_method": assign(self.ecosystems[ecosystem_uid].config.light_method),
+            "update_chaos": assign(self.ecosystems[ecosystem_uid].config.chaos),
+            "update_time_parameters": assign(self.ecosystems[ecosystem_uid].config.time_parameters),
+            "create_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
+            "update_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
+            "delete_environment_parameter": self.ecosystems[ecosystem_uid].config.delete_climate_parameter,
+            # Hardware creation, deletion and update
+            "create_hardware": self.ecosystems[ecosystem_uid].config.create_new_hardware,
+            "update_hardware": self.ecosystems[ecosystem_uid].config.update_hardware,
+            "delete_hardware": self.ecosystems[ecosystem_uid].config.delete_hardware,
+            # Private
+            "update_place": self.engine.config.set_place,
+        }[crud_key]
+
+    def on_crud(self, message: CrudPayloadDict):
+        data: CrudPayloadDict = self.validate_payload(
+            message, CrudPayload)
+        crud_uuid = data["uuid"]
+        engine_uid = data["engine_uid"]
+        if engine_uid != self.engine.uid:
+            self.logger.error(
+                f"Received 'on_crud' event intended to engine {engine_uid}"
+            )
+            return
+        crud_key = f"{data['action'].value}_{data['target']}"
+        ecosystem_uid = (
+            data["values"].get("ecosystem_uid") or data["values"].get("uid")
+        )
+        crud_function = self.get_crud_function(crud_key, ecosystem_uid)
+        try:
+            crud_function(**data["values"])
+            self.emit(
+                event="crud_result",
+                data=CrudResult(
+                    uuid=crud_uuid,
+                    status=Result.success
+                ).dict()
+            )
+        except Exception as e:
+            self.emit(
+                event="crud_result",
+                data=CrudResult(
+                    uuid=crud_uuid,
+                    status=Result.failure,
+                    message=e
+                ).dict()
+            )
 
     def on_get_data_since(self, message: SynchronisationPayloadDict) -> None:
         if self.db is None:

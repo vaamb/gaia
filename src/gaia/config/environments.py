@@ -698,20 +698,27 @@ class SpecificConfig:
             self.environment["climate"] = {}
             return self.environment["climate"]
 
-    def get_climate_parameters(self, parameter: ClimateParameterNames) -> ClimateConfig:
+    def get_climate_parameter(self, parameter: ClimateParameterNames) -> ClimateConfig:
         try:
             data = self.climate[parameter]
             return ClimateConfig(parameter=parameter, **data)
         except KeyError:
             raise UndefinedParameter
 
-    def set_climate_parameters(
+    def set_climate_parameter(
             self,
             parameter: ClimateParameterNames,
             value: _ClimateConfigDict
     ) -> None:
         validated_value = _ClimateConfig(**value).dict()
         self.climate[parameter] = validated_value
+        self.save()
+
+    def delete_climate_parameter(
+            self,
+            parameter: ClimateParameterNames,
+    ) -> None:
+        del self.climate[parameter]
         self.save()
 
     """Parameters related to IO"""    
