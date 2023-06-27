@@ -279,6 +279,8 @@ class GeneralConfig(metaclass=SingletonMeta):
             if reload_cfg:
                 logger.info(f"Change in config file(s) detected, updating GeneralConfig.")
                 self.reload(reload_cfg)
+                if "ecosystems" in reload_cfg:
+                    self.refresh_sun_times()
             self._stop_event.wait(get_gaia_config().CONFIG_WATCHER_PERIOD)
 
     @property
@@ -481,9 +483,19 @@ class GeneralConfig(metaclass=SingletonMeta):
         return self._sun_times
 
     def refresh_sun_times(self) -> None:
+        needed = False
+        for ecosystem_config in self._ecosystems_config.values():
+            sky = SkyConfig(**ecosystem_config["environment"]["sky"])
+            if sky.lighting != LightMethod.fixed:
+                needed = True
+                break
+        if not needed:
+            logger.debug("No need to refresh sun times")
+            return
         sun_times_file = get_cache_dir()/"sunrise.json"
         # Determine if the file needs to be updated
         sun_times_data: SunTimesDict | None = None
+        logger.debug("Trying to load cached sun times")
         try:
             with sun_times_file.open("r") as file:
                 payload: SunTimesFileDict = json.loads(file.read())
@@ -494,7 +506,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         else:
             if last_update.date() >= date.today():
                 sun_times_data = payload["data"]["home"]
-                logger.debug("Sun times already up to date")
+                logger.info("Sun times already up to date")
         if sun_times_data is None:
             sun_times_data = self.download_sun_times()
 
@@ -516,24 +528,29 @@ class GeneralConfig(metaclass=SingletonMeta):
             )
 
         else:
+            logger.warning(
+                "Could not refresh sun times, some functionalities might not "
+                "work as expected. All 'light_method's were set to 'fixed'."
+            )
             self._sun_times = None
 
     def download_sun_times(self) -> SunTimesDict | None:
         sun_times_file = get_cache_dir()/"sunrise.json"
-        logger.info("Refreshing sun times")
+        logger.info("Trying to download sun times")
         try:
             home_coordinates = self.home_coordinates
         except UndefinedParameter:
-            logger.error(
+            logger.warning(
                 "You need to define your home city coordinates in "
-                "'private.cfg' in order to update sun times."
+                "'private.cfg' in order to download sun times."
             )
             return None
         else:
             try:
                 logger.debug(
                     "Trying to update sunrise and sunset times on "
-                    "sunrise-sunset.org")
+                    "sunrise-sunset.org"
+                )
                 response = requests.get(
                     url=f"https://api.sunrise-sunset.org/json",
                     params={
@@ -546,7 +563,8 @@ class GeneralConfig(metaclass=SingletonMeta):
                 results: SunTimesDict = data["results"]
             except requests.exceptions.ConnectionError:
                 logger.debug(
-                    "Failed to update sunrise and sunset times"
+                    "Failed to update sunrise and sunset times due to a "
+                    "connection error"
                 )
                 return None
             else:
@@ -667,6 +685,8 @@ class SpecificConfig:
         except KeyError:
             raise ValueError("'method' is not a valid 'LightMethod'")
         self.sky["lighting"] = validated_method
+        if validated_method != LightMethod.fixed:
+            self.general.refresh_sun_times()
         self.save()
 
     @property
