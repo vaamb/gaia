@@ -9,20 +9,17 @@ import random
 import requests
 import string
 from threading import Condition, Event, Lock, Thread
-from typing import cast, TypedDict
+from typing import Literal, TypedDict
 import weakref
 
 from pydantic import BaseModel, Field, ValidationError, validator
 
-from gaia_validators import (
-    ChaosConfig, ChaosConfigDict, ClimateParameterNames, ClimateConfig, DayConfig,
-    safe_enum_from_name, IDs, HardwareConfig, HardwareLevelNames,
-    HardwareTypeNames, LightMethod, LightMethodNames, ManagementConfig,
-    ManagementNames, SunTimes, SkyConfig, SkyConfigDict)
+from gaia_validators import *
 
 from gaia.config import (
     get_base_dir, get_cache_dir, get_config as get_gaia_config)
-from gaia.exceptions import HardwareNotFound, UndefinedParameter
+from gaia.exceptions import (
+    EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
 from gaia.subroutines import SUBROUTINES
 from gaia.utils import (
@@ -30,6 +27,9 @@ from gaia.utils import (
 
 
 _store = {}
+
+
+ConfigType = Literal["ecosystems", "private"]
 
 
 def get_config_event():
@@ -79,7 +79,7 @@ class Place(BaseModel):
 
 class PlaceDict(TypedDict):
     name: str
-    coordinates: tuple[float, float]
+    coordinates: CoordinatesDict
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ class _HardwareConfigDict(TypedDict):
 class _ClimateConfig(BaseModel):
     day: float
     night: float
-    hysteresis: float
+    hysteresis: float = 0.0
 
 
 class _ClimateConfigDict(TypedDict):
@@ -174,7 +174,7 @@ class EcosystemConfigDict(TypedDict):
     status: bool
     management: dict[ManagementNames, bool]
     environment: _EnvironmentConfigDict
-    IO: dict[str, _HardwareConfig]
+    IO: dict[str, _HardwareConfigDict]
 
 
 class _EcosystemsConfig(BaseModel):
@@ -203,6 +203,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         self._watchdog_pause.set()
         self._thread: Thread | None = None
         for cfg in ("ecosystems", "private"):
+            cfg: ConfigType
             self._load_or_create_config(cfg)
 
     def __repr__(self) -> str:
@@ -212,7 +213,7 @@ class GeneralConfig(metaclass=SingletonMeta):
     def started(self) -> bool:
         return self._thread is not None
 
-    def _load_config(self, cfg: str) -> None:
+    def _load_config(self, cfg: ConfigType) -> None:
         config_path = self._base_dir / f"{cfg}.cfg"
         if cfg == "ecosystems":
             with open(config_path, "r") as file:
@@ -230,7 +231,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         else:  # pragma: no cover
             raise ValueError("cfg should be 'ecosystems' or 'private'")
 
-    def _dump_config(self, cfg: str):
+    def _dump_config(self, cfg: ConfigType):
         config_path = self._base_dir / f"{cfg}.cfg"
         if cfg == "ecosystems":
             with open(config_path, "w") as file:
@@ -241,7 +242,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         else:  # pragma: no cover
             raise ValueError("cfg should be 'ecosystems' or 'private'")
 
-    def _load_or_create_config(self, cfg: str) -> None:
+    def _load_or_create_config(self, cfg: ConfigType) -> None:
         try:
             self._load_config(cfg)
         except OSError:
@@ -291,6 +292,8 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     @thread.setter
     def thread(self, thread: Thread | None):
+        if not isinstance(thread, Thread):
+            raise ValueError
         self._thread = thread
 
     def start_watchdog(self) -> None:
@@ -333,13 +336,10 @@ class GeneralConfig(metaclass=SingletonMeta):
             with config_event:
                 config_event.notify_all()
 
-    def save(self, config: list | str | tuple) -> None:
+    def save(self, config: ConfigType) -> None:
         with self.pausing_watchdog():
-            if isinstance(config, str):
-                config = (config, )
-            logger.debug(f"Updating configuration file(s) {tuple(config)}")
-            for cfg in config:
-                self._dump_config(cfg)
+            logger.debug(f"Updating configuration file(s) {config}")
+            self._dump_config(config)
 
     def _create_new_ecosystem_uid(self) -> str:
         length = 8
@@ -356,6 +356,12 @@ class GeneralConfig(metaclass=SingletonMeta):
         uid = self._create_new_ecosystem_uid()
         ecosystem_cfg = EcosystemConfig(name=ecosystem_name).dict()
         self._ecosystems_config.update({uid: ecosystem_cfg})
+        self.save("ecosystems")
+
+    def delete_ecosystem(self, ecosystem_id: str) -> None:
+        ecosystem_ids = self.get_IDs(ecosystem_id)
+        del self._ecosystems_config[ecosystem_ids.uid]
+        self.save("ecosystems")
 
     @property
     def ecosystems_config(self) -> dict[str, EcosystemConfigDict]:
@@ -416,7 +422,7 @@ class GeneralConfig(metaclass=SingletonMeta):
             ecosystem_uid = self.name_to_id_dict[ecosystem_id]
             ecosystem_name = ecosystem_id
             return IDs(ecosystem_uid, ecosystem_name)
-        raise ValueError(
+        raise EcosystemNotFound(
             "'ecosystem_id' parameter should either be an ecosystem uid or an "
             "ecosystem name present in the 'ecosystems.cfg' file. If you want "
             "to create a new ecosystem configuration use the function "
@@ -425,30 +431,40 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     """Private config parameters"""
     @property
-    def places(self) -> dict:
+    def places(self) -> dict[str, CoordinatesDict]:
         try:
             return self._private_config["places"]
         except KeyError:
             self._private_config["places"] = {}
             return self._private_config["places"]
 
-    def get_place(self, place_name: str) -> Place:
+    def get_place(self, place: str) -> Place:
         try:
-            place = self.places[place_name]
-            return Place(**place)
+            coordinates: CoordinatesDict = self.places[place]
+            return Place(name=place, coordinates=coordinates)
         except KeyError:
             raise UndefinedParameter
 
-    def set_place(self, place_name: str, place_value: PlaceDict):
-        self.places[place_name] = place_value
+    def set_place(
+            self,
+            place: str,
+            coordinates: tuple[float, float] | CoordinatesDict
+    ) -> None:
+        if isinstance(coordinates, tuple):
+            coordinates = CoordinatesDict(
+                latitude=coordinates[0],
+                longitude=coordinates[1]
+            )
+        validated_coordinates: CoordinatesDict = Coordinates(**coordinates).dict()
+        self.places[place] = validated_coordinates
 
     @property
     def home(self) -> Place:
         return self.get_place("home")
 
     @home.setter
-    def home(self, value: PlaceDict):
-        self.set_place("home", place_value=value)
+    def home(self, coordinates: tuple[float, float] | CoordinatesDict) -> None:
+        self.set_place("home", coordinates=coordinates)
 
     @property
     def home_name(self) -> str:
@@ -459,7 +475,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         return self.home.coordinates
 
     @property
-    def units(self):
+    def units(self) -> dict[str, str]:
         return self._private_config.get("units", {})
 
     @property
@@ -552,9 +568,8 @@ class GeneralConfig(metaclass=SingletonMeta):
                 )
                 return None
             else:
-                self._last_sun_times_update = datetime.now().astimezone()
                 payload: SunTimesFileDict = {
-                    "last_update": self._last_sun_times_update.isoformat(),
+                    "last_update": datetime.now().astimezone().isoformat(),
                     "data": {"home": results},
                 }
                 with open(sun_times_file, "w") as file:
@@ -569,7 +584,7 @@ class GeneralConfig(metaclass=SingletonMeta):
 # ---------------------------------------------------------------------------
 class SpecificConfig:
     def __init__(self, general_config: GeneralConfig, ecosystem: str) -> None:
-        self._general_config = weakref.proxy(general_config)
+        self._general_config: GeneralConfig = weakref.proxy(general_config)
         ids = self._general_config.get_IDs(ecosystem)
         self.uid = ids.uid
         self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
@@ -580,6 +595,10 @@ class SpecificConfig:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"general_config={self._general_config})"
 
+    def save(self) -> None:
+        if not get_gaia_config().TESTING:
+            self._general_config.save("ecosystems")
+
     @property
     def general(self) -> GeneralConfig:
         return self._general_config
@@ -589,7 +608,7 @@ class SpecificConfig:
         return self._general_config.ecosystems_config[self.uid]
 
     @ecosystem_config.setter
-    def ecosystem_config(self, value: EcosystemConfigDict):
+    def ecosystem_config(self, value: EcosystemConfigDict) -> None:
         if get_gaia_config().TESTING:
             self._general_config.ecosystems_config[self.uid] = value
         else:
@@ -602,6 +621,7 @@ class SpecificConfig:
     @name.setter
     def name(self, value: str) -> None:
         self.ecosystem_config["name"] = value
+        self.save()
 
     @property
     def status(self) -> bool:
@@ -610,6 +630,7 @@ class SpecificConfig:
     @status.setter
     def status(self, value: bool) -> None:
         self.ecosystem_config["status"] = value
+        self.save()
 
     """Parameters related to sub-routines control"""
     def get_management(self, management: ManagementNames) -> bool:
@@ -619,9 +640,12 @@ class SpecificConfig:
             return False
 
     def set_management(self, management: ManagementNames, value: bool) -> None:
+        if management not in get_enum_names(ManagementFlags):
+            raise ValueError(f"{management} is not a valid management parameter")
         self.ecosystem_config["management"][management] = value
+        self.save()
 
-    def get_managed_subroutines(self) -> list:
+    def get_managed_subroutines(self) -> list[ManagementNames]:
         return [subroutine for subroutine in SUBROUTINES
                 if self.get_management(subroutine)]
 
@@ -673,14 +697,15 @@ class SpecificConfig:
             raise UndefinedParameter
 
     @chaos.setter
-    def chaos(self, values: dict) -> None:
+    def chaos(self, values: ChaosConfigDict) -> None:
         """Set chaos parameter
 
         :param values: A dict with the entries 'frequency': int,
                        'duration': int and 'intensity': float.
         """
-        chaos = ChaosConfig(**values)
-        self.environment["chaos"] = chaos.dict()
+        validated_values = ChaosConfig(**values).dict()
+        self.environment["chaos"] = validated_values
+        self.save()
 
     @property
     def climate(self) -> dict[ClimateParameterNames, _ClimateConfigDict]:
@@ -693,23 +718,32 @@ class SpecificConfig:
             self.environment["climate"] = {}
             return self.environment["climate"]
 
-    def get_climate_parameters(self, parameter: ClimateParameterNames) -> ClimateConfig:
+    def get_climate_parameter(self, parameter: ClimateParameterNames) -> ClimateConfig:
         try:
             data = self.climate[parameter]
             return ClimateConfig(parameter=parameter, **data)
         except KeyError:
             raise UndefinedParameter
 
-    def set_climate_parameters(
+    def set_climate_parameter(
             self,
             parameter: ClimateParameterNames,
             value: _ClimateConfigDict
     ) -> None:
-        self.climate[parameter] = value
+        validated_value = _ClimateConfig(**value).dict()
+        self.climate[parameter] = validated_value
+        self.save()
+
+    def delete_climate_parameter(
+            self,
+            parameter: ClimateParameterNames,
+    ) -> None:
+        del self.climate[parameter]
+        self.save()
 
     """Parameters related to IO"""    
     @property
-    def IO_dict(self) -> dict:
+    def IO_dict(self) -> dict[str, _HardwareConfigDict]:
         """
         Returns the IOs (hardware) present in the ecosystem
         """
@@ -728,13 +762,6 @@ class SpecificConfig:
                 if self.IO_dict[uid]["type"].lower() == IO_type
                 and self.IO_dict[uid]["level"].lower() in level]
 
-    def get_hardware_config(self, uid: str) -> HardwareConfig:
-        try:
-            hardware_config = self.IO_dict[uid]
-            return HardwareConfig(uid=uid, **hardware_config)
-        except KeyError:
-            raise HardwareNotFound
-
     def _create_new_IO_uid(self) -> str:
         length = 16
         used_ids = list(self.IO_dict.keys())
@@ -750,19 +777,16 @@ class SpecificConfig:
         return [self.IO_dict[hardware]["address"]
                 for hardware in self.IO_dict]
 
-    def save(self):
-        if not get_gaia_config().TESTING:
-            self._general_config.save("ecosystems")
-
     def create_new_hardware(
-        self,
-        name: str,
-        address: str,
-        model: str,
-        type: HardwareTypeNames,
-        level: HardwareLevelNames,
-        measures: list | None = None,
-        plants: list | None = None,
+            self,
+            *,
+            name: str,
+            address: str,
+            model: str,
+            type: HardwareTypeNames,
+            level: HardwareLevelNames,
+            measures: list | None = None,
+            plants: list | None = None,
     ) -> None:
         """
         Create a new hardware
@@ -799,6 +823,20 @@ class SpecificConfig:
         self.IO_dict.update({uid: hardware_repr})
         self.save()
 
+    def update_hardware(self, uid: str, update_value: dict) -> None:
+        try:
+            non_null_value = {
+                key: value for key, value in update_value.items()
+                if value is not None
+            }
+            base = self.IO_dict[uid].copy()
+            base.update(non_null_value)
+            validated_value = HardwareConfig(uid=uid, **base).dict()
+            self.IO_dict[uid] = validated_value
+            self.save()
+        except KeyError:
+            raise HardwareNotFound
+
     def delete_hardware(self, uid: str) -> None:
         """
         Delete a hardware from the config
@@ -807,6 +845,13 @@ class SpecificConfig:
         try:
             del self.IO_dict[uid]
             self.save()
+        except KeyError:
+            raise HardwareNotFound
+
+    def get_hardware_config(self, uid: str) -> HardwareConfig:
+        try:
+            hardware_config = self.IO_dict[uid]
+            return HardwareConfig(uid=uid, **hardware_config)
         except KeyError:
             raise HardwareNotFound
 
@@ -823,19 +868,13 @@ class SpecificConfig:
         )
 
     @time_parameters.setter
-    def time_parameters(self, value: dict[str, str]) -> None:
+    def time_parameters(self, value: DayConfigDict) -> None:
         """Set time parameters
 
         :param value: A dict in the form {'day': '8h00', 'night': '22h00'}
         """
-        if not (value.get("day") and value.get("night")):
-            raise ValueError(
-                "value should be a dict with keys equal to 'day' and 'night' "
-                "and values equal to string representing a human readable time, "
-                "such as '20h00'"
-            )
-        for tod in ("day", "night"):
-            self.sky[tod] = value[tod]
+        validated_value = DayConfig(**value).dict()
+        self.environment["sky"].update(validated_value)
 
     @property
     def sun_times(self) -> SunTimes | None:

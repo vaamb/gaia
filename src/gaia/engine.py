@@ -73,7 +73,7 @@ class Engine(metaclass=SingletonMeta):
             if not self.started:
                 break
             self.refresh_ecosystems()
-            if self.event_handler:
+            if self.use_message_broker:
                 self.event_handler.send_full_config()
                 self.event_handler.send_light_data()
 
@@ -89,15 +89,15 @@ class Engine(metaclass=SingletonMeta):
         return self._thread is not None
 
     @property
-    def ecosystems(self):
+    def ecosystems(self) -> dict[str, Ecosystem]:
         return self._ecosystems
 
     @property
-    def config(self):
+    def config(self) -> GeneralEnvironmentConfig:
         return self._config
 
     @property
-    def ecosystems_started(self) -> set:
+    def ecosystems_started(self) -> set[str]:
         return set([
             ecosystem.uid for ecosystem in self.ecosystems.values()
             if ecosystem.status
@@ -115,16 +115,22 @@ class Engine(metaclass=SingletonMeta):
         self._thread = thread
 
     @property
-    def event_handler(self):
+    def event_handler(self) -> Events:
         """Return the event handler
 
         Either a Socketio Namespace or dispatcher EventHandler
         """
-        return self._event_handler
+        if self._event_handler is not None:
+            return self._event_handler
+        raise AttributeError("'event_handler' has not been set")
 
     @event_handler.setter
     def event_handler(self, event_handler: Events):
         self._event_handler = event_handler
+
+    @property
+    def use_message_broker(self) -> bool:
+        return self._event_handler is not None
 
     def init_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
         """Initialize an Ecosystem

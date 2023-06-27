@@ -23,7 +23,7 @@ from ruamel.yaml import SafeRepresenter, ScalarNode
 from gaia.config import get_config, get_log_dir
 
 
-yaml = ruamel.yaml.YAML(typ="safe")
+yaml = ruamel.yaml.YAML()
 
 
 def _repr_time(self: SafeRepresenter, data: time) -> ScalarNode:
@@ -32,12 +32,12 @@ def _repr_time(self: SafeRepresenter, data: time) -> ScalarNode:
 
 
 def _repr_enum(self: SafeRepresenter, data: Enum) -> ScalarNode:
-    print(data)
     return self.represent_scalar('tag:yaml.org,2002:str', data.value)
 
 
 ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
 ruamel.yaml.add_multi_representer(Enum, _repr_enum, yaml.representer)
+yaml.Constructor = ruamel.yaml.constructor.SafeConstructor
 
 
 try:

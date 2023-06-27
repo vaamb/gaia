@@ -197,7 +197,7 @@ class Hardware(metaclass=_MetaHardware):
             cls,
             hardware_config: HardwareConfig,
             subroutine: "SubroutineTemplate" | None
-    ):
+    ) -> Self:
         return cls(
             subroutine=subroutine,
             uid=hardware_config.uid,
@@ -263,7 +263,6 @@ class Hardware(metaclass=_MetaHardware):
     def multiplexer_model(self):
         return self._multiplexer_model
 
-    @property
     def dict_repr(self, shorten: bool = False) -> dict:
         dict_repr = {
             "uid": self._uid,

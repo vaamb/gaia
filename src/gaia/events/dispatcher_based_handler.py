@@ -8,7 +8,7 @@ except ImportError:
     )
 
 from gaia.events import Events
-from gaia.ecosystem import Ecosystem
+from gaia.engine import Engine
 
 
 class DispatcherBasedGaiaEvents(dispatcher.EventHandler, Events):
@@ -16,5 +16,5 @@ class DispatcherBasedGaiaEvents(dispatcher.EventHandler, Events):
     """
     type = "dispatcher"
 
-    def __init__(self, namespace: str, ecosystem_dict: dict[str, Ecosystem]):
-        super().__init__(namespace=namespace, ecosystem_dict=ecosystem_dict)
+    def __init__(self, namespace: str, engine: Engine):
+        super().__init__(namespace=namespace, engine=engine)

@@ -50,7 +50,7 @@ class Ecosystem:
     The Ecosystem will take care of creating, starting and stopping the required
     subroutines that will themselves act on the physical ecosystem parameters
 
-    : param ecosystem_id: The name or the uid of an ecosystem, as written in
+    :param ecosystem_id: The name or the uid of an ecosystem, as written in
                           'ecosystems.cfg'
     """
     def __init__(self, ecosystem_id: str, engine: "Engine"):
@@ -121,7 +121,7 @@ class Ecosystem:
         return self._engine
 
     @property
-    def event_handler(self) -> "Events" | None:
+    def event_handler(self) -> "Events":
         return self._engine.event_handler
 
     @property
@@ -151,6 +151,8 @@ class Ecosystem:
             morning_start=self.config.time_parameters.day,
             evening_end=self.config.time_parameters.night,
         )
+
+    light_data = light_info
 
     @property
     def light_method(self) -> LightMethod:
@@ -246,7 +248,7 @@ class Ecosystem:
                 self.refresh_lighting_hours()
                 self.logger.info("Starting the Ecosystem")
                 self._refresh_subroutines()
-                if self.event_handler and self.event_handler._registered:
+                if self.engine.use_message_broker and self.event_handler.registered:
                     self.event_handler.send_ecosystems_info(self.uid)
                 self.logger.debug(f"Ecosystem successfully started")
                 self._started = True
@@ -276,10 +278,12 @@ class Ecosystem:
     def actuator_info(self) -> ActuatorsDataDict:
         return self._actuators_state
 
+    actuator_data = actuator_info
+
     def turn_actuator(
             self,
-            actuator: str,
-            mode: str = "automatic",
+            actuator: HardwareType | str,
+            mode: ActuatorModePayload | str = ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
         """Turn the actuator to the specified mode
@@ -322,7 +326,7 @@ class Ecosystem:
                 f"is not currently running"
             )
         else:
-            if self.event_handler is not None:
+            if self.engine.use_message_broker and self.event_handler.registered:
                 try:
                     self.event_handler.send_actuator_data(
                         ecosystem_uids=[self._uid])
@@ -397,9 +401,9 @@ class Ecosystem:
                     )
 
         if (
-                self.event_handler
-                and self.event_handler._registered
-                and send
+                send
+                and self.engine.use_message_broker
+                and self.event_handler.registered
         ):
             try:
                 self.event_handler.send_light_data(
@@ -420,6 +424,8 @@ class Ecosystem:
             health_subroutine: "Health" = self.subroutines["health"]
             return health_subroutine.plants_health
         return Empty()
+
+    health_data = plants_health
 
     # Climate
     def climate_parameters_regulated(self) -> set[str]:

@@ -12,7 +12,7 @@ from gaia_validators import (
     ActuatorModePayload, Empty, HardwareConfig, HardwareType, LightingHours,
     safe_enum_from_name)
 
-from gaia.exceptions import StoppingSubroutine, UndefinedParameter
+from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, Switch
 from gaia.shared_resources import scheduler
@@ -21,7 +21,6 @@ from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.subroutines.light import Light
     from gaia.subroutines.sensors import Sensors
 
 
@@ -169,7 +168,7 @@ class Climate(SubroutineTemplate):
         for climate_param in parameters.keys():
             climate_param: ClimateParameterNames
             try:
-                param_cfg = self.config.get_climate_parameters(climate_param)
+                param_cfg = self.config.get_climate_parameter(climate_param)
             except UndefinedParameter:
                 parameters[climate_param]["regulated"] = False
             else:

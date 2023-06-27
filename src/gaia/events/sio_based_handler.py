@@ -17,7 +17,7 @@ else:
     from socketio.client import reconnecting_clients
 
 from gaia.events import Events
-from gaia.ecosystem import Ecosystem
+from gaia.engine import Engine
 
 
 class RetryClient(socketio.Client):
@@ -75,5 +75,5 @@ class SioBasedGaiaEvents(socketio.ClientNamespace, Events):
     """
     type = "socketio"
 
-    def __init__(self, namespace: str, ecosystem_dict: dict[str, Ecosystem]):
-        super().__init__(namespace=namespace, ecosystem_dict=ecosystem_dict)
+    def __init__(self, namespace: str, engine: Engine):
+        super().__init__(namespace=namespace, engine=engine)
