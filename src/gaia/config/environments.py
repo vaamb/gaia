@@ -9,6 +9,7 @@ import random
 import requests
 import string
 from threading import Condition, Event, Lock, Thread
+import typing as t
 from typing import Literal, TypedDict
 import weakref
 
@@ -24,6 +25,10 @@ from gaia.hardware import hardware_models
 from gaia.subroutines import SUBROUTINES
 from gaia.utils import (
     file_hash, json, SingletonMeta, utc_time_to_local_time, yaml)
+
+
+if t.TYPE_CHECKING:
+    from gaia.engine import Engine
 
 
 _store = {}
@@ -193,6 +198,7 @@ class GeneralConfig(metaclass=SingletonMeta):
     def __init__(self, base_dir=get_base_dir()) -> None:
         logger.debug("Initializing GeneralConfig")
         self._base_dir = pathlib.Path(base_dir)
+        self._engine: "Engine" | None = None
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
         self._sun_times: SunTimes | None = None
@@ -262,6 +268,28 @@ class GeneralConfig(metaclass=SingletonMeta):
                 self._private_config = {}
                 self.save("private")
 
+    @property
+    def thread(self) -> Thread:
+        if self._thread is not None:
+            return self._thread
+        raise AttributeError("'thread' has not been set up")
+
+    @thread.setter
+    def thread(self, thread: Thread) -> None:
+        if not isinstance(thread, Thread):
+            raise ValueError
+        self._thread = thread
+
+    @property
+    def engine(self) -> "Engine":
+        if self._engine is not None:
+            return self._engine
+        raise AttributeError("'engine' has not been set up")
+
+    @engine.setter
+    def engine(self, value: "Engine") -> None:
+        self._engine = value
+
     def _update_cfg_hash(self) -> None:
         for cfg in ("ecosystems", "private"):
             path = self._base_dir/f"{cfg}.cfg"
@@ -281,20 +309,11 @@ class GeneralConfig(metaclass=SingletonMeta):
                 self.reload(reload_cfg)
                 if "ecosystems" in reload_cfg:
                     self.refresh_sun_times()
+                try:
+                    self.engine.event_handler.send_full_config()
+                except AttributeError:
+                    pass
             self._stop_event.wait(get_gaia_config().CONFIG_WATCHER_PERIOD)
-
-    @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise RuntimeError("Thread has not been set up")
-        else:
-            return self._thread
-
-    @thread.setter
-    def thread(self, thread: Thread | None):
-        if not isinstance(thread, Thread):
-            raise ValueError
-        self._thread = thread
 
     def start_watchdog(self) -> None:
         if not self.started:
@@ -340,6 +359,10 @@ class GeneralConfig(metaclass=SingletonMeta):
         with self.pausing_watchdog():
             logger.debug(f"Updating configuration file(s) {config}")
             self._dump_config(config)
+            try:
+                self.engine.event_handler.send_full_config()
+            except AttributeError:
+                pass
 
     def _create_new_ecosystem_uid(self) -> str:
         length = 8

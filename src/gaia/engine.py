@@ -29,6 +29,7 @@ class Engine(metaclass=SingletonMeta):
     """
     def __init__(self, general_config: GeneralEnvironmentConfig) -> None:
         self._config: GeneralEnvironmentConfig = weakref.proxy(general_config)
+        self._config.engine = self
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine"
         )
@@ -37,6 +38,9 @@ class Engine(metaclass=SingletonMeta):
         self._uid: str = get_config().ENGINE_UID
         self._event_handler: Events | None = None
         self._thread: Thread | None = None
+
+    def __del__(self):
+        self._config.engine = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
