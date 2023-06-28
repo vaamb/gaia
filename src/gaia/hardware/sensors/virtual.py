@@ -64,8 +64,10 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
 
 virtual_sensor_models:  dict[str, Type[virtualSensor]]= {
     hardware.__name__: hardware for hardware in [
+        virtualAHT20,
         virtualDHT11,
         virtualDHT22,
+        virtualVCNL4040,
         virtualVEML7700,
         virtualCapacitiveMoisture,
     ]

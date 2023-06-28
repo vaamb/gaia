@@ -158,8 +158,17 @@ class DHT22(DHTBase):
     pass
 
 
-class AHTx0(TemperatureCompatibility, HumidityCompatibility):
-    pass
+class AHTx0(CompatibilityHardware):
+    def _readdata(self):
+        pass
+
+    @property
+    def _temp(self) -> float:
+        return get_temperature(self.ecosystem_uid)
+
+    @property
+    def _humidity(self) -> float:
+        return get_humidity(self.ecosystem_uid)
 
 
 class VEML7700(LightCompatibility):

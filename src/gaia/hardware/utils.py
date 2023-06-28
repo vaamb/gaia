@@ -17,7 +17,8 @@ def get_i2c():
     except KeyError:
         if _IS_RASPI:
             try:
-                from adafruit_blinka import board, busio
+                import board
+                import busio
             except ImportError:
                 raise RuntimeError(
                     "Adafruit blinka package is required. Run `pip install "

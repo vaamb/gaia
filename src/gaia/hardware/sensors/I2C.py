@@ -3,7 +3,7 @@ from __future__ import annotations
 from time import sleep
 import typing as t
 
-from gaia_validators import MeasureRecord
+from gaia_validators import MeasureRecordDict
 
 from gaia.hardware.abc import (
     i2cSensor, LightSensor, PlantLevelHardware, hardware_logger)
@@ -39,25 +39,36 @@ class AHT20(i2cSensor):
                 from adafruit_ahtx0 import AHTx0
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit veml7700 package is required. Run `pip install "
-                    "adafruit-circuitpython-veml7700` in your virtual env."
+                    "Adafruit aht0 package is required. Run `pip install "
+                    "adafruit-circuitpython-ahtx0` in your virtual env."
                 )
         else:
             from gaia.hardware._compatibility import AHTx0
         return AHTx0(self._get_i2c(), self._address["main"].main)
 
-    def get_data(self) -> list[MeasureRecord]:
+    def _get_raw_data(self) -> tuple[float | None, float | None]:
+        try:
+            self.device._readdata()
+            humidity = round(self.device._humidity, 2)
+            temperature = round(self.device._temp, 2)
+        except Exception:
+            humidity = None
+            temperature = None
+        return humidity, temperature
+
+    def get_data(self) -> list[MeasureRecordDict]:
         data = []
+        raw_humidity, raw_temperature = self._get_raw_data()
         if "temperature" in self.measures:
             temperature = temperature_converter(
-                self.device.temperature,
+                raw_temperature,
                 "celsius",
                 get_unit("temperature", "celsius")
             )
             data.append({"measure": "temperature", "value": temperature})
         if "humidity" in self.measures:
             data.append(
-                {"measure": "moisture", "value": self.device.relative_humidity}
+                {"measure": "humidity", "value": raw_humidity}
             )
         return data
 
@@ -86,7 +97,7 @@ class VEML7700(i2cSensor, LightSensor):
     # To catch data fast from light routine
     def get_lux(self) -> float | None:
         try:
-            return self.device.lux
+            return round(self.device.lux, 2)
         except Exception as e:
             hardware_logger.error(
                 f"Sensor {self._name} encountered an error. "
@@ -94,7 +105,7 @@ class VEML7700(i2cSensor, LightSensor):
             )
             return None
 
-    def get_data(self) -> list[MeasureRecord]:
+    def get_data(self) -> list[MeasureRecordDict]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
             data.append({"measure": "light", "value": self.get_lux()})
@@ -115,8 +126,8 @@ class VCNL4040(i2cSensor, LightSensor):
                 from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit veml7700 package is required. Run `pip install "
-                    "adafruit-circuitpython-veml7700` in your virtual env."
+                    "Adafruit vcnl4040 package is required. Run `pip install "
+                    "adafruit-circuitpython-vcnl4040` in your virtual env."
                 )
         else:
             from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
@@ -125,7 +136,7 @@ class VCNL4040(i2cSensor, LightSensor):
     # To catch data fast from light routine
     def get_lux(self) -> float | None:
         try:
-            return self.device.lux
+            return round(self.device.lux, 2)
         except Exception as e:
             hardware_logger.error(
                 f"Sensor {self._name} encountered an error. "
@@ -133,7 +144,7 @@ class VCNL4040(i2cSensor, LightSensor):
             )
             return None
 
-    def get_data(self) -> list[MeasureRecord]:
+    def get_data(self) -> list[MeasureRecordDict]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
             data.append({"measure": "light", "value": self.get_lux()})
@@ -161,7 +172,7 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self._address["main"].main)
 
-    def get_data(self) -> list[MeasureRecord]:
+    def get_data(self) -> list[MeasureRecordDict]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -178,8 +189,8 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         temperature: float | None = None
         for retry in range(3):
             try:
-                moisture = self.device.moisture_read()
-                temperature = self.device.get_temp()
+                moisture = round(self.device.moisture_read(), 2)
+                temperature = round(self.device.get_temp(), 2)
 
             except RuntimeError:
                 sleep(0.5)
@@ -195,7 +206,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                 break
         return moisture, temperature
 
-    def get_data(self) -> list[MeasureRecord]:
+    def get_data(self) -> list[MeasureRecordDict]:
         try:
             moisture, raw_temperature = self._get_raw_data()
         except RuntimeError:
@@ -214,7 +225,9 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
 
 i1c_sensor_models = {
     hardware.__name__: hardware for hardware in [
+        AHT20,
         CapacitiveMoisture,
+        VCNL4040,
         VEML7700,
     ]
 }

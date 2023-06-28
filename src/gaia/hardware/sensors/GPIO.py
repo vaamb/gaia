@@ -3,6 +3,8 @@ from __future__ import annotations
 from time import sleep
 import typing as t
 
+from gaia_validators import MeasureRecordDict
+
 from gaia.hardware.abc import gpioSensor, hardware_logger
 from gaia.hardware.utils import _IS_RASPI
 from gaia.utils import (
@@ -52,7 +54,7 @@ class DHTSensor(gpioSensor):
                 break
         return humidity, temperature
 
-    def get_data(self) -> list:
+    def get_data(self) -> list[MeasureRecordDict]:
         try:
             raw_humidity, raw_temperature = self._get_raw_data()
         except RuntimeError:

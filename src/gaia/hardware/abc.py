@@ -11,7 +11,7 @@ import weakref
 
 from gaia_validators import (
     safe_enum_from_name, HardwareConfig, HardwareLevel, HardwareLevelNames,
-    HardwareType, HardwareTypeNames, MeasureRecord)
+    HardwareType, HardwareTypeNames, MeasureRecordDict)
 
 from gaia.config import get_base_dir
 from gaia.hardware.multiplexers import multiplexer_models
@@ -168,7 +168,10 @@ class Hardware(metaclass=_MetaHardware):
         self._multiplexer_model = multiplexer_model
 
     def __del__(self):
-        del _MetaHardware.instances[self._uid]
+        # If an error arises during __init__ (because of a missing package), no
+        #  instance will be registered
+        if _MetaHardware.instances.get(self._uid):
+            del _MetaHardware.instances[self._uid]
 
     def __repr__(self):
         return (
@@ -356,7 +359,7 @@ class gpioDimmer(gpioHardware, Dimmer):
     def _get_dimmer(self) -> "pwmio.PWMOut":
         if _IS_RASPI:
             try:
-                from adafruit_blinka import pwmio
+                import pwmio
             except ImportError:
                 raise RuntimeError(
                     "Adafruit blinka package is required. Run `pip install "
@@ -423,7 +426,7 @@ class BaseSensor(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[MeasureRecord]:
+    def get_data(self) -> list[MeasureRecordDict]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
