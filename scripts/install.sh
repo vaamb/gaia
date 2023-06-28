@@ -80,8 +80,8 @@ cp -r scripts/ $GAIA_DIR/
 cd "$GAIA_DIR/scripts/"
 chmod +x start.sh stop.sh update.sh
 
-if [ $(grep -ic "#>>>Gaia variables>>>" $HOME/.bashrc) -eq 1 ]; then
-  sed -i "/#>>>Gaia variables>>>/,/#<<<Gaia variables<<</d" $HOME/.bashrc;
+if [ $(grep -ic "#>>>Gaia variables>>>" $HOME/.profile) -eq 1 ]; then
+  sed -i "/#>>>Gaia variables>>>/,/#<<<Gaia variables<<</d" $HOME/.profile;
 fi
 
 echo "
@@ -92,20 +92,41 @@ export GAIA_DIR=$GAIA_DIR
 # Gaia utility function to start and stop the main application
 gaia() {
   case \$1 in
-    start) nohup \$GAIA_DIR/scripts/start.sh &> \$GAIA_DIR/logs/nohup.out & ;;
+    start) \$GAIA_DIR/scripts/start.sh ;;
     stop) \$GAIA_DIR/scripts/stop.sh ;;
-    stdout) tail \$GAIA_DIR/logs/nohup.out ;;
-    update) bash \$GAIA_DIR/scripts/update.sh ;;
+    stdout) tail \$GAIA_DIR/logs/stdout ;;
+    update) \$GAIA_DIR/scripts/update.sh ;;
     *) echo 'Need an argument in start, stop, stdout or update' ;;
   esac
 }
 complete -W 'start stop stdout update' gaia
 #<<<Gaia variables<<<
-" >> $HOME/.bashrc;
+" >> $HOME/.profile;
 
-source $HOME/.bashrc
+source $HOME/.profile
+
+# Create the service file
+echo "[Unit]
+Description=Gaia greenhouse service
+
+[Service]
+Environment=GAIA_DIR=$GAIA_DIR
+Type=simple
+User=$USER
+Restart=always
+RestartSec=3
+ExecStart=$GAIA_DIR/scripts/start.sh
+ExecStop=$GAIA_DIR/scripts/stop.sh
+
+[Install]
+WantedBy=multi-user.target
+" > $GAIA_DIR/scripts/gaia.service
+
+sudo cp $GAIA_DIR/scripts/gaia.service /etc/systemd/system/
+sudo systemctl daemon-reload
 
 echo "Gaia installed."
 echo "It might be required to install extra python packages depending on the hardware used."
 echo "To do so, install the required packages as indicated in the log files or in the docs and restart Gaia."
 echo "To start Gaia, either use \`gaia start\` or go to the gaia directory, activate the virtual environment and run \`python main.py\`"
+echo "Alternatively, you can start gaia as a service with \`sudo systemctl start gaia.service \` and enable it to run at startup with \`sudo systemctl enable gaia.service \`"
