@@ -13,7 +13,7 @@ from gaia_validators import (
     HealthData, LightData, LightingHours, LightMethod, ManagementConfig,
     safe_enum_from_name, SensorsData)
 
-from gaia.config import get_environment_config, SpecificEnvironmentConfig
+from gaia.config import EcosystemConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
 from gaia.subroutines import SUBROUTINES, SubroutineTypes
 from gaia.subroutines.chaos import Chaos
@@ -54,7 +54,7 @@ class Ecosystem:
                           'ecosystems.cfg'
     """
     def __init__(self, ecosystem_id: str, engine: "Engine"):
-        self._config: SpecificEnvironmentConfig = get_environment_config(ecosystem_id)
+        self._config: EcosystemConfig = EcosystemConfig(ecosystem_id)
         self._uid: str = self._config.uid
         self._name: str = self._config.name
         self._engine: "Engine" = weakref.proxy(engine)
@@ -113,7 +113,7 @@ class Ecosystem:
         return self._started
 
     @property
-    def config(self) -> SpecificEnvironmentConfig:
+    def config(self) -> EcosystemConfig:
         return self._config
 
     @property
@@ -170,7 +170,7 @@ class Ecosystem:
     def management(self) -> ManagementConfig:
         """Return the subroutines' management corrected by whether they are
         manageable or not"""
-        base_management = self.config.ecosystem_config["management"]
+        base_management = self.config.managements
         management = {}
         for m in base_management:
             try:
@@ -181,7 +181,7 @@ class Ecosystem:
 
     @property
     def environmental_parameters(self) -> EnvironmentConfig:
-        environment_dict = self.config.ecosystem_config.get("environment", {})
+        environment_dict = self.config.environment
         return EnvironmentConfig(**environment_dict)
 
     @property

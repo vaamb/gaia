@@ -7,8 +7,8 @@ from threading import Thread
 import weakref
 
 from gaia.config import (
-    GeneralEnvironmentConfig, get_cache_dir, get_config, get_environment_IDs)
-from gaia.config.environments import get_config_event, detach_config
+    EngineConfig, get_cache_dir, get_config, get_ecosystem_IDs)
+from gaia.config.from_files import get_config_event, detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.events import Events
 from gaia.exceptions import UndefinedParameter
@@ -27,8 +27,8 @@ class Engine(metaclass=SingletonMeta):
 
     :param general_config: a GeneralConfig object
     """
-    def __init__(self, general_config: GeneralEnvironmentConfig) -> None:
-        self._config: GeneralEnvironmentConfig = weakref.proxy(general_config)
+    def __init__(self) -> None:
+        self._config: EngineConfig = weakref.proxy(EngineConfig())
         self._config.engine = self
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine"
@@ -97,7 +97,7 @@ class Engine(metaclass=SingletonMeta):
         return self._ecosystems
 
     @property
-    def config(self) -> GeneralEnvironmentConfig:
+    def config(self) -> EngineConfig:
         return self._config
 
     @property
@@ -144,7 +144,7 @@ class Engine(metaclass=SingletonMeta):
         :param start: Whether to immediately start the ecosystem after its
                       creation or not
         """
-        ecosystem_uid, ecosystem_name = get_environment_IDs(ecosystem_id)
+        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
         if ecosystem_uid not in self.ecosystems:
             ecosystem = Ecosystem(ecosystem_uid, self)
             self.ecosystems[ecosystem_uid] = ecosystem
@@ -164,7 +164,7 @@ class Engine(metaclass=SingletonMeta):
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
                              'ecosystems.cfg'
         """
-        ecosystem_uid, ecosystem_name = get_environment_IDs(ecosystem_id)
+        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid not in self.ecosystems_started:
                 ecosystem: Ecosystem = self.ecosystems[ecosystem_uid]
@@ -190,7 +190,7 @@ class Engine(metaclass=SingletonMeta):
                          If dismounted, the Ecosystem will need to be recreated
                          before being able to restart.
         """
-        ecosystem_uid, ecosystem_name = get_environment_IDs(ecosystem_id)
+        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 ecosystem = self.ecosystems[ecosystem_uid]
@@ -217,7 +217,7 @@ class Engine(metaclass=SingletonMeta):
         :param detach_config_: Whether to remove the Ecosystem's config from
                                memory or not.
         """
-        ecosystem_id, ecosystem_name = get_environment_IDs(ecosystem_id)
+        ecosystem_id, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
         if ecosystem_id in self.ecosystems:
             if ecosystem_id in self.ecosystems_started:
                 raise RuntimeError(
@@ -242,7 +242,7 @@ class Engine(metaclass=SingletonMeta):
         :param ecosystem: The name or the uid of an ecosystem, as written in
                           'ecosystems.cfg'
         """
-        ecosystem_uid, ecosystem_name = get_environment_IDs(ecosystem)
+        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem)
         if ecosystem_uid in self.ecosystems:
             _ecosystem = self.ecosystems[ecosystem_uid]
         else:

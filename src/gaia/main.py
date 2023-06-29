@@ -6,7 +6,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia.config import GaiaConfig, GeneralEnvironmentConfig, get_config
+from gaia.config import GaiaConfig, EngineConfig, get_config
 from gaia.engine import Engine
 from gaia.shared_resources import scheduler, start_scheduler
 from gaia.utils import configure_logging, json
@@ -44,7 +44,7 @@ class Gaia:
         self.connect_to_ouranos: bool = config_cls.COMMUNICATE_WITH_OURANOS
         self.use_database = config_cls.USE_DATABASE
         self._thread: Thread | None = None
-        self.engine = Engine(GeneralEnvironmentConfig())
+        self.engine = Engine()
         self._broker_url = config_cls.AGGREGATOR_COMMUNICATION_URL
         self.message_broker: "KombuDispatcher" | "RetryClient" | None = None
         self.db: "SQLAlchemyWrapper" | None = None

@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, ValidationError, validator
 
 from gaia_validators import *
 
-from gaia.config import (
+from gaia.config._utils import (
     get_base_dir, get_cache_dir, get_config as get_gaia_config)
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
@@ -188,7 +188,7 @@ class RootEcosystemsConfigValidator(BaseModel):
 # ---------------------------------------------------------------------------
 #   GeneralConfig class
 # ---------------------------------------------------------------------------
-class GeneralConfig(metaclass=SingletonMeta):
+class EngineConfig(metaclass=SingletonMeta):
     """Class to interact with the configuration files
 
     To interact with a specific ecosystem configuration, the SpecificConfig
@@ -600,14 +600,15 @@ class GeneralConfig(metaclass=SingletonMeta):
                     "Sunrise and sunset times successfully updated")
                 return results
 
-    def get_ecosystem_config(self, ecosystem: str) -> "SpecificConfig":
-        return SpecificConfig(ecosystem=ecosystem)
+    @staticmethod
+    def get_ecosystem_config(ecosystem: str) -> "EcosystemConfig":
+        return EcosystemConfig(ecosystem=ecosystem)
 
 
 # ---------------------------------------------------------------------------
 #   SpecificConfig class
 # ---------------------------------------------------------------------------
-class _MetaSpecificConfig(type):
+class _MetaEcosystemConfig(type):
     instances: dict[str, Self] = {}
 
     def __call__(cls, *args, **kwargs) -> Self:
@@ -615,7 +616,7 @@ class _MetaSpecificConfig(type):
             ecosystem = args[0]
         else:
             ecosystem = kwargs["ecosystem"]
-        general_config = GeneralConfig()
+        general_config = EngineConfig()
         ecosystem_uid =  general_config.get_IDs(ecosystem).uid
         try:
             return cls.instances[ecosystem_uid]
@@ -626,18 +627,17 @@ class _MetaSpecificConfig(type):
             return config
 
 
-class SpecificConfig(metaclass=_MetaSpecificConfig):
+class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def __init__(self, ecosystem: str) -> None:
-        self._general_config: GeneralConfig = weakref.proxy(GeneralConfig())
+        self._general_config: EngineConfig = weakref.proxy(EngineConfig())
         ids = self._general_config.get_IDs(ecosystem)
         self.uid = ids.uid
         self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
         self.logger.debug(f"Initializing SpecificConfig for {ids.name}")
-        self._first_connection_error = True
 
     def __del__(self):
         try:
-            del _MetaSpecificConfig.instances[self.uid]
+            del _MetaEcosystemConfig.instances[self.uid]
         except KeyError:  # already removed
             pass
 
@@ -645,54 +645,54 @@ class SpecificConfig(metaclass=_MetaSpecificConfig):
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"general_config={self._general_config})"
 
+    @property
+    def __dict(self) -> EcosystemConfigDict:
+        return self._general_config.ecosystems_config[self.uid]
+
+    def as_dict(self) -> EcosystemConfigDict:
+        return self.__dict
+
     def save(self) -> None:
         if not get_gaia_config().TESTING:
             self._general_config.save("ecosystems")
 
     @property
-    def general(self) -> GeneralConfig:
+    def general(self) -> EngineConfig:
         return self._general_config
 
     @property
-    def ecosystem_config(self) -> EcosystemConfigDict:
-        return self._general_config.ecosystems_config[self.uid]
-
-    @ecosystem_config.setter
-    def ecosystem_config(self, value: EcosystemConfigDict) -> None:
-        if get_gaia_config().TESTING:
-            self._general_config.ecosystems_config[self.uid] = value
-        else:
-            raise AttributeError("can't set attribute 'ecosystem_config'")
-
-    @property
     def name(self) -> str:
-        return self.ecosystem_config["name"]
+        return self.__dict["name"]
 
     @name.setter
     def name(self, value: str) -> None:
-        self.ecosystem_config["name"] = value
+        self.__dict["name"] = value
         self.save()
 
     @property
     def status(self) -> bool:
-        return self.ecosystem_config["status"]
+        return self.__dict["status"]
 
     @status.setter
     def status(self, value: bool) -> None:
-        self.ecosystem_config["status"] = value
+        self.__dict["status"] = value
         self.save()
 
     """Parameters related to sub-routines control"""
+    @property
+    def managements(self) -> ManagementConfigDict:
+        return self.__dict["management"]
+
     def get_management(self, management: ManagementNames) -> bool:
         try:
-            return self.ecosystem_config["management"].get(management, False)
+            return self.__dict["management"].get(management, False)
         except (KeyError, AttributeError):  # pragma: no cover
             return False
 
     def set_management(self, management: ManagementNames, value: bool) -> None:
         if management not in get_enum_names(ManagementFlags):
             raise ValueError(f"{management} is not a valid management parameter")
-        self.ecosystem_config["management"][management] = value
+        self.__dict["management"][management] = value
         self.save()
 
     def get_managed_subroutines(self) -> list[ManagementNames]:
@@ -706,10 +706,10 @@ class SpecificConfig(metaclass=_MetaSpecificConfig):
         Returns the environment config for the ecosystem
         """
         try:
-            return self.ecosystem_config["environment"]
+            return self.__dict["environment"]
         except KeyError:
-            self.ecosystem_config["environment"] = EnvironmentConfigValidator().dict()
-            return self.ecosystem_config["environment"]
+            self.__dict["environment"] = EnvironmentConfigValidator().dict()
+            return self.__dict["environment"]
 
     @property
     def sky(self) -> SkyConfigDict:
@@ -798,10 +798,10 @@ class SpecificConfig(metaclass=_MetaSpecificConfig):
         Returns the IOs (hardware) present in the ecosystem
         """
         try:
-            return self.ecosystem_config["IO"]
+            return self.__dict["IO"]
         except KeyError:
-            self.ecosystem_config["IO"] = {}
-            return self.ecosystem_config["IO"]
+            self.__dict["IO"] = {}
+            return self.__dict["IO"]
 
     def get_IO_group_uids(
             self,
@@ -934,27 +934,14 @@ class SpecificConfig(metaclass=_MetaSpecificConfig):
 # ---------------------------------------------------------------------------
 #   Functions to interact with the module
 # ---------------------------------------------------------------------------
-def get_general_config() -> GeneralConfig:
-    return GeneralConfig()
-
-
-def get_config(ecosystem: str) -> SpecificConfig:
-    """ Return the specificConfig object for the given ecosystem.
-
-    :param ecosystem: str, an ecosystem uid or name. If left to none, will
-                      return globalConfig object instead.
-    """
-    return SpecificConfig(ecosystem=ecosystem)
-
-
 def get_IDs(ecosystem: str) -> IDs:
     """Return the tuple (ecosystem_uid, ecosystem_name)
 
     :param ecosystem: str, either an ecosystem uid or ecosystem name
     """
-    return GeneralConfig().get_IDs(ecosystem)
+    return EngineConfig().get_IDs(ecosystem)
 
 
 def detach_config(ecosystem: str) -> None:
-    config = SpecificConfig(ecosystem=ecosystem)
-    del _MetaSpecificConfig.instances[config.uid]
+    config = EcosystemConfig(ecosystem=ecosystem)
+    del _MetaEcosystemConfig.instances[config.uid]

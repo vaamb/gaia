@@ -13,7 +13,7 @@ from gaia.hardware.abc import BaseSensor, Camera, Dimmer, Hardware, Switch
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.config.environments import SpecificConfig
+    from gaia.config.from_files import EcosystemConfig
     from gaia.ecosystem import Ecosystem
 
 
@@ -90,7 +90,7 @@ class SubroutineTemplate(ABC):
         return self._ecosystem
 
     @property
-    def config(self) -> "SpecificConfig":
+    def config(self) -> "EcosystemConfig":
         return self._ecosystem.config
 
     @property
