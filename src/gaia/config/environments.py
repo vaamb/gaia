@@ -10,7 +10,7 @@ import requests
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
-from typing import Literal, TypedDict
+from typing import Literal, Self, TypedDict
 import weakref
 
 from pydantic import BaseModel, Field, ValidationError, validator
@@ -32,7 +32,6 @@ if t.TYPE_CHECKING:
 
 
 _store = {}
-
 
 ConfigType = Literal["ecosystems", "private"]
 
@@ -601,18 +600,46 @@ class GeneralConfig(metaclass=SingletonMeta):
                     "Sunrise and sunset times successfully updated")
                 return results
 
+    def get_ecosystem_config(self, ecosystem: str) -> "SpecificConfig":
+        return SpecificConfig(ecosystem=ecosystem)
+
 
 # ---------------------------------------------------------------------------
 #   SpecificConfig class
 # ---------------------------------------------------------------------------
-class SpecificConfig:
-    def __init__(self, general_config: GeneralConfig, ecosystem: str) -> None:
-        self._general_config: GeneralConfig = weakref.proxy(general_config)
+class _MetaSpecificConfig(type):
+    instances: dict[str, Self] = {}
+
+    def __call__(cls, *args, **kwargs) -> Self:
+        if len(args) > 0:
+            ecosystem = args[0]
+        else:
+            ecosystem = kwargs["ecosystem"]
+        general_config = GeneralConfig()
+        ecosystem_uid =  general_config.get_IDs(ecosystem).uid
+        try:
+            return cls.instances[ecosystem_uid]
+        except KeyError:
+            config = cls.__new__(cls, ecosystem, *args, **kwargs)
+            config.__init__(*args, **kwargs)
+            cls.instances[ecosystem_uid] = config
+            return config
+
+
+class SpecificConfig(metaclass=_MetaSpecificConfig):
+    def __init__(self, ecosystem: str) -> None:
+        self._general_config: GeneralConfig = weakref.proxy(GeneralConfig())
         ids = self._general_config.get_IDs(ecosystem)
         self.uid = ids.uid
         self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
         self.logger.debug(f"Initializing SpecificConfig for {ids.name}")
         self._first_connection_error = True
+
+    def __del__(self):
+        try:
+            del _MetaSpecificConfig.instances[self.uid]
+        except KeyError:  # already removed
+            pass
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
@@ -907,9 +934,6 @@ class SpecificConfig:
 # ---------------------------------------------------------------------------
 #   Functions to interact with the module
 # ---------------------------------------------------------------------------
-_configs: dict[str, SpecificConfig] = {}
-
-
 def get_general_config() -> GeneralConfig:
     return GeneralConfig()
 
@@ -920,14 +944,7 @@ def get_config(ecosystem: str) -> SpecificConfig:
     :param ecosystem: str, an ecosystem uid or name. If left to none, will
                       return globalConfig object instead.
     """
-    general_config = get_general_config()
-
-    ecosystem_uid = general_config.get_IDs(ecosystem).uid
-    try:
-        return _configs[ecosystem_uid]
-    except KeyError:
-        _configs[ecosystem_uid] = SpecificConfig(general_config, ecosystem_uid)
-        return _configs[ecosystem_uid]
+    return SpecificConfig(ecosystem=ecosystem)
 
 
 def get_IDs(ecosystem: str) -> IDs:
@@ -935,9 +952,9 @@ def get_IDs(ecosystem: str) -> IDs:
 
     :param ecosystem: str, either an ecosystem uid or ecosystem name
     """
-    return get_general_config().get_IDs(ecosystem)
+    return GeneralConfig().get_IDs(ecosystem)
 
 
-def detach_config(ecosystem) -> None:
-    uid = get_general_config().get_IDs(ecosystem).uid
-    del _configs[uid]
+def detach_config(ecosystem: str) -> None:
+    config = SpecificConfig(ecosystem=ecosystem)
+    del _MetaSpecificConfig.instances[config.uid]
