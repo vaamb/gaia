@@ -10,14 +10,14 @@ import requests
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
-from typing import Literal, TypedDict
+from typing import Literal, Self, TypedDict
 import weakref
 
 from pydantic import BaseModel, Field, ValidationError, validator
 
 from gaia_validators import *
 
-from gaia.config import (
+from gaia.config._utils import (
     get_base_dir, get_cache_dir, get_config as get_gaia_config)
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
@@ -32,7 +32,6 @@ if t.TYPE_CHECKING:
 
 
 _store = {}
-
 
 ConfigType = Literal["ecosystems", "private"]
 
@@ -58,16 +57,16 @@ class SunTimesDict(TypedDict):
     civil_twilight_end: str
 
 
-class _SunTimesFileHomeDict(TypedDict):
+class SunTimesCacheHomeDict(TypedDict):
     home: SunTimesDict
 
 
-class SunTimesFileDict(TypedDict):
+class SunTimesCacheDict(TypedDict):
     last_update: str
-    data: _SunTimesFileHomeDict
+    data: SunTimesCacheHomeDict
 
 
-class Coordinates(BaseModel):
+class CoordinatesValidator(BaseModel):
     latitude: float
     longitude: float
 
@@ -77,9 +76,9 @@ class CoordinatesDict(TypedDict):
     longitude: float
 
 
-class Place(BaseModel):
+class PlaceValidator(BaseModel):
     name: str
-    coordinates: Coordinates
+    coordinates: CoordinatesValidator
 
 
 class PlaceDict(TypedDict):
@@ -92,7 +91,7 @@ class PlaceDict(TypedDict):
 # ---------------------------------------------------------------------------
 # Custom models for Hardware, Climate and Environment configs as some of their
 #  parameters are used as keys in ecosystems.cfg
-class _HardwareConfig(BaseModel):
+class HardwareConfigValidator(BaseModel):
     name: str
     address: str
     type: str
@@ -127,7 +126,7 @@ class _HardwareConfig(BaseModel):
         return value
 
 
-class _HardwareConfigDict(TypedDict):
+class HardwareConfigDict(TypedDict):
     name: str
     address: str
     type: str
@@ -138,58 +137,58 @@ class _HardwareConfigDict(TypedDict):
     multiplexer_model: str | None
 
 
-class _ClimateConfig(BaseModel):
+class ClimateConfigValidator(BaseModel):
     day: float
     night: float
     hysteresis: float = 0.0
 
 
-class _ClimateConfigDict(TypedDict):
+class ClimateConfigDict(TypedDict):
     day: float
     night: float
     hysteresis: float
 
 
-class _EnvironmentConfig(BaseModel):
+class EnvironmentConfigValidator(BaseModel):
     chaos: ChaosConfig = Field(default_factory=ChaosConfig)
     sky: SkyConfig = Field(default_factory=SkyConfig)
-    climate: dict[ClimateParameterNames, _ClimateConfig] = Field(default_factory=dict)
+    climate: dict[ClimateParameterNames, ClimateConfigValidator] = Field(default_factory=dict)
 
     @validator("climate", pre=True)
     def dict_to_climate(cls, value: dict):
-        return {k: _ClimateConfig(**v) for k, v in value.items()}
+        return {k: ClimateConfigValidator(**v) for k, v in value.items()}
 
 
-class _EnvironmentConfigDict(TypedDict):
+class EnvironmentConfigDict(TypedDict):
     chaos: ChaosConfigDict
     sky: SkyConfigDict
-    climate: dict[str, _ClimateConfigDict]
+    climate: dict[str, ClimateConfigDict]
 
 
-class EcosystemConfig(BaseModel):
+class EcosystemConfigValidator(BaseModel):
     name: str
     status: bool = False
     management: ManagementConfig = Field(default_factory=ManagementConfig)
-    environment: _EnvironmentConfig = Field(default_factory=_EnvironmentConfig)
-    IO: dict[str, _HardwareConfig] = Field(default_factory=dict)
+    environment: EnvironmentConfigValidator = Field(default_factory=EnvironmentConfigValidator)
+    IO: dict[str, HardwareConfigValidator] = Field(default_factory=dict)
 
 
 class EcosystemConfigDict(TypedDict):
     name: str
     status: bool
     management: dict[ManagementNames, bool]
-    environment: _EnvironmentConfigDict
-    IO: dict[str, _HardwareConfigDict]
+    environment: EnvironmentConfigDict
+    IO: dict[str, HardwareConfigDict]
 
 
-class _EcosystemsConfig(BaseModel):
-    config: dict[str, EcosystemConfig]
+class RootEcosystemsConfigValidator(BaseModel):
+    config: dict[str, EcosystemConfigValidator]
 
 
 # ---------------------------------------------------------------------------
 #   GeneralConfig class
 # ---------------------------------------------------------------------------
-class GeneralConfig(metaclass=SingletonMeta):
+class EngineConfig(metaclass=SingletonMeta):
     """Class to interact with the configuration files
 
     To interact with a specific ecosystem configuration, the SpecificConfig
@@ -225,7 +224,7 @@ class GeneralConfig(metaclass=SingletonMeta):
             with open(config_path, "r") as file:
                 raw = {"config": yaml.load(file)}
                 try:
-                    cleaned = _EcosystemsConfig(**raw).dict()
+                    cleaned = RootEcosystemsConfigValidator(**raw).dict()
                 except ValidationError as e:
                     # TODO: log formatted error message
                     raise e
@@ -377,7 +376,7 @@ class GeneralConfig(metaclass=SingletonMeta):
 
     def create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
-        ecosystem_cfg = EcosystemConfig(name=ecosystem_name).dict()
+        ecosystem_cfg = EcosystemConfigValidator(name=ecosystem_name).dict()
         self._ecosystems_config.update({uid: ecosystem_cfg})
         self.save("ecosystems")
 
@@ -461,10 +460,10 @@ class GeneralConfig(metaclass=SingletonMeta):
             self._private_config["places"] = {}
             return self._private_config["places"]
 
-    def get_place(self, place: str) -> Place:
+    def get_place(self, place: str) -> PlaceValidator:
         try:
             coordinates: CoordinatesDict = self.places[place]
-            return Place(name=place, coordinates=coordinates)
+            return PlaceValidator(name=place, coordinates=coordinates)
         except KeyError:
             raise UndefinedParameter
 
@@ -478,11 +477,11 @@ class GeneralConfig(metaclass=SingletonMeta):
                 latitude=coordinates[0],
                 longitude=coordinates[1]
             )
-        validated_coordinates: CoordinatesDict = Coordinates(**coordinates).dict()
+        validated_coordinates: CoordinatesDict = CoordinatesValidator(**coordinates).dict()
         self.places[place] = validated_coordinates
 
     @property
-    def home(self) -> Place:
+    def home(self) -> PlaceValidator:
         return self.get_place("home")
 
     @home.setter
@@ -494,7 +493,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         return self.home.name
 
     @property
-    def home_coordinates(self) -> Coordinates:
+    def home_coordinates(self) -> CoordinatesValidator:
         return self.home.coordinates
 
     @property
@@ -521,7 +520,7 @@ class GeneralConfig(metaclass=SingletonMeta):
         logger.debug("Trying to load cached sun times")
         try:
             with sun_times_file.open("r") as file:
-                payload: SunTimesFileDict = json.loads(file.read())
+                payload: SunTimesCacheDict = json.loads(file.read())
                 last_update: datetime = \
                     datetime.fromisoformat(payload["last_update"]).astimezone()
         except (FileNotFoundError, JSONDecodeError, KeyError):
@@ -591,7 +590,7 @@ class GeneralConfig(metaclass=SingletonMeta):
                 )
                 return None
             else:
-                payload: SunTimesFileDict = {
+                payload: SunTimesCacheDict = {
                     "last_update": datetime.now().astimezone().isoformat(),
                     "data": {"home": results},
                 }
@@ -601,71 +600,99 @@ class GeneralConfig(metaclass=SingletonMeta):
                     "Sunrise and sunset times successfully updated")
                 return results
 
+    @staticmethod
+    def get_ecosystem_config(ecosystem: str) -> "EcosystemConfig":
+        return EcosystemConfig(ecosystem=ecosystem)
+
 
 # ---------------------------------------------------------------------------
 #   SpecificConfig class
 # ---------------------------------------------------------------------------
-class SpecificConfig:
-    def __init__(self, general_config: GeneralConfig, ecosystem: str) -> None:
-        self._general_config: GeneralConfig = weakref.proxy(general_config)
+class _MetaEcosystemConfig(type):
+    instances: dict[str, Self] = {}
+
+    def __call__(cls, *args, **kwargs) -> Self:
+        if len(args) > 0:
+            ecosystem = args[0]
+        else:
+            ecosystem = kwargs["ecosystem"]
+        general_config = EngineConfig()
+        ecosystem_uid =  general_config.get_IDs(ecosystem).uid
+        try:
+            return cls.instances[ecosystem_uid]
+        except KeyError:
+            config = cls.__new__(cls, ecosystem, *args, **kwargs)
+            config.__init__(*args, **kwargs)
+            cls.instances[ecosystem_uid] = config
+            return config
+
+
+class EcosystemConfig(metaclass=_MetaEcosystemConfig):
+    def __init__(self, ecosystem: str) -> None:
+        self._general_config: EngineConfig = weakref.proxy(EngineConfig())
         ids = self._general_config.get_IDs(ecosystem)
         self.uid = ids.uid
         self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
         self.logger.debug(f"Initializing SpecificConfig for {ids.name}")
-        self._first_connection_error = True
+
+    def __del__(self):
+        try:
+            del _MetaEcosystemConfig.instances[self.uid]
+        except KeyError:  # already removed
+            pass
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"general_config={self._general_config})"
+
+    @property
+    def __dict(self) -> EcosystemConfigDict:
+        return self._general_config.ecosystems_config[self.uid]
+
+    def as_dict(self) -> EcosystemConfigDict:
+        return self.__dict
 
     def save(self) -> None:
         if not get_gaia_config().TESTING:
             self._general_config.save("ecosystems")
 
     @property
-    def general(self) -> GeneralConfig:
+    def general(self) -> EngineConfig:
         return self._general_config
 
     @property
-    def ecosystem_config(self) -> EcosystemConfigDict:
-        return self._general_config.ecosystems_config[self.uid]
-
-    @ecosystem_config.setter
-    def ecosystem_config(self, value: EcosystemConfigDict) -> None:
-        if get_gaia_config().TESTING:
-            self._general_config.ecosystems_config[self.uid] = value
-        else:
-            raise AttributeError("can't set attribute 'ecosystem_config'")
-
-    @property
     def name(self) -> str:
-        return self.ecosystem_config["name"]
+        return self.__dict["name"]
 
     @name.setter
     def name(self, value: str) -> None:
-        self.ecosystem_config["name"] = value
+        self.__dict["name"] = value
         self.save()
 
     @property
     def status(self) -> bool:
-        return self.ecosystem_config["status"]
+        return self.__dict["status"]
 
     @status.setter
     def status(self, value: bool) -> None:
-        self.ecosystem_config["status"] = value
+        self.__dict["status"] = value
         self.save()
 
     """Parameters related to sub-routines control"""
+    @property
+    def managements(self) -> ManagementConfigDict:
+        return self.__dict["management"]
+
     def get_management(self, management: ManagementNames) -> bool:
         try:
-            return self.ecosystem_config["management"].get(management, False)
+            return self.__dict["management"].get(management, False)
         except (KeyError, AttributeError):  # pragma: no cover
             return False
 
     def set_management(self, management: ManagementNames, value: bool) -> None:
         if management not in get_enum_names(ManagementFlags):
             raise ValueError(f"{management} is not a valid management parameter")
-        self.ecosystem_config["management"][management] = value
+        self.__dict["management"][management] = value
         self.save()
 
     def get_managed_subroutines(self) -> list[ManagementNames]:
@@ -674,15 +701,15 @@ class SpecificConfig:
 
     """EnvironmentConfig related parameters"""
     @property
-    def environment(self) -> _EnvironmentConfigDict:
+    def environment(self) -> EnvironmentConfigDict:
         """
         Returns the environment config for the ecosystem
         """
         try:
-            return self.ecosystem_config["environment"]
+            return self.__dict["environment"]
         except KeyError:
-            self.ecosystem_config["environment"] = _EnvironmentConfig().dict()
-            return self.ecosystem_config["environment"]
+            self.__dict["environment"] = EnvironmentConfigValidator().dict()
+            return self.__dict["environment"]
 
     @property
     def sky(self) -> SkyConfigDict:
@@ -731,7 +758,7 @@ class SpecificConfig:
         self.save()
 
     @property
-    def climate(self) -> dict[ClimateParameterNames, _ClimateConfigDict]:
+    def climate(self) -> dict[ClimateParameterNames, ClimateConfigDict]:
         """
         Returns the sky config for the ecosystem
         """
@@ -751,9 +778,9 @@ class SpecificConfig:
     def set_climate_parameter(
             self,
             parameter: ClimateParameterNames,
-            value: _ClimateConfigDict
+            value: ClimateConfigDict
     ) -> None:
-        validated_value = _ClimateConfig(**value).dict()
+        validated_value = ClimateConfigValidator(**value).dict()
         self.climate[parameter] = validated_value
         self.save()
 
@@ -766,15 +793,15 @@ class SpecificConfig:
 
     """Parameters related to IO"""    
     @property
-    def IO_dict(self) -> dict[str, _HardwareConfigDict]:
+    def IO_dict(self) -> dict[str, HardwareConfigDict]:
         """
         Returns the IOs (hardware) present in the ecosystem
         """
         try:
-            return self.ecosystem_config["IO"]
+            return self.__dict["IO"]
         except KeyError:
-            self.ecosystem_config["IO"] = {}
-            return self.ecosystem_config["IO"]
+            self.__dict["IO"] = {}
+            return self.__dict["IO"]
 
     def get_IO_group_uids(
             self,
@@ -907,37 +934,14 @@ class SpecificConfig:
 # ---------------------------------------------------------------------------
 #   Functions to interact with the module
 # ---------------------------------------------------------------------------
-_configs: dict[str, SpecificConfig] = {}
-
-
-def get_general_config() -> GeneralConfig:
-    return GeneralConfig()
-
-
-def get_config(ecosystem: str) -> SpecificConfig:
-    """ Return the specificConfig object for the given ecosystem.
-
-    :param ecosystem: str, an ecosystem uid or name. If left to none, will
-                      return globalConfig object instead.
-    """
-    general_config = get_general_config()
-
-    ecosystem_uid = general_config.get_IDs(ecosystem).uid
-    try:
-        return _configs[ecosystem_uid]
-    except KeyError:
-        _configs[ecosystem_uid] = SpecificConfig(general_config, ecosystem_uid)
-        return _configs[ecosystem_uid]
-
-
 def get_IDs(ecosystem: str) -> IDs:
     """Return the tuple (ecosystem_uid, ecosystem_name)
 
     :param ecosystem: str, either an ecosystem uid or ecosystem name
     """
-    return get_general_config().get_IDs(ecosystem)
+    return EngineConfig().get_IDs(ecosystem)
 
 
-def detach_config(ecosystem) -> None:
-    uid = get_general_config().get_IDs(ecosystem).uid
-    del _configs[uid]
+def detach_config(ecosystem: str) -> None:
+    config = EcosystemConfig(ecosystem=ecosystem)
+    del _MetaEcosystemConfig.instances[config.uid]

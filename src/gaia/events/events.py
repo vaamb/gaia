@@ -13,7 +13,7 @@ from pydantic import BaseModel, ValidationError
 
 from gaia_validators import *
 
-from gaia.config import get_config, get_environment_config
+from gaia.config import get_config
 from gaia.shared_resources import scheduler
 from gaia.utils import (
     encrypted_uid, generate_uid_token, humanize_list, local_ip_address)

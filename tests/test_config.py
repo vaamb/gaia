@@ -87,7 +87,7 @@ def test_specific_properties(
         specific_config: "SpecificConfig"
 ):
     assert specific_config.general.__dict__ == general_config.__dict__
-    assert specific_config.ecosystem_config == TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]
+    assert specific_config.__dict == TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]
     assert specific_config.name == "test"
     specific_config.name = "name"
     assert specific_config.name == "name"
@@ -154,4 +154,4 @@ def test_specific_hardware(specific_config: "SpecificConfig"):
         specific_config.create_new_hardware(**hardware_info)
         hardware_info["model"] = "DoesNotExist"
         specific_config.create_new_hardware(**hardware_info)
-    specific_config.ecosystem_config = TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]
+    specific_config.__dict = TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]

@@ -274,8 +274,8 @@ _virtual_ecosystems: dict[str, VirtualEcosystem] = {}
 
 
 def get_virtual_ecosystem(ecosystem: str, start=False) -> VirtualEcosystem:
-    from gaia.config import get_environment_IDs
-    ecosystem_uid = get_environment_IDs(ecosystem).uid
+    from gaia.config import get_ecosystem_IDs
+    ecosystem_uid = get_ecosystem_IDs(ecosystem).uid
     try:
         return _virtual_ecosystems[ecosystem_uid]
     except KeyError:

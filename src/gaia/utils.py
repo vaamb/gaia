@@ -323,8 +323,8 @@ def temperature_converter(
 
 
 def get_unit(measure: str, default: str) -> str:
-    from gaia.config.environments import get_general_config
-    return get_general_config().units.get(measure, default)
+    from gaia.config.from_files import EngineConfig
+    return EngineConfig().units.get(measure, default)
 
 
 def is_connected() -> bool:
