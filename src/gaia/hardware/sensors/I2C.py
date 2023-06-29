@@ -29,9 +29,7 @@ class AHT20(i2cSensor):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):
             kwargs["measures"] = ["temperature", "humidity"]
-        super().__init__(*args, **kwargs)
-        if not self._address["main"].main:
-            self._address["main"].main = 0x38
+        super().__init__(*args, default_address=0x38, **kwargs)
 
     def _get_device(self) -> "AHTx0":
         if _IS_RASPI:
@@ -44,7 +42,7 @@ class AHT20(i2cSensor):
                 )
         else:
             from gaia.hardware._compatibility import AHTx0
-        return AHTx0(self._get_i2c(), self._address["main"].main)
+        return AHTx0(self._get_i2c(), self._address_book.primary.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
         try:
@@ -67,9 +65,7 @@ class AHT20(i2cSensor):
             )
             data.append({"measure": "temperature", "value": temperature})
         if "humidity" in self.measures:
-            data.append(
-                {"measure": "humidity", "value": raw_humidity}
-            )
+            data.append({"measure": "humidity", "value": raw_humidity})
         return data
 
 
@@ -77,9 +73,7 @@ class VEML7700(i2cSensor, LightSensor):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):
             kwargs["measures"] = ["lux"]
-        super().__init__(*args, **kwargs)
-        if not self._address["main"].main:
-            self._address["main"].main = 0x10
+        super().__init__(*args, default_address=0x10, **kwargs)
 
     def _get_device(self) -> "_VEML7700":
         if _IS_RASPI:
@@ -92,7 +86,7 @@ class VEML7700(i2cSensor, LightSensor):
                 )
         else:
             from gaia.hardware._compatibility import VEML7700 as _VEML7700
-        return _VEML7700(self._get_i2c(), self._address["main"].main)
+        return _VEML7700(self._get_i2c(), self._address_book.primary.main)
 
     # To catch data fast from light routine
     def get_lux(self) -> float | None:
@@ -116,9 +110,7 @@ class VCNL4040(i2cSensor, LightSensor):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):
             kwargs["measures"] = ["lux"]
-        super().__init__(*args, **kwargs)
-        if not self._address["main"].main:
-            self._address["main"].main = 0x60
+        super().__init__(*args, default_address=0x60, **kwargs)
 
     def _get_device(self) -> "_VCNL4040":
         if _IS_RASPI:
@@ -131,7 +123,7 @@ class VCNL4040(i2cSensor, LightSensor):
                 )
         else:
             from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
-        return _VCNL4040(self._get_i2c(), self._address["main"].main)
+        return _VCNL4040(self._get_i2c(), self._address_book.primary.main)
 
     # To catch data fast from light routine
     def get_lux(self) -> float | None:
@@ -155,9 +147,7 @@ class CapacitiveSensor(i2cSensor):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):
             kwargs["measures"] = ["capacitive"]
-        super().__init__(*args, **kwargs)
-        if not self._address["main"].main:
-            self._address["main"].main = 0x36
+        super().__init__(*args, default_address=0x36, **kwargs)
 
     def _get_device(self) -> "Seesaw":
         if _IS_RASPI:
@@ -170,7 +160,7 @@ class CapacitiveSensor(i2cSensor):
                 )
         else:
             from gaia.hardware._compatibility import Seesaw
-        return Seesaw(self._get_i2c(), self._address["main"].main)
+        return Seesaw(self._get_i2c(), self._address_book.primary.main)
 
     def get_data(self) -> list[MeasureRecordDict]:
         raise NotImplementedError(

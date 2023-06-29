@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 import io
 import os
 from pathlib import Path
+import re
+import textwrap
 import typing as t
-from typing import Any, cast, Self
+from typing import Any, cast, Literal, Self
 import weakref
 
 from gaia_validators import (
@@ -20,15 +23,25 @@ from gaia.utils import (
     pin_bcm_to_board, pin_board_to_bcm, pin_translation)
 
 
-if t.TYPE_CHECKING and 0:  # pragma: no cover
+if t.TYPE_CHECKING:  # pragma: no cover
     import numpy as np
 
     from gaia.subroutines.template import SubroutineTemplate
     if _IS_RASPI:
-        from adafruit_blinka import pwmio
+        import pwmio
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
     else:
         from gaia.hardware._compatibility import Pin, pwmio
+
+
+class PinNumberError(ValueError):
+    pass
+
+
+class AddressType(Enum):
+    GPIO = "GPIO"
+    I2C = "I2C"
+    SPI = "SPI"
 
 
 def str_to_hex(address: str) -> int:
@@ -37,65 +50,120 @@ def str_to_hex(address: str) -> int:
     return int(address, base=16)
 
 
-@dataclass
+@dataclass(slots=True)
 class Image:
     array: "np.array"
     timestamp: datetime
 
 
 class Address:
-    __slots__ = ("type", "main", "multiplexer", "multiplexer_channel")
+    __slots__ = ("type", "main", "multiplexer_address", "multiplexer_channel")
 
     def __init__(self, address_string: str) -> None:
         """
-        :param address_string: str: address in form 'GPIO_1'
+        :param address_string: properly written address. cf the _hint method
+                               to see different address formats possible
         """
         address_components = address_string.split("_")
         if len(address_components) != 2:
-            raise ValueError
-        self.type: str = address_components[0].lower()
-        self.main: int = 0
-        self.multiplexer: int = 0
-        self.multiplexer_channel: int = 0
-        self._set_number(address_components[1])
+            raise ValueError(self._hint())
+
+        address_data = self._extract_address_data(
+            type_str=address_components[0],
+            numbers_str=address_components[1]
+        )
+        self.type: AddressType = address_data[0]
+        self.main: int = address_data[1]
+        self.multiplexer_address: int = address_data[2]
+        self.multiplexer_channel: int = address_data[3]
 
     def __repr__(self) -> str:
-        if self.type == "i2c":
+        if self.type == AddressType.GPIO:
+            rep_f = int
+        elif self.type == AddressType.I2C:
+            rep_f = hex
+        elif self.type == AddressType.SPI:
             rep_f = hex
         else:
-            rep_f = int
-        if self.multiplexer:
+            raise TypeError
+        if self.multiplexer_address:
             return (
-                f"{self.type.upper()}_{rep_f(self.multiplexer)}#"
+                f"{self.type.value}_{rep_f(self.multiplexer_address)}#"
                 f"{self.multiplexer_channel}.{rep_f(self.main)}"
             )
         else:
-            return f"{self.type.upper()}_{rep_f(self.main)}"
+            return f"{self.type.value}_{rep_f(self.main)}"
 
-    def _set_number(self, str_number: str) -> None:
-        if self.type.lower() in ("board", "bcm", "gpio"):
-            number = int(str_number)
-            if self.type.lower() == "board":
+    @staticmethod
+    def _hint() -> str:
+        msg = """\
+        Different types of address can be used: "GPIO" (using board or bcm
+        numbers), "I2C" and "SPI" (currently not implemented).
+
+        Here are some examples for the different address types:
+        GPIO:
+            Board numbers: "BOARD_37"
+            BCM/GPIO numbers: "BCM_27"  == "GPIO_27"
+        I2C:
+            Without a multiplexer: "I2C_0x10"
+            With a multiplexer: "I2C_0x70#1.0x10", where "0x70" is the
+                                address of the multiplexer and "1" the
+                                channel used
+        SPI:
+            Not implemented yet
+        """
+        return textwrap.dedent(msg)
+
+    def _extract_address_data(
+            self,
+            type_str: str,
+            numbers_str: str
+    ) -> tuple[AddressType, int, int, int]:
+        # Extract type
+        address_type: AddressType
+        if type_str.lower() in ("board", "bcm", "gpio"):
+            address_type = AddressType.GPIO
+        elif type_str.lower() == "i2c":
+            address_type = AddressType.I2C
+        elif type_str.lower() == "spi":
+            address_type = AddressType.SPI
+        else:
+            raise ValueError("Address type is not supported")
+
+        # Extract numbers
+        main: int = 0
+        multiplexer_address: int = 0
+        multiplexer_channel: int = 0
+        # GPIO-type address
+        if address_type == AddressType.GPIO:
+            try:
+                number = int(numbers_str)
+            except ValueError:
+                raise ValueError(self._hint())
+            if type_str.lower() == "board":
                 if number not in pin_board_to_bcm:  # pragma: no cover
-                    raise ValueError("The pin is not a valid GPIO pin")
-                self.main = pin_translation(number, "to_BCM")
+                    raise PinNumberError("The pin is not a valid GPIO pin")
+                main = pin_translation(number, "to_BCM")
             else:
                 if number not in pin_bcm_to_board:  # pragma: no cover
-                    raise ValueError("The pin is not a valid GPIO pin")
-                self.main = number
-        elif self.type.lower() == "i2c":
-            i2c_components = str_number.split(".")
-            if len(i2c_components) > 1:
-                self.main = str_to_hex(i2c_components[1])
-                multiplexer_components = i2c_components[0].split("#")
-                self.multiplexer = str_to_hex(multiplexer_components[0])
-                self.multiplexer_channel = str_to_hex(multiplexer_components[1])
+                    raise PinNumberError("The pin is not a valid GPIO pin")
+                main = number
+        # I2C type address
+        elif address_type == AddressType.I2C:
+            i2c_components = re.split("[#.]", numbers_str)
+            if len(i2c_components) == 1:
+                main = str_to_hex(i2c_components[0])
+            elif len(i2c_components) == 3:
+                multiplexer_address = str_to_hex(i2c_components[0])
+                multiplexer_channel = str_to_hex(i2c_components[1])
+                main = str_to_hex(i2c_components[2])
             else:
-                self.main = str_to_hex(i2c_components[0])
+                raise ValueError(self._hint())
+        return address_type, main, multiplexer_address, multiplexer_channel
 
     @property
     def is_multiplexed(self) -> bool:
-        return self.multiplexer != 0
+        return self.multiplexer_address != 0
 
 
 class _MetaHardware(type):
@@ -112,6 +180,15 @@ class _MetaHardware(type):
             return hardware
 
 
+@dataclass(frozen=True, slots=True)
+class AddressBook:
+    primary: Address
+    secondary: Address | None = None
+
+
+AddressBookType = Literal["primary", "secondary"]
+
+
 class Hardware(metaclass=_MetaHardware):
     """
     Base class for all hardware config creation and when creating hardware
@@ -124,7 +201,7 @@ class Hardware(metaclass=_MetaHardware):
     ecosystems.cfg
     """
     __slots__ = (
-        "_subroutine", "_uid", "_name", "_address", "_level", "_type",
+        "_subroutine", "_uid", "_name", "_address_book", "_level", "_type",
         "_model", "_measures", "_multiplexer_model", "_plants"
     )
 
@@ -154,17 +231,16 @@ class Hardware(metaclass=_MetaHardware):
         self._model: str = model
         self._name: str = name or uid
         address_list: list = address.split(":")
-        self._address: dict[str, Address] = {"main": Address(address_list[0])}
-        if len(address_list) == 2:
-            self._address.update({"secondary": Address(address_list[1])})
-        measures = measures or []
+        self._address_book: AddressBook = AddressBook(
+            primary=Address(address_list[0]),
+            secondary=Address(address_list[1]) if len(address_list) == 2 else None
+        )
         if isinstance(measures, str):
             measures = [measures]
-        self._measures = measures
-        plants = plants or []
+        self._measures = measures or []
         if isinstance(plants, str):
             plants = [plants]
-        self._plants = plants
+        self._plants = plants or []
         self._multiplexer_model = multiplexer_model
 
     def __del__(self):
@@ -231,16 +307,16 @@ class Hardware(metaclass=_MetaHardware):
         self._name = new_name
 
     @property
-    def address(self) -> dict[str, Address]:
-        return self._address
+    def address_book(self) -> AddressBook:
+        return self._address_book
 
     @property
     def address_repr(self) -> str:
-        sec = self._address.get("secondary", None)
+        sec = self._address_book.secondary is not None
         if sec:
-            return f"{self._address['main']}:{sec}"
+            return f"{self._address_book.primary}:{self._address_book.secondary}"
         else:
-            return str(self._address['main'])
+            return str(self._address_book.primary)
 
     @property
     def model(self) -> str:
@@ -288,7 +364,7 @@ class gpioHardware(Hardware):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not self._address["main"].type in ("bcm", "board", "gpio"):  # pragma: no cover
+        if not self._address_book.primary.type == AddressType.GPIO:  # pragma: no cover
             raise ValueError(
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
@@ -309,12 +385,15 @@ class gpioHardware(Hardware):
 
     @property
     def pin(self) -> "Pin":
-        return self._get_pin(self._address["main"].main)
+        return self._get_pin(self._address_book.primary.main)
 
 
 class Switch(Hardware):
     def __del__(self):
-        self.turn_off()
+        try:
+            self.turn_off()
+        except AttributeError:  # Pin not yet setup
+            pass
 
     def turn_on(self) -> None:
         raise NotImplementedError(
@@ -330,7 +409,7 @@ class Switch(Hardware):
 class Dimmer(Hardware):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if "secondary" not in self.address:  # pragma: no cover
+        if self._address_book.secondary is None:  # pragma: no cover
             raise ValueError(
                 "dimmable hardware address should be of form "
                 "'addressType1_addressNum1:addressType2_addressNum2' with"
@@ -350,7 +429,7 @@ class Dimmer(Hardware):
 class gpioDimmer(gpioHardware, Dimmer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self.address["secondary"].type in ("bcm", "board", "gpio"):  # pragma: no cover
+        if not self._address_book.secondary.type == AddressType.GPIO:  # pragma: no cover
             raise ValueError(
                 "gpioDimmable address must be of type"
                 "'addressType1_addressNum1:GPIO_pinNumber'"
@@ -375,28 +454,28 @@ class gpioDimmer(gpioHardware, Dimmer):
 
     @property
     def PWMPin(self) -> "Pin":
-        return self._get_pin(self._address["secondary"].main)
+        return self._get_pin(self._address_book.secondary.main)
 
     @property
     def dimmer(self) -> "pwmio.PWMOut":
         return self._get_dimmer()
 
 
-# TODO later: handle multiplex
 class i2cHardware(Hardware):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not self.address["main"].type == "i2c":  # pragma: no cover
+        if not self._address_book.primary.type == AddressType.I2C:  # pragma: no cover
             raise ValueError(
                 "i2cHardware address must be of type: 'I2C_default' or 'I2C_0' "
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
                 "to use a specific address"
             )
 
-    def _get_i2c(self, address: str = "main"):
-        if self.address[address].is_multiplexed:
-            multiplexer_address = self.address[address].multiplexer
-            multiplexer_channel = self.address[address].multiplexer_channel
+    def _get_i2c(self, address: AddressBookType = "primary"):
+        address: Address = getattr(self._address_book, address)
+        if self._address_book[address].is_multiplexed:
+            multiplexer_address = self._address_book[address].multiplexer_address
+            multiplexer_channel = self._address_book[address].multiplexer_channel
             multiplexer_class = multiplexer_models[self.multiplexer_model]
             multiplexer = multiplexer_class(multiplexer_address)
             return multiplexer.get_channel(multiplexer_channel)
@@ -452,6 +531,13 @@ class gpioSensor(BaseSensor, gpioHardware):
 
 
 class i2cSensor(BaseSensor, i2cHardware):
+    def __init__(self, *args, default_address: int | None = None, **kwargs) -> None:
+        if default_address is not None:
+            address = kwargs["address"]
+            if "def" in address:
+                kwargs["address"] = f"I2C_{hex(default_address)}"
+        super().__init__(*args, **kwargs)
+
     def get_data(self) -> list:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
