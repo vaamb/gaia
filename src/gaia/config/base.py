@@ -16,7 +16,7 @@ class BaseConfig:
     LOG_TO_FILE = True
     LOG_ERROR = True
 
-    ENGINE_UID = os.environ.get("GAIA_UUID") or hex(uuid.getnode())[2:]
+    ENGINE_UID = os.environ.get("GAIA_UID") or hex(uuid.getnode())[2:]
     VIRTUALIZATION = os.environ.get("GAIA_VIRTUALIZATION", False)
 
     USE_DATABASE = False
