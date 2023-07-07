@@ -67,6 +67,7 @@ class ActuatorHandler:
 
     @status.setter
     def status(self, value: bool) -> None:
+        self.subroutine.ecosystem._actuators_state[self.type.value]["status"] = value
         if self.status != self.last_status:
             self._set_status_no_update(value)
             self.subroutine.logger.info(
