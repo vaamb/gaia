@@ -473,9 +473,9 @@ class i2cHardware(Hardware):
 
     def _get_i2c(self, address: AddressBookType = "primary"):
         address: Address = getattr(self._address_book, address)
-        if self._address_book[address].is_multiplexed:
-            multiplexer_address = self._address_book[address].multiplexer_address
-            multiplexer_channel = self._address_book[address].multiplexer_channel
+        if address.is_multiplexed:
+            multiplexer_address = address.multiplexer_address
+            multiplexer_channel = address.multiplexer_channel
             multiplexer_class = multiplexer_models[self.multiplexer_model]
             multiplexer = multiplexer_class(multiplexer_address)
             return multiplexer.get_channel(multiplexer_channel)
@@ -490,7 +490,7 @@ class PlantLevelHardware(Hardware):
         if not self.plants:  # pragma: no cover
             hardware_logger.warning(
                 "Plants-level hardware should be provided a plant name "
-                "as kwarg with the key name 'plant'"
+                "as kwarg with the key name 'plants'"
             )
 
 
