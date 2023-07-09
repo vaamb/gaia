@@ -683,6 +683,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def managements(self) -> ManagementConfigDict:
         return self.__dict["management"]
 
+    @managements.setter
+    def managements(self, value: ManagementConfigDict) -> None:
+        self.__dict["management"] = ManagementConfig(**value).dict()
+        self.save()
+
     def get_management(self, management: ManagementNames) -> bool:
         try:
             return self.__dict["management"].get(management, False)

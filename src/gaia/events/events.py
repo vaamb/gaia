@@ -13,7 +13,7 @@ from pydantic import BaseModel, ValidationError
 
 from gaia_validators import *
 
-from gaia.config import get_config
+from gaia.config import EcosystemConfig, get_config
 from gaia.shared_resources import scheduler
 from gaia.utils import (
     encrypted_uid, generate_uid_token, humanize_list, local_ip_address)
@@ -319,20 +319,22 @@ class Events:
         ):
             raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
 
-        def assign(property_setter):
+        def assign(prop: EcosystemConfig, attr_name: str):
             def inner(payload: dict):
-                property_setter = payload  # noqa
+                setattr(prop, attr_name, payload)
 
             return inner
 
         return {
-            # Ecosystem creation/deletion
+            # Ecosystem creation and deletion
             "create_ecosystem": self.engine.config.create_ecosystem,
             "delete_ecosystem": self.engine.config.delete_ecosystem,
-            # Ecosystem update
-            "update_light_method": assign(self.ecosystems[ecosystem_uid].config.light_method),
-            "update_chaos": assign(self.ecosystems[ecosystem_uid].config.chaos),
-            "update_time_parameters": assign(self.ecosystems[ecosystem_uid].config.time_parameters),
+            # Ecosystem properties update
+            "update_chaos": assign(self.ecosystems[ecosystem_uid].config, "chaos"),
+            "update_light_method": assign(self.ecosystems[ecosystem_uid].config, "light_method"),
+            "update_management": assign(self.ecosystems[ecosystem_uid].config, "managements"),
+            "update_time_parameters": assign(self.ecosystems[ecosystem_uid].config, "time_parameters"),
+            # Environment parameter creation, deletion and update
             "create_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
             "update_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
             "delete_environment_parameter": self.ecosystems[ecosystem_uid].config.delete_climate_parameter,
@@ -348,19 +350,17 @@ class Events:
         data: CrudPayloadDict = self.validate_payload(
             message, CrudPayload)
         crud_uuid = data["uuid"]
-        engine_uid = data["engine_uid"]
+        engine_uid = data["routing"]["engine_uid"]
         if engine_uid != self.engine.uid:
-            self.logger.error(
+            self.logger.warning(
                 f"Received 'on_crud' event intended to engine {engine_uid}"
             )
             return
         crud_key = f"{data['action'].value}_{data['target']}"
-        ecosystem_uid = (
-            data["values"].get("ecosystem_uid") or data["values"].get("uid")
-        )
+        ecosystem_uid = data["routing"]["ecosystem_uid"]
         crud_function = self.get_crud_function(crud_key, ecosystem_uid)
         try:
-            crud_function(**data["values"])
+            crud_function(data["values"])
             self.emit(
                 event="crud_result",
                 data=CrudResult(
@@ -374,7 +374,7 @@ class Events:
                 data=CrudResult(
                     uuid=crud_uuid,
                     status=Result.failure,
-                    message=e
+                    message=str(e)
                 ).dict()
             )
 
