@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime, time
+from enum import Enum
 from json.decoder import JSONDecodeError
 import logging
 import pathlib
@@ -34,17 +35,12 @@ if t.TYPE_CHECKING:
     from gaia.engine import Engine
 
 
-_store = {}
-
-ConfigType = Literal["ecosystems", "private"]
+config_condition = Condition()
 
 
-def get_config_event():
-    try:
-        return _store["config_event"]
-    except KeyError:
-        _store["config_event"] = Condition()
-        return _store["config_event"]
+class ConfigType(Enum):
+    ecosystems = "_ecosystems_config"
+    private = "_private_config"
 
 
 logger = logging.getLogger("gaia.config.environments")
@@ -204,15 +200,12 @@ class EngineConfig(metaclass=SingletonMeta):
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
         self._sun_times: SunTimes | None = None
-        self._hash_dict: dict[str, str] = {}
+        # Watchdog threading securities
+        self._hash_dict: dict[ConfigType, str] = {}
         self._lock = Lock()
         self._stop_event = Event()
-        self._watchdog_pause = Event()
-        self._watchdog_pause.set()
         self._thread: Thread | None = None
-        for cfg in ("ecosystems", "private"):
-            cfg: ConfigType
-            self._load_or_create_config(cfg)
+        self.initialize_configs()
 
     def __repr__(self) -> str:
         return f"GeneralConfig(watchdog={self.started})"
@@ -220,55 +213,6 @@ class EngineConfig(metaclass=SingletonMeta):
     @property
     def started(self) -> bool:
         return self._thread is not None
-
-    def _load_config(self, cfg: ConfigType) -> None:
-        config_path = self._base_dir / f"{cfg}.cfg"
-        if cfg == "ecosystems":
-            with open(config_path, "r") as file:
-                raw = {"config": yaml.load(file)}
-                try:
-                    cleaned = RootEcosystemsConfigValidator(**raw).dict()
-                except ValidationError as e:
-                    # TODO: log formatted error message
-                    raise e
-                else:
-                    self._ecosystems_config = cleaned["config"]
-        elif cfg == "private":
-            with open(config_path, "r") as file:
-                self._private_config = yaml.load(file)
-        else:  # pragma: no cover
-            raise ValueError("cfg should be 'ecosystems' or 'private'")
-
-    def _dump_config(self, cfg: ConfigType):
-        config_path = self._base_dir / f"{cfg}.cfg"
-        if cfg == "ecosystems":
-            with open(config_path, "w") as file:
-                yaml.dump(self._ecosystems_config, file)
-        elif cfg == "private":
-            with open(config_path, "w") as file:
-                yaml.dump(self._private_config, file)
-        else:  # pragma: no cover
-            raise ValueError("cfg should be 'ecosystems' or 'private'")
-
-    def _load_or_create_config(self, cfg: ConfigType) -> None:
-        try:
-            self._load_config(cfg)
-        except OSError:
-            if cfg == "ecosystems":
-                logger.warning(
-                    "There is currently no custom ecosystem configuration file. "
-                    "Creating a default configuration instead"
-                )
-                self._ecosystems_config = {}
-                self.create_ecosystem("Default Ecosystem")
-                self.save("ecosystems")
-            elif cfg == "private":
-                logger.warning(
-                    "There is currently no custom private configuration file. "
-                    "Using the default settings instead"
-                )
-                self._private_config = {}
-                self.save("private")
 
     @property
     def thread(self) -> Thread:
@@ -292,29 +236,93 @@ class EngineConfig(metaclass=SingletonMeta):
     def engine(self, value: "Engine") -> None:
         self._engine = value
 
+    # Load, dump and save config
+    def _load_config(self, cfg_type: ConfigType) -> None:
+        # /!\ must be used with the config_files_lock acquired
+        config_path = self._base_dir/f"{cfg_type.name}.cfg"
+        if cfg_type == ConfigType.ecosystems:
+            with open(config_path, "r") as file:
+                raw = {"config": yaml.load(file)}
+                try:
+                    cleaned = RootEcosystemsConfigValidator(**raw).dict()
+                except ValidationError as e:
+                    # TODO: log formatted error message
+                    raise e
+                else:
+                    self._ecosystems_config = cleaned["config"]
+        elif cfg_type == ConfigType.private:
+            with open(config_path, "r") as file:
+                self._private_config = yaml.load(file)
+
+    def _dump_config(self, cfg_type: ConfigType):
+        # /!\ must be used with the config_files_lock acquired
+        config_path = self._base_dir/f"{cfg_type.name}.cfg"
+        with open(config_path, "w") as file:
+            cfg = getattr(self, cfg_type.value)
+            yaml.dump(cfg, file)
+
+    def _create_ecosystems_config_file(self):
+        self._ecosystems_config = {}
+        self.create_ecosystem("Default Ecosystem")
+        self._dump_config(ConfigType.ecosystems)
+
+    def _create_private_config_file(self):
+        self._private_config = {}
+        self._dump_config(ConfigType.private)
+
+    def initialize_configs(self) -> None:
+        with self.config_files_lock():
+            for cfg_type in ConfigType:
+                try:
+                    self._load_config(cfg_type)
+                except OSError:
+                    if cfg_type == ConfigType.ecosystems:
+                        logger.warning(
+                            "No custom `ecosystems.cfg` configuration file "
+                            "detected. Creating a default file.")
+                        self._create_ecosystems_config_file()
+                    elif cfg_type == ConfigType.private:
+                        logger.warning(
+                            "No custom `private.cfg` configuration file "
+                            "detected. Creating a default file.")
+                        self._create_private_config_file()
+
+    def save(self, cfg_type: ConfigType) -> None:
+        with self.config_files_lock():
+            logger.debug(f"Updating {cfg_type.name} configuration file(s)")
+            self._dump_config(cfg_type)
+
+    # File watchdog
     def _update_cfg_hash(self) -> None:
-        for cfg in ("ecosystems", "private"):
-            path = self._base_dir/f"{cfg}.cfg"
-            self._hash_dict[cfg] = file_hash(path)
+        for cfg_type in ConfigType:
+            path = self._base_dir/f"{cfg_type.name}.cfg"
+            self._hash_dict[cfg_type] = file_hash(path)
 
     def _watchdog_loop(self) -> None:
         while not self._stop_event.is_set():
-            self._watchdog_pause.wait()
-            old_hash = {**self._hash_dict}
-            self._update_cfg_hash()
-            reload_cfg = [
-                cfg for cfg in ("ecosystems", "private")
-                if old_hash[cfg] != self._hash_dict[cfg]
-            ]
-            if reload_cfg:
-                logger.info(f"Change in config file(s) detected, updating GeneralConfig.")
-                self.reload(reload_cfg)
+            reloaded = False
+            with self.config_files_lock():
+                old_hash = {**self._hash_dict}
+                self._update_cfg_hash()
+                # Need to reload the config if its hash has changed
+                reload_cfg: list[ConfigType] = [
+                    cfg_type for cfg_type in ConfigType
+                    if old_hash[cfg_type] != self._hash_dict[cfg_type]
+                ]
+                if reload_cfg:
+                    logger.info(
+                        f"Change in config file(s) detected. Updating "
+                        f"configuration file(s) {[cfg.name for cfg in reload_cfg]}")
+                    for cfg in reload_cfg:
+                        self._load_config(cfg_type=cfg)
+                    with config_condition:
+                        config_condition.notify_all()
+                    reloaded = True
+            if reloaded:
                 if "ecosystems" in reload_cfg:
                     self.refresh_sun_times()
-                try:
+                if self.engine.use_message_broker:
                     self.engine.event_handler.send_full_config()
-                except AttributeError:
-                    pass
             self._stop_event.wait(get_gaia_config().CONFIG_WATCHER_PERIOD)
 
     def start_watchdog(self) -> None:
@@ -337,35 +345,16 @@ class EngineConfig(metaclass=SingletonMeta):
             logger.debug("Configuration files watchdog successfully stopped")
 
     @contextmanager
-    def pausing_watchdog(self):
-        with self._lock:  # maybe use a semaphore?
+    def config_files_lock(self):
+        """A context manager that makes sure only one process access file
+        content at the time"""
+        with self._lock:
             try:
-                self._watchdog_pause.clear()
                 yield
             finally:
                 self._update_cfg_hash()
-                self._watchdog_pause.set()
 
-    def reload(self, config: list | str | tuple = ("ecosystems", "private")) -> None:
-        with self.pausing_watchdog():
-            if isinstance(config, str):
-                config = (config, )
-            logger.debug(f"Updating configuration file(s) {tuple(config)}")
-            for cfg in config:
-                self._load_config(cfg=cfg)
-            config_event = get_config_event()
-            with config_event:
-                config_event.notify_all()
-
-    def save(self, config: ConfigType) -> None:
-        with self.pausing_watchdog():
-            logger.debug(f"Updating configuration file(s) {config}")
-            self._dump_config(config)
-            try:
-                self.engine.event_handler.send_full_config()
-            except AttributeError:
-                pass
-
+    # API
     def _create_new_ecosystem_uid(self) -> str:
         length = 8
         used_ids = self.ecosystems_uid
@@ -381,12 +370,12 @@ class EngineConfig(metaclass=SingletonMeta):
         uid = self._create_new_ecosystem_uid()
         ecosystem_cfg = EcosystemConfigValidator(name=ecosystem_name).dict()
         self._ecosystems_config.update({uid: ecosystem_cfg})
-        self.save("ecosystems")
+        self.save(ConfigType.ecosystems)
 
     def delete_ecosystem(self, ecosystem_id: str) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
         del self._ecosystems_config[ecosystem_ids.uid]
-        self.save("ecosystems")
+        self.save(ConfigType.ecosystems)
 
     @property
     def ecosystems_config(self) -> dict[str, EcosystemConfigDict]:
@@ -484,11 +473,13 @@ class EngineConfig(metaclass=SingletonMeta):
             )
         validated_coordinates: CoordinatesDict = CoordinatesValidator(**coordinates).dict()
         self.places[place] = validated_coordinates
+        self.save(ConfigType.private)
 
     def CRUD_create_place(self, value: PlaceDict):
         validated_value: PlaceDict = PlaceValidator(**value).dict()
         place = validated_value.pop("name")
         self.places[place] = validated_value["coordinates"]
+        self.save(ConfigType.private)
 
     def CRUD_update_place(self, value: PlaceDict) -> None:
         validated_value: PlaceDict = PlaceValidator(**value).dict()
@@ -498,6 +489,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"No place named '{place}' was found in the private "
                 f"configuration file")
         self.places[place] = validated_value["coordinates"]
+        self.save(ConfigType.private)
 
     @property
     def home(self) -> PlaceValidator:
@@ -674,7 +666,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def save(self) -> None:
         if not get_gaia_config().TESTING:
-            self._general_config.save("ecosystems")
+            self._general_config.save(ConfigType.ecosystems)
 
     @property
     def general(self) -> EngineConfig:
@@ -925,6 +917,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def CRUD_create_hardware(self, value: gvHardwareConfigDict) -> None:
         self.create_new_hardware(**value)
+        self.save()
 
     def update_hardware(self, uid: str, update_value: dict) -> None:
         try:
