@@ -319,9 +319,9 @@ class Events:
         ):
             raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
 
-        def assign(prop: EcosystemConfig, attr_name: str):
+        def CRUD_update(config: EcosystemConfig, attr_name: str):
             def inner(payload: dict):
-                setattr(prop, attr_name, payload)
+                setattr(config, attr_name, payload)
 
             return inner
 
@@ -330,20 +330,21 @@ class Events:
             "create_ecosystem": self.engine.config.create_ecosystem,
             "delete_ecosystem": self.engine.config.delete_ecosystem,
             # Ecosystem properties update
-            "update_chaos": assign(self.ecosystems[ecosystem_uid].config, "chaos"),
-            "update_light_method": assign(self.ecosystems[ecosystem_uid].config, "light_method"),
-            "update_management": assign(self.ecosystems[ecosystem_uid].config, "managements"),
-            "update_time_parameters": assign(self.ecosystems[ecosystem_uid].config, "time_parameters"),
+            "update_chaos": CRUD_update(self.ecosystems[ecosystem_uid].config, "chaos"),
+            "update_light_method": CRUD_update(self.ecosystems[ecosystem_uid].config, "light_method"),
+            "update_management": CRUD_update(self.ecosystems[ecosystem_uid].config, "managements"),
+            "update_time_parameters": CRUD_update(self.ecosystems[ecosystem_uid].config, "time_parameters"),
             # Environment parameter creation, deletion and update
-            "create_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
-            "update_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
+            "create_environment_parameter": self.ecosystems[ecosystem_uid].config.CRUD_create_climate_parameter,
+            "update_environment_parameter": self.ecosystems[ecosystem_uid].config.CRUD_update_climate_parameter,
             "delete_environment_parameter": self.ecosystems[ecosystem_uid].config.delete_climate_parameter,
             # Hardware creation, deletion and update
-            "create_hardware": self.ecosystems[ecosystem_uid].config.create_new_hardware,
-            "update_hardware": self.ecosystems[ecosystem_uid].config.update_hardware,
+            "create_hardware": self.ecosystems[ecosystem_uid].config.CRUD_create_hardware,
+            "update_hardware": self.ecosystems[ecosystem_uid].config.CRUD_update_hardware,
             "delete_hardware": self.ecosystems[ecosystem_uid].config.delete_hardware,
             # Private
-            "update_place": self.engine.config.set_place,
+            "create_place": self.engine.config.CRUD_create_place,
+            "update_place": self.engine.config.CRUD_update_place,
         }[crud_key]
 
     def on_crud(self, message: CrudPayloadDict):
@@ -360,7 +361,7 @@ class Events:
         ecosystem_uid = data["routing"]["ecosystem_uid"]
         crud_function = self.get_crud_function(crud_key, ecosystem_uid)
         try:
-            crud_function(data["values"])
+            crud_function(data["data"])
             self.emit(
                 event="crud_result",
                 data=CrudResult(

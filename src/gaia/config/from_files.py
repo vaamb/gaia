@@ -16,6 +16,9 @@ import weakref
 from pydantic import BaseModel, Field, ValidationError, validator
 
 from gaia_validators import *
+from gaia_validators import (
+    ClimateConfigDict as gvClimateConfigDict,
+    HardwareConfigDict as gvHardwareConfigDict)
 
 from gaia.config._utils import (
     get_base_dir, get_cache_dir, get_config as get_gaia_config)
@@ -465,7 +468,9 @@ class EngineConfig(metaclass=SingletonMeta):
             coordinates: CoordinatesDict = self.places[place]
             return PlaceValidator(name=place, coordinates=coordinates)
         except KeyError:
-            raise UndefinedParameter
+            raise UndefinedParameter(
+                f"No place named '{place}' was found in the private "
+                f"configuration file")
 
     def set_place(
             self,
@@ -479,6 +484,20 @@ class EngineConfig(metaclass=SingletonMeta):
             )
         validated_coordinates: CoordinatesDict = CoordinatesValidator(**coordinates).dict()
         self.places[place] = validated_coordinates
+
+    def CRUD_create_place(self, value: PlaceDict):
+        validated_value: PlaceDict = PlaceValidator(**value).dict()
+        place = validated_value.pop("name")
+        self.places[place] = validated_value["coordinates"]
+
+    def CRUD_update_place(self, value: PlaceDict) -> None:
+        validated_value: PlaceDict = PlaceValidator(**value).dict()
+        place = validated_value.pop("name")
+        if place not in self.places:
+            raise UndefinedParameter(
+                f"No place named '{place}' was found in the private "
+                f"configuration file")
+        self.places[place] = validated_value["coordinates"]
 
     @property
     def home(self) -> PlaceValidator:
@@ -540,7 +559,8 @@ class EngineConfig(metaclass=SingletonMeta):
                     local_time = utc_time_to_local_time(my_time)
                     return local_time
                 except Exception:
-                    raise UndefinedParameter
+                    raise UndefinedParameter(
+                        f"Could not find {daytime_event} in sun times file.")
 
             self._sun_times = SunTimes(
                 twilight_begin=import_daytime_event("civil_twilight_begin"),
@@ -749,7 +769,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         try:
             return ChaosConfig(**self.environment["chaos"])
         except KeyError:
-            raise UndefinedParameter
+            raise UndefinedParameter(f"Chaos as not been set in {self.name}")
 
     @chaos.setter
     def chaos(self, values: ChaosConfigDict) -> None:
@@ -778,7 +798,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             data = self.climate[parameter]
             return ClimateConfig(parameter=parameter, **data)
         except KeyError:
-            raise UndefinedParameter
+            raise UndefinedParameter(
+                f"No climate parameter {parameter} was found for ecosystem "
+                f"'{self.name}' in ecosystems configuration file")
 
     def set_climate_parameter(
             self,
@@ -793,7 +815,28 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             parameter: ClimateParameterNames,
     ) -> None:
-        del self.climate[parameter]
+        try:
+            del self.climate[parameter]
+            self.save()
+        except KeyError:
+            raise UndefinedParameter(
+                f"No climate parameter {parameter} was found for ecosystem "
+                f"'{self.name}' in ecosystems configuration file")
+
+    def CRUD_create_climate_parameter(self, value: ClimateConfigDict) -> None:
+        validated_value: gvClimateConfigDict = ClimateConfig(**value).dict()
+        parameter = validated_value.pop("parameter")
+        self.climate[parameter] = validated_value
+        self.save()
+
+    def CRUD_update_climate_parameter(self, value: ClimateConfigDict) -> None:
+        validated_value: gvClimateConfigDict = ClimateConfig(**value).dict()
+        parameter = validated_value.pop("parameter")
+        if parameter not in self.climate:
+            raise UndefinedParameter(
+                f"No climate parameter {parameter} was found for ecosystem "
+                f"'{self.name}' in ecosystems configuration file")
+        self.climate[parameter] = validated_value
         self.save()
 
     """Parameters related to IO"""    
@@ -842,6 +885,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             level: HardwareLevelNames,
             measures: list | None = None,
             plants: list | None = None,
+            multiplexer_model: str | None = None,
     ) -> None:
         """
         Create a new hardware
@@ -870,13 +914,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             level=level,
             model=model,
             measures=measures,
-            plants=plants
+            plants=plants,
+            multiplexer_model=multiplexer_model,
         )
         new_hardware = h.from_hardware_config(hardware_config, None)
         hardware_repr = new_hardware.dict_repr(shorten=True)
         hardware_repr.pop("uid")
         self.IO_dict.update({uid: hardware_repr})
         self.save()
+
+    def CRUD_create_hardware(self, value: gvHardwareConfigDict) -> None:
+        self.create_new_hardware(**value)
 
     def update_hardware(self, uid: str, update_value: dict) -> None:
         try:
@@ -891,6 +939,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.save()
         except KeyError:
             raise HardwareNotFound
+
+    def CRUD_update_hardware(self, value: gvHardwareConfigDict) -> None:
+        validated_value: gvHardwareConfigDict = HardwareConfig(**value).dict()
+        uid = validated_value.pop("uid")
+        if uid not in self.IO_dict:
+            raise HardwareNotFound
+        self.IO_dict[uid] = validated_value
+        self.save()
 
     def delete_hardware(self, uid: str) -> None:
         """
