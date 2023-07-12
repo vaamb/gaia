@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-import logging
 import inspect
+import logging
 from threading import Thread
 from time import sleep
 import typing as t
@@ -308,7 +308,7 @@ class Events:
             self.ecosystems[ecosystem_uid].config.save()
             self.emit_event("management", ecosystem_uids=[ecosystem_uid])
 
-    def get_crud_function(
+    def get_CRUD_function(
             self,
             crud_key: str,
             ecosystem_uid: str | None = None
@@ -347,10 +347,36 @@ class Events:
             "update_place": self.engine.config.CRUD_update_place,
         }[crud_key]
 
+    def get_CRUD_event_name(self, crud_key: str) -> EventNames:
+        # TODO: handle ecosystem creation and deletion
+        return {
+            # Ecosystem creation and deletion
+            "create_ecosystem": "base_info",
+            "delete_ecosystem": "base_info",
+            # Ecosystem properties update
+            #"update_chaos": ,
+            "update_light_method": "light_data",
+            "update_management": "management",
+            "update_time_parameters": "light_data",
+            # Environment parameter creation, deletion and update
+            "create_environment_parameter": "environmental_parameters",
+            "update_environment_parameter": "environmental_parameters",
+            "delete_environment_parameter": "environmental_parameters",
+            # Hardware creation, deletion and update
+            "create_hardware": "hardware",
+            "update_hardware": "hardware",
+            "delete_hardware": "hardware",
+            # Private
+            #"create_place": ,
+            #"update_place": ,
+        }[crud_key]
+
     def on_crud(self, message: CrudPayloadDict):
         data: CrudPayloadDict = self.validate_payload(
             message, CrudPayload)
         crud_uuid = data["uuid"]
+        self.logger.info(
+            f"Received CRUD request '{crud_uuid}' from Ouranos")
         engine_uid = data["routing"]["engine_uid"]
         if engine_uid != self.engine.uid:
             self.logger.warning(
@@ -359,7 +385,13 @@ class Events:
             return
         crud_key = f"{data['action'].value}_{data['target']}"
         ecosystem_uid = data["routing"]["ecosystem_uid"]
-        crud_function = self.get_crud_function(crud_key, ecosystem_uid)
+        try:
+            crud_function = self.get_CRUD_function(crud_key, ecosystem_uid)
+        except KeyError:
+            self.logger.error(
+                f"No CRUD function linked to action '{data['action'].value}' on"
+                f"target '{data['target']}' could be found. Aborting")
+            return
         try:
             crud_function(data["data"])
             self.emit(
@@ -369,6 +401,18 @@ class Events:
                     status=Result.success
                 ).dict()
             )
+            self.logger.info(
+                f"CRUD request '{crud_uuid}' was successfully treated")
+            try:
+                event_name = self.get_CRUD_event_name(crud_key)
+            except KeyError:
+                self.logger.debug(
+                    f"No CRUD payload linked to action '{data['action'].value}' "
+                    f"on target '{data['target']}' was found. New data won't be "
+                    f"sent to Ouranos")
+            else:
+                self.emit_event(
+                    event_name=event_name, ecosystem_uids=ecosystem_uid)
         except Exception as e:
             self.emit(
                 event="crud_result",
@@ -378,6 +422,8 @@ class Events:
                     message=str(e)
                 ).dict()
             )
+            self.logger.info(
+                f"CRUD request '{crud_uuid}' could not be treated")
 
     def on_get_data_since(self, message: SynchronisationPayloadDict) -> None:
         if self.db is None:
