@@ -62,7 +62,7 @@ class Events:
         self.registered = False
         self._background_task = False
         self._thread: Thread | None = None
-        self.logger = logging.getLogger(f"gaia.broker")
+        self.logger = logging.getLogger(f"gaia.events_handler")
         self.db: "SQLAlchemyWrapper" | None
         if get_config().USE_DATABASE:
             from gaia.database.models import db
