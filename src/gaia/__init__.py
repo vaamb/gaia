@@ -1,4 +1,4 @@
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 from gaia.config import EcosystemConfig, EngineConfig, get_base_dir, get_config
 from gaia.ecosystem import Ecosystem
