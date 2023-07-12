@@ -328,7 +328,7 @@ class Climate(SubroutineTemplate):
             pid.reset()
         scheduler.add_job(
             self._climate_routine,
-            trigger="cron", minute="*",
+            trigger="cron", minute="*", misfire_grace_time=5,
             id=f"{self._ecosystem_name}-climate"
         )
 
