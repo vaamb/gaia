@@ -4,7 +4,7 @@ description = "An app to manage greenhouses, terrariums and aquariums"
 authors = [
     {name = "Valentin Ambroise", email = "valentin.ambroise@outlook.com"}
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 readme = "README.md"
 license = {file = "LICENSE"}
 dynamic = ["version"]
