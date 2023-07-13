@@ -9,7 +9,7 @@ readme = "README.md"
 license = {file = "LICENSE"}
 dynamic = ["version"]
 dependencies = [
-    "adafruit-blinka~=6.2.2",
+    "adafruit-blinka~=8.20.0",
     "apscheduler~=3.7.0",
     "cachetools~=4.2.2",
     "cryptography~=35.0.0",
