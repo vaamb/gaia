@@ -9,7 +9,7 @@ import typing as t
 from typing import Callable, Literal, Type
 import weakref
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from gaia_validators import *
 

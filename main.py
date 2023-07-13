@@ -12,7 +12,7 @@ else:
 
     def _default(obj):
         if isinstance(obj, BaseModel):
-            return obj.dict()
+            return obj.model_dump()
         raise TypeError
 
     def dumps(__obj, default=None, option=None):

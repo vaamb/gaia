@@ -14,7 +14,7 @@ import typing as t
 from typing import Literal, Self, TypedDict
 import weakref
 
-from pydantic import BaseModel, Field, ValidationError, validator
+from pydantic import Field, field_validator, RootModel, ValidationError
 
 from gaia_validators import *
 from gaia_validators import (
@@ -100,10 +100,7 @@ class HardwareConfigValidator(BaseModel):
     plants: list[str] = Field(default_factory=list, alias="plant")
     multiplexer_model: str | None = Field(default=None, alias="multiplexer")
 
-    class Config:
-        allow_population_by_field_name = True
-
-    @validator("measures", "plants", pre=True)
+    @field_validator("measures", "plants", mode="before")
     def parse_to_list(cls, value: str | list | None):
         if value is None:
             return []
@@ -111,7 +108,7 @@ class HardwareConfigValidator(BaseModel):
             return [value]
         return value
 
-    @validator("address", "type", "level", "measures", pre=True)
+    @field_validator("address", "type", "level", "measures", mode="before")
     def lower_str(cls, value: str | list | None):
         if isinstance(value, str):
             return value.lower()
@@ -153,7 +150,7 @@ class EnvironmentConfigValidator(BaseModel):
     sky: SkyConfig = Field(default_factory=SkyConfig)
     climate: dict[ClimateParameterNames, ClimateConfigValidator] = Field(default_factory=dict)
 
-    @validator("climate", pre=True)
+    @field_validator("climate", mode="before")
     def dict_to_climate(cls, value: dict):
         return {k: ClimateConfigValidator(**v) for k, v in value.items()}
 
@@ -180,8 +177,8 @@ class EcosystemConfigDict(TypedDict):
     IO: dict[str, HardwareConfigDict]
 
 
-class RootEcosystemsConfigValidator(BaseModel):
-    config: dict[str, EcosystemConfigValidator]
+class RootEcosystemsConfigValidator(RootModel[dict[str, EcosystemConfigValidator]]):
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -242,14 +239,14 @@ class EngineConfig(metaclass=SingletonMeta):
         config_path = self._base_dir/f"{cfg_type.name}.cfg"
         if cfg_type == ConfigType.ecosystems:
             with open(config_path, "r") as file:
-                raw = {"config": yaml.load(file)}
+                raw = yaml.load(file)
                 try:
-                    cleaned = RootEcosystemsConfigValidator(**raw).dict()
+                    cleaned = RootEcosystemsConfigValidator(**raw).model_dump()
                 except ValidationError as e:
                     # TODO: log formatted error message
                     raise e
                 else:
-                    self._ecosystems_config = cleaned["config"]
+                    self._ecosystems_config = cleaned
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
                 self._private_config = yaml.load(file)
