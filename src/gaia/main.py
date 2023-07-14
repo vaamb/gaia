@@ -6,7 +6,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia.config import GaiaConfig, EngineConfig, get_config
+from gaia.config import GaiaConfig, get_config
 from gaia.engine import Engine
 from gaia.shared_resources import scheduler, start_scheduler
 from gaia.utils import configure_logging, json
@@ -41,17 +41,16 @@ class Gaia:
         configure_logging(config_cls)
         self.logger = logging.getLogger("gaia")
         self.logger.info("Initializing Gaia")
-        self.use_database = config_cls.USE_DATABASE
-        self._thread: Thread | None = None
+        self.started: bool = False
         self.engine = Engine()
+        self._thread: Thread | None = None
         self._broker_url = config_cls.AGGREGATOR_COMMUNICATION_URL
         self._message_broker: "KombuDispatcher" | "RetryClient" | None = None
-        self.db: "SQLAlchemyWrapper" | None = None
-        if self.use_database:
+        self._db: "SQLAlchemyWrapper" | None = None
+        if config_cls.USE_DATABASE:
             self._init_database()
         if config_cls.COMMUNICATE_WITH_OURANOS:
             self._init_message_broker()
-        self.started: bool = False
 
     def _init_message_broker(self) -> None:
         self.logger.info("Initialising the message broker")
@@ -145,13 +144,27 @@ class Gaia:
     def use_message_broker(self) -> bool:
         return self._message_broker is not None
 
+    @property
+    def db(self) -> "SQLAlchemyWrapper":
+        if self._db is None:
+            raise AttributeError
+        return self._db
+
+    @db.setter
+    def db(self, value: "SQLAlchemyWrapper" | None) -> None:
+        self._db = value
+
+    @property
+    def use_db(self) -> bool:
+        return self._db is not None
+
     def start(self) -> None:
         if not self.started:
             self.logger.info("Starting Gaia")
+            start_scheduler()
             self.engine.start()
             if self.use_message_broker:
                 self._start_message_broker()
-            start_scheduler()
             self.started = True
             self.logger.info("GAIA started successfully")
         else:

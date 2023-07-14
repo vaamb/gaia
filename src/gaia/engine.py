@@ -24,8 +24,6 @@ class Engine(metaclass=SingletonMeta):
     for each ecosystem. The Engine makes sure this is the case. It also
     manages the config watchdog and updates the sun times once a day.
     When used within Gaia, the Engine is automatically instantiated when needed.
-
-    :param general_config: a GeneralConfig object
     """
     def __init__(self) -> None:
         self._config: EngineConfig = weakref.proxy(EngineConfig())
