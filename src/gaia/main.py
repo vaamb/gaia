@@ -41,16 +41,15 @@ class Gaia:
         configure_logging(config_cls)
         self.logger = logging.getLogger("gaia")
         self.logger.info("Initializing Gaia")
-        self.connect_to_ouranos: bool = config_cls.COMMUNICATE_WITH_OURANOS
         self.use_database = config_cls.USE_DATABASE
         self._thread: Thread | None = None
         self.engine = Engine()
         self._broker_url = config_cls.AGGREGATOR_COMMUNICATION_URL
-        self.message_broker: "KombuDispatcher" | "RetryClient" | None = None
+        self._message_broker: "KombuDispatcher" | "RetryClient" | None = None
         self.db: "SQLAlchemyWrapper" | None = None
         if self.use_database:
             self._init_database()
-        if self.connect_to_ouranos:
+        if config_cls.COMMUNICATE_WITH_OURANOS:
             self._init_message_broker()
         self.started: bool = False
 
@@ -86,26 +85,26 @@ class Gaia:
 
         self.engine.event_handler = events_handler
 
-    def _connect_to_ouranos(self) -> None:
-        if self.message_broker is not None:
-            if hasattr(self.message_broker, "is_socketio"):
-                self.message_broker: "RetryClient"
-                self.logger.info("Starting socketIO client")
+    def _start_message_broker(self) -> None:
+        if hasattr(self.message_broker, "is_socketio"):
+            self.message_broker: "RetryClient"
+            self.logger.info("Starting socketIO client")
 
-                def thread_func():
-                    server_url = (
-                        f"http:/"
-                        f"{self._broker_url[self._broker_url.index('://'):]}"
-                    )
-                    self.message_broker.connect(
-                        server_url, transports="websocket", namespaces=['/gaia']
-                    )
-                self.thread = Thread(target=thread_func)
-                self.thread.name = "socketio.connection"
-                self.thread.start()
-            else:
-                self.logger.info("Starting the dispatcher")
-                self.message_broker.start()
+            def thread_func():
+                server_url = (
+                    f"http:/"
+                    f"{self._broker_url[self._broker_url.index('://'):]}"
+                )
+                self.message_broker.connect(
+                    server_url, transports="websocket", namespaces=['/gaia'])
+
+            self.thread = Thread(target=thread_func)
+            self.thread.name = "socketio.connection"
+            self.thread.start()
+        else:
+            self.message_broker: "KombuDispatcher"
+            self.logger.info("Starting the dispatcher")
+            self.message_broker.start(retry=True, block=False)
 
     def _init_database(self) -> None:
         self.logger.info("Initialising the database")
@@ -132,12 +131,26 @@ class Gaia:
     def thread(self, thread: Thread | None):
         self._thread = thread
 
+    @property
+    def message_broker(self) -> "KombuDispatcher" | "RetryClient":
+        if self._message_broker is None:
+            raise AttributeError
+        return self._message_broker
+
+    @message_broker.setter
+    def message_broker(self, value: "KombuDispatcher" | "RetryClient" | None) -> None:
+        self._message_broker = value
+
+    @property
+    def use_message_broker(self) -> bool:
+        return self._message_broker is not None
+
     def start(self) -> None:
         if not self.started:
             self.logger.info("Starting Gaia")
             self.engine.start()
-            if self.connect_to_ouranos:
-                self._connect_to_ouranos()
+            if self.use_message_broker:
+                self._start_message_broker()
             start_scheduler()
             self.started = True
             self.logger.info("GAIA started successfully")
@@ -154,7 +167,7 @@ class Gaia:
         if self.started:
             self.logger.info("Stopping")
             self.engine.stop()
-            if self.connect_to_ouranos:
+            if self.use_message_broker:
                 if hasattr(self.message_broker, "is_socketio"):
                     self.message_broker.disconnect()
                 else:
