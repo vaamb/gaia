@@ -14,12 +14,13 @@ import typing as t
 from typing import Literal, Self, TypedDict
 import weakref
 
-from pydantic import Field, field_validator, RootModel, ValidationError
-
 from gaia_validators import *
 from gaia_validators import (
     ClimateConfigDict as gvClimateConfigDict,
     HardwareConfigDict as gvHardwareConfigDict)
+
+# TODO: remove up once compatibility issues are solved
+from pydantic import Field, field_validator, ValidationError  # noqa
 
 from gaia.config._utils import (
     get_base_dir, get_cache_dir, get_config as get_gaia_config)
@@ -177,8 +178,8 @@ class EcosystemConfigDict(TypedDict):
     IO: dict[str, HardwareConfigDict]
 
 
-class RootEcosystemsConfigValidator(RootModel[dict[str, EcosystemConfigValidator]]):
-    pass
+class RootEcosystemsConfigValidator(BaseModel):
+    config: dict[str, EcosystemConfigValidator]
 
 
 # ---------------------------------------------------------------------------
@@ -239,14 +240,16 @@ class EngineConfig(metaclass=SingletonMeta):
         config_path = self._base_dir/f"{cfg_type.name}.cfg"
         if cfg_type == ConfigType.ecosystems:
             with open(config_path, "r") as file:
-                raw = yaml.load(file)
+                unvalidated = yaml.load(file)
                 try:
-                    cleaned = RootEcosystemsConfigValidator(**raw).model_dump()
+                    validated = RootEcosystemsConfigValidator(
+                        **{"config": unvalidated}
+                    ).model_dump()["config"]
                 except ValidationError as e:
                     # TODO: log formatted error message
                     raise e
                 else:
-                    self._ecosystems_config = cleaned
+                    self._ecosystems_config = validated
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
                 self._private_config = yaml.load(file)
