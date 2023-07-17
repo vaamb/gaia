@@ -19,17 +19,19 @@ dependencies = [
     "ruamel.yaml~=0.17.21",
     "simple_pid~=1.0.1",
     "setproctitle~=1.3.1",
-    "SQLAlchemy~=2.0.0",
 
     # From git
     "gaia-validators @ git+https://github.com/vaamb/gaia-validators.git",
-    "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git",
 ]
 
 [project.optional-dependencies]
 camera = [
     "numpy~=1.25.0",
     "Pillow~=9.5.0",
+]
+database = [
+    "SQLAlchemy~=2.0.0",
+    "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git",
 ]
 dispatcher = [
     "kombu~=5.3.1",
