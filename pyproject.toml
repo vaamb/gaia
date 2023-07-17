@@ -14,7 +14,6 @@ dependencies = [
     "cachetools~=4.2.2",
     "cryptography~=35.0.0",
     "eventlet~=0.33.0",
-    "kombu~=5.3.1",
     "orjson~=3.8.0",
     "numpy~=1.25.0",
     "Pillow~=9.5.0",
@@ -27,12 +26,15 @@ dependencies = [
     "SQLAlchemy~=2.0.0",
 
     # From git
-    "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git",
     "gaia-validators @ git+https://github.com/vaamb/gaia-validators.git",
     "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git",
 ]
 
 [project.optional-dependencies]
+dispatcher = [
+    "kombu~=5.3.1",
+    "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git",
+]
 test = [
     "pytest~=7.1.2"
 ]
