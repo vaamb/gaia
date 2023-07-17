@@ -5,7 +5,7 @@ import io
 import typing as t
 
 from gaia_validators import (
-    ActuatorMode, ActuatorModePayload, Empty, HardwareConfig, HealthData)
+    ActuatorMode, ActuatorModePayload, Empty, HardwareConfig, HealthRecord)
 
 from gaia.config import get_config
 from gaia.hardware import camera_models
@@ -22,7 +22,7 @@ class Health(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, Camera]
-        self._plants_health: HealthData | Empty = Empty()
+        self._plants_health: HealthRecord | Empty = Empty()
         self._imageIO = io.BytesIO
         self._finish__init__()
 
@@ -47,7 +47,7 @@ class Health(SubroutineTemplate):
             green = random.randrange(12000, 1500000, 1000)
             necrosis = random.uniform(5, 55)
             health_index = random.uniform(70, 97)
-            self._plants_health = HealthData(
+            self._plants_health = HealthRecord(
                 timestamp=datetime.now().astimezone().replace(microsecond=0),
                 green=green,
                 necrosis=round(necrosis, 2),
@@ -123,5 +123,5 @@ class Health(SubroutineTemplate):
         pass
 
     @property
-    def plants_health(self) -> HealthData | Empty:
+    def plants_health(self) -> HealthRecord | Empty:
         return self._plants_health

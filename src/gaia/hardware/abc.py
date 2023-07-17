@@ -9,12 +9,12 @@ from pathlib import Path
 import re
 import textwrap
 import typing as t
-from typing import Any, cast, Literal, Self
+from typing import Any, cast, Literal, Self, TypedDict
 import weakref
 
 from gaia_validators import (
     safe_enum_from_name, HardwareConfig, HardwareLevel, HardwareLevelNames,
-    HardwareType, HardwareTypeNames, MeasureRecordDict)
+    HardwareType, HardwareTypeNames)
 
 from gaia.config import get_base_dir
 from gaia.hardware.multiplexers import multiplexer_models
@@ -32,6 +32,11 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
     else:
         from gaia.hardware._compatibility import Pin, pwmio
+
+
+class MeasureRecordDict(TypedDict):
+    measure: str
+    value: float
 
 
 class PinNumberError(ValueError):

@@ -3,10 +3,9 @@ from __future__ import annotations
 from time import sleep
 import typing as t
 
-from gaia_validators import MeasureRecordDict
-
 from gaia.hardware.abc import (
-    i2cSensor, LightSensor, PlantLevelHardware, hardware_logger)
+    hardware_logger, i2cSensor, LightSensor, MeasureRecordDict,
+    PlantLevelHardware)
 from gaia.hardware.utils import _IS_RASPI
 from gaia.utils import get_unit, temperature_converter
 

@@ -10,7 +10,7 @@ import weakref
 from gaia_validators import (
     ActuatorModePayload, ActuatorState, ActuatorsDataDict, BaseInfoConfig,
     ChaosConfig, Empty, EnvironmentConfig, HardwareConfig, HardwareType,
-    HealthData, LightData, LightingHours, LightMethod, ManagementConfig,
+    HealthRecord, LightData, LightingHours, LightMethod, ManagementConfig,
     safe_enum_from_name, SensorsData)
 
 from gaia.config import EcosystemConfig
@@ -419,7 +419,7 @@ class Ecosystem:
 
     # Health
     @property
-    def plants_health(self) -> HealthData | Empty:
+    def plants_health(self) -> HealthRecord | Empty:
         if self.get_subroutine_status("health"):
             health_subroutine: "Health" = self.subroutines["health"]
             return health_subroutine.plants_health

@@ -7,7 +7,9 @@ from time import monotonic
 import typing as t
 from typing import Any
 
-from gaia_validators import Empty, HardwareConfig, SensorsData
+from gaia_validators import (
+    Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict,
+    SensorRecord)
 
 from gaia.config import get_config
 from gaia.hardware import sensor_models
@@ -108,28 +110,35 @@ class Sensors(SubroutineTemplate):
         """
         Loops through all the sensors and stores the value in self._data
         """
-        cache: dict[str, Any] = {}
-        to_average: dict[str, list] = {}
+        cache: SensorsDataDict = {}
+        to_average: dict[str, list[float]] = {}
         cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
-        cache["records"]: list[dict] = []
+        records: list[SensorRecord] = []
         for uid in self.hardware:
             measures = self.hardware[uid].get_data()
-            cache["records"].append(
-                {"sensor_uid": uid, "measures": measures}
-            )
             for measure in measures:
+                if measure.get("value") is None:
+                    continue
+                records.append(SensorRecord(
+                    sensor_uid=uid, measure=measure["measure"],
+                    value=measure["value"], timestamp=None))
                 try:
                     to_average[measure["measure"]].append(measure["value"])
                 except KeyError:
                     to_average[measure["measure"]] = [measure["value"]]
-        average: dict[str, float | int] = {}
+        cache["records"] = records
+        average: dict[str, float] = {}
         for measure in to_average:
             average[measure] = round(mean(to_average[measure]), 2)
         cache["average"] = [
-            {"measure": measure, "value": value} for measure, value in average.items()
+            MeasureAverage(measure=measure, value=value, timestamp=None)
+            for measure, value in average.items()
         ]
         with lock:
-            self._data = SensorsData(**cache)
+            if len(records) > 0:
+                self._data = SensorsData(**cache)
+            else:
+                self._data = Empty()
 
     @property
     def sensors_data(self) -> SensorsData | Empty:

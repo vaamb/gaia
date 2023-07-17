@@ -24,18 +24,18 @@ def log_sensors_data(scoped_session: "scoped_session", engine: "Engine"):
             sensors_data = ecosystem.sensors_data
             database_management = ecosystem.config.get_management("database")
             if isinstance(sensors_data, SensorsData) and database_management:
-                measurement_time: datetime = sensors_data.timestamp
-                measurement_time = measurement_time.astimezone(timezone.utc)
-                if measurement_time.minute % sensors_logging_period == 0:
-                    for sensor in sensors_data.records:
-                        sensor_uid = sensor.sensor_uid
-                        for measure in sensor.measures:
-                            data_point = SensorHistory(
-                                sensor_uid=sensor_uid,
-                                ecosystem_uid=ecosystem_uid,
-                                measure=measure.measure,
-                                timestamp=measurement_time,
-                                value=measure.value,
-                            )
-                            session.add(data_point)
+                timestamp: datetime = sensors_data.timestamp
+                timestamp = timestamp.astimezone(timezone.utc)
+                if timestamp.minute % sensors_logging_period == 0:
+                    for sensor_record in sensors_data.records:
+                        if sensor_record.value is None:
+                            continue
+                        data_point = SensorHistory(
+                            sensor_uid=sensor_record.sensor_uid,
+                            ecosystem_uid=ecosystem_uid,
+                            measure=sensor_record.measure,
+                            timestamp=timestamp,
+                            value=sensor_record.value,
+                        )
+                        session.add(data_point)
         session.commit()
