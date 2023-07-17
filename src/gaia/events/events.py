@@ -15,8 +15,7 @@ from gaia_validators import *
 
 from gaia.config import EcosystemConfig, get_config
 from gaia.shared_resources import scheduler
-from gaia.utils import (
-    encrypted_uid, generate_uid_token, humanize_list, local_ip_address)
+from gaia.utils import humanize_list, local_ip_address
 
 if get_config().USE_DATABASE:
     from sqlalchemy import select
@@ -152,13 +151,16 @@ class Events:
 
     def register(self) -> None:
         if self.type == "socketio":
-            data = {"ikys": encrypted_uid(), "uid_token": generate_uid_token()}
+            data = EnginePayload(
+                engine_uid=get_config().ENGINE_UID,
+                address=local_ip_address(),
+            ).model_dump()
             self.emit("register_engine", data=data)
         elif self.type == "dispatcher":
             data = EnginePayload(
                 engine_uid=get_config().ENGINE_UID,
                 address=local_ip_address(),
-            )
+            ).model_dump()
             self.emit("register_engine", data=data, ttl=2)
         else:
             raise TypeError("Event type is invalid")

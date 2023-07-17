@@ -10,13 +10,9 @@ from math import log, e
 import os
 import pathlib
 import platform
-import secrets
 import socket
 from typing import Any
 
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import ruamel.yaml
 from ruamel.yaml import SafeRepresenter, ScalarNode
 
@@ -352,33 +348,12 @@ def local_ip_address() -> str:
     return address
 
 
-def encrypted_uid() -> str:
-    h = hashes.Hash(hashes.SHA256())
-    h.update(get_config().OURANOS_SECRET_KEY.encode("utf-8"))
-    key = base64.urlsafe_b64encode(h.finalize())
-    f = Fernet(key=key)
-    return f.encrypt(get_config().ENGINE_UID.encode("utf-8")).decode("utf-8")
-
-
-def generate_uid_token(iterations: int = 160000) -> str:
-    CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
-    ssalt = "".join(secrets.choice(CHARS) for _ in range(16))
-    bsalt = ssalt.encode("utf-8")
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=bsalt,
-        iterations=iterations,
-    )
-    bkey = kdf.derive(get_config().ENGINE_UID.encode())
-    hkey = base64.b64encode(bkey).hex()
-    return f"pbkdf2:sha256:{iterations}${ssalt}${hkey}"
-
-
 def generate_secret_key_from_password(
         password: str | bytes,
         set_env: bool = False
 ) -> str:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
     if isinstance(password, str):
         password = password.encode("utf-8")
     kdf = PBKDF2HMAC(

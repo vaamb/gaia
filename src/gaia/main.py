@@ -95,7 +95,8 @@ class Gaia:
                     f"{self._broker_url[self._broker_url.index('://'):]}"
                 )
                 self.message_broker.connect(
-                    server_url, transports="websocket", namespaces=['/gaia'])
+                    server_url, transports="websocket", namespaces=['/gaia'],
+                    auth={"secret_key": get_config().OURANOS_SECRET_KEY})
 
             self.thread = Thread(target=thread_func)
             self.thread.name = "socketio.connection"
