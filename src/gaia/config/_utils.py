@@ -35,7 +35,7 @@ def get_base_dir() -> Path:
 
 def _get_config() -> Type[GaiaConfig]:
     base_dir = get_base_dir()
-    sys.path.extend([str(base_dir)])
+    sys.path.insert(0, str(base_dir))
     try:
         from config import Config
     except ImportError:
