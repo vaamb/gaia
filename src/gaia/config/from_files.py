@@ -260,7 +260,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def _create_ecosystems_config_file(self):
         self._ecosystems_config = {}
-        self.create_ecosystem("Default Ecosystem")
+        self._create_ecosystem("Default Ecosystem")
         self._dump_config(ConfigType.ecosystems)
 
     def _create_private_config_file(self):
@@ -363,10 +363,13 @@ class EngineConfig(metaclass=SingletonMeta):
                 break
         return x
 
-    def create_ecosystem(self, ecosystem_name: str) -> None:
+    def _create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
         ecosystem_cfg = EcosystemConfigValidator(name=ecosystem_name).dict()
         self._ecosystems_config.update({uid: ecosystem_cfg})
+
+    def create_ecosystem(self, ecosystem_name: str) -> None:
+        self._create_ecosystem(ecosystem_name)
         self.save(ConfigType.ecosystems)
 
     def delete_ecosystem(self, ecosystem_id: str) -> None:
