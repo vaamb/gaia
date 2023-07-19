@@ -89,7 +89,7 @@ class Events:
             )
             raise ValidationError
         try:
-            return model_cls(**data).dict()
+            return model_cls(**data).model_dump()
         except ValidationError as e:
             event = inspect.stack()[1].function.lstrip("on_")
             msg_list = [f"{error['loc'][0]}: {error['msg']}" for error in e.errors()]
@@ -194,6 +194,7 @@ class Events:
     def on_register(self) -> None:
         self.registered = False
         self.logger.info("Received registration request from server")
+        sleep(1)
         self.register()
 
     def on_registration_ack(self) -> None:
@@ -222,7 +223,7 @@ class Events:
             self,
             event_name: EventNames,
             ecosystem_uids: str | list[str] | None = None
-    ) -> list[EcosystemPayload]:
+    ) -> list[EcosystemPayloadDict]:
         rv = []
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
@@ -236,7 +237,8 @@ class Events:
             if not isinstance(data, Empty):
                 payload_class = payload_classes[event_name]
                 payload: EcosystemPayload = payload_class.from_base(uid, data)
-                rv.append(payload)
+                payload_dict: EcosystemPayloadDict = payload.model_dump()
+                rv.append(payload_dict)
         return rv
 
     def emit_event(
@@ -401,7 +403,7 @@ class Events:
                 data=CrudResult(
                     uuid=crud_uuid,
                     status=Result.success
-                ).dict()
+                ).model_dump()
             )
             self.logger.info(
                 f"CRUD request '{crud_uuid}' was successfully treated")
@@ -422,7 +424,7 @@ class Events:
                     uuid=crud_uuid,
                     status=Result.failure,
                     message=str(e)
-                ).dict()
+                ).model_dump()
             )
             self.logger.info(
                 f"CRUD request '{crud_uuid}' could not be treated")

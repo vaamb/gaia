@@ -68,8 +68,14 @@ class Gaia:
             self.logger.debug("Initializing the dispatcher")
             from dispatcher import KombuDispatcher
             from gaia.events.dispatcher_based_handler import DispatcherBasedGaiaEvents
+            if self._broker_url == "amqp://":
+                broker_uri = "amqp://guest:guest@localhost:5672//"
+            elif self._broker_url == "redis://":
+                broker_uri = "redis://localhost:6379/0"
+            else:
+                broker_uri = self._broker_url
             self.message_broker = KombuDispatcher(
-                "gaia", url=self._broker_url, queue_options={
+                "gaia", url=broker_uri, queue_options={
                     "name": f"gaia-{get_config().ENGINE_UID}", "durable": True
                 }
             )
