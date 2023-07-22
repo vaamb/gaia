@@ -29,6 +29,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
 
 
+DispatcherType = Literal["raw", "dispatcher", "socketio"]
 EventNames = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
     "sensors_data", "health_data", "light_data", "actuator_data"]
@@ -52,14 +53,15 @@ class Events:
 
     :param engine: an `Engine` instance
     """
-    type = "raw"
+    type: DispatcherType = "raw"
 
     def __init__(self, engine: "Engine", **kwargs) -> None:
         super().__init__(**kwargs)
+        if self.type not in ("dispatcher", "socketio"):
+            raise ValueError("'type' should be 'dispatcher' or 'socketio'")
         self.engine: "Engine" = weakref.proxy(engine)
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
-        self._background_task = False
         self._thread: Thread | None = None
         self.logger = logging.getLogger(f"gaia.events_handler")
         self.db: "SQLAlchemyWrapper" | None
@@ -99,14 +101,27 @@ class Events:
             )
             raise
 
-    def _try_func(self, func):
+    def is_connected(self) -> bool:
+        if self.type == "dispatcher":
+            if self._dispatcher.connected:
+                return True
+        elif self.type == "socketio":
+            if self.client.connected:
+                return True
+        return False
+
+    def emit_event_if_connected(self, event_name: EventNames) -> None:
+        if not self.is_connected():
+            self.logger.debug(
+                f"Events handler not currently connected. Scheduled emission "
+                f"of event '{event_name}' aborted")
+            return
         try:
-            func()
+            self.emit_event(event_name)
         except Exception as e:
             log_msg = (
-                f"Encountered an error while handling function `{func.__name__}`. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`"
-            )
+                f"Encountered an error while tying to emit event "
+                f"`{event_name}`. ERROR msg: `{e.__class__.__name__} :{e}`")
             ex_msg = e.args[1] if len(e.args) > 1 else e.args[0]
             # If socketio error when not connected, log to debug
             if "is not a connected namespace" in ex_msg:
@@ -114,40 +129,43 @@ class Events:
             else:
                 self.logger.error(log_msg)
 
-    def background_task(self):
+    def schedule_jobs(self):
         scheduler.add_job(
-            self._try_func, kwargs={"func": self.send_sensors_data},
+            self.emit_event_if_connected, kwargs={"event_name": "sensors_data"},
             id="send_sensors_data", trigger="cron", minute="*",
             misfire_grace_time=10
         )
         scheduler.add_job(
-            self._try_func, kwargs={"func": self.send_light_data},
+            self.emit_event_if_connected, kwargs={"event_name": "light_data"},
             id="send_light_data", trigger="cron", hour="1",
             misfire_grace_time=10*60
         )
         scheduler.add_job(
-            self._try_func, kwargs={"func": self.send_health_data},
+            self.emit_event_if_connected, kwargs={"event_name": "health_data"},
             id="send_health_data", trigger="cron", hour="1",
             misfire_grace_time=10*60
         )
-        while True:
-            self.ping()
-            sleep(15)
 
     def start_background_task(self):
-        if not self._background_task:
-            thread = Thread(target=self.background_task)
-            thread.name = "ping"
-            thread.start()
-            self._thread = thread
-            self._background_task = True
+        self.schedule_jobs()
+        thread = Thread(target=self.ping_loop)
+        thread.name = "ping"
+        thread.start()
+        self._thread = thread
+
+    def ping_loop(self):
+        sleep(0.1)  # Sleep to allow the end of dispatcher initialization if it directly connects
+        while True:
+            if self.is_connected():
+                self.ping()
+            sleep(15)
 
     def ping(self) -> None:
         ecosystems = [ecosystem.uid for ecosystem in self.ecosystems.values()]
         if self.type == "socketio":
             self.emit("ping", data=ecosystems)
         elif self.type == "dispatcher":
-            self.emit("ping", data=ecosystems, ttl=30)
+            self.emit("ping", data=ecosystems, ttl=20)
 
     def register(self) -> None:
         if self.type == "socketio":
@@ -177,12 +195,12 @@ class Events:
         self.send_health_data(uids)
 
     def on_connect(self, environment) -> None:  # noqa
+        if self._thread is None:
+            self.start_background_task()
         if self.type == "socketio":
             self.logger.info("Connection to Ouranos successful")
         elif self.type == "dispatcher":
             self.logger.info("Connection to dispatcher successful")
-        else:
-            raise TypeError("Event type is invalid")
         self.register()
 
     def on_disconnect(self, *args) -> None:  # noqa
@@ -200,7 +218,6 @@ class Events:
     def on_registration_ack(self) -> None:
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info")
-        self.start_background_task()
         self.send_ecosystems_info()
         self.registered = True
         self.logger.info("Initial ecosystems info sent")
