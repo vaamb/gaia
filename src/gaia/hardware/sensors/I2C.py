@@ -7,7 +7,8 @@ from gaia.hardware.abc import (
     hardware_logger, i2cSensor, LightSensor, MeasureRecordDict,
     PlantLevelHardware)
 from gaia.hardware.utils import _IS_RASPI
-from gaia.utils import get_unit, temperature_converter
+from gaia.utils import (
+    get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -66,6 +67,16 @@ class AHT20(i2cSensor):
             data.append({"measure": "temperature", "value": temperature})
         if "humidity" in self.measures:
             data.append({"measure": "humidity", "value": raw_humidity})
+        if "dew_point" in self.measures:
+            raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
+            dew_point = temperature_converter(
+                raw_dew_point, "celsius", get_unit("temperature", "celsius")
+            )
+            data.append({"measure": "dew_point", "value": dew_point})
+        if "absolute_humidity" in self.measures:
+            raw_absolute_humidity = get_absolute_humidity(
+                raw_temperature, raw_humidity)
+            data.append({"measure": "absolute_humidity", "value": raw_absolute_humidity})
         return data
 
 
