@@ -16,6 +16,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_seesaw.seesaw import Seesaw
         from adafruit_veml7700 import VEML7700 as _VEML7700
         from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
+        from adafruit_ens160 import ENS160 as _ENS160
     else:
         from gaia.hardware._compatibility import (
             AHTx0, Seesaw, VEML7700 as _VEML7700, VCNL4040 as _VCNL4040)
@@ -65,6 +66,62 @@ class AHT20(i2cSensor):
             data.append({"measure": "temperature", "value": temperature})
         if "humidity" in self.measures:
             data.append({"measure": "humidity", "value": raw_humidity})
+        return data
+
+
+class ENS160(i2cSensor):
+    def __init__(self, *args, **kwargs) -> None:
+        if not kwargs.get("measures"):
+            kwargs["measures"] = ["AQI", "eCO2", "TVOC"]
+        super().__init__(*args, default_address=0x53, **kwargs)
+
+    def _get_device(self) -> "_ENS160":
+        if _IS_RASPI:
+            try:
+                from adafruit_ens160 import ENS160 as _ENS160
+            except ImportError:
+                raise RuntimeError(
+                    "Adafruit ens160 package is required. Run `pip install "
+                    "adafruit-circuitpython-ens160` in your virtual env."
+                )
+        else:
+            from gaia.hardware._compatibility import _ENS160
+        return _ENS160(self._get_i2c(), self._address_book.primary.main)
+
+    def _get_raw_data(self) -> tuple[float | None, float | None, float | None]:
+        # Data status from https://github.com/adafruit/Adafruit_CircuitPython_ENS160/blob/main/adafruit_ens160.py
+        # NORMAL_OP = 0x00
+        # WARM_UP = 0x01
+        # START_UP = 0x02
+        # INVALID_OUT = 0x03
+        while True:
+            # if no data, wait
+            if self.device.new_data_available:
+                break
+            sleep(0.1)
+        # If sensor's output is invalid, return None
+        if self.device.data_validity == 0x03:
+            return None, None, None
+        data = self.device.read_all_sensors()
+        # First reading is always zeroes
+        if data["AQI"] == data["eCO2"] == data["TVOC"] == 0:
+            return None, None, None
+        return data["AQI"], data["eCO2"], data["TVOC"]
+
+    def compensation(self, temperature: float, humidity: float) -> None:
+        self.device.temperature_compensation = temperature
+        self.device.humidity_compensation = humidity
+
+    def get_data(self) -> list[MeasureRecordDict]:
+        # TODO: access temperature and humidity data to compensate
+        data = []
+        AQI, eCO2, TVOC = self._get_raw_data()
+        if "aqi" in self.measures:
+            data.append({"measure": "AQI", "value": AQI})
+        if "eco2" in self.measures:
+            data.append({"measure": "eCO2", "value": eCO2})
+        if "tvoc" in self.measures:
+            data.append({"measure": "TVOC", "value": TVOC})
         return data
 
 
@@ -212,10 +269,11 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         return data
 
 
-i1c_sensor_models = {
+i2c_sensor_models = {
     hardware.__name__: hardware for hardware in [
         AHT20,
         CapacitiveMoisture,
+        ENS160,
         VCNL4040,
         VEML7700,
     ]

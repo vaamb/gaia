@@ -897,7 +897,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if model not in hardware_models:
             raise ValueError(
                 "This hardware model is not supported. Use "
-                "'SpecificConfig.supported_hardware()' to see supported hardware"
+                "'EcosystemConfig.supported_hardware()' to see supported hardware"
             )
         uid = self._create_new_IO_uid()
         h = hardware_models[model]
