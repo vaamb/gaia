@@ -109,17 +109,29 @@ class HardwareConfigValidator(BaseModel):
             return [value]
         return value
 
-    @field_validator("address", "type", "level", "measures", mode="before")
-    def lower_str(cls, value: str | list | None):
+    @field_validator("type", "level", mode="before")
+    def lower_str(cls, value: str | list[str] | None):
         if isinstance(value, str):
             return value.lower()
         if isinstance(value, list):
-            accumulator = []
-            for v in value:
-                if isinstance(v, str):
-                    v = v.lower()
-                accumulator.append(v)
-            return accumulator
+            return [v.lower() for v in value]
+        return value
+
+    @field_validator("measures", "plants", mode="before")
+    def format_measures(cls, value: str | list[str] | None):
+        if value is None:
+            return None
+
+        def format_measure(measure: str) -> str:
+            measure = measure.replace(" ", "_")
+            if measure.istitle():
+                return measure.lower()
+            return measure
+
+        if isinstance(value, str):
+            return format_measure(value)
+        if isinstance(value, list):
+            return [format_measure(v) for v in value]
         return value
 
 

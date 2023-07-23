@@ -70,13 +70,12 @@ class AHT20(i2cSensor):
         if "dew_point" in self.measures:
             raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
             dew_point = temperature_converter(
-                raw_dew_point, "celsius", get_unit("temperature", "celsius")
-            )
+                raw_dew_point, "celsius", get_unit("temperature", "celsius"))
             data.append({"measure": "dew_point", "value": dew_point})
         if "absolute_humidity" in self.measures:
-            raw_absolute_humidity = get_absolute_humidity(
+            absolute_humidity = get_absolute_humidity(
                 raw_temperature, raw_humidity)
-            data.append({"measure": "absolute_humidity", "value": raw_absolute_humidity})
+            data.append({"measure": "absolute_humidity", "value": absolute_humidity})
         return data
 
 
@@ -127,11 +126,11 @@ class ENS160(i2cSensor):
         # TODO: access temperature and humidity data to compensate
         data = []
         AQI, eCO2, TVOC = self._get_raw_data()
-        if "aqi" in self.measures:
+        if "AQI" in self.measures:
             data.append({"measure": "AQI", "value": AQI})
-        if "eco2" in self.measures:
+        if "eCO2" in self.measures:
             data.append({"measure": "eCO2", "value": eCO2})
-        if "tvoc" in self.measures:
+        if "TVOC" in self.measures:
             data.append({"measure": "TVOC", "value": TVOC})
         return data
 
