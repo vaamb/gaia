@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Generator, NamedTuple, Sequence
+from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import delete, select, update
+from sqlalchemy.orm import Mapped, mapped_column, Session
 
+from gaia_validators import BufferedDataPayload, BufferedSensorData
 from sqlalchemy_wrapper import SQLAlchemyWrapper
 
 from gaia.utils import json
@@ -17,8 +23,8 @@ db = SQLAlchemyWrapper(
 Base = db.Model
 
 
-class SensorHistory(Base):
-    __tablename__ = "sensors_history"
+class BaseSensorRecord(Base):
+    __abstract__ = True
 
     id: Mapped[int] = mapped_column(nullable=False, primary_key=True)
     sensor_uid: Mapped[str] = mapped_column(sa.String(length=16), nullable=False)
@@ -42,3 +48,65 @@ class SensorHistory(Base):
             "datetime": self.timestamp,
             "value": self.value,
         }
+
+
+class SensorRecord(BaseSensorRecord):
+    __tablename__ = "sensor_records"
+
+
+class SensorBuffer(BaseSensorRecord):
+    __tablename__ = "sensor_buffers"
+
+    exchange_uuid: Mapped[UUID | None] = mapped_column()
+
+    @classmethod
+    def get_buffered_data(
+            cls,
+            session: Session,
+            limit: int = 50
+    ) -> Generator[BufferedDataPayload]:
+        while True:
+            stmt = (
+                select(cls)
+                .where(cls.exchange_uuid == None)
+                .limit(limit)
+            )
+            result = session.execute(stmt)
+            buffered_data: Sequence[SensorBuffer] = result.scalars().all()
+            if not buffered_data:
+                break
+            uuid = uuid4()
+            rv: list[BufferedSensorData] = [
+                BufferedSensorData(
+                    ecosystem_uid=data.ecosystem_uid,
+                    sensor_uid=data.sensor_uid,
+                    measure=data.measure,
+                    value=data.measure,
+                    timestamp=data.timestamp
+                )
+                for data in buffered_data
+            ]
+            for data in buffered_data:
+                data.exchange_uuid = uuid
+            session.commit()
+            yield BufferedDataPayload(
+                data=rv,
+                uuid=uuid,
+            )
+
+    @classmethod
+    def clear_buffer(cls, session: Session, uuid: UUID | str):
+        stmt = (
+            delete(cls)
+            .where(cls.exchange_uuid == uuid)
+        )
+        session.execute(stmt)
+
+    @classmethod
+    def clear_uuid(cls, session: Session, uuid: UUID | str):
+        stmt = (
+            update(cls)
+            .where(cls.exchange_uuid == uuid)
+            .values(exchange_uuid=None)
+        )
+        session.execute(stmt)

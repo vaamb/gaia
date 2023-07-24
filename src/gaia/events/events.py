@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 import inspect
 import logging
 from threading import Thread
@@ -18,10 +17,9 @@ from gaia.shared_resources import scheduler
 from gaia.utils import humanize_list, local_ip_address
 
 if get_config().USE_DATABASE:
-    from sqlalchemy import select
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
-    from gaia.database.models import SensorHistory
+    from gaia.database.models import SensorBuffer
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -189,7 +187,7 @@ class Events:
     ) -> None:
         uids = self.filter_uids(ecosystem_uids)
         self.send_full_config(uids)
-        self.send_sensors_data(uids)
+        # self.send_sensors_data(uids)
         self.send_actuator_data(uids)
         self.send_light_data(uids)
         self.send_health_data(uids)
@@ -201,7 +199,8 @@ class Events:
             self.logger.info("Connection to Ouranos successful")
         elif self.type == "dispatcher":
             self.logger.info("Connection to dispatcher successful")
-        self.register()
+        if not self.registered:
+            self.register()
 
     def on_disconnect(self, *args) -> None:  # noqa
         if self.registered:
@@ -219,8 +218,11 @@ class Events:
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info")
         self.send_ecosystems_info()
-        self.registered = True
         self.logger.info("Initial ecosystems info sent")
+        if self.db:
+            self.send_buffered_data()
+        self.registered = True
+
 
     def filter_uids(
             self,
@@ -262,14 +264,15 @@ class Events:
             self,
             event_name: EventNames,
             ecosystem_uids: str | list[str] | None = None
-    ) -> None:
+    ) -> bool:
         self.logger.debug(f"Sending event {event_name} requested")
         payload = self.get_event_payload(event_name, ecosystem_uids)
         if payload:
             self.logger.debug(f"Payload for event {event_name} sent")
-            self.emit(event_name, data=payload)
+            return self.emit(event_name, data=payload)
         else:
             self.logger.debug(f"No payload for event {event_name}")
+            return False
 
     def send_full_config(
             self,
@@ -417,7 +420,7 @@ class Events:
             crud_function(data["data"])
             self.emit(
                 event="crud_result",
-                data=gv.CrudResult(
+                data=gv.RequestResult(
                     uuid=crud_uuid,
                     status=gv.Result.success
                 ).model_dump()
@@ -437,7 +440,7 @@ class Events:
         except Exception as e:
             self.emit(
                 event="crud_result",
-                data=gv.CrudResult(
+                data=gv.RequestResult(
                     uuid=crud_uuid,
                     status=gv.Result.failure,
                     message=str(e)
@@ -446,24 +449,25 @@ class Events:
             self.logger.info(
                 f"CRUD request '{crud_uuid}' could not be treated")
 
-    def on_get_data_since(self, message: gv.SynchronisationPayloadDict) -> None:
+    def send_buffered_data(self) -> None:
         if self.db is None:
-            self.logger.error(
-                "Received 'get_data_since' event but USE_DATABASE is set to False"
-            )
-            return
-        message: gv.SynchronisationPayloadDict = self.validate_payload(
-            message, gv.SynchronisationPayload)
-        uids: list[str] = self.filter_uids(message["ecosystems"])
-        since: datetime = message["since"]
+            raise RuntimeError(
+                "The database is not enabled. To enable it, set configuration "
+                "parameter 'USE_DATABASE' to 'True'")
         with self.db.scoped_session() as session:
-            query = (
-                select(SensorHistory)
-                .where(SensorHistory.timestamp >= since)
-                .where(SensorHistory.ecosystem_uid.in_(uids))
-            )
-            results = session.execute(query).all().scalars()
-        self.emit(
-            "sensor_data_record",
-            [result.dict_repr for result in results]
-        )
+            for data in SensorBuffer.get_buffered_data(session):
+                self.emit(
+                    event="buffered_sensors_data", data=data)
+
+    def on_buffered_data_ack(self, message: gv.RequestResultDict):
+        if self.db is None:
+            raise RuntimeError(
+                "The database is not enabled. To enable it, set configuration "
+                "parameter 'USE_DATABASE' to 'True'")
+        data: gv.RequestResultDict = self.validate_payload(
+            message, gv.RequestResult)
+        with self.db.scoped_session() as session:
+            if data["status"] == gv.Result.success:
+                SensorBuffer.clear_buffer(session, data["uuid"])
+            else:
+                SensorBuffer.clear_uuid(session, data["uuid"])

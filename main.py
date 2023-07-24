@@ -1,6 +1,6 @@
-# import eventlet
+import eventlet
 
-# eventlet.monkey_patch()
+eventlet.monkey_patch()
 
 try:
     import orjson
