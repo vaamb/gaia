@@ -11,7 +11,7 @@ import weakref
 
 from pydantic import ValidationError
 
-from gaia_validators import *
+import gaia_validators as gv
 
 from gaia.config import EcosystemConfig, get_config
 from gaia.shared_resources import scheduler
@@ -35,15 +35,15 @@ EventNames = Literal[
     "sensors_data", "health_data", "light_data", "actuator_data"]
 
 
-payload_classes: dict[EventNames, Type[EcosystemPayload]] = {
-    "base_info": BaseInfoConfigPayload,
-    "management": ManagementConfigPayload,
-    "environmental_parameters": EnvironmentConfigPayload,
-    "hardware": HardwareConfigPayload,
-    "sensors_data": SensorsDataPayload,
-    "health_data": HealthDataPayload,
-    "light_data": LightDataPayload,
-    "actuator_data": ActuatorsDataPayload,
+payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
+    "base_info": gv.BaseInfoConfigPayload,
+    "management": gv.ManagementConfigPayload,
+    "environmental_parameters": gv.EnvironmentConfigPayload,
+    "hardware": gv.HardwareConfigPayload,
+    "sensors_data": gv.SensorsDataPayload,
+    "health_data": gv.HealthDataPayload,
+    "light_data": gv.LightDataPayload,
+    "actuator_data": gv.ActuatorsDataPayload,
 }
 
 
@@ -81,7 +81,7 @@ class Events:
     def validate_payload(
             self,
             data: dict,
-            model_cls: Type[BaseModel],
+            model_cls: Type[gv.BaseModel],
     ) -> dict:
         if not data:
             event = inspect.stack()[1].function.lstrip("on_")
@@ -169,13 +169,13 @@ class Events:
 
     def register(self) -> None:
         if self.type == "socketio":
-            data = EnginePayload(
+            data = gv.EnginePayload(
                 engine_uid=get_config().ENGINE_UID,
                 address=local_ip_address(),
             ).model_dump()
             self.emit("register_engine", data=data)
         elif self.type == "dispatcher":
-            data = EnginePayload(
+            data = gv.EnginePayload(
                 engine_uid=get_config().ENGINE_UID,
                 address=local_ip_address(),
             ).model_dump()
@@ -240,7 +240,7 @@ class Events:
             self,
             event_name: EventNames,
             ecosystem_uids: str | list[str] | None = None
-    ) -> list[EcosystemPayloadDict]:
+    ) -> list[gv.EcosystemPayloadDict]:
         rv = []
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
@@ -251,10 +251,10 @@ class Events:
             else:
                 self.logger.error(f"Payload for event {event_name} is not defined")
                 return rv
-            if not isinstance(data, Empty):
+            if not isinstance(data, gv.Empty):
                 payload_class = payload_classes[event_name]
-                payload: EcosystemPayload = payload_class.from_base(uid, data)
-                payload_dict: EcosystemPayloadDict = payload.model_dump()
+                payload: gv.EcosystemPayload = payload_class.from_base(uid, data)
+                payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
                 rv.append(payload_dict)
         return rv
 
@@ -304,12 +304,12 @@ class Events:
         self.emit_event("actuator_data", ecosystem_uids)
 
     def on_turn_light(self, message: dict) -> None:
-        message["actuator"] = HardwareType.light
+        message["actuator"] = gv.HardwareType.light
         self.on_turn_actuator(message)
 
-    def on_turn_actuator(self, message: TurnActuatorPayloadDict) -> None:
-        data: TurnActuatorPayloadDict = self.validate_payload(
-            message, TurnActuatorPayload)
+    def on_turn_actuator(self, message: gv.TurnActuatorPayloadDict) -> None:
+        data: gv.TurnActuatorPayloadDict = self.validate_payload(
+            message, gv.TurnActuatorPayload)
         ecosystem_uid: str = data["ecosystem_uid"]
         if ecosystem_uid in self.ecosystems:
             self.logger.debug("Received turn_actuator event")
@@ -319,9 +319,9 @@ class Events:
                 countdown=message.get("countdown", 0.0)
             )
 
-    def on_change_management(self, message: ManagementConfigPayloadDict) -> None:
-        data: ManagementConfigPayloadDict = self.validate_payload(
-            message, ManagementConfigPayload)
+    def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
+        data: gv.ManagementConfigPayloadDict = self.validate_payload(
+            message, gv.ManagementConfigPayload)
         ecosystem_uid: str = data["uid"]
         if ecosystem_uid in self.ecosystems:
             for management, status in data["data"].items():
@@ -392,9 +392,9 @@ class Events:
             #"update_place": ,
         }[crud_key]
 
-    def on_crud(self, message: CrudPayloadDict):
-        data: CrudPayloadDict = self.validate_payload(
-            message, CrudPayload)
+    def on_crud(self, message: gv.CrudPayloadDict):
+        data: gv.CrudPayloadDict = self.validate_payload(
+            message, gv.CrudPayload)
         crud_uuid = data["uuid"]
         self.logger.info(
             f"Received CRUD request '{crud_uuid}' from Ouranos")
@@ -417,9 +417,9 @@ class Events:
             crud_function(data["data"])
             self.emit(
                 event="crud_result",
-                data=CrudResult(
+                data=gv.CrudResult(
                     uuid=crud_uuid,
-                    status=Result.success
+                    status=gv.Result.success
                 ).model_dump()
             )
             self.logger.info(
@@ -437,23 +437,23 @@ class Events:
         except Exception as e:
             self.emit(
                 event="crud_result",
-                data=CrudResult(
+                data=gv.CrudResult(
                     uuid=crud_uuid,
-                    status=Result.failure,
+                    status=gv.Result.failure,
                     message=str(e)
                 ).model_dump()
             )
             self.logger.info(
                 f"CRUD request '{crud_uuid}' could not be treated")
 
-    def on_get_data_since(self, message: SynchronisationPayloadDict) -> None:
+    def on_get_data_since(self, message: gv.SynchronisationPayloadDict) -> None:
         if self.db is None:
             self.logger.error(
                 "Received 'get_data_since' event but USE_DATABASE is set to False"
             )
             return
-        message: SynchronisationPayloadDict = self.validate_payload(
-            message, SynchronisationPayload)
+        message: gv.SynchronisationPayloadDict = self.validate_payload(
+            message, gv.SynchronisationPayload)
         uids: list[str] = self.filter_uids(message["ecosystems"])
         since: datetime = message["since"]
         with self.db.scoped_session() as session:

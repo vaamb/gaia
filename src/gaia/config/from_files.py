@@ -11,15 +11,13 @@ import requests
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
-from typing import Literal, Self, TypedDict
+from typing import Self, TypedDict
 import weakref
 
-from gaia_validators import *
-from gaia_validators import (
-    ClimateConfigDict as gvClimateConfigDict,
-    HardwareConfigDict as gvHardwareConfigDict)
+import gaia_validators as gv
+from gaia_validators import get_enum_names, safe_enum_from_name
 
-# TODO: remove up once compatibility issues are solved
+# TODO: move up once compatibility issues are solved
 from pydantic import Field, field_validator, ValidationError  # noqa
 
 from gaia.config._utils import (
@@ -66,7 +64,7 @@ class SunTimesCacheDict(TypedDict):
     data: SunTimesCacheHomeDict
 
 
-class CoordinatesValidator(BaseModel):
+class CoordinatesValidator(gv.BaseModel):
     latitude: float
     longitude: float
 
@@ -76,7 +74,7 @@ class CoordinatesDict(TypedDict):
     longitude: float
 
 
-class PlaceValidator(BaseModel):
+class PlaceValidator(gv.BaseModel):
     name: str
     coordinates: CoordinatesValidator
 
@@ -91,7 +89,7 @@ class PlaceDict(TypedDict):
 # ---------------------------------------------------------------------------
 # Custom models for Hardware, Climate and Environment configs as some of their
 #  parameters are used as keys in ecosystems.cfg
-class HardwareConfigValidator(BaseModel):
+class HardwareConfigValidator(gv.BaseModel):
     name: str
     address: str
     type: str
@@ -146,7 +144,7 @@ class HardwareConfigDict(TypedDict):
     multiplexer_model: str | None
 
 
-class ClimateConfigValidator(BaseModel):
+class ClimateConfigValidator(gv.BaseModel):
     day: float
     night: float
     hysteresis: float = 0.0
@@ -158,10 +156,10 @@ class ClimateConfigDict(TypedDict):
     hysteresis: float
 
 
-class EnvironmentConfigValidator(BaseModel):
-    chaos: ChaosConfig = Field(default_factory=ChaosConfig)
-    sky: SkyConfig = Field(default_factory=SkyConfig)
-    climate: dict[ClimateParameterNames, ClimateConfigValidator] = Field(default_factory=dict)
+class EnvironmentConfigValidator(gv.BaseModel):
+    chaos: gv.ChaosConfig = Field(default_factory=gv.ChaosConfig)
+    sky: gv.SkyConfig = Field(default_factory=gv.SkyConfig)
+    climate: dict[gv.ClimateParameterNames, ClimateConfigValidator] = Field(default_factory=dict)
 
     @field_validator("climate", mode="before")
     def dict_to_climate(cls, value: dict):
@@ -169,15 +167,15 @@ class EnvironmentConfigValidator(BaseModel):
 
 
 class EnvironmentConfigDict(TypedDict):
-    chaos: ChaosConfigDict
-    sky: SkyConfigDict
+    chaos: gv.ChaosConfigDict
+    sky: gv.SkyConfigDict
     climate: dict[str, ClimateConfigDict]
 
 
-class EcosystemConfigValidator(BaseModel):
+class EcosystemConfigValidator(gv.BaseModel):
     name: str
     status: bool = False
-    management: ManagementConfig = Field(default_factory=ManagementConfig)
+    management: gv.ManagementConfig = Field(default_factory=gv.ManagementConfig)
     environment: EnvironmentConfigValidator = Field(default_factory=EnvironmentConfigValidator)
     IO: dict[str, HardwareConfigValidator] = Field(default_factory=dict)
 
@@ -185,12 +183,12 @@ class EcosystemConfigValidator(BaseModel):
 class EcosystemConfigDict(TypedDict):
     name: str
     status: bool
-    management: dict[ManagementNames, bool]
+    management: dict[gv.ManagementNames, bool]
     environment: EnvironmentConfigDict
     IO: dict[str, HardwareConfigDict]
 
 
-class RootEcosystemsConfigValidator(BaseModel):
+class RootEcosystemsConfigValidator(gv.BaseModel):
     config: dict[str, EcosystemConfigValidator]
 
 
@@ -209,7 +207,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._engine: "Engine" | None = None
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
-        self._sun_times: SunTimes | None = None
+        self._sun_times: gv.SunTimes | None = None
         # Watchdog threading securities
         self._hash_dict: dict[ConfigType, str] = {}
         self._lock = Lock()
@@ -442,15 +440,15 @@ class EngineConfig(metaclass=SingletonMeta):
             if self._ecosystems_config[ecosystem_uid]["status"]
         ])
 
-    def get_IDs(self, ecosystem_id: str) -> IDs:
+    def get_IDs(self, ecosystem_id: str) -> gv.IDs:
         if ecosystem_id in self.ecosystems_uid:
             ecosystem_uid = ecosystem_id
             ecosystem_name = self.id_to_name_dict[ecosystem_id]
-            return IDs(ecosystem_uid, ecosystem_name)
+            return gv.IDs(ecosystem_uid, ecosystem_name)
         elif ecosystem_id in self.ecosystems_name:
             ecosystem_uid = self.name_to_id_dict[ecosystem_id]
             ecosystem_name = ecosystem_id
-            return IDs(ecosystem_uid, ecosystem_name)
+            return gv.IDs(ecosystem_uid, ecosystem_name)
         raise EcosystemNotFound(
             "'ecosystem_id' parameter should either be an ecosystem uid or an "
             "ecosystem name present in the 'ecosystems.cfg' file. If you want "
@@ -527,14 +525,14 @@ class EngineConfig(metaclass=SingletonMeta):
         return self._private_config.get("units", {})
 
     @property
-    def sun_times(self) -> SunTimes | None:
+    def sun_times(self) -> gv.SunTimes | None:
         return self._sun_times
 
     def refresh_sun_times(self) -> None:
         needed = False
         for ecosystem_config in self._ecosystems_config.values():
-            sky = SkyConfig(**ecosystem_config["environment"]["sky"])
-            if sky.lighting != LightMethod.fixed:
+            sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
+            if sky.lighting != gv.LightMethod.fixed:
                 needed = True
                 break
         if not needed:
@@ -569,7 +567,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     raise UndefinedParameter(
                         f"Could not find {daytime_event} in sun times file.")
 
-            self._sun_times = SunTimes(
+            self._sun_times = gv.SunTimes(
                 twilight_begin=import_daytime_event("civil_twilight_begin"),
                 sunrise=import_daytime_event("sunrise"),
                 sunset=import_daytime_event("sunset"),
@@ -707,27 +705,27 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     """Parameters related to sub-routines control"""
     @property
-    def managements(self) -> ManagementConfigDict:
+    def managements(self) -> gv.ManagementConfigDict:
         return self.__dict["management"]
 
     @managements.setter
-    def managements(self, value: ManagementConfigDict) -> None:
-        self.__dict["management"] = ManagementConfig(**value).dict()
+    def managements(self, value: gv.ManagementConfigDict) -> None:
+        self.__dict["management"] = gv.ManagementConfig(**value).dict()
         self.save()
 
-    def get_management(self, management: ManagementNames) -> bool:
+    def get_management(self, management: gv.ManagementNames) -> bool:
         try:
             return self.__dict["management"].get(management, False)
         except (KeyError, AttributeError):  # pragma: no cover
             return False
 
-    def set_management(self, management: ManagementNames, value: bool) -> None:
-        if management not in get_enum_names(ManagementFlags):
+    def set_management(self, management: gv.ManagementNames, value: bool) -> None:
+        if management not in get_enum_names(gv.ManagementFlags):
             raise ValueError(f"{management} is not a valid management parameter")
         self.__dict["management"][management] = value
         self.save()
 
-    def get_managed_subroutines(self) -> list[ManagementNames]:
+    def get_managed_subroutines(self) -> list[gv.ManagementNames]:
         return [subroutine for subroutine in SUBROUTINES
                 if self.get_management(subroutine)]
 
@@ -744,53 +742,53 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return self.__dict["environment"]
 
     @property
-    def sky(self) -> SkyConfigDict:
+    def sky(self) -> gv.SkyConfigDict:
         """
         Returns the sky config for the ecosystem
         """
         try:
             return self.environment["sky"]
         except KeyError:
-            self.environment["sky"] = SkyConfig().dict()
+            self.environment["sky"] = gv.SkyConfig().dict()
             return self.environment["sky"]
 
     @property
-    def light_method(self) -> LightMethod:
+    def light_method(self) -> gv.LightMethod:
         if self.sun_times is None:
-            return LightMethod.fixed
-        return safe_enum_from_name(LightMethod, self.sky["lighting"])
+            return gv.LightMethod.fixed
+        return safe_enum_from_name(gv.LightMethod, self.sky["lighting"])
 
     @light_method.setter
-    def light_method(self, method: LightMethod) -> None:
+    def light_method(self, method: gv.LightMethod) -> None:
         try:
-            validated_method = safe_enum_from_name(LightMethod, method)
+            validated_method = safe_enum_from_name(gv.LightMethod, method)
         except KeyError:
             raise ValueError("'method' is not a valid 'LightMethod'")
         self.sky["lighting"] = validated_method
-        if validated_method != LightMethod.fixed:
+        if validated_method != gv.LightMethod.fixed:
             self.general.refresh_sun_times()
         self.save()
 
     @property
-    def chaos(self) -> ChaosConfig:
+    def chaos(self) -> gv.ChaosConfig:
         try:
-            return ChaosConfig(**self.environment["chaos"])
+            return gv.ChaosConfig(**self.environment["chaos"])
         except KeyError:
             raise UndefinedParameter(f"Chaos as not been set in {self.name}")
 
     @chaos.setter
-    def chaos(self, values: ChaosConfigDict) -> None:
+    def chaos(self, values: gv.ChaosConfigDict) -> None:
         """Set chaos parameter
 
         :param values: A dict with the entries 'frequency': int,
                        'duration': int and 'intensity': float.
         """
-        validated_values = ChaosConfig(**values).dict()
+        validated_values = gv.ChaosConfig(**values).dict()
         self.environment["chaos"] = validated_values
         self.save()
 
     @property
-    def climate(self) -> dict[ClimateParameterNames, ClimateConfigDict]:
+    def climate(self) -> dict[gv.ClimateParameterNames, ClimateConfigDict]:
         """
         Returns the sky config for the ecosystem
         """
@@ -800,10 +798,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.environment["climate"] = {}
             return self.environment["climate"]
 
-    def get_climate_parameter(self, parameter: ClimateParameterNames) -> ClimateConfig:
+    def get_climate_parameter(self, parameter: gv.ClimateParameterNames) -> gv.ClimateConfig:
         try:
             data = self.climate[parameter]
-            return ClimateConfig(parameter=parameter, **data)
+            return gv.ClimateConfig(parameter=parameter, **data)
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
@@ -811,7 +809,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def set_climate_parameter(
             self,
-            parameter: ClimateParameterNames,
+            parameter: gv.ClimateParameterNames,
             value: ClimateConfigDict
     ) -> None:
         validated_value = ClimateConfigValidator(**value).dict()
@@ -820,7 +818,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def delete_climate_parameter(
             self,
-            parameter: ClimateParameterNames,
+            parameter: gv.ClimateParameterNames,
     ) -> None:
         try:
             del self.climate[parameter]
@@ -831,13 +829,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"'{self.name}' in ecosystems configuration file")
 
     def CRUD_create_climate_parameter(self, value: ClimateConfigDict) -> None:
-        validated_value: gvClimateConfigDict = ClimateConfig(**value).dict()
+        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).dict()
         parameter = validated_value.pop("parameter")
         self.climate[parameter] = validated_value
         self.save()
 
     def CRUD_update_climate_parameter(self, value: ClimateConfigDict) -> None:
-        validated_value: gvClimateConfigDict = ClimateConfig(**value).dict()
+        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).dict()
         parameter = validated_value.pop("parameter")
         if parameter not in self.climate:
             raise UndefinedParameter(
@@ -888,8 +886,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             name: str,
             address: str,
             model: str,
-            type: HardwareTypeNames,
-            level: HardwareLevelNames,
+            type: gv.HardwareTypeNames,
+            level: gv.HardwareLevelNames,
             measures: list | None = None,
             plants: list | None = None,
             multiplexer_model: str | None = None,
@@ -913,7 +911,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         uid = self._create_new_IO_uid()
         h = hardware_models[model]
-        hardware_config = HardwareConfig(
+        hardware_config = gv.HardwareConfig(
             uid=uid,
             name=name,
             address=address,
@@ -930,7 +928,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.IO_dict.update({uid: hardware_repr})
         self.save()
 
-    def CRUD_create_hardware(self, value: gvHardwareConfigDict) -> None:
+    def CRUD_create_hardware(self, value: gv.HardwareConfigDict) -> None:
         self.create_new_hardware(**value)
         self.save()
 
@@ -942,14 +940,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             }
             base = self.IO_dict[uid].copy()
             base.update(non_null_value)
-            validated_value = HardwareConfig(uid=uid, **base).dict()
+            validated_value = gv.HardwareConfig(uid=uid, **base).dict()
             self.IO_dict[uid] = validated_value
             self.save()
         except KeyError:
             raise HardwareNotFound
 
-    def CRUD_update_hardware(self, value: gvHardwareConfigDict) -> None:
-        validated_value: gvHardwareConfigDict = HardwareConfig(**value).dict()
+    def CRUD_update_hardware(self, value: gv.HardwareConfigDict) -> None:
+        validated_value: gv.HardwareConfigDict = gv.HardwareConfig(**value).dict()
         uid = validated_value.pop("uid")
         if uid not in self.IO_dict:
             raise HardwareNotFound
@@ -967,10 +965,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         except KeyError:
             raise HardwareNotFound
 
-    def get_hardware_config(self, uid: str) -> HardwareConfig:
+    def get_hardware_config(self, uid: str) -> gv.HardwareConfig:
         try:
             hardware_config = self.IO_dict[uid]
-            return HardwareConfig(uid=uid, **hardware_config)
+            return gv.HardwareConfig(uid=uid, **hardware_config)
         except KeyError:
             raise HardwareNotFound
 
@@ -980,30 +978,30 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     """Parameters related to time"""
     @property
-    def time_parameters(self) -> DayConfig:
-        return DayConfig(
+    def time_parameters(self) -> gv.DayConfig:
+        return gv.DayConfig(
             day=self.sky["day"],
             night=self.sky["night"],
         )
 
     @time_parameters.setter
-    def time_parameters(self, value: DayConfigDict) -> None:
+    def time_parameters(self, value: gv.DayConfigDict) -> None:
         """Set time parameters
 
         :param value: A dict in the form {'day': '8h00', 'night': '22h00'}
         """
-        validated_value = DayConfig(**value).dict()
+        validated_value = gv.DayConfig(**value).dict()
         self.environment["sky"].update(validated_value)
 
     @property
-    def sun_times(self) -> SunTimes | None:
+    def sun_times(self) -> gv.SunTimes | None:
         return self.general.sun_times
 
 
 # ---------------------------------------------------------------------------
 #   Functions to interact with the module
 # ---------------------------------------------------------------------------
-def get_IDs(ecosystem: str) -> IDs:
+def get_IDs(ecosystem: str) -> gv.IDs:
     """Return the tuple (ecosystem_uid, ecosystem_name)
 
     :param ecosystem: str, either an ecosystem uid or ecosystem name
