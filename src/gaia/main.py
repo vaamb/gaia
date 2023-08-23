@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from threading import Thread
 from time import sleep
 import typing as t
 from typing import Type
@@ -9,15 +8,12 @@ from typing import Type
 from gaia.config import GaiaConfig, get_config
 from gaia.engine import Engine
 from gaia.shared_resources import scheduler, start_scheduler
-from gaia.utils import configure_logging, json
+from gaia.utils import configure_logging
 
 
 if t.TYPE_CHECKING:
     from dispatcher import KombuDispatcher
-
     from sqlalchemy_wrapper import SQLAlchemyWrapper
-
-    from gaia.events.sio_based_handler import RetryClient
 
 
 def main():
@@ -39,78 +35,54 @@ class Gaia:
             config_cls: Type[GaiaConfig] = get_config(),
     ) -> None:
         configure_logging(config_cls)
+        self._config: Type[GaiaConfig] = config_cls
         self.logger = logging.getLogger("gaia")
         self.logger.info("Initializing Gaia")
         self.started: bool = False
         self.engine = Engine()
-        self._thread: Thread | None = None
-        self._broker_url = config_cls.AGGREGATOR_COMMUNICATION_URL
-        self._message_broker: "KombuDispatcher" | "RetryClient" | None = None
+        self._message_broker: "KombuDispatcher" | None = None
         self._db: "SQLAlchemyWrapper" | None = None
-        if config_cls.USE_DATABASE:
+        if self._config.USE_DATABASE:
             self._init_database()
-        if config_cls.COMMUNICATE_WITH_OURANOS:
+        if self._config.COMMUNICATE_WITH_OURANOS:
+            broker_url = config_cls.AGGREGATOR_COMMUNICATION_URL
+            broker_type = broker_url[:broker_url.index("://")]
+            if broker_type not in {"amqp", "redis"}:
+                raise ValueError(f"{broker_type} is not supported")
             self._init_message_broker()
 
     def _init_message_broker(self) -> None:
         self.logger.info("Initialising the message broker")
-        broker_type = self._broker_url[:self._broker_url.index("://")]
-        if broker_type == "socketio":
-            self.logger.debug("Initializing the SocketIO client")
-            from gaia.events.sio_based_handler import SioBasedGaiaEvents, RetryClient
-            self.message_broker = RetryClient(json=json, logger=get_config().DEBUG)
-            namespace = SioBasedGaiaEvents(
-                namespace="/gaia", engine=self.engine)
-            self.message_broker.register_namespace(namespace)
-            events_handler = self.message_broker.namespace_handlers["/gaia"]
-
-        elif broker_type in {"amqp", "redis"}:
-            self.logger.debug("Initializing the dispatcher")
+        broker_url = self._config.AGGREGATOR_COMMUNICATION_URL
+        self.logger.debug("Initializing the dispatcher")
+        if broker_url == "amqp://":
+            broker_url = "amqp://guest:guest@localhost:5672//"
+        elif broker_url == "redis://":
+            broker_url = "redis://localhost:6379/0"
+        try:
             from dispatcher import KombuDispatcher
-            from gaia.events.dispatcher_based_handler import DispatcherBasedGaiaEvents
-            if self._broker_url == "amqp://":
-                broker_uri = "amqp://guest:guest@localhost:5672//"
-            elif self._broker_url == "redis://":
-                broker_uri = "redis://localhost:6379/0"
-            else:
-                broker_uri = self._broker_url
-            self.message_broker = KombuDispatcher(
-                "gaia", url=broker_uri, queue_options={
-                    "name": f"gaia-{get_config().ENGINE_UID}", "durable": True
-                }
-            )
-            events_handler = DispatcherBasedGaiaEvents(
-                namespace="aggregator", engine=self.engine)
-            self.message_broker.register_event_handler(events_handler)
-
-        else:
+        except ImportError:
             raise RuntimeError(
-                f"{broker_type} is not supported"
+                "Event-dispatcher is required to use the dispatcher. Download it "
+                "from `https://github.com/vaamb/dispatcher` and install it in "
+                "your virtual env"
             )
-
+        self.message_broker = KombuDispatcher(
+            "gaia", url=broker_url, queue_options={
+                "name": f"gaia-{self._config.ENGINE_UID}",
+                # Delete the queue after one week, CRUD requests will be lost
+                #  at this point
+                "expires": 60 * 60 * 24 * 7
+            })
+        from gaia.events import Events
+        events_handler = Events(engine=self.engine)
+        self.message_broker.register_event_handler(events_handler)
         self.engine.event_handler = events_handler
 
     def _start_message_broker(self) -> None:
-        if hasattr(self.message_broker, "is_socketio"):
-            self.message_broker: "RetryClient"
-            self.logger.info("Starting socketIO client")
-
-            def thread_func():
-                server_url = (
-                    f"http:/"
-                    f"{self._broker_url[self._broker_url.index('://'):]}"
-                )
-                self.message_broker.connect(
-                    server_url, transports="websocket", namespaces=['/gaia'],
-                    auth={"secret_key": get_config().OURANOS_SECRET_KEY})
-
-            self.thread = Thread(target=thread_func)
-            self.thread.name = "socketio.connection"
-            self.thread.start()
-        else:
-            self.message_broker: "KombuDispatcher"
-            self.logger.info("Starting the dispatcher")
-            self.message_broker.start(retry=True, block=False)
+        self.message_broker: "KombuDispatcher"
+        self.logger.info("Starting the dispatcher")
+        self.message_broker.start(retry=True, block=False)
 
     def _init_database(self) -> None:
         self.logger.info("Initialising the database")
@@ -123,54 +95,40 @@ class Gaia:
                 routines.log_sensors_data,
                 kwargs={"scoped_session": self.db.scoped_session, "engine": self.engine},
                 trigger="cron", minute="*", misfire_grace_time=10,
-                id="log_sensors_data",
-            )
+                id="log_sensors_data")
 
     @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise RuntimeError("Thread has not been set up")
-        else:
-            return self._thread
-
-    @thread.setter
-    def thread(self, thread: Thread | None):
-        self._thread = thread
-
-    @property
-    def message_broker(self) -> "KombuDispatcher" | "RetryClient":
+    def message_broker(self) -> "KombuDispatcher":
         if self._message_broker is None:
-            raise AttributeError
+            raise RuntimeError(
+                "'message_broker' is not valid as the message broker between "
+                "Ouranos and Gaia is not used. To use it, set the config "
+                "parameter 'COMMUNICATE_WITH_OURANOS' to True, and the "
+                "parameter 'AGGREGATOR_COMMUNICATION_URL' to a valid url")
         return self._message_broker
 
     @message_broker.setter
-    def message_broker(self, value: "KombuDispatcher" | "RetryClient" | None) -> None:
+    def message_broker(self, value: "KombuDispatcher" | None) -> None:
         self._message_broker = value
-
-    @property
-    def use_message_broker(self) -> bool:
-        return self._message_broker is not None
 
     @property
     def db(self) -> "SQLAlchemyWrapper":
         if self._db is None:
-            raise AttributeError
+            raise RuntimeError(
+                "'db' is not valid as the database is currently not used. To use "
+                "it, set the config parameter 'USE_DATABASE' to True")
         return self._db
 
     @db.setter
     def db(self, value: "SQLAlchemyWrapper" | None) -> None:
         self._db = value
 
-    @property
-    def use_db(self) -> bool:
-        return self._db is not None
-
     def start(self) -> None:
         if not self.started:
             self.logger.info("Starting Gaia")
             start_scheduler()
             self.engine.start()
-            if self.use_message_broker:
+            if self._config.COMMUNICATE_WITH_OURANOS:
                 self._start_message_broker()
             self.started = True
             self.logger.info("GAIA started successfully")
@@ -182,14 +140,13 @@ class Gaia:
             self.logger.info("Running")
             while True:
                 sleep(1)
+        else:
+            raise RuntimeError("Gaia needs to be started in order to wait")
 
     def stop(self):
         if self.started:
             self.logger.info("Stopping")
             self.engine.stop()
-            if self.use_message_broker:
-                if hasattr(self.message_broker, "is_socketio"):
-                    self.message_broker.disconnect()
-                else:
-                    self.message_broker.stop()
+            if self._config.COMMUNICATE_WITH_OURANOS:
+                self.message_broker.stop()
             self.started = False

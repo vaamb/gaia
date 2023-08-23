@@ -5,16 +5,20 @@ import logging
 import logging.config
 from threading import Thread
 import weakref
+import typing as t
 
 from gaia.config import (
     EngineConfig, get_cache_dir, get_config, get_ecosystem_IDs)
 from gaia.config.from_files import config_condition, detach_config
 from gaia.ecosystem import Ecosystem
-from gaia.events import Events
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import scheduler, start_scheduler
 from gaia.utils import json, SingletonMeta
 from gaia.virtual import get_virtual_ecosystem
+
+
+if t.TYPE_CHECKING:
+    from gaia.events import Events
 
 
 class Engine(metaclass=SingletonMeta):
@@ -34,7 +38,7 @@ class Engine(metaclass=SingletonMeta):
         self.logger.debug("Initializing")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = get_config().ENGINE_UID
-        self._event_handler: Events | None = None
+        self._event_handler: "Events" | None = None
         self._thread: Thread | None = None
 
     def __del__(self):
@@ -116,17 +120,14 @@ class Engine(metaclass=SingletonMeta):
         self._thread = thread
 
     @property
-    def event_handler(self) -> Events:
-        """Return the event handler
-
-        Either a Socketio Namespace or dispatcher EventHandler
-        """
+    def event_handler(self) -> "Events":
+        """Return the event handler"""
         if self._event_handler is not None:
             return self._event_handler
         raise AttributeError("'event_handler' has not been set")
 
     @event_handler.setter
-    def event_handler(self, event_handler: Events):
+    def event_handler(self, event_handler: "Events"):
         self._event_handler = event_handler
 
     @property

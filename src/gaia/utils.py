@@ -450,10 +450,6 @@ def configure_logging(config_class):
                 "handlers": handlers,
                 "level": f"{'DEBUG' if DEBUG else 'INFO'}"
             },
-            "socketio": {
-                "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
-            },
         },
     }
     logging.config.dictConfig(LOGGING_CONFIG)

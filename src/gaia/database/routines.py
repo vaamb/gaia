@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import datetime, timezone
 import typing as t
 
 from gaia_validators import SensorsData
@@ -8,8 +8,6 @@ from gaia.database.models import SensorBuffer, SensorRecord
 
 
 if t.TYPE_CHECKING:
-    from datetime import datetime
-
     from sqlalchemy.orm import scoped_session
 
     from gaia.engine import Engine
