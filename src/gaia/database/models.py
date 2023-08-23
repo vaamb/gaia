@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Generator, NamedTuple, Sequence
+from typing import Generator, Sequence
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Mapped, mapped_column, Session
 
-from gaia_validators import BufferedDataPayload, BufferedSensorData
+from gaia_validators import BufferedSensorsDataPayload, BufferedSensorRecord
 from sqlalchemy_wrapper import SQLAlchemyWrapper
 
 from gaia.utils import json
@@ -64,7 +64,7 @@ class SensorBuffer(BaseSensorRecord):
             cls,
             session: Session,
             limit: int = 50
-    ) -> Generator[BufferedDataPayload]:
+    ) -> Generator[BufferedSensorsDataPayload]:
         while True:
             stmt = (
                 select(cls)
@@ -76,8 +76,8 @@ class SensorBuffer(BaseSensorRecord):
             if not buffered_data:
                 break
             uuid = uuid4()
-            rv: list[BufferedSensorData] = [
-                BufferedSensorData(
+            rv: list[BufferedSensorRecord] = [
+                BufferedSensorRecord(
                     ecosystem_uid=data.ecosystem_uid,
                     sensor_uid=data.sensor_uid,
                     measure=data.measure,
@@ -89,7 +89,7 @@ class SensorBuffer(BaseSensorRecord):
             for data in buffered_data:
                 data.exchange_uuid = uuid
             session.commit()
-            yield BufferedDataPayload(
+            yield BufferedSensorsDataPayload(
                 data=rv,
                 uuid=uuid,
             )
