@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from time import sleep
 import typing as t
+from typing import Type
 
-from gaia.hardware.abc import gpioSensor, hardware_logger
+from gaia.hardware.abc import BaseSensor, gpioHardware, hardware_logger
 from gaia.hardware.sensors.abc import TempHumSensor
-from gaia.hardware.utils import _IS_RASPI
+from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if _IS_RASPI:
+    if is_raspi():
         from adafruit_dht import DHT11 as _DHT11, DHT22 as _DHT22
     else:
         from gaia.hardware._compatibility import (
@@ -19,7 +20,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   GPIO sensors
 # ---------------------------------------------------------------------------
-class DHTSensor(TempHumSensor):
+class DHTSensor(TempHumSensor, gpioHardware):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):
             kwargs["measures"] = ["temperature", "humidity"]
@@ -54,7 +55,7 @@ class DHTSensor(TempHumSensor):
 
 class DHT11(DHTSensor):
     def _get_device(self) -> "_DHT11":
-        if _IS_RASPI:
+        if is_raspi():
             try:
                 from adafruit_dht import DHT11 as _DHT11
             except ImportError:
@@ -70,7 +71,7 @@ class DHT11(DHTSensor):
 
 class DHT22(DHTSensor):
     def _get_device(self) -> "_DHT22":
-        if _IS_RASPI:
+        if is_raspi():
             try:
                 from adafruit_dht import DHT22 as _DHT22
             except ImportError:
@@ -84,7 +85,7 @@ class DHT22(DHTSensor):
         return _DHT22(self.pin, use_pulseio=False)
 
 
-gpio_sensor_models = {
+gpio_sensor_models: dict[str, Type[BaseSensor]] = {
     hardware.__name__: hardware for hardware in [
         DHT11,
         DHT22,

@@ -13,7 +13,7 @@ if t.TYPE_CHECKING:
     from gaia.subroutines.template import SubroutineTemplate
 
 
-def allways_off(**kwargs) -> bool:
+def always_off(**kwargs) -> bool:
     return False
 
 
@@ -22,7 +22,7 @@ class ActuatorHandler:
             self,
             subroutine: "SubroutineTemplate",
             actuator_type: HardwareType,
-            expected_status_function: Callable[..., bool] = allways_off
+            expected_status_function: Callable[..., bool] = always_off
     ) -> None:
         self.subroutine: "SubroutineTemplate" = weakref.proxy(subroutine)
         assert actuator_type != HardwareType.sensor
@@ -35,46 +35,45 @@ class ActuatorHandler:
 
     @property
     def active(self) -> bool:
-        return self.subroutine.ecosystem._actuators_state[self.type.value]["active"]
+        return self.subroutine.ecosystem.actuators_state[self.type.value]["active"]
 
     @active.setter
     def active(self, value: bool) -> None:
-        self.subroutine.ecosystem._actuators_state[self.type.value]["active"] = value
+        self.subroutine.ecosystem.actuators_state[self.type.value]["active"] = value
 
     @property
     def mode(self) -> ActuatorMode:
-        return self.subroutine.ecosystem._actuators_state[self.type.value]["mode"]
-
-    def _set_mode_no_update(self, value: ActuatorMode):
-        self.subroutine.ecosystem._actuators_state[self.type.value]["mode"] = value
+        return self.subroutine.ecosystem.actuators_state[self.type.value]["mode"]
 
     @mode.setter
     def mode(self, value: ActuatorMode) -> None:
+        self._set_mode_no_update(value)
         if self.mode != self.last_mode:
-            self._set_mode_no_update(value)
             self.subroutine.logger.info(
                 f"{self.type.value.capitalize()} has been set to "
                 f"'{self.mode.value}' mode")
             self.send_actuators_state()
             self.last_mode = self.mode
 
+    def _set_mode_no_update(self, value: ActuatorMode) -> None:
+        self.subroutine.ecosystem.actuators_state[self.type.value]["mode"] = value
+
     @property
     def status(self) -> bool:
-        return self.subroutine.ecosystem._actuators_state[self.type.value]["status"]
-
-    def _set_status_no_update(self, value: bool):
-        self.subroutine.ecosystem._actuators_state[self.type.value]["status"] = value
+        return self.subroutine.ecosystem.actuators_state[self.type.value]["status"]
 
     @status.setter
     def status(self, value: bool) -> None:
-        self.subroutine.ecosystem._actuators_state[self.type.value]["status"] = value
+        self._set_status_no_update(value)
         if self.status != self.last_status:
-            self._set_status_no_update(value)
             self.subroutine.logger.info(
                 f"{self.type.value.capitalize()} has been turned "
                 f"{'on' if self.status else 'off'}")
             self.send_actuators_state()
             self.last_status = self.status
+
+    def _set_status_no_update(self, value: bool) -> None:
+        self.subroutine.ecosystem.actuators_state[self.type.value]["status"] = value
 
     @property
     def countdown(self) -> float | None:
@@ -110,7 +109,7 @@ class ActuatorHandler:
             self,
             turn_to: ActuatorModePayload = ActuatorModePayload.automatic,
             countdown: float = 0.0
-    ):
+    ) -> None:
         if turn_to == ActuatorModePayload.automatic:
             self._set_mode_no_update(ActuatorMode.automatic)
         else:
@@ -135,7 +134,7 @@ class ActuatorHandler:
         self.last_mode = self.mode
         self.last_status = self.status
 
-    def send_actuators_state(self):
+    def send_actuators_state(self) -> None:
         if (
                 self.subroutine.ecosystem.engine.use_message_broker
                 and self.subroutine.ecosystem.event_handler.registered

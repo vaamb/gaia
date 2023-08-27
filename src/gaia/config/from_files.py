@@ -11,7 +11,7 @@ import requests
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
-from typing import Self, TypedDict
+from typing import Literal, TypedDict
 import weakref
 
 import gaia_validators as gv
@@ -25,7 +25,7 @@ from gaia.config._utils import (
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
-from gaia.subroutines import SUBROUTINES
+from gaia.subroutines import subroutines
 from gaia.utils import (
     file_hash, json, SingletonMeta, utc_time_to_local_time, yaml)
 
@@ -48,6 +48,10 @@ logger = logging.getLogger("gaia.config.environments")
 # ---------------------------------------------------------------------------
 #   Common config models
 # ---------------------------------------------------------------------------
+DaytimeEvents = Literal[
+    "civil_twilight_begin", "sunrise", "sunset", "civil_twilight_end"]
+
+
 class SunTimesDict(TypedDict):
     civil_twilight_begin: str
     sunrise: str
@@ -224,14 +228,12 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def thread(self) -> Thread:
-        if self._thread is not None:
-            return self._thread
-        raise AttributeError("'thread' has not been set up")
+        if self._thread is None:
+            raise AttributeError("'thread' has not been set up")
+        return self._thread
 
     @thread.setter
-    def thread(self, thread: Thread) -> None:
-        if not isinstance(thread, Thread):
-            raise ValueError
+    def thread(self, thread: Thread | None) -> None:
         self._thread = thread
 
     @property
@@ -266,6 +268,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
+        # TODO: shorten dicts used ?
         config_path = self._base_dir/f"{cfg_type.name}.cfg"
         with open(config_path, "w") as file:
             cfg = getattr(self, cfg_type.value)
@@ -489,13 +492,13 @@ class EngineConfig(metaclass=SingletonMeta):
         self.save(ConfigType.private)
 
     def CRUD_create_place(self, value: PlaceDict):
-        validated_value: PlaceDict = PlaceValidator(**value).dict()
+        validated_value: PlaceDict = PlaceValidator(**value).model_dump()
         place = validated_value.pop("name")
         self.places[place] = validated_value["coordinates"]
         self.save(ConfigType.private)
 
     def CRUD_update_place(self, value: PlaceDict) -> None:
-        validated_value: PlaceDict = PlaceValidator(**value).dict()
+        validated_value: PlaceDict = PlaceValidator(**value).model_dump()
         place = validated_value.pop("name")
         if place not in self.places:
             raise UndefinedParameter(
@@ -557,7 +560,7 @@ class EngineConfig(metaclass=SingletonMeta):
             sun_times_data = self.download_sun_times()
 
         if sun_times_data is not None:
-            def import_daytime_event(daytime_event: str) -> time:
+            def import_daytime_event(daytime_event: DaytimeEvents) -> time:
                 try:
                     my_time = datetime.strptime(
                         sun_times_data[daytime_event], "%I:%M:%S %p").astimezone().time()
@@ -634,9 +637,9 @@ class EngineConfig(metaclass=SingletonMeta):
 #   SpecificConfig class
 # ---------------------------------------------------------------------------
 class _MetaEcosystemConfig(type):
-    instances: dict[str, Self] = {}
+    instances: dict[str, "EcosystemConfig"] = {}
 
-    def __call__(cls, *args, **kwargs) -> Self:
+    def __call__(cls, *args, **kwargs) -> "EcosystemConfig":
         if len(args) > 0:
             ecosystem = args[0]
         else:
@@ -646,10 +649,11 @@ class _MetaEcosystemConfig(type):
         try:
             return cls.instances[ecosystem_uid]
         except KeyError:
-            config = cls.__new__(cls, ecosystem, *args, **kwargs)
-            config.__init__(*args, **kwargs)
-            cls.instances[ecosystem_uid] = config
-            return config
+            ecosystem_config: EcosystemConfig = \
+                cls.__new__(cls, ecosystem, *args, **kwargs)
+            ecosystem_config.__init__(*args, **kwargs)
+            cls.instances[ecosystem_uid] = ecosystem_config
+            return ecosystem_config
 
 
 class EcosystemConfig(metaclass=_MetaEcosystemConfig):
@@ -663,7 +667,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def __del__(self):
         try:
             del _MetaEcosystemConfig.instances[self.uid]
-        except KeyError:  # already removed
+        except KeyError:  # already removed or failed to init
             pass
 
     def __repr__(self) -> str:
@@ -726,7 +730,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.save()
 
     def get_managed_subroutines(self) -> list[gv.ManagementNames]:
-        return [subroutine for subroutine in SUBROUTINES
+        return [subroutine for subroutine in subroutines
                 if self.get_management(subroutine)]
 
     """EnvironmentConfig related parameters"""

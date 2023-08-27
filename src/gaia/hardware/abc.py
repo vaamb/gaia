@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import textwrap
 import typing as t
-from typing import Any, cast, Literal, Self
+from typing import Any, cast, Literal, Self, Type
 import weakref
 
 from gaia_validators import (
@@ -17,8 +17,8 @@ from gaia_validators import (
     HardwareType, HardwareTypeNames, SensorRecord)
 
 from gaia.config import get_base_dir
-from gaia.hardware.multiplexers import multiplexer_models
-from gaia.hardware.utils import _IS_RASPI, get_i2c, hardware_logger
+from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
+from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import (
     pin_bcm_to_board, pin_board_to_bcm, pin_translation)
 
@@ -27,7 +27,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     import numpy as np
 
     from gaia.subroutines.template import SubroutineTemplate
-    if _IS_RASPI:
+    if is_raspi():
         import pwmio
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
     else:
@@ -167,9 +167,9 @@ class Address:
 
 
 class _MetaHardware(type):
-    instances: dict[str, Self] = {}
+    instances: dict[str, "Hardware"] = {}
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args, **kwargs) -> "Hardware":
         uid = kwargs["uid"]
         try:
             return cls.instances[uid]
@@ -243,13 +243,13 @@ class Hardware(metaclass=_MetaHardware):
         self._plants = plants or []
         self._multiplexer_model = multiplexer_model
 
-    def __del__(self):
+    def __del__(self) -> None:
         # If an error arises during __init__ (because of a missing package), no
         #  instance will be registered
         if _MetaHardware.instances.get(self._uid):
             del _MetaHardware.instances[self._uid]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"<{self.__class__.__name__}({self._uid}, name={self._name}, "
             f"model={self._model})>"
@@ -370,8 +370,9 @@ class gpioHardware(Hardware):
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
 
-    def _get_pin(self, address) -> "Pin":
-        if _IS_RASPI:
+    @staticmethod
+    def _get_pin(address) -> "Pin":
+        if is_raspi():
             try:
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
             except ImportError:
@@ -389,7 +390,7 @@ class gpioHardware(Hardware):
 
 
 class Switch(Hardware):
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.turn_off()
         except AttributeError:  # Pin not yet setup
@@ -407,7 +408,7 @@ class Switch(Hardware):
 
 
 class Dimmer(Hardware):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self._address_book.secondary is None:  # pragma: no cover
             raise ValueError(
@@ -427,7 +428,7 @@ class Dimmer(Hardware):
 
 
 class gpioDimmer(gpioHardware, Dimmer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if not self._address_book.secondary.type == AddressType.GPIO:  # pragma: no cover
             raise ValueError(
@@ -436,7 +437,7 @@ class gpioDimmer(gpioHardware, Dimmer):
             )
 
     def _get_dimmer(self) -> "pwmio.PWMOut":
-        if _IS_RASPI:
+        if is_raspi():
             try:
                 import pwmio
             except ImportError:
@@ -471,20 +472,21 @@ class i2cHardware(Hardware):
                 "to use a specific address"
             )
 
-    def _get_i2c(self, address: AddressBookType = "primary"):
-        address: Address = getattr(self._address_book, address)
+    def _get_i2c(self, address_type: AddressBookType = "primary"):
+        address: Address = getattr(self._address_book, address_type)
         if address.is_multiplexed:
             multiplexer_address = address.multiplexer_address
             multiplexer_channel = address.multiplexer_channel
-            multiplexer_class = multiplexer_models[self.multiplexer_model]
-            multiplexer = multiplexer_class(multiplexer_address)
+            multiplexer_class: Type[Multiplexer] = \
+                multiplexer_models[self.multiplexer_model]
+            multiplexer: Multiplexer = multiplexer_class(multiplexer_address)
             return multiplexer.get_channel(multiplexer_channel)
         else:
             return get_i2c()
 
 
 class PlantLevelHardware(Hardware):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         kwargs["level"] = HardwareLevel.plants
         super().__init__(*args, **kwargs)
         if not self.plants:  # pragma: no cover
@@ -512,7 +514,7 @@ class BaseSensor(Hardware):
 
 
 class LightSensor(BaseSensor):
-    def get_lux(self) -> float:
+    def get_lux(self) -> float | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -545,7 +547,7 @@ class i2cSensor(BaseSensor, i2cHardware):
 
 
 class Camera(Hardware):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         import numpy as np
         from PIL import Image as _Image
         super().__init__(*args, **kwargs)
@@ -558,12 +560,12 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def get_image(self) -> Image:
+    def get_image(self) -> Image | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    def get_video(self) -> io.BytesIO:
+    def get_video(self) -> io.BytesIO | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -582,6 +584,7 @@ class Camera(Hardware):
             image: Image,
             name: str | None = None,
     ) -> Path:
+        from PIL import Image as _Image  # TODO: fix this ugliness
         if name is None:
             name = f"{self.uid}-{image.timestamp.isoformat(timespec='seconds')}"
         path = self.camera_dir/name

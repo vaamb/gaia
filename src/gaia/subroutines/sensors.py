@@ -5,6 +5,7 @@ from statistics import mean
 from threading import Event, Thread, Lock
 from time import monotonic
 import typing as t
+from typing import cast
 
 from gaia_validators import (
     Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict,
@@ -26,6 +27,7 @@ lock = Lock()
 class Sensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.hardware: dict[str, BaseSensor]
         self._thread: Thread | None = None
         self._stop_event = Event()
         self._data: SensorsData | Empty = Empty()
@@ -59,21 +61,23 @@ class Sensors(SubroutineTemplate):
             )
             self.manageable = False
 
-    def _start(self):
+    def _start(self) -> None:
+        time_out: float = get_config().SENSORS_TIMEOUT
         self.logger.info(
-            f"Starting sensors loop. It will run every {get_config().SENSORS_TIMEOUT} s"
-        )
-        self._thread = Thread(target=self._sensors_loop, args=())
+            f"Starting sensors loop. It will run every {time_out} s")
+        self._stop_event.clear()
+        self.thread = Thread(target=self._sensors_loop, args=())
         self.thread.name = f"{self._uid}-sensors_loop"
         self.thread.start()
         self.logger.debug(f"Sensors loop successfully started")
 
-    def _stop(self):
+    def _stop(self) -> None:
         self.logger.info(f"Stopping sensors loop")
         self._stop_event.set()
         self.thread.join()
+        self.thread = None
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
+            climate_subroutine = cast("Climate", self.ecosystem.subroutines["climate"])
             climate_subroutine.stop()
         self.hardware = {}
 
@@ -81,12 +85,12 @@ class Sensors(SubroutineTemplate):
     @property
     def thread(self) -> Thread:
         if self._thread is None:
-            raise RuntimeError("Thread has not been set up")
+            raise ValueError("Thread has not been set up")
         else:
             return self._thread
 
     @thread.setter
-    def thread(self, thread: Thread | None):
+    def thread(self, thread: Thread | None) -> None:
         self._thread = thread
 
     def add_hardware(self, hardware_config: HardwareConfig) -> BaseSensor:
@@ -102,7 +106,7 @@ class Sensors(SubroutineTemplate):
     def refresh_hardware(self) -> None:
         super().refresh_hardware()
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
+            climate_subroutine = cast("Climate", self.ecosystem.subroutines["climate"])
             climate_subroutine.refresh_hardware()
 
     def update_sensors_data(self) -> None:
@@ -112,7 +116,7 @@ class Sensors(SubroutineTemplate):
         cache: SensorsDataDict = {}
         to_average: dict[str, list[float]] = {}
         cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
-        cache["records"]: list[SensorRecord] = []
+        cache["records"] = []
         for uid in self.hardware:
             cache["records"].extend(
                 data for data in self.hardware[uid].get_data()

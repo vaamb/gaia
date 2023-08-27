@@ -2,18 +2,19 @@ from __future__ import annotations
 
 from time import sleep
 import typing as t
+from typing import Type
 
 from gaia_validators import SensorRecord
 
 from gaia.hardware.abc import (
-    hardware_logger, i2cSensor, LightSensor, PlantLevelHardware)
+    BaseSensor, hardware_logger, i2cSensor, LightSensor, PlantLevelHardware)
 from gaia.hardware.sensors.abc import TempHumSensor
-from gaia.hardware.utils import _IS_RASPI
+from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if _IS_RASPI:
+    if is_raspi():
         from adafruit_ahtx0 import AHTx0
         from adafruit_seesaw.seesaw import Seesaw
         from adafruit_veml7700 import VEML7700 as _VEML7700
@@ -27,14 +28,14 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   I2C sensors
 # ---------------------------------------------------------------------------
-class AHT20(TempHumSensor):
+class AHT20(TempHumSensor, i2cSensor):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):
             kwargs["measures"] = ["temperature", "humidity"]
         super().__init__(*args, default_address=0x38, **kwargs)
 
     def _get_device(self) -> "AHTx0":
-        if _IS_RASPI:
+        if is_raspi():
             try:
                 from adafruit_ahtx0 import AHTx0
             except ImportError:
@@ -64,7 +65,7 @@ class ENS160(i2cSensor):
         super().__init__(*args, default_address=0x53, **kwargs)
 
     def _get_device(self) -> "_ENS160":
-        if _IS_RASPI:
+        if is_raspi():
             try:
                 from adafruit_ens160 import ENS160 as _ENS160
             except ImportError:
@@ -134,7 +135,7 @@ class VEML7700(i2cSensor, LightSensor):
         super().__init__(*args, default_address=0x10, **kwargs)
 
     def _get_device(self) -> "_VEML7700":
-        if _IS_RASPI:
+        if is_raspi():
             try:
                 from adafruit_veml7700 import VEML7700 as _VEML7700
             except ImportError:
@@ -175,7 +176,7 @@ class VCNL4040(i2cSensor, LightSensor):
         super().__init__(*args, default_address=0x60, **kwargs)
 
     def _get_device(self) -> "_VCNL4040":
-        if _IS_RASPI:
+        if is_raspi():
             try:
                 from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
             except ImportError:
@@ -216,7 +217,7 @@ class CapacitiveSensor(i2cSensor):
         super().__init__(*args, default_address=0x36, **kwargs)
 
     def _get_device(self) -> "Seesaw":
-        if _IS_RASPI:
+        if is_raspi():
             try:
                 from adafruit_seesaw.seesaw import Seesaw
             except ImportError:
@@ -286,7 +287,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         return data
 
 
-i2c_sensor_models = {
+i2c_sensor_models: dict[str, Type[BaseSensor]] = {
     hardware.__name__: hardware for hardware in [
         AHT20,
         CapacitiveMoisture,
