@@ -3,10 +3,9 @@ from __future__ import annotations
 from time import sleep
 import typing as t
 
-from gaia.hardware.abc import gpioSensor, hardware_logger, MeasureRecordDict
+from gaia.hardware.abc import gpioSensor, hardware_logger
+from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import _IS_RASPI
-from gaia.utils import (
-    get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -20,7 +19,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   GPIO sensors
 # ---------------------------------------------------------------------------
-class DHTSensor(gpioSensor):
+class DHTSensor(TempHumSensor):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):
             kwargs["measures"] = ["temperature", "humidity"]
@@ -51,35 +50,6 @@ class DHTSensor(gpioSensor):
             else:
                 break
         return humidity, temperature
-
-    def get_data(self) -> list[MeasureRecordDict]:
-        try:
-            raw_humidity, raw_temperature = self._get_raw_data()
-        except RuntimeError:
-            raw_humidity = raw_temperature = None
-        data = []
-        if raw_humidity is not None and raw_temperature is not None:
-            if "humidity" in self.measures:
-                data.append({"measure": "humidity", "value": raw_humidity})
-
-            if "temperature" in self.measures:
-                temperature = temperature_converter(
-                    raw_temperature, "celsius", get_unit("temperature", "celsius")
-                )
-                data.append({"measure": "temperature", "value": temperature})
-
-            if "dew_point" in self.measures:
-                raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
-                dew_point = temperature_converter(
-                    raw_dew_point, "celsius", get_unit("temperature", "celsius")
-                )
-                data.append({"measure": "dew_point", "value": dew_point})
-
-            if "absolute_humidity" in self.measures:
-                raw_absolute_humidity = get_absolute_humidity(
-                    raw_temperature, raw_humidity)
-                data.append({"measure": "absolute_humidity", "value": raw_absolute_humidity})
-        return data
 
 
 class DHT11(DHTSensor):

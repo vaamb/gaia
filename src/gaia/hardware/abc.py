@@ -9,12 +9,12 @@ from pathlib import Path
 import re
 import textwrap
 import typing as t
-from typing import Any, cast, Literal, Self, TypedDict
+from typing import Any, cast, Literal, Self
 import weakref
 
 from gaia_validators import (
     safe_enum_from_name, HardwareConfig, HardwareLevel, HardwareLevelNames,
-    HardwareType, HardwareTypeNames)
+    HardwareType, HardwareTypeNames, SensorRecord)
 
 from gaia.config import get_base_dir
 from gaia.hardware.multiplexers import multiplexer_models
@@ -32,11 +32,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
     else:
         from gaia.hardware._compatibility import Pin, pwmio
-
-
-class MeasureRecordDict(TypedDict):
-    measure: str
-    value: float
 
 
 class PinNumberError(ValueError):
@@ -510,7 +505,7 @@ class BaseSensor(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[MeasureRecordDict]:
+    def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -522,14 +517,14 @@ class LightSensor(BaseSensor):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list:
+    def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class gpioSensor(BaseSensor, gpioHardware):
-    def get_data(self) -> list:
+    def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -543,7 +538,7 @@ class i2cSensor(BaseSensor, i2cHardware):
                 kwargs["address"] = f"I2C_{hex(default_address)}"
         super().__init__(*args, **kwargs)
 
-    def get_data(self) -> list:
+    def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
