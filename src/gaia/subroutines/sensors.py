@@ -5,7 +5,6 @@ from statistics import mean
 from threading import Event, Thread, Lock
 from time import monotonic
 import typing as t
-from typing import Any
 
 from gaia_validators import (
     Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict,
@@ -113,50 +112,31 @@ class Sensors(SubroutineTemplate):
         cache: SensorsDataDict = {}
         to_average: dict[str, list[float]] = {}
         cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
-        records: list[SensorRecord] = []
+        cache["records"]: list[SensorRecord] = []
         for uid in self.hardware:
-            measures = self.hardware[uid].get_data()
-            for measure in measures:
-                if measure.get("value") is None:
-                    continue
-                records.append(SensorRecord(
-                    sensor_uid=uid, measure=measure["measure"],
-                    value=measure["value"], timestamp=None))
-                try:
-                    to_average[measure["measure"]].append(measure["value"])
-                except KeyError:
-                    to_average[measure["measure"]] = [measure["value"]]
-        cache["records"] = records
-        average: dict[str, float] = {}
-        for measure in to_average:
-            average[measure] = round(mean(to_average[measure]), 2)
+            cache["records"].extend(
+                data for data in self.hardware[uid].get_data()
+                if data.value is not None
+            )
+        for record in cache["records"]:
+            try:
+                to_average[record.measure].append(record.value)
+            except KeyError:
+                to_average[record.measure] = [record.value]
         cache["average"] = [
-            MeasureAverage(measure=measure, value=value, timestamp=None)
-            for measure, value in average.items()
+            MeasureAverage(
+                measure=measure,
+                value=round(mean(value), 2),
+                timestamp=None
+            )
+            for measure, value in to_average.items()
         ]
         with lock:
-            if len(records) > 0:
+            if len(cache["records"]) > 0:
                 self._data = SensorsData(**cache)
             else:
                 self._data = Empty()
 
     @property
     def sensors_data(self) -> SensorsData | Empty:
-        """
-        Get sensors data as a dict with the following format:
-        {
-            "timestamp": datetime.now(),
-            "data": [
-                {
-                    "sensor_uid": sensor1_uid,
-                    "measures": [
-                        {"name": measure1, "value": sensor1_measure1_value},
-                    ],
-                },
-            ],
-            "average": [
-                {"name": measure, "value": average_measure_value}
-            }],
-        }
-        """
         return self._data

@@ -3,12 +3,13 @@ from __future__ import annotations
 from time import sleep
 import typing as t
 
+from gaia_validators import SensorRecord
+
 from gaia.hardware.abc import (
-    hardware_logger, i2cSensor, LightSensor, MeasureRecordDict,
-    PlantLevelHardware)
+    hardware_logger, i2cSensor, LightSensor, PlantLevelHardware)
+from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import _IS_RASPI
-from gaia.utils import (
-    get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
+from gaia.utils import get_unit, temperature_converter
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -26,7 +27,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   I2C sensors
 # ---------------------------------------------------------------------------
-class AHT20(i2cSensor):
+class AHT20(TempHumSensor):
     def __init__(self, *args, **kwargs) -> None:
         if not kwargs.get("measures"):
             kwargs["measures"] = ["temperature", "humidity"]
@@ -54,29 +55,6 @@ class AHT20(i2cSensor):
             humidity = None
             temperature = None
         return humidity, temperature
-
-    def get_data(self) -> list[MeasureRecordDict]:
-        data = []
-        raw_humidity, raw_temperature = self._get_raw_data()
-        if "temperature" in self.measures:
-            temperature = temperature_converter(
-                raw_temperature,
-                "celsius",
-                get_unit("temperature", "celsius")
-            )
-            data.append({"measure": "temperature", "value": temperature})
-        if "humidity" in self.measures:
-            data.append({"measure": "humidity", "value": raw_humidity})
-        if "dew_point" in self.measures:
-            raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
-            dew_point = temperature_converter(
-                raw_dew_point, "celsius", get_unit("temperature", "celsius"))
-            data.append({"measure": "dew_point", "value": dew_point})
-        if "absolute_humidity" in self.measures:
-            absolute_humidity = get_absolute_humidity(
-                raw_temperature, raw_humidity)
-            data.append({"measure": "absolute_humidity", "value": absolute_humidity})
-        return data
 
 
 class ENS160(i2cSensor):
@@ -122,16 +100,30 @@ class ENS160(i2cSensor):
         self.device.temperature_compensation = temperature
         self.device.humidity_compensation = humidity
 
-    def get_data(self) -> list[MeasureRecordDict]:
+    def get_data(self) -> list[SensorRecord]:
         # TODO: access temperature and humidity data to compensate
         data = []
         AQI, eCO2, TVOC = self._get_raw_data()
         if "AQI" in self.measures:
-            data.append({"measure": "AQI", "value": AQI})
+            data.append(SensorRecord(
+                sensor_uid=self.uid,
+                measure="AQI",
+                value=AQI
+            ))
+
         if "eCO2" in self.measures:
-            data.append({"measure": "eCO2", "value": eCO2})
+            data.append(SensorRecord(
+                sensor_uid=self.uid,
+                measure="eCO2",
+                value=eCO2
+            ))
+
         if "TVOC" in self.measures:
-            data.append({"measure": "TVOC", "value": TVOC})
+            data.append(SensorRecord(
+                sensor_uid=self.uid,
+                measure="TVOC",
+                value=TVOC
+            ))
         return data
 
 
@@ -165,10 +157,14 @@ class VEML7700(i2cSensor, LightSensor):
             )
             return None
 
-    def get_data(self) -> list[MeasureRecordDict]:
+    def get_data(self) -> list[SensorRecord]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
-            data.append({"measure": "light", "value": self.get_lux()})
+            data.append(SensorRecord(
+                sensor_uid=self.uid,
+                measure="light",
+                value=self.get_lux()
+            ))
         return data
 
 
@@ -202,10 +198,14 @@ class VCNL4040(i2cSensor, LightSensor):
             )
             return None
 
-    def get_data(self) -> list[MeasureRecordDict]:
+    def get_data(self) -> list[SensorRecord]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
-            data.append({"measure": "light", "value": self.get_lux()})
+            data.append(SensorRecord(
+                sensor_uid=self.uid,
+                measure="light",
+                value=self.get_lux()
+            ))
         return data
 
 
@@ -228,7 +228,7 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self._address_book.primary.main)
 
-    def get_data(self) -> list[MeasureRecordDict]:
+    def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -262,20 +262,27 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                 break
         return moisture, temperature
 
-    def get_data(self) -> list[MeasureRecordDict]:
+    def get_data(self) -> list[SensorRecord]:
         try:
             moisture, raw_temperature = self._get_raw_data()
         except RuntimeError:
             moisture = raw_temperature = None
         data = []
         if "moisture" in self.measures:
-            data.append({"measure": "moisture", "value": moisture})
+            data.append(SensorRecord(
+                sensor_uid=self.uid,
+                measure="moisture",
+                value=moisture
+            ))
 
         if "temperature" in self.measures:
             temperature = temperature_converter(
-                raw_temperature, "celsius", get_unit("temperature", "celsius")
-            )
-            data.append({"measure": "temperature", "value": temperature})
+                raw_temperature, "celsius", get_unit("temperature", "celsius"))
+            data.append(SensorRecord(
+                sensor_uid=self.uid,
+                measure="temperature",
+                value=temperature
+            ))
         return data
 
 
