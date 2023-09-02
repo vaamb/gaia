@@ -51,7 +51,7 @@ class VirtualWorld(metaclass=SingletonMeta):
         self._dt = None
         self._last_update = None
 
-    def __call__(self, time_now=None):
+    def __call__(self, time_now: datetime | None = None) -> tuple[float, float, int]:
         mono_clock = monotonic()
         if (
             not self._last_update
@@ -113,19 +113,33 @@ class VirtualWorld(metaclass=SingletonMeta):
         return self.temperature, self.humidity, self.light
 
     @property
-    def temperature(self):
+    def temperature(self) -> float:
+        if self._temperature is None:
+            raise RuntimeError(
+                "VirtualWorld must be started to get environmental values"
+            )
         return self._temperature
 
     @property
-    def humidity(self):
+    def humidity(self) -> float:
+        if self._humidity is None:
+            raise RuntimeError(
+                "VirtualWorld must be started to get environmental values"
+            )
         return self._humidity
 
     @property
-    def light(self):
+    def light(self) -> int:
+        if self._light is None:
+            raise RuntimeError(
+                "VirtualWorld must be started to get environmental values"
+            )
         return self._light
 
 
 class VirtualEcosystem:
+    time_between_measures = 15
+
     AIR_HEAT_CAPACITY = 1  # kj/kg/K
     AIR_DENSITY = 1.225  # kg/m3
     WATER_HEAT_CAPACITY = 4.184  # kj/kg/K
@@ -135,60 +149,57 @@ class VirtualEcosystem:
             self,
             uid: str,
             virtual_world: VirtualWorld,
-            dimension: tuple = (0.5, 0.5, 1.0),
+            dimension: tuple[float, float, float] = (0.5, 0.5, 1.0),
             water_volume: float = 5,  # in liter
             max_heater_output: int = 25,  # max heater output in watt
             max_light_output: int = 30000,  # max light output in lux
             start: bool = False,
     ) -> None:
-
         assert len(dimension) == 3
-        self.virtual_world = virtual_world
-        self._uid = uid
+        self.virtual_world: VirtualWorld = virtual_world
+        self._uid: str = uid
         self._volume = dimension[0] * dimension[1] * dimension[2]
         # Assumes only loss through walls
-        self._exchange_surface = (
+        self._exchange_surface: float = (
                 2 * dimension[2] * (dimension[0] + dimension[1])
         )
-        self._heat_loss_coef = self._exchange_surface * self.INSULATION_U_VAL  # in W/K
-        self._water_volume = water_volume
+        self._heat_loss_coef: float = self._exchange_surface * self.INSULATION_U_VAL  # in W/K
+        self._water_volume: float = water_volume
 
-        self._temperature = None
-        self._humidity = None
-        self._lux = None
+        self._temperature: float | None = None
+        self._humidity: float | None = None
+        self._lux: int | None = None
 
-        self._max_heater_output = max_heater_output
-        self._max_light_output = max_light_output
+        self._max_heater_output: int = max_heater_output
+        self._max_light_output: int = max_light_output
 
-        self._heat_quantity = None
-        self._hybrid_capacity = None
-        self._air_water_capacity_ratio = None, None
+        self._heat_quantity: float | None = None
+        self._hybrid_capacity: float | None = None
+        self._air_water_capacity_ratio: tuple[None, None] | tuple[float, float] = None, None
 
         # Virtual hardware status
-        self._heater = False
-        self._light = False
+        self._heater: bool = False
+        self._light: bool = False
 
-        self._start_time = None
-        self._last_update = None
+        self._start_time: float | None = None
+        self._last_update: float | None = None
 
         if start:
             self.start()
 
-    def measure(self):
-        delay_between_measures = 15
-
+    def measure(self) -> None:
         if not self._start_time:
             raise RuntimeError("The virtualEcosystem needs to be started "
                                "before computing measures")
         now = monotonic()
         if (
                 not self._last_update
-                or (now - self._last_update) > delay_between_measures
+                or (now - self._last_update) > self.time_between_measures
         ):
             if self._last_update is None:
                 d_sec = 0.1
             else:
-                d_sec = (monotonic() - self._last_update)
+                d_sec = (now - self._last_update)
             out_temp, out_hum, out_light = self.virtual_world()
 
             # New heat quantity
@@ -211,7 +222,7 @@ class VirtualEcosystem:
                 self._lux += self._max_light_output
             self._last_update = now
 
-    def reset(self):
+    def reset(self) -> None:
         air_mass = self._volume * self.AIR_DENSITY
         air_capacity = air_mass * self.AIR_HEAT_CAPACITY * 1000
 
@@ -237,52 +248,60 @@ class VirtualEcosystem:
         self._start_time = None
         self._last_update = None
 
-    def start(self):
+    def start(self) -> None:
         self.reset()
         self._start_time = datetime.now()
 
     @property
-    def uid(self):
+    def uid(self) -> str:
         return self._uid
 
     @uid.setter
-    def uid(self, value):
+    def uid(self, value: str):
         raise AttributeError("uid cannot be set")
 
     @property
-    def temperature(self) -> float | None:
+    def temperature(self) -> float:
+        if self._temperature is None:
+            raise RuntimeError(
+                "VirtualWorld must be started to get environmental values"
+            )
         return temperature_converter(self._temperature, "k", "c")
 
     @property
-    def humidity(self) -> float | None:
+    def humidity(self) -> float:
+        if self._humidity is None:
+            raise RuntimeError(
+                "VirtualWorld must be started to get environmental values"
+            )
         return self._humidity
 
     @property
-    def lux(self):
+    def lux(self) -> int:
+        if self._light is None:
+            raise RuntimeError(
+                "VirtualWorld must be started to get environmental values"
+            )
         return self._lux
 
     @property
-    def uptime(self):
-        return datetime.now() - self._start_time
+    def uptime(self) -> float:
+        return monotonic() - self._start_time
 
     @property
-    def status(self):
-        return bool(self._start_time)
+    def status(self) -> bool:
+        return self._start_time is not None
 
 
 _virtual_ecosystems: dict[str, VirtualEcosystem] = {}
 
 
-def get_virtual_ecosystem(ecosystem: str, start=False) -> VirtualEcosystem:
+def get_virtual_ecosystem(ecosystem: str, start: bool = False) -> VirtualEcosystem:
     from gaia.config import get_ecosystem_IDs
     ecosystem_uid = get_ecosystem_IDs(ecosystem).uid
     try:
         return _virtual_ecosystems[ecosystem_uid]
     except KeyError:
-        if start:
-            _virtual_ecosystems[ecosystem_uid] = \
-                VirtualEcosystem(ecosystem_uid, VirtualWorld(), start=True)
-        else:
-            _virtual_ecosystems[ecosystem_uid] = \
-                VirtualEcosystem(ecosystem_uid, VirtualWorld())
+        _virtual_ecosystems[ecosystem_uid] = \
+            VirtualEcosystem(ecosystem_uid, VirtualWorld(), start=start)
         return _virtual_ecosystems[ecosystem_uid]

@@ -106,7 +106,7 @@ class SubroutineTemplate(ABC):
         return self.config.get_management(self.name)
 
     @management.setter
-    def management(self, value: bool) -> None:  # TODO: save changes
+    def management(self, value: bool) -> None:
         self.config.set_management(self.name, value)
 
     @abstractmethod

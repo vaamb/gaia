@@ -5,7 +5,7 @@ import logging
 from threading import Thread
 from time import sleep
 import typing as t
-from typing import Callable, Literal, Type
+from typing import Callable, cast, Literal, Type
 import weakref
 
 from pydantic import ValidationError
@@ -110,7 +110,7 @@ class Events(EventHandler):
                 f"Encountered an error while tying to emit event `{event_name}`. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`")
 
-    def schedule_jobs(self):
+    def schedule_jobs(self) -> None:
         scheduler.add_job(
             self.emit_event_if_connected, kwargs={"event_name": "sensors_data"},
             id="send_sensors_data", trigger="cron", minute="*",
@@ -127,14 +127,14 @@ class Events(EventHandler):
             misfire_grace_time=10*60
         )
 
-    def start_background_task(self):
+    def start_background_task(self) -> None:
         self.schedule_jobs()
         thread = Thread(target=self.ping_loop)
         thread.name = "ping"
         thread.start()
         self._thread = thread
 
-    def ping_loop(self):
+    def ping_loop(self) -> None:
         sleep(0.1)  # Sleep to allow the end of dispatcher initialization if it directly connects
         while True:
             if self.is_connected():
@@ -211,7 +211,7 @@ class Events(EventHandler):
             event_name: EventNames,
             ecosystem_uids: str | list[str] | None = None
     ) -> list[gv.EcosystemPayloadDict]:
-        rv = []
+        rv: list[gv.EcosystemPayloadDict] = []
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
             f"Getting '{event_name}' payload for {humanize_list(uids)}")
@@ -247,7 +247,7 @@ class Events(EventHandler):
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
         for cfg in ("base_info", "management", "environmental_parameters", "hardware"):
-            cfg: EventNames
+            cfg = cast(EventNames, cfg)
             self.emit_event(cfg, ecosystem_uids)
 
     def send_sensors_data(
@@ -274,7 +274,7 @@ class Events(EventHandler):
     ) -> None:
         self.emit_event("actuator_data", ecosystem_uids)
 
-    def on_turn_light(self, message: dict) -> None:
+    def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
         message["actuator"] = gv.HardwareType.light
         self.on_turn_actuator(message)
 
@@ -285,8 +285,8 @@ class Events(EventHandler):
         if ecosystem_uid in self.ecosystems:
             self.logger.debug("Received turn_actuator event")
             self.ecosystems[ecosystem_uid].turn_actuator(
-                actuator=data["actuator"],
-                mode=data["mode"],
+                validated_actuator=data["actuator"],
+                validated_mode=data["mode"],
                 countdown=message.get("countdown", 0.0)
             )
 
@@ -305,22 +305,24 @@ class Events(EventHandler):
             crud_key: str,
             ecosystem_uid: str | None = None
     ) -> Callable:
-        if (
-                not "ecosystem" in crud_key
-                and ecosystem_uid is None
-        ):
-            raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
+        if "ecosystem" in crud_key:
+            return {
+            # Ecosystem creation and deletion
+            "create_ecosystem": self.engine.config.create_ecosystem,
+            "delete_ecosystem": self.engine.config.delete_ecosystem,
+            }[crud_key]
+        else:
+            if ecosystem_uid is None:
+                raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
+        ecosystem_uid = cast(str, ecosystem_uid)
 
-        def CRUD_update(config: EcosystemConfig, attr_name: str):
+        def CRUD_update(config: EcosystemConfig, attr_name: str) -> Callable:
             def inner(payload: dict):
                 setattr(config, attr_name, payload)
 
             return inner
 
         return {
-            # Ecosystem creation and deletion
-            "create_ecosystem": self.engine.config.create_ecosystem,
-            "delete_ecosystem": self.engine.config.delete_ecosystem,
             # Ecosystem properties update
             "update_chaos": CRUD_update(self.ecosystems[ecosystem_uid].config, "chaos"),
             "update_light_method": CRUD_update(self.ecosystems[ecosystem_uid].config, "light_method"),
@@ -363,7 +365,7 @@ class Events(EventHandler):
             #"update_place": ,
         }[crud_key]
 
-    def on_crud(self, message: gv.CrudPayloadDict):
+    def on_crud(self, message: gv.CrudPayloadDict) -> None:
         data: gv.CrudPayloadDict = self.validate_payload(
             message, gv.CrudPayload)
         crud_uuid = data["uuid"]
@@ -427,7 +429,7 @@ class Events(EventHandler):
                 self.emit(
                     event="buffered_sensors_data", data=data)
 
-    def on_buffered_data_ack(self, message: gv.RequestResultDict):
+    def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
         if self.db is None:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "

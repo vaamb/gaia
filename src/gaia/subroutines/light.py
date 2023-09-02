@@ -14,7 +14,7 @@ from gaia.config import get_config
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
-from gaia.subroutines.actuator_handler import ActuatorHandler
+from gaia.actuator_handler import ActuatorHandler
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -24,6 +24,7 @@ Kd = 0.01
 lock = Lock()
 
 
+# TODO: improve
 def _is_time_between(
         begin_time: time,
         end_time: time,
@@ -44,14 +45,13 @@ class Light(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, "Switch"]
-        self._light_loop_thread: Thread | None = None
+        self._light_status_thread: Thread | None = None
+        self._light_intensity_thread: Thread | None = None
         self.actuator: ActuatorHandler = ActuatorHandler(
             self, HardwareType.light, self.expected_status)
-        self._last_light_status = self.actuator.status
         self._dimmers: set[str] = set()
         self._pid = PID(Kp, Ki, Kd)
         self._stop_event = Event()
-        self._adjust_light_level_event = Event()
         self._finish__init__()
 
     @staticmethod
@@ -78,15 +78,15 @@ class Light(SubroutineTemplate):
                 check_time=now
             )
 
-    def _light_state_loop(self) -> None:
+    def _light_status_loop(self) -> None:
         cfg = get_config()
         self.logger.info(
             f"Starting light loop at a frequency of {1/cfg.LIGHT_LOOP_PERIOD} Hz")
         while not self._stop_event.is_set():
-            self._light_state_routine()
+            self._light_status_routine()
             self._stop_event.wait(cfg.LIGHT_LOOP_PERIOD)
 
-    def _light_state_routine(self) -> None:
+    def _light_status_routine(self) -> None:
         # If lighting == True, lights should be on
         lighting = self.actuator.compute_expected_status(
             method=self.ecosystem.light_method, lighting_hours=self.lighting_hours)
@@ -102,12 +102,11 @@ class Light(SubroutineTemplate):
             self.actuator.status = False
             for light in self.hardware.values():
                 light.turn_off()
-        self._last_light_status = self.actuator.status
 
     # TODO: add a second loop for light level, only used if light is on and dimmable
-    def _light_level_loop(self) -> None:
+    def _light_intensity_loop(self) -> None:
         if self.ecosystem.get_subroutine_status("sensors"):
-            while not self._adjust_light_level_event.is_set():
+            while not self._stop_event.is_set():
                 light_sensors: list[LightSensor] = [
                     sensor for sensor in
                     Hardware.get_actives_by_type(HardwareType.sensor)
@@ -119,10 +118,10 @@ class Light(SubroutineTemplate):
                     if light is not None:
                         light_level.append(light)
                 mean_light = mean(light_level)
-                self._light_level_routine(mean_light)
-                self._adjust_light_level_event.wait(1)
+                self._light_intensity_routine(mean_light)
+                self._stop_event.wait(1)
 
-    def _light_level_routine(self, light_level: float) -> None:
+    def _light_intensity_routine(self, light_level: float) -> None:
         pass
 
     """Functions to switch the light on/off either manually or automatically"""
@@ -144,34 +143,45 @@ class Light(SubroutineTemplate):
             )
             self.manageable = False
 
-    def _start(self):
-        self.light_loop_thread = Thread(
-            target=self._light_state_loop, args=())
-        self.light_loop_thread.name = f"{self._uid}-light_loop"
-        self.light_loop_thread.start()
+    def _start(self) -> None:
+        self._stop_event.clear()
+        self.light_intensity_thread = Thread(target=self._light_status_loop, args=())
+        self.light_intensity_thread.name = f"{self._uid}-light_loop"
+        self.light_intensity_thread.start()
         self.actuator.active = True
 
-    def _stop(self):
+    def _stop(self) -> None:
         self.logger.info("Stopping light loop")
         self._stop_event.set()
-        self._adjust_light_level_event.set()
-        self.light_loop_thread.join()
+        self.light_intensity_thread.join()
+        self.light_intensity_thread = None
         self.actuator.active = False
         self.hardware = {}
 
     """API calls"""
     @property
-    def light_loop_thread(self) -> Thread:
-        if self._light_loop_thread is None:
-            raise RuntimeError("Thread has not been set up")
+    def light_status_thread(self) -> Thread:
+        if self._light_status_thread is None:
+            raise ValueError("Light status thread has not been set up")
         else:
-            return self._light_loop_thread
+            return self._light_status_thread
 
-    @light_loop_thread.setter
-    def light_loop_thread(self, thread: Thread | None):
-        self._light_loop_thread = thread
+    @light_status_thread.setter
+    def light_status_thread(self, thread: Thread | None) -> None:
+        self._light_status_thread = thread
 
-    def add_hardware(self, hardware_config: HardwareConfig):
+    @property
+    def light_intensity_thread(self) -> Thread:
+        if self._light_intensity_thread is None:
+            raise ValueError("Light intensity thread has not been set up")
+        else:
+            return self._light_intensity_thread
+
+    @light_intensity_thread.setter
+    def light_intensity_thread(self, thread: Thread | None) -> None:
+        self._light_intensity_thread = thread
+
+    def add_hardware(self, hardware_config: HardwareConfig) -> None:
         hardware: Switch = self._add_hardware(hardware_config, actuator_models)
         if isinstance(hardware, Dimmer):
             self._dimmers.add(hardware.uid)

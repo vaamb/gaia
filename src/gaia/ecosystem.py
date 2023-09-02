@@ -5,6 +5,7 @@ import logging
 import logging.config
 from threading import Lock
 import typing as t
+from typing import cast
 import weakref
 
 from gaia_validators import (
@@ -15,7 +16,9 @@ from gaia_validators import (
 
 from gaia.config import EcosystemConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
-from gaia.subroutines import SUBROUTINES, SubroutineTypes
+from gaia.subroutines import (
+    Climate, Health, Light, Sensors, subroutines, SubroutineTemplate,
+    SubroutineTypes)
 from gaia.subroutines.chaos import Chaos
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
@@ -23,8 +26,6 @@ from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
     from gaia.events import Events
-    from gaia.subroutines import Climate, Health, Light, Sensors
-    subroutines: Climate | Health | Light | Sensors
 
 
 lock = Lock()
@@ -38,7 +39,7 @@ def _to_dt(_time: time) -> datetime:
 
 def _generate_actuators_state_dict() -> ActuatorsDataDict:
     return {
-        actuator: ActuatorState().dict()
+        actuator: ActuatorState().model_dump()
         for actuator in [
             "light", "cooler", "heater", "humidifier", "dehumidifier"]
     }
@@ -67,9 +68,9 @@ class Ecosystem:
             morning_start=self.config.time_parameters.day,
             evening_end=self.config.time_parameters.night,
         )
-        self._actuators_state: ActuatorsDataDict = _generate_actuators_state_dict()
-        self.subroutines:  dict[SubroutineTypes, "subroutines"] = {}
-        for subroutine in SUBROUTINES:
+        self.actuators_state: ActuatorsDataDict = _generate_actuators_state_dict()
+        self.subroutines:  dict[SubroutineTypes, SubroutineTemplate] = {}
+        for subroutine in subroutines:
             self.init_subroutine(subroutine)
         self._chaos: Chaos = Chaos(self, 0, 0, 1)
         self.refresh_chaos()
@@ -82,7 +83,7 @@ class Ecosystem:
 
     def _refresh_subroutines(self) -> None:
         # Need to start sensors and lights before other subroutines
-        subroutines_ordered = set(SUBROUTINES.keys())
+        subroutines_ordered = set(subroutines.keys())
         subroutines_needed = subroutines_ordered.intersection(
             self._config.get_managed_subroutines()
         )
@@ -173,6 +174,7 @@ class Ecosystem:
         base_management = self.config.managements
         management = {}
         for m in base_management:
+            m = cast(SubroutineTypes, m)
             try:
                 management[m] = self.config.get_management(m) & self.subroutines[m].manageable
             except KeyError:
@@ -194,7 +196,7 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutines to initialize
         """
-        self.subroutines[subroutine_name] = SUBROUTINES[subroutine_name](self)
+        self.subroutines[subroutine_name] = subroutines[subroutine_name](self)
 
     def start_subroutine(self, subroutine_name: SubroutineTypes) -> None:
         """Start a Subroutines
@@ -263,7 +265,7 @@ class Ecosystem:
         """Stop the Ecosystem"""
         if self.status:
             self.logger.info("Stopping the Ecosystem ...")
-            for subroutine in reversed(list(SUBROUTINES.keys())):
+            for subroutine in reversed(list(subroutines.keys())):
                 self.subroutines[subroutine].stop()
             if not any([self.subroutines[subroutine].status
                         for subroutine in self.subroutines]):
@@ -276,7 +278,7 @@ class Ecosystem:
     # Actuator
     @property
     def actuator_info(self) -> ActuatorsDataDict:
-        return self._actuators_state
+        return self.actuators_state
 
     actuator_data = actuator_info
 
@@ -294,35 +296,33 @@ class Ecosystem:
         :param countdown: the delay before which the actuator will be turned to
                           the specified mode.
         """
-        actuator: HardwareType = safe_enum_from_name(
-            HardwareType, actuator)
-        mode: ActuatorModePayload = safe_enum_from_name(
-            ActuatorModePayload, mode)
+        validated_actuator: HardwareType = safe_enum_from_name(HardwareType, actuator)
+        validated_mode: ActuatorModePayload = safe_enum_from_name(ActuatorModePayload, mode)
         try:
-            if actuator == HardwareType.light:
+            if validated_actuator == HardwareType.light:
                 if self.get_subroutine_status("light"):
-                    light_subroutine: "Light" = self.subroutines["light"]
+                    light_subroutine: Light = cast(Light, self.subroutines["light"])
                     light_subroutine.turn_light(
-                        turn_to=mode, countdown=countdown)
+                        turn_to=validated_mode, countdown=countdown)
                 else:
                     raise RuntimeError
-            elif actuator in [
+            elif validated_actuator in [
                 HardwareType.heater, HardwareType.cooler, HardwareType.humidifier,
                 HardwareType.dehumidifier
             ]:
                 if self.get_subroutine_status("climate"):
-                    light_subroutine: "Climate" = self.subroutines["climate"]
-                    light_subroutine.turn_climate_actuator(
-                        climate_actuator=actuator, turn_to=mode, countdown=countdown)
+                    climate_subroutine: Climate = cast(Climate, self.subroutines["climate"])
+                    climate_subroutine.turn_climate_actuator(
+                        climate_actuator=validated_actuator, turn_to=validated_mode, countdown=countdown)
                 else:
                     raise RuntimeError
             else:
                 raise ValueError(
-                    f"Actuator '{actuator.value}' is not currently supported"
+                    f"Actuator '{validated_actuator.value}' is not currently supported"
                 )
         except RuntimeError:
             self.logger.error(
-                f"Cannot turn {actuator} to {mode} as the subroutine managing it "
+                f"Cannot turn {validated_actuator} to {validated_mode} as the subroutine managing it "
                 f"is not currently running"
             )
         else:
@@ -343,7 +343,7 @@ class Ecosystem:
     @property
     def sensors_data(self) -> SensorsData | Empty:
         if self.get_subroutine_status("sensors"):
-            sensors_subroutine: "Sensors" = self.subroutines["sensors"]
+            sensors_subroutine: Sensors = cast(Sensors, self.subroutines["sensors"])
             return sensors_subroutine.sensors_data
         return Empty()
 
@@ -421,7 +421,7 @@ class Ecosystem:
     @property
     def plants_health(self) -> HealthRecord | Empty:
         if self.get_subroutine_status("health"):
-            health_subroutine: "Health" = self.subroutines["health"]
+            health_subroutine: Health = cast(Health, self.subroutines["health"])
             return health_subroutine.plants_health
         return Empty()
 
@@ -430,12 +430,12 @@ class Ecosystem:
     # Climate
     def climate_parameters_regulated(self) -> set[str]:
         if self.get_subroutine_status("climate"):
-            climate_subroutine: "Climate" = self.subroutines["climate"]
+            climate_subroutine: Climate = cast(Climate, self.subroutines["climate"])
             return climate_subroutine.regulated
         return set()
 
     def climate_targets(self) -> dict[ClimateParameterNames, ClimateTarget]:
         if self.get_subroutine_status("climate"):
-            climate_subroutine: "Climate" = self.subroutines["climate"]
+            climate_subroutine: Climate = cast(Climate, self.subroutines["climate"])
             return climate_subroutine.targets
         return {}

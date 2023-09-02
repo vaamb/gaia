@@ -1,30 +1,39 @@
+from __future__ import annotations
+
 import logging
-from typing import Any
+import typing as t
 
 from adafruit_platformdetect import Board, Detector
 
 
-_store: dict[str, Any] = {}
+if t.TYPE_CHECKING:
+    from busio import I2C
 
-_IS_RASPI: bool = Board(Detector()).any_raspberry_pi  # noqa
+
+_is_raspi: bool | None = None
+_i2c: "I2C" | None = None
+
+
+_store: dict[str, "I2C"] = {}
+
 
 hardware_logger = logging.getLogger("engine.hardware_lib")
 
 
-def get_i2c():
-    try:
-        return _store["I2C"]
-    except KeyError:
-        if _IS_RASPI:
-            try:
-                import board
-                import busio
-            except ImportError:
-                raise RuntimeError(
-                    "Adafruit blinka package is required. Run `pip install "
-                    "adafruit-blinka` in your virtual env`."
-                )
+def is_raspi() -> bool:
+    global _is_raspi
+    if _is_raspi is None:
+        _is_raspi = Board(Detector()).any_raspberry_pi
+    return _is_raspi
+
+
+def get_i2c() -> "I2C":
+    global _i2c
+    if _i2c is None:
+        if is_raspi():
+            import board
+            import busio
         else:
             from gaia.hardware._compatibility import board, busio
-        _store["I2C"] = busio.I2C(board.SCL, board.SDA)
-        return _store["I2C"]
+        _i2c = busio.I2C(board.SCL, board.SDA)
+    return _i2c

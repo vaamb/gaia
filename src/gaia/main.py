@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from time import sleep
 import typing as t
 from typing import Type
@@ -24,7 +25,8 @@ def main():
     gaia = Gaia()
     try:
         gaia.start()
-        gaia.wait()
+        sleep(10)
+        #gaia.wait()
     finally:
         gaia.stop()
 

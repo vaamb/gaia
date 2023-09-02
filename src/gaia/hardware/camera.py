@@ -5,12 +5,12 @@ from time import sleep
 import typing as t
 from typing import Type, Generator
 
-from gaia.hardware.abc import Camera, Image
-from gaia.hardware.utils import _IS_RASPI
+from gaia.hardware.abc import Camera, hardware_logger, Image
+from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:
-    if _IS_RASPI:  # pragma: no cover
+    if is_raspi():  # pragma: no cover
         from picamera2 import PiCamera2 as _PiCamera, Preview
     else:
         from gaia.hardware._compatibility import PiCamera as _PiCamera, Preview
@@ -18,7 +18,7 @@ if t.TYPE_CHECKING:
 
 class PiCamera(Camera):
     def _get_device(self) -> "_PiCamera":
-        if _IS_RASPI:  # pragma: no cover
+        if is_raspi():  # pragma: no cover
             try:
                 from picamera import PiCamera as _PiCamera, Preview
             except ImportError:
@@ -42,9 +42,14 @@ class PiCamera(Camera):
                 now = datetime.now().astimezone()
                 array = self.device.capture_array("main")
                 self.device.stop()
-                return Image(array=array, timestamp=now)
             except Exception as e:
-                print(e)
+                hardware_logger.error(
+                    f"Camera {self._name} encountered an error. "
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                )
+            else:
+                return Image(array=array, timestamp=now)
+        return None
 
     def get_timelapse(
             self,

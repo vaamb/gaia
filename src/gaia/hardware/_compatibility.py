@@ -1,17 +1,15 @@
+from __future__ import annotations
+
 import random
 import time
+from typing import Any
 
 from gaia.config import get_config
-from gaia.hardware.utils import _IS_RASPI, hardware_logger
+from gaia.hardware.utils import hardware_logger
 
 
-if not _IS_RASPI:
-    hardware_logger.warning(
-        "The platform used is not a Raspberry Pi, using compatibility modules")
-else:
-    hardware_logger.warning(
-        "hardware._compatibility module has been loaded although the platform "
-        "used is a Raspberry Pi")
+hardware_logger.warning(
+    "The platform used is not a Raspberry Pi, using compatibility modules")
 
 
 if get_config().VIRTUALIZATION:
@@ -19,31 +17,32 @@ if get_config().VIRTUALIZATION:
 
     hardware_logger.info("Using ecosystem virtualization")
 
-    def _add_noise(measure):
+    def _add_noise(measure: float) -> float:
         return measure * random.gauss(1, 0.01)
 
-    def get_humidity(ecosystem_uid, *args, **kwargs) -> float:
+    def get_humidity(ecosystem_uid: str, *args, **kwargs) -> float:
         virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
         virtual_ecosystem.measure()
         return round(_add_noise(virtual_ecosystem.humidity), 2)
 
-    def get_light(ecosystem_uid, *args, **kwargs) -> float:
+    def get_light(ecosystem_uid: str, *args, **kwargs) -> float:
         virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
         virtual_ecosystem.measure()
         return round(_add_noise(virtual_ecosystem.lux))
 
-    def get_moisture(ecosystem_uid, *args, **kwargs) -> float:
+    def get_moisture(ecosystem_uid: str, *args, **kwargs) -> float:
         virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
         virtual_ecosystem.measure()
         moisture_at_42_deg = (virtual_ecosystem.humidity * 0.2) + 6
         slope = (moisture_at_42_deg - 100) / (42 - 5)
         intercept = 100 - (slope * 5)
         moisture = (slope * virtual_ecosystem.temperature) + intercept
+        moisture = round(_add_noise(moisture), 2)
         if moisture > 98.3:
             moisture = 98.3
-        return round(_add_noise(moisture), 2)
+        return moisture
 
-    def get_temperature(ecosystem_uid, *args, **kwargs) -> float:
+    def get_temperature(ecosystem_uid: str, *args, **kwargs) -> float:
         virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
         virtual_ecosystem.measure()
         return round(_add_noise(virtual_ecosystem.temperature), 2)
@@ -52,24 +51,24 @@ else:
     _BASE_TEMPERATURE = 25
     _BASE_HUMIDITY = 60
 
-    def get_humidity(*args, **kwargs) -> float:
+    def get_humidity(ecosystem_uid: str, *args, **kwargs) -> float:
         return random.gauss(_BASE_HUMIDITY, 5)
 
 
-    def get_light(*args, **kwargs) -> float:
+    def get_light(ecosystem_uid: str, *args, **kwargs) -> float:
         return random.randrange(start=1000, stop=100000, step=10)
 
 
-    def get_moisture(*args, **kwargs) -> float:
+    def get_moisture(ecosystem_uid: str, *args, **kwargs) -> float:
         return random.gauss(_BASE_HUMIDITY/2, 5)
 
 
-    def get_temperature(*args, **kwargs) -> float:
+    def get_temperature(ecosystem_uid: str, *args, **kwargs) -> float:
         return random.gauss(_BASE_TEMPERATURE, 2.5)
 
 
 def random_sleep(
-        avg_duration: float = 0.15,
+        avg_duration: float = 0.55,
         std_deviation: float = 0.075
 ) -> None:
     if not get_config().TESTING:
@@ -89,7 +88,7 @@ class busio:
     module
     """
     @staticmethod
-    def I2C(*args, **kwargs):
+    def I2C(*args, **kwargs) -> None:
         return None
 
 
@@ -98,7 +97,7 @@ class pwmio:
     module
     """
     class PWMOut:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **kwargs) -> None:
             duty_cycle = 0
 
 
@@ -111,18 +110,17 @@ class Pin:
     def init(self, mode: int) -> None:
         self._mode = mode
 
-    def value(self, val: int) -> int:
-        if val:
-            self._value = val
-        else:
+    def value(self, val: int | None = None) -> int | None:
+        if val is None:
             return self._value
+        self._value = val
 
 
 # ---------------------------------------------------------------------------
 #   Hardware modules from Adafruit
 # ---------------------------------------------------------------------------
 class CompatibilityHardware:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         self.ecosystem_uid = kwargs.get("ecosystem_uid", "")
 
 
@@ -159,7 +157,7 @@ class DHT22(DHTBase):
 
 
 class AHTx0(CompatibilityHardware):
-    def _readdata(self):
+    def _readdata(self) -> None:
         pass
 
     @property
@@ -190,31 +188,31 @@ class Seesaw(CompatibilityHardware):
 
 
 class PiCamera:
-    def create_preview_configuration(self):
+    def create_preview_configuration(self) -> None:
         pass
 
-    def create_still_configuration(self):
+    def create_still_configuration(self) -> None:
         pass
 
-    def create_video_configuration(self):
+    def create_video_configuration(self) -> None:
         pass
 
-    def capture_array(self, *args):
+    def capture_array(self, *args) -> Any:
         pass
 
-    def configure(self, camera_config):
+    def configure(self, camera_config) -> Any:
         pass
 
-    def start_preview(self, preview: "Preview"):
+    def start_preview(self, preview: "Preview") -> None:
         pass
 
-    def start(self):
+    def start(self) -> None:
         pass
 
-    def stop(self):
+    def stop(self) -> None:
         pass
 
-    def capture_file(self, name, format="jpg"):
+    def capture_file(self, name: str, format: str = "jpg") -> None:
         pass
 
 

@@ -19,14 +19,15 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class Health(SubroutineTemplate):
+    # TODO: fix
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware: dict[str, Camera]
         self._plants_health: HealthRecord | Empty = Empty()
-        self._imageIO = io.BytesIO
+        self._imageIO = io.BytesIO()
         self._finish__init__()
 
-    def _start_scheduler(self):
+    def _start_scheduler(self) -> None:
         h, m = get_config().HEALTH_LOGGING_TIME.split("h")
         scheduler.add_job(
             self.health_routine,
@@ -34,12 +35,12 @@ class Health(SubroutineTemplate):
             id=f"{self._ecosystem_name}-health"
         )
 
-    def _stop_scheduler(self):
+    def _stop_scheduler(self) -> None:
         self.logger.info("Closing the tasks scheduler")
         scheduler.remove_job(f"{self._ecosystem_name}-health")
         self.logger.info("The tasks scheduler was closed properly")
 
-    def analyse_picture(self):
+    def analyse_picture(self) -> None:
         self.logger.info(f"Starting analysis of {self._ecosystem} image")
         # If got an image, analyse it
         if self._imageIO.getbuffer().nbytes:
@@ -59,7 +60,7 @@ class Health(SubroutineTemplate):
             # TODO: change Exception
             raise Exception
 
-    def health_routine(self):
+    def health_routine(self) -> None:
         # If webcam: turn it off and restart after
         light_running = self.ecosystem.get_subroutine_status("light")
         if light_running:
@@ -100,7 +101,7 @@ class Health(SubroutineTemplate):
             )
             self.manageable = False
 
-    def _start(self):
+    def _start(self) -> None:
         if not self.ecosystem.get_subroutine_status("light"):
             self.logger.warning(
                 "The Ecosystem is not managing light subroutine, be sure the "
@@ -108,7 +109,7 @@ class Health(SubroutineTemplate):
                 "taking the image."
             )
 
-    def _stop(self):
+    def _stop(self) -> None:
         self.hardware = {}
 
     """API calls"""
@@ -119,7 +120,7 @@ class Health(SubroutineTemplate):
         # TODO
         pass
 
-    def take_picture(self):
+    def take_picture(self) -> None:
         pass
 
     @property

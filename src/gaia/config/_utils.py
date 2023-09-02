@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 import sys
 from typing import Type
@@ -5,12 +7,6 @@ import warnings
 
 from gaia import __version__ as version
 from gaia.config.base import BaseConfig, DIR
-
-
-_state: dict = {
-    "base_dir": None,
-    "config": None,
-}
 
 
 class AppInfo:
@@ -22,15 +18,19 @@ class GaiaConfig(AppInfo, BaseConfig):
     pass
 
 
+_base_dir: Path | None = None
+_config: Type[GaiaConfig] | None = None
+
+
 def get_base_dir() -> Path:
-    global _state
-    if _state["base_dir"] is None:
-        _state["base_dir"] = Path(DIR)
-        if not _state["base_dir"].exists():
+    global _base_dir
+    if _base_dir is None:
+        _base_dir = Path(DIR)
+        if not _base_dir.exists():
             raise ValueError(
                 "Environment variable `OURANOS_DIR` is not set to a valid path"
             )
-    return _state["base_dir"]
+    return _base_dir
 
 
 def _get_config() -> Type[GaiaConfig]:
@@ -55,10 +55,10 @@ def _get_config() -> Type[GaiaConfig]:
 
 
 def get_config() -> Type[GaiaConfig]:
-    global _state
-    if _state["config"] is None:
-        _state["config"] = _get_config()
-    return _state["config"]
+    global _config
+    if _config is None:
+        _config = _get_config()
+    return _config
 
 
 def _get_dir(name: str, fallback_path: str) -> Path:
