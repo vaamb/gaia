@@ -15,7 +15,7 @@ from typing import Literal, TypedDict
 import weakref
 
 import gaia_validators as gv
-from gaia_validators import get_enum_names, safe_enum_from_name
+from gaia_validators import safe_enum_from_name
 
 # TODO: move up once compatibility issues are solved
 from pydantic import Field, field_validator, ValidationError  # noqa
@@ -52,15 +52,8 @@ DaytimeEvents = Literal[
     "civil_twilight_begin", "sunrise", "sunset", "civil_twilight_end"]
 
 
-class SunTimesDict(TypedDict):
-    civil_twilight_begin: str
-    sunrise: str
-    sunset: str
-    civil_twilight_end: str
-
-
 class SunTimesCacheHomeDict(TypedDict):
-    home: SunTimesDict
+    home: gv.SunTimesDict
 
 
 class SunTimesCacheDict(TypedDict):
@@ -91,89 +84,23 @@ class PlaceDict(TypedDict):
 # ---------------------------------------------------------------------------
 #   Ecosystem config models
 # ---------------------------------------------------------------------------
-# Custom models for Hardware, Climate and Environment configs as some of their
+# Custom models for Climate and Environment configs as some of their
 #  parameters are used as keys in ecosystems.cfg
-class HardwareConfigValidator(gv.BaseModel):
-    name: str
-    address: str
-    type: str
-    level: str
-    model: str
-    measures: list[str] = Field(default_factory=list, alias="measure")
-    plants: list[str] = Field(default_factory=list, alias="plant")
-    multiplexer_model: str | None = Field(default=None, alias="multiplexer")
-
-    @field_validator("measures", "plants", mode="before")
-    def parse_to_list(cls, value: str | list | None):
-        if value is None:
-            return []
-        if isinstance(value, str):
-            return [value]
-        return value
-
-    @field_validator("type", "level", mode="before")
-    def lower_str(cls, value: str | list[str] | None):
-        if isinstance(value, str):
-            return value.lower()
-        if isinstance(value, list):
-            return [v.lower() for v in value]
-        return value
-
-    @field_validator("measures", "plants", mode="before")
-    def format_measures(cls, value: str | list[str] | None):
-        if value is None:
-            return None
-
-        def format_measure(measure: str) -> str:
-            measure = measure.replace(" ", "_")
-            if measure.istitle():
-                return measure.lower()
-            return measure
-
-        if isinstance(value, str):
-            return format_measure(value)
-        if isinstance(value, list):
-            return [format_measure(v) for v in value]
-        return value
-
-
-class HardwareConfigDict(TypedDict):
-    name: str
-    address: str
-    type: str
-    level: str
-    model: str
-    measures: list[str]
-    plants: list[str]
-    multiplexer_model: str | None
-
-
-class ClimateConfigValidator(gv.BaseModel):
-    day: float
-    night: float
-    hysteresis: float = 0.0
-
-
-class ClimateConfigDict(TypedDict):
-    day: float
-    night: float
-    hysteresis: float
-
-
 class EnvironmentConfigValidator(gv.BaseModel):
     chaos: gv.ChaosConfig = Field(default_factory=gv.ChaosConfig)
     sky: gv.SkyConfig = Field(default_factory=gv.SkyConfig)
-    climate: dict[gv.ClimateParameterNames, ClimateConfigValidator] = Field(default_factory=dict)
+    climate: dict[gv.ClimateParameterNames, gv.AnonymousClimateConfig] = \
+        Field(default_factory=dict)
 
     @field_validator("climate", mode="before")
     def dict_to_climate(cls, value: dict):
-        return {k: ClimateConfigValidator(**v) for k, v in value.items()}
+        return {k: gv.AnonymousClimateConfig(**v) for k, v in value.items()}
 
 
 class EnvironmentConfigDict(TypedDict):
     chaos: gv.ChaosConfigDict
     sky: gv.SkyConfigDict
-    climate: dict[str, ClimateConfigDict]
+    climate: dict[str, gv.AnonymousClimateConfigDict]
 
 
 class EcosystemConfigValidator(gv.BaseModel):
@@ -181,7 +108,7 @@ class EcosystemConfigValidator(gv.BaseModel):
     status: bool = False
     management: gv.ManagementConfig = Field(default_factory=gv.ManagementConfig)
     environment: EnvironmentConfigValidator = Field(default_factory=EnvironmentConfigValidator)
-    IO: dict[str, HardwareConfigValidator] = Field(default_factory=dict)
+    IO: dict[str, gv.AnonymousHardwareConfig] = Field(default_factory=dict)
 
 
 class EcosystemConfigDict(TypedDict):
@@ -189,7 +116,7 @@ class EcosystemConfigDict(TypedDict):
     status: bool
     management: dict[gv.ManagementNames, bool]
     environment: EnvironmentConfigDict
-    IO: dict[str, HardwareConfigDict]
+    IO: dict[str, gv.AnonymousHardwareConfigDict]
 
 
 class RootEcosystemsConfigValidator(gv.BaseModel):
@@ -543,7 +470,7 @@ class EngineConfig(metaclass=SingletonMeta):
             return
         sun_times_file = get_cache_dir()/"sunrise.json"
         # Determine if the file needs to be updated
-        sun_times_data: SunTimesDict | None = None
+        sun_times_data: gv.SunTimesDict | None = None
         logger.debug("Trying to load cached sun times")
         try:
             with sun_times_file.open("r") as file:
@@ -584,7 +511,7 @@ class EngineConfig(metaclass=SingletonMeta):
             )
             self._sun_times = None
 
-    def download_sun_times(self) -> SunTimesDict | None:
+    def download_sun_times(self) -> gv.SunTimesDict | None:
         sun_times_file = get_cache_dir()/"sunrise.json"
         logger.info("Trying to download sun times")
         try:
@@ -610,7 +537,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     timeout=3.0,
                 )
                 data = response.json()
-                results: SunTimesDict = data["results"]
+                results: gv.SunTimesDict = data["results"]
             except requests.exceptions.ConnectionError:
                 logger.debug(
                     "Failed to update sunrise and sunset times due to a "
@@ -724,9 +651,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return False
 
     def set_management(self, management: gv.ManagementNames, value: bool) -> None:
-        if management not in get_enum_names(gv.ManagementFlags):
-            raise ValueError(f"{management} is not a valid management parameter")
-        self.__dict["management"][management] = value
+        validated_management = safe_enum_from_name(gv.ManagementFlags, management)
+        management_name: gv.ManagementNames = validated_management.name
+        self.__dict["management"][management_name] = value
         self.save()
 
     def get_managed_subroutines(self) -> list[gv.ManagementNames]:
@@ -792,7 +719,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.save()
 
     @property
-    def climate(self) -> dict[gv.ClimateParameterNames, ClimateConfigDict]:
+    def climate(self) -> dict[gv.ClimateParameterNames, gv.AnonymousClimateConfigDict]:
         """
         Returns the sky config for the ecosystem
         """
@@ -814,9 +741,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def set_climate_parameter(
             self,
             parameter: gv.ClimateParameterNames,
-            value: ClimateConfigDict
+            value: gv.AnonymousClimateConfigDict
     ) -> None:
-        validated_value = ClimateConfigValidator(**value).dict()
+        validated_value = gv.AnonymousClimateConfig(**value).model_dump()
         self.climate[parameter] = validated_value
         self.save()
 
@@ -832,14 +759,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
 
-    def CRUD_create_climate_parameter(self, value: ClimateConfigDict) -> None:
-        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).dict()
+    def CRUD_create_climate_parameter(self, value: gv.AnonymousClimateConfigDict) -> None:
+        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).model_dump()
         parameter = validated_value.pop("parameter")
         self.climate[parameter] = validated_value
         self.save()
 
-    def CRUD_update_climate_parameter(self, value: ClimateConfigDict) -> None:
-        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).dict()
+    def CRUD_update_climate_parameter(self, value: gv.AnonymousClimateConfigDict) -> None:
+        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).model_dump()
         parameter = validated_value.pop("parameter")
         if parameter not in self.climate:
             raise UndefinedParameter(
@@ -850,7 +777,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     """Parameters related to IO"""    
     @property
-    def IO_dict(self) -> dict[str, HardwareConfigDict]:
+    def IO_dict(self) -> dict[str, gv.AnonymousHardwareConfigDict]:
         """
         Returns the IOs (hardware) present in the ecosystem
         """
