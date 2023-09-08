@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from threading import Event
 import typing as t
 from typing import cast, Literal, TypedDict
 
@@ -98,7 +97,6 @@ PID_THRESHOLD = 5
 class Climate(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._stop_event: Event = Event()
         self._sensor_miss: int = 0
         self.actuators: ClimateActuators = self._setup_actuators()
         self._parameters: ClimateParameters = climate_parameters_template()
