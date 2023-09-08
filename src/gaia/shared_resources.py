@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.schedulers import SchedulerAlreadyRunningError
 
 
-_scheduler: BackgroundScheduler | None = None
+_scheduler: AsyncIOScheduler | None = None
 
 
-def get_scheduler() -> BackgroundScheduler:
+def get_scheduler() -> AsyncIOScheduler:
     global _scheduler
     if _scheduler is None:
-        _scheduler = BackgroundScheduler()
+        _scheduler = AsyncIOScheduler()
     return _scheduler
 
 
