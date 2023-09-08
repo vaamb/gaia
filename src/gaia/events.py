@@ -14,7 +14,7 @@ from dispatcher import EventHandler
 import gaia_validators as gv
 
 from gaia.config import EcosystemConfig, get_config
-from gaia.shared_resources import scheduler
+from gaia.shared_resources import get_scheduler
 from gaia.utils import humanize_list, local_ip_address
 
 if get_config().USE_DATABASE:
@@ -110,7 +110,8 @@ class Events(EventHandler):
                 f"Encountered an error while tying to emit event `{event_name}`. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`")
 
-    def schedule_jobs(self) -> None:
+    def _schedule_jobs(self) -> None:
+        scheduler = get_scheduler()
         scheduler.add_job(
             self.emit_event_if_connected, kwargs={"event_name": "sensors_data"},
             id="send_sensors_data", trigger="cron", minute="*",
@@ -127,12 +128,23 @@ class Events(EventHandler):
             misfire_grace_time=10*60
         )
 
-    def start_background_task(self) -> None:
-        self.schedule_jobs()
+    def _unschedule_jobs(self) -> None:
+        scheduler = get_scheduler()
+        scheduler.remove_job(job_id="send_sensors_data")
+        scheduler.remove_job(job_id="send_light_data")
+        scheduler.remove_job(job_id="send_health_data")
+
+    def start_background_tasks(self) -> None:
+        self._schedule_jobs()
         thread = Thread(target=self.ping_loop)
         thread.name = "ping"
         thread.start()
         self._thread = thread
+
+    def stop_background_tasks(self) -> None:
+        self._unschedule_jobs()
+        self._thread.join()
+        self._thread = None
 
     def ping_loop(self) -> None:
         sleep(0.1)  # Sleep to allow the end of dispatcher initialization if it directly connects
@@ -165,7 +177,7 @@ class Events(EventHandler):
 
     def on_connect(self, environment) -> None:  # noqa
         if self._thread is None:
-            self.start_background_task()
+            self.start_background_tasks()
         self.logger.info("Connection to message broker successful")
         if not self.registered:
             self.register()
@@ -175,6 +187,7 @@ class Events(EventHandler):
             self.logger.warning("Disconnected from server")
         else:
             self.logger.error("Failed to register engine")
+        self.stop_background_tasks()
 
     def on_register(self) -> None:
         self.registered = False

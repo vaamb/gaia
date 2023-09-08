@@ -12,7 +12,7 @@ from gaia.config import (
 from gaia.config.from_files import config_condition, detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
-from gaia.shared_resources import scheduler, start_scheduler
+from gaia.shared_resources import get_scheduler, start_scheduler
 from gaia.utils import json, SingletonMeta
 from gaia.virtual import get_virtual_ecosystem
 
@@ -51,6 +51,7 @@ class Engine(metaclass=SingletonMeta):
         self.logger.debug("Starting background tasks")
         self.config.start_watchdog()
         self.refresh_sun_times()
+        scheduler = get_scheduler()
         scheduler.add_job(self.refresh_sun_times, "cron",
                           hour="1", misfire_grace_time=15 * 60,
                           id="refresh_sun_times")
@@ -62,6 +63,7 @@ class Engine(metaclass=SingletonMeta):
     def _stop_background_tasks(self) -> None:
         self.logger.debug("Stopping background tasks")
         self.config.stop_watchdog()
+        scheduler = get_scheduler()
         scheduler.remove_job("refresh_sun_times")
         scheduler.remove_job("refresh_chaos")
 

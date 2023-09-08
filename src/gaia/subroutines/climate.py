@@ -15,7 +15,7 @@ from gaia_validators import (
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, Switch
-from gaia.shared_resources import scheduler
+from gaia.shared_resources import get_scheduler
 from gaia.actuator_handler import ActuatorHandler
 from gaia.subroutines.template import SubroutineTemplate
 
@@ -356,6 +356,7 @@ class Climate(SubroutineTemplate):
         )
         for pid in self._pids.values():
             pid.reset()
+        scheduler = get_scheduler()
         scheduler.add_job(
             self._climate_routine,
             trigger="cron", minute="*", misfire_grace_time=10,
@@ -363,6 +364,7 @@ class Climate(SubroutineTemplate):
         )
 
     def _stop(self) -> None:
+        scheduler = get_scheduler()
         scheduler.remove_job(job_id=f"{self._ecosystem_name}-climate")
 
     """API calls"""
