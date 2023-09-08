@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from asyncio import create_task, sleep, Task
 from datetime import datetime, time
 from statistics import mean
-from threading import Event, Lock, Thread
 
 from simple_pid import PID
 
@@ -44,18 +44,17 @@ class Light(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
-        self.hardware: dict[str, "Switch"]
-        self._light_status_thread: Thread | None = None
-        self._light_intensity_thread: Thread | None = None
+        self.hardware: dict[str, Switch]
+        self._light_status_task: Task | None = None
+        self._light_intensity_task: Task | None = None
         self.actuator: ActuatorHandler = ActuatorHandler(
             self, HardwareType.light, self.expected_status)
         self._dimmers: set[str] = set()
         self._pid = PID(Kp, Ki, Kd)
-        self._stop_event = Event()
         self._finish__init__()
 
     @staticmethod
-    def expected_status(
+    async def expected_status(
             *,
             method: LightMethod,
             lighting_hours: LightingHours
@@ -78,37 +77,40 @@ class Light(SubroutineTemplate):
                 check_time=now
             )
 
-    def _light_status_loop(self) -> None:
+    async def _light_status_loop(self) -> None:
         cfg = get_config()
         self.logger.info(
             f"Starting light loop at a frequency of {1/cfg.LIGHT_LOOP_PERIOD} Hz")
-        while not self._stop_event.is_set():
-            self._light_status_routine()
-            self._stop_event.wait(cfg.LIGHT_LOOP_PERIOD)
+        while True:
+            await self._light_status_routine()
+            await sleep(cfg.LIGHT_LOOP_PERIOD)
 
-    def _light_status_routine(self) -> None:
+    async def _light_status_routine(self) -> None:
         # If lighting == True, lights should be on
-        lighting = self.actuator.compute_expected_status(
+        lighting = await self.actuator.compute_expected_status(
             method=self.ecosystem.light_method,
             lighting_hours=self.lighting_hours,
         )
+        light: Switch
         if lighting:
             # Reset pid so there is no internal value overshoot
             if not self.actuator.last_status:
                 self._pid.reset()
-            self.actuator.set_status(True)
+            await self.actuator.set_status(True)
             for light in self.hardware.values():
-                light.turn_on()
+                await light.turn_on()
+                await sleep(0)
         # If lighting == False, lights should be off
         else:
-            self.actuator.set_status(False)
+            await self.actuator.set_status(False)
             for light in self.hardware.values():
-                light.turn_off()
+                await light.turn_off()
+                await sleep(0)
 
     # TODO: add a second loop for light level, only used if light is on and dimmable
-    def _light_intensity_loop(self) -> None:
+    async def _light_intensity_loop(self) -> None:
         if self.ecosystem.get_subroutine_status("sensors"):
-            while not self._stop_event.is_set():
+            while True:
                 light_sensors: list[LightSensor] = [
                     sensor for sensor in
                     Hardware.get_actives_by_type(HardwareType.sensor)
@@ -116,14 +118,14 @@ class Light(SubroutineTemplate):
                 ]
                 light_level: list[float] = []
                 for light_sensor in light_sensors:
-                    light = light_sensor.get_lux()
+                    light = await light_sensor.get_lux()
                     if light is not None:
                         light_level.append(light)
                 mean_light = mean(light_level)
-                self._light_intensity_routine(mean_light)
-                self._stop_event.wait(1)
+                await self._light_intensity_routine(mean_light)
+                await sleep(1)
 
-    def _light_intensity_routine(self, light_level: float) -> None:
+    async def _light_intensity_routine(self, light_level: float) -> None:
         pass
 
     """Functions to switch the light on/off either manually or automatically"""
@@ -146,57 +148,54 @@ class Light(SubroutineTemplate):
             self.manageable = False
 
     def _start(self) -> None:
-        self._stop_event.clear()
-        self.light_status_thread = Thread(
-            target=self._light_status_loop,
+        self.light_status_task = create_task(
+            self._light_status_loop(),
             name=f"{self.ecosystem.uid}-light-status")
-        self.light_status_thread.start()
-        # self.light_intensity_thread = Thread(
-        #     target=self._light_intensity_loop,
-        #     name=f"{self._uid}-light-intensity")
-        # self.light_intensity_thread.start()
+        # self.light_intensity_task = create_task(
+        #     self._light_intensity_loop(),
+        #     name=f"{self.ecosystem.name}-light-intensity")
         self.actuator.active = True
 
     def _stop(self) -> None:
         self.logger.info("Stopping light loop")
-        self._stop_event.set()
-        self.light_status_thread.join()
-        self.light_status_thread = None
-        # self.light_intensity_thread.join()
-        # self.light_intensity_thread = None
+        self.light_status_task.cancel()
+        self.light_status_task = None
+        # self.light_intensity_task.cancel()
+        # self.light_intensity_task = None
         self.actuator.active = False
         self.hardware = {}
 
     """API calls"""
     @property
-    def light_status_thread(self) -> Thread:
-        if self._light_status_thread is None:
-            raise AttributeError("Light status thread has not been set up")
+    def light_status_task(self) -> Task:
+        if self._light_status_task is None:
+            raise AttributeError("Light status task has not been set up")
         else:
-            return self._light_status_thread
+            return self._light_status_task
 
-    @light_status_thread.setter
-    def light_status_thread(self, thread: Thread | None) -> None:
-        self._light_status_thread = thread
+    @light_status_task.setter
+    def light_status_task(self, task: Task | None) -> None:
+        self._light_status_task = task
 
     @property
-    def light_intensity_thread(self) -> Thread:
-        if self._light_intensity_thread is None:
-            raise AttributeError("Light intensity thread has not been set up")
+    def light_intensity_task(self) -> Task:
+        if self._light_intensity_task is None:
+            raise AttributeError("Light intensity task has not been set up")
         else:
-            return self._light_intensity_thread
+            return self._light_intensity_task
 
-    @light_intensity_thread.setter
-    def light_intensity_thread(self, thread: Thread | None) -> None:
-        self._light_intensity_thread = thread
+    @light_intensity_task.setter
+    def light_intensity_task(self, task: Task | None) -> None:
+        self._light_intensity_task = task
 
-    def add_hardware(self, hardware_config: HardwareConfig) -> Hardware:
-        hardware = super().add_hardware(hardware_config)
+    async def add_hardware(self, hardware_config: HardwareConfig) -> Hardware:
+        hardware = await super().add_hardware(hardware_config)
         if isinstance(hardware, Dimmer):
             self._dimmers.add(hardware.uid)
+        return hardware
 
-    def remove_hardware(self, hardware_uid: str) -> None:
-        super().remove_hardware(hardware_uid)
+    async def remove_hardware(self, hardware_uid: str) -> None:
+        await super().remove_hardware(hardware_uid)
         if hardware_uid in self._dimmers:
             self._dimmers.remove(hardware_uid)
 
@@ -207,13 +206,13 @@ class Light(SubroutineTemplate):
     def lighting_hours(self) -> LightingHours:
         return self.ecosystem.lighting_hours
 
-    def turn_light(
+    async def turn_light(
             self,
             turn_to: ActuatorModePayload = ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
         if self._started:
-            self.actuator.turn_to(turn_to, countdown)
+            await self.actuator.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
                 f"{self.name} is not started in ecosystem {self.ecosystem}")
