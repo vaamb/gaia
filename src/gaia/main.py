@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import logging
-import time
 from time import sleep
 import typing as t
 from typing import Type
 
 from gaia.config import GaiaConfig, get_config
 from gaia.engine import Engine
-from gaia.shared_resources import scheduler, start_scheduler
+from gaia.shared_resources import get_scheduler, start_scheduler
 from gaia.utils import configure_logging
 
 
@@ -93,6 +92,7 @@ class Gaia:
         self.db.init(get_config())
         self.db.create_all()
         if get_config().SENSORS_LOGGING_PERIOD:
+            scheduler = get_scheduler()
             scheduler.add_job(
                 routines.log_sensors_data,
                 kwargs={"scoped_session": self.db.scoped_session, "engine": self.engine},
@@ -125,6 +125,10 @@ class Gaia:
     def db(self, value: "SQLAlchemyWrapper" | None) -> None:
         self._db = value
 
+    @property
+    def use_db(self) -> bool:
+        return self._db is not None
+
     def start(self) -> None:
         if not self.started:
             self.logger.info("Starting Gaia")
@@ -151,4 +155,9 @@ class Gaia:
             self.engine.stop()
             if self._config.COMMUNICATE_WITH_OURANOS:
                 self.message_broker.stop()
+            scheduler = get_scheduler()
+            if self.use_db:
+                scheduler.remove_job("log_sensors_data")
+            scheduler.remove_all_jobs()
+            scheduler.shutdown()
             self.started = False

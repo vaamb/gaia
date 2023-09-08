@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import logging
-from threading import Thread
+from threading import Event, Thread
 from time import sleep
 import typing as t
 from typing import Callable, cast, Literal, Type
@@ -14,7 +14,7 @@ from dispatcher import EventHandler
 import gaia_validators as gv
 
 from gaia.config import EcosystemConfig, get_config
-from gaia.shared_resources import scheduler
+from gaia.shared_resources import get_scheduler
 from gaia.utils import humanize_list, local_ip_address
 
 if get_config().USE_DATABASE:
@@ -59,6 +59,7 @@ class Events(EventHandler):
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
         self._thread: Thread | None = None
+        self._stop_event = Event()
         self.logger = logging.getLogger(f"gaia.events_handler")
         self.db: "SQLAlchemyWrapper" | None
         if get_config().USE_DATABASE:
@@ -68,6 +69,20 @@ class Events(EventHandler):
             self.db.create_all()
         else:
             self.db = None
+
+    @property
+    def thread(self) -> Thread:
+        if self._thread is None:
+            raise RuntimeError("Thread has not been set up")
+        return self._thread
+
+    @thread.setter
+    def thread(self, thread: Thread | None) -> None:
+        self._thread = thread
+
+    @property
+    def background_tasks_running(self) -> bool:
+        return self._thread is not None
 
     def validate_payload(
             self,
@@ -110,7 +125,8 @@ class Events(EventHandler):
                 f"Encountered an error while tying to emit event `{event_name}`. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`")
 
-    def schedule_jobs(self) -> None:
+    def _schedule_jobs(self) -> None:
+        scheduler = get_scheduler()
         scheduler.add_job(
             self.emit_event_if_connected, kwargs={"event_name": "sensors_data"},
             id="send_sensors_data", trigger="cron", minute="*",
@@ -127,16 +143,28 @@ class Events(EventHandler):
             misfire_grace_time=10*60
         )
 
-    def start_background_task(self) -> None:
-        self.schedule_jobs()
-        thread = Thread(target=self.ping_loop)
-        thread.name = "ping"
-        thread.start()
-        self._thread = thread
+    def _unschedule_jobs(self) -> None:
+        scheduler = get_scheduler()
+        scheduler.remove_job(job_id="send_sensors_data")
+        scheduler.remove_job(job_id="send_light_data")
+        scheduler.remove_job(job_id="send_health_data")
+
+    def start_background_tasks(self) -> None:
+        self._schedule_jobs()
+        self._stop_event.clear()
+        self.thread = Thread(target=self.ping_loop)
+        self.thread.name = "ping"
+        self.thread.start()
+
+    def stop_background_tasks(self) -> None:
+        self._unschedule_jobs()
+        self._stop_event.set()
+        self.thread.join()
+        self.thread = None
 
     def ping_loop(self) -> None:
         sleep(0.1)  # Sleep to allow the end of dispatcher initialization if it directly connects
-        while True:
+        while not self._stop_event.is_set():
             if self.is_connected():
                 self.ping()
             sleep(15)
@@ -164,8 +192,6 @@ class Events(EventHandler):
         self.send_health_data(uids)
 
     def on_connect(self, environment) -> None:  # noqa
-        if self._thread is None:
-            self.start_background_task()
         self.logger.info("Connection to message broker successful")
         if not self.registered:
             self.register()
@@ -175,12 +201,16 @@ class Events(EventHandler):
             self.logger.warning("Disconnected from server")
         else:
             self.logger.error("Failed to register engine")
+        if self.background_tasks_running:
+            self.stop_background_tasks()
 
     def on_register(self) -> None:
         self.registered = False
         self.logger.info("Received registration request from Ouranos")
         sleep(1)
         self.register()
+        if not self.background_tasks_running:
+            self.start_background_tasks()
 
     def on_registration_ack(self) -> None:
         self.logger.info(

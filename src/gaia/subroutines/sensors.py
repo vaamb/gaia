@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from statistics import mean
-from threading import Event, Thread, Lock
+from threading import Event, Lock, Thread
 from time import monotonic
 import typing as t
 from typing import cast

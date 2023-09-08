@@ -3,7 +3,7 @@ from __future__ import annotations
 from json.decoder import JSONDecodeError
 import logging
 import logging.config
-from threading import Thread
+from threading import Event, Thread
 import weakref
 import typing as t
 
@@ -12,7 +12,7 @@ from gaia.config import (
 from gaia.config.from_files import config_condition, detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
-from gaia.shared_resources import scheduler, start_scheduler
+from gaia.shared_resources import get_scheduler, start_scheduler
 from gaia.utils import json, SingletonMeta
 from gaia.virtual import get_virtual_ecosystem
 
@@ -40,6 +40,7 @@ class Engine(metaclass=SingletonMeta):
         self._uid: str = get_config().ENGINE_UID
         self._event_handler: "Events" | None = None
         self._thread: Thread | None = None
+        self._stop_event = Event()
 
     def __del__(self):
         self._config.engine = None
@@ -51,6 +52,7 @@ class Engine(metaclass=SingletonMeta):
         self.logger.debug("Starting background tasks")
         self.config.start_watchdog()
         self.refresh_sun_times()
+        scheduler = get_scheduler()
         scheduler.add_job(self.refresh_sun_times, "cron",
                           hour="1", misfire_grace_time=15 * 60,
                           id="refresh_sun_times")
@@ -62,6 +64,7 @@ class Engine(metaclass=SingletonMeta):
     def _stop_background_tasks(self) -> None:
         self.logger.debug("Stopping background tasks")
         self.config.stop_watchdog()
+        scheduler = get_scheduler()
         scheduler.remove_job("refresh_sun_times")
         scheduler.remove_job("refresh_chaos")
 
@@ -72,7 +75,7 @@ class Engine(metaclass=SingletonMeta):
         self.refresh_ecosystems()
 
     def _loop(self) -> None:
-        while self.started:
+        while not self._stop_event.is_set():
             with config_condition:
                 config_condition.wait()
             if not self.started:
@@ -91,7 +94,7 @@ class Engine(metaclass=SingletonMeta):
 
     @property
     def started(self) -> bool:
-        return self._thread is not None
+        return not self._stop_event.is_set()
 
     @property
     def ecosystems(self) -> dict[str, Ecosystem]:
@@ -332,6 +335,7 @@ class Engine(metaclass=SingletonMeta):
             self.logger.info("Starting the Engine ...")
             self._start_background_tasks()
             self._engine_startup()
+            self._stop_event.clear()
             self.thread = Thread(target=self._loop)
             self.thread.name = "engine"
             self.thread.start()
@@ -350,6 +354,7 @@ class Engine(metaclass=SingletonMeta):
             if clear_engine:
                 stop_ecosystems = True
             # send a config signal so a last loops starts
+            self._stop_event.set()
             with config_condition:
                 config_condition.notify_all()
             self.thread.join()
