@@ -132,7 +132,7 @@ class Climate(SubroutineTemplate):
         return target, hysteresis
 
     @staticmethod
-    def expected_status(
+    async def expected_status(
             *,
             current_value: float,
             target_value: float,
@@ -252,14 +252,14 @@ class Climate(SubroutineTemplate):
         else:
             self.manageable = True
 
-    def _climate_routine(self) -> None:
+    async def _climate_routine(self) -> None:
         if not self.ecosystem.get_subroutine_status("sensors"):
             if not self.config.get_management("sensors"):
                 self.logger.error(
                     "The climate subroutine requires sensors management in order to "
                     "work. Stopping the climate subroutine."
                 )
-                self.stop()
+                await self.stop()
                 return
             else:
                 self.logger.debug(
@@ -282,26 +282,26 @@ class Climate(SubroutineTemplate):
             self._check_misses()
             return
 
-        def activate(
+        async def activate(
                 actuator_handler: ActuatorHandler,
                 pid_output: float
         ) -> None:
-            actuator_handler.set_status(True)
+            await actuator_handler.set_status(True)
             actuator_list = cast(
                 list[Switch],
                 Hardware.get_actives_by_type(actuator_handler.type.value).values())
             for actuator in actuator_list:
-                actuator.turn_on()
+                await actuator.turn_on()
                 if isinstance(actuator, Dimmer):
-                    actuator.set_pwm_level(pid_output)
+                    await actuator.set_pwm_level(pid_output)
 
-        def deactivate(actuator_handler: ActuatorHandler) -> None:
-            actuator_handler.set_status(False)
+        async def deactivate(actuator_handler: ActuatorHandler) -> None:
+            await actuator_handler.set_status(False)
             actuator_list = cast(
                 list[Switch],
                 Hardware.get_actives_by_type(actuator_handler.type.value).values())
             for actuator in actuator_list:
-                actuator.turn_off()
+                await actuator.turn_off()
 
         average = sensors_data.average
         for data in average:
@@ -325,20 +325,20 @@ class Climate(SubroutineTemplate):
                 actuator_handler: ActuatorHandler = self.actuators[actuator_name]
                 if not actuator_handler.active:
                     continue
-                expected_status = actuator_handler.compute_expected_status(
+                expected_status = await actuator_handler.compute_expected_status(
                     current_value=current_value, target_value=target_value,
                     hysteresis=hysteresis)
                 if expected_status:
                     if pid_output > PID_THRESHOLD:
                         if actuator_direction == "increase":
-                            activate(actuator_handler, pid_output)
+                            await activate(actuator_handler, pid_output)
                         else:
-                            deactivate(actuator_handler)
+                            await deactivate(actuator_handler)
                     elif pid_output < -PID_THRESHOLD:
                         if actuator_direction == "increase":
-                            deactivate(actuator_handler)
+                            await deactivate(actuator_handler)
                         else:
-                            activate(actuator_handler, -pid_output)
+                            await activate(actuator_handler, -pid_output)
 
     def _check_misses(self) -> None:
         if self._sensor_miss >= MISSES_BEFORE_STOP:
@@ -405,7 +405,7 @@ class Climate(SubroutineTemplate):
             } for parameter, value in self._parameters.items()
         }
 
-    def turn_climate_actuator(
+    async def turn_climate_actuator(
             self,
             climate_actuator: HardwareType | str,
             turn_to: ActuatorModePayload = ActuatorModePayload.automatic,
@@ -420,7 +420,7 @@ class Climate(SubroutineTemplate):
             raise TypeError(
                 "'climate_actuator' should be a valid climate actuator")
         if self._started:
-            self.actuators[climate_actuator.value].turn_to(turn_to, countdown)
+            await self.actuators[climate_actuator.value].turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
                 f"{self.name} is not started in engine {self.ecosystem}")
