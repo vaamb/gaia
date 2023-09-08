@@ -390,12 +390,12 @@ class gpioHardware(Hardware):
 
 
 class Switch(Hardware):
-    def turn_on(self) -> None:
+    async def turn_on(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
-    def turn_off(self) -> None:
+    async def turn_off(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
@@ -412,7 +412,7 @@ class Dimmer(Hardware):
                 "being PWM-able"
             )
 
-    def set_pwm_level(self, level) -> None:
+    async def set_pwm_level(self, level) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
@@ -498,26 +498,26 @@ class BaseSensor(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[SensorRecord]:
+    async def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class LightSensor(BaseSensor):
-    def get_lux(self) -> float | None:
+    async def get_lux(self) -> float | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[SensorRecord]:
+    async def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class gpioSensor(BaseSensor, gpioHardware):
-    def get_data(self) -> list[SensorRecord]:
+    async def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -531,7 +531,7 @@ class i2cSensor(BaseSensor, i2cHardware):
                 kwargs["address"] = f"I2C_{hex(default_address)}"
         super().__init__(*args, **kwargs)
 
-    def get_data(self) -> list[SensorRecord]:
+    async def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -551,12 +551,12 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def get_image(self) -> Image | None:
+    async def get_image(self) -> Image | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    def get_video(self) -> io.BytesIO | None:
+    async def get_video(self) -> io.BytesIO | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
