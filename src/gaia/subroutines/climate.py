@@ -286,7 +286,7 @@ class Climate(SubroutineTemplate):
                 actuator_handler: ActuatorHandler,
                 pid_output: float
         ) -> None:
-            actuator_handler.status = True
+            actuator_handler.set_status(True)
             actuator_list = cast(
                 list[Switch],
                 Hardware.get_actives_by_type(actuator_handler.type.value).values())
@@ -296,7 +296,7 @@ class Climate(SubroutineTemplate):
                     actuator.set_pwm_level(pid_output)
 
         def deactivate(actuator_handler: ActuatorHandler) -> None:
-            actuator_handler.status = False
+            actuator_handler.set_status(False)
             actuator_list = cast(
                 list[Switch],
                 Hardware.get_actives_by_type(actuator_handler.type.value).values())

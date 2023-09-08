@@ -18,6 +18,11 @@ def always_off(**kwargs) -> bool:
 
 
 class ActuatorHandler:
+    __slots__ = (
+        "_expected_status_function", "_time_limit", "_timer_on", "last_mode",
+        "last_status", "subroutine", "type"
+    )
+
     def __init__(
             self,
             subroutine: "SubroutineTemplate",
@@ -29,7 +34,8 @@ class ActuatorHandler:
         self.type = actuator_type
         self._timer_on: bool = False
         self._time_limit: float = 0.0
-        self._expected_status_function: Callable[..., bool] = expected_status_function
+        self._expected_status_function: Callable[..., bool] = \
+            expected_status_function
         self.last_mode: ActuatorMode = self.mode
         self.last_status: bool = self.status
 
@@ -45,8 +51,7 @@ class ActuatorHandler:
     def mode(self) -> ActuatorMode:
         return self.subroutine.ecosystem.actuators_state[self.type.value]["mode"]
 
-    @mode.setter
-    def mode(self, value: ActuatorMode) -> None:
+    def set_mode(self, value: ActuatorMode) -> None:
         self._set_mode_no_update(value)
         if self.mode != self.last_mode:
             self.subroutine.logger.info(
@@ -62,8 +67,7 @@ class ActuatorHandler:
     def status(self) -> bool:
         return self.subroutine.ecosystem.actuators_state[self.type.value]["status"]
 
-    @status.setter
-    def status(self, value: bool) -> None:
+    def set_status(self, value: bool) -> None:
         self._set_status_no_update(value)
         if self.status != self.last_status:
             self.subroutine.logger.info(
@@ -156,7 +160,7 @@ class ActuatorHandler:
     def compute_expected_status(self, **kwargs) -> bool:
         countdown = self.countdown
         if countdown is not None and countdown <= 0.1:
-            self.mode = ActuatorMode.automatic
+            self.set_mode(ActuatorMode.automatic)
             self.reset_countdown()
         if self.mode == ActuatorMode.automatic:
             return self._expected_status_function(**kwargs)
