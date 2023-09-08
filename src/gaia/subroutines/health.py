@@ -63,22 +63,22 @@ class Health(SubroutineTemplate):
             # TODO: change Exception
             raise Exception
 
-    def health_routine(self) -> None:
+    async def health_routine(self) -> None:
         # If webcam: turn it off and restart after
         light_running = self.ecosystem.get_subroutine_status("light")
         if light_running:
             light_subroutine: "Light" = self.ecosystem.subroutines["light"]
             light_mode = light_subroutine.actuator.mode
             light_status = light_subroutine.actuator.status
-            light_subroutine.turn_light(ActuatorModePayload.on)
+            await light_subroutine.turn_light(ActuatorModePayload.on)
             self.take_picture()
             if light_mode is ActuatorMode.automatic:
-                light_subroutine.turn_light(ActuatorModePayload.automatic)
+                await light_subroutine.turn_light(ActuatorModePayload.automatic)
             else:
                 if light_status:
-                    light_subroutine.turn_light(ActuatorModePayload.on)
+                    await light_subroutine.turn_light(ActuatorModePayload.on)
                 else:
-                    light_subroutine.turn_light(ActuatorModePayload.off)
+                    await light_subroutine.turn_light(ActuatorModePayload.off)
         else:
             self.take_picture()
         self.analyse_picture()
