@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from asyncio import create_task, sleep, Lock, Task
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from statistics import mean
-from threading import Event, Lock, Thread
 from time import monotonic
 import typing as t
 
@@ -25,17 +25,16 @@ class Sensors(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = sensor_models
         self.hardware: dict[str, BaseSensor]
-        self._thread: Thread | None = None
-        self._stop_event = Event()
+        self._task: Task | None = None
         self._sensors_data: SensorsData | Empty = Empty()
         self._data_lock = Lock()
         self._finish__init__()
 
-    def _sensors_loop(self) -> None:
-        while not self._stop_event.is_set():
+    async def _sensors_loop(self) -> None:
+        while True:
             start_time = monotonic()
             self.logger.debug("Starting sensors data update routine ...")
-            self.update_sensors_data()
+            await self.update_sensors_data()
             loop_time = monotonic() - start_time
             sleep_time = get_config().SENSORS_TIMEOUT - loop_time
             if sleep_time < 0:  # pragma: no cover
@@ -48,7 +47,7 @@ class Sensors(SubroutineTemplate):
                 f"Sensors data update finished in {loop_time:.1f}" +
                 f"s. Next sensors data update in {sleep_time:.1f}s"
             )
-            self._stop_event.wait(sleep_time)
+            await sleep(sleep_time)
 
     def _update_manageable(self) -> None:
         if self.config.get_IO_group_uids("sensor"):
@@ -63,18 +62,15 @@ class Sensors(SubroutineTemplate):
         time_out: float = get_config().SENSORS_TIMEOUT
         self.logger.info(
             f"Starting sensors loop. It will run every {time_out} s")
-        self._stop_event.clear()
-        self.thread = Thread(
-            target=self._sensors_loop,
+        self.task = create_task(
+            self._sensors_loop(),
             name=f"{self.ecosystem.uid}-sensors")
-        self.thread.start()
         self.logger.debug(f"Sensors loop successfully started")
 
     def _stop(self) -> None:
         self.logger.info(f"Stopping sensors loop")
-        self._stop_event.set()
-        self.thread.join()
-        self.thread = None
+        self.task.cancel()
+        self.task = None
         if self.ecosystem.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.stop()
@@ -82,33 +78,33 @@ class Sensors(SubroutineTemplate):
 
     """API calls"""
     @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise AttributeError("Sensors thread has not been set up")
+    def task(self) -> Task:
+        if self._task is None:
+            raise AttributeError("Sensors task has not been set up")
         else:
-            return self._thread
+            return self._task
 
-    @thread.setter
-    def thread(self, thread: Thread | None) -> None:
-        self._thread = thread
+    @task.setter
+    def task(self, task: Task | None) -> None:
+        self._task = task
 
-    def add_hardware(self, hardware_config: HardwareConfig) -> BaseSensor:
+    async def add_hardware(self, hardware_config: HardwareConfig) -> BaseSensor:
         model = hardware_config.model
         if get_config().VIRTUALIZATION:
             if not model.startswith("virtual"):
                 hardware_config.model = f"virtual{model}"
-        return super().add_hardware(hardware_config)
+        return await super().add_hardware(hardware_config)
 
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids("sensor"))
 
-    def refresh_hardware(self) -> None:
-        super().refresh_hardware()
+    async def refresh_hardware(self) -> None:
+        await super().refresh_hardware()
         if self.ecosystem.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
-            climate_subroutine.refresh_hardware()
+            await climate_subroutine.refresh_hardware()
 
-    def update_sensors_data(self) -> None:
+    async def update_sensors_data(self) -> None:
         """
         Loops through all the sensors and stores the value in self._data
         """
@@ -140,17 +136,16 @@ class Sensors(SubroutineTemplate):
             )
             for measure, value in to_average.items()
         ]
-        if len(cache["records"]) > 0:
-            self.sensors_data = SensorsData(**cache)
-        else:
-            self.sensors_data = Empty()
+        async with self._data_lock:
+            if len(cache["records"]) > 0:
+                self.sensors_data = SensorsData(**cache)
+            else:
+                self.sensors_data = Empty()
 
     @property
     def sensors_data(self) -> SensorsData | Empty:
-        with self._data_lock:
-            return self._sensors_data
+        return self._sensors_data
 
     @sensors_data.setter
     def sensors_data(self, data: SensorsData | Empty) -> None:
-        with self._data_lock:
-            self._sensors_data = data
+        self._sensors_data = data
