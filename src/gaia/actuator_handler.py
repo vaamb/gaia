@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import typing as t
-from typing import Callable
+from typing import Awaitable, Callable
 import weakref
 
 from gaia_validators import (
@@ -13,7 +13,7 @@ if t.TYPE_CHECKING:
     from gaia.subroutines.template import SubroutineTemplate
 
 
-def always_off(**kwargs) -> bool:
+async def always_off(**kwargs) -> bool:
     return False
 
 
@@ -27,14 +27,14 @@ class ActuatorHandler:
             self,
             subroutine: "SubroutineTemplate",
             actuator_type: HardwareType,
-            expected_status_function: Callable[..., bool] = always_off
+            expected_status_function: Callable[..., Awaitable[bool]] = always_off
     ) -> None:
         self.subroutine: "SubroutineTemplate" = weakref.proxy(subroutine)
         assert actuator_type != HardwareType.sensor
         self.type = actuator_type
         self._timer_on: bool = False
         self._time_limit: float = 0.0
-        self._expected_status_function: Callable[..., bool] = \
+        self._expected_status_function: Callable[..., Awaitable[bool]] = \
             expected_status_function
         self.last_mode: ActuatorMode = self.mode
         self.last_status: bool = self.status
@@ -51,13 +51,13 @@ class ActuatorHandler:
     def mode(self) -> ActuatorMode:
         return self.subroutine.ecosystem.actuators_state[self.type.value]["mode"]
 
-    def set_mode(self, value: ActuatorMode) -> None:
+    async def set_mode(self, value: ActuatorMode) -> None:
         self._set_mode_no_update(value)
         if self.mode != self.last_mode:
             self.subroutine.logger.info(
                 f"{self.type.value.capitalize()} has been set to "
                 f"'{self.mode.value}' mode")
-            self.send_actuators_state()
+            await self.send_actuators_state()
             self.last_mode = self.mode
 
     def _set_mode_no_update(self, value: ActuatorMode) -> None:
@@ -67,13 +67,13 @@ class ActuatorHandler:
     def status(self) -> bool:
         return self.subroutine.ecosystem.actuators_state[self.type.value]["status"]
 
-    def set_status(self, value: bool) -> None:
+    async def set_status(self, value: bool) -> None:
         self._set_status_no_update(value)
         if self.status != self.last_status:
             self.subroutine.logger.info(
                 f"{self.type.value.capitalize()} has been turned "
                 f"{'on' if self.status else 'off'}")
-            self.send_actuators_state()
+            await self.send_actuators_state()
             self.last_status = self.status
 
     def _set_status_no_update(self, value: bool) -> None:
@@ -109,7 +109,7 @@ class ActuatorHandler:
         else:
             raise AttributeError("No timer set, you cannot reduce the countdown")
 
-    def turn_to(
+    async def turn_to(
             self,
             turn_to: ActuatorModePayload = ActuatorModePayload.automatic,
             countdown: float = 0.0
@@ -134,11 +134,11 @@ class ActuatorHandler:
             self.subroutine.logger.info(
                 f"{self.type.value.capitalize()} has been turned "
                 f"{'on' if self.status else 'off'} with '{self.mode.value}' mode")
-            self.send_actuators_state()
+            await self.send_actuators_state()
         self.last_mode = self.mode
         self.last_status = self.status
 
-    def send_actuators_state(self) -> None:
+    async def send_actuators_state(self) -> None:
         if (
                 self.subroutine.ecosystem.engine.use_message_broker
                 and self.subroutine.ecosystem.event_handler.registered
@@ -146,7 +146,7 @@ class ActuatorHandler:
             self.subroutine.ecosystem.logger.debug(
                 "Sending actuators data to Ouranos")
             try:
-                self.subroutine.ecosystem.event_handler.send_actuator_data(
+                await self.subroutine.ecosystem.event_handler.send_actuator_data(
                     ecosystem_uids=self.subroutine.config.uid)
             except Exception as e:
                 msg = e.args[1] if len(e.args) > 1 else e.args[0]
@@ -157,13 +157,14 @@ class ActuatorHandler:
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
                 )
 
-    def compute_expected_status(self, **kwargs) -> bool:
+    async def compute_expected_status(self, **kwargs) -> bool:
         countdown = self.countdown
         if countdown is not None and countdown <= 0.1:
-            self.set_mode(ActuatorMode.automatic)
+            await self.set_mode(ActuatorMode.automatic)
             self.reset_countdown()
         if self.mode == ActuatorMode.automatic:
-            return self._expected_status_function(**kwargs)
+            expected_status = await self._expected_status_function(**kwargs)
+            return expected_status
         else:
             if self.status:
                 return True
