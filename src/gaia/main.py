@@ -24,8 +24,7 @@ def main():
     gaia = Gaia()
     try:
         gaia.start()
-        sleep(10)
-        #gaia.wait()
+        gaia.wait()
     finally:
         gaia.stop()
 
