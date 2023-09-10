@@ -18,6 +18,8 @@ from gaia.virtual import get_virtual_ecosystem
 
 
 if t.TYPE_CHECKING:
+    from dispatcher import KombuDispatcher
+
     from gaia.events import Events
 
 
@@ -38,7 +40,10 @@ class Engine(metaclass=SingletonMeta):
         self.logger.debug("Initializing")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = get_config().ENGINE_UID
+        self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
+        if get_config().COMMUNICATE_WITH_OURANOS:
+            self._init_message_broker()
         self._thread: Thread | None = None
         self._started_event = Event()
 
@@ -48,6 +53,78 @@ class Engine(metaclass=SingletonMeta):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
 
+    # ---------------------------------------------------------------------------
+    #   Events dispatcher
+    # ---------------------------------------------------------------------------
+    def _init_message_broker(self) -> None:
+        gaia_config = get_config()
+        broker_url = gaia_config.AGGREGATOR_COMMUNICATION_URL
+        broker_type = broker_url[:broker_url.index("://")]
+        if broker_type not in {"amqp", "redis"}:
+            raise ValueError(f"{broker_type} is not supported")
+        self.logger.info("Initialising the message broker")
+        self.logger.debug("Initializing the dispatcher")
+        if broker_url == "amqp://":
+            broker_url = "amqp://guest:guest@localhost:5672//"
+        elif broker_url == "redis://":
+            broker_url = "redis://localhost:6379/0"
+        try:
+            from dispatcher import KombuDispatcher
+        except ImportError:
+            raise RuntimeError(
+                "Event-dispatcher is required to use the dispatcher. Download it "
+                "from `https://github.com/vaamb/dispatcher` and install it in "
+                "your virtual env"
+            )
+        self.message_broker = KombuDispatcher(
+            "gaia", url=broker_url, queue_options={
+                "name": f"gaia-{gaia_config.ENGINE_UID}",
+                # Delete the queue after one week, CRUD requests will be lost
+                #  at this point
+                "expires": 60 * 60 * 24 * 7
+            })
+        from gaia.events import Events
+        events_handler = Events(engine=self)
+        self.message_broker.register_event_handler(events_handler)
+        self.event_handler = events_handler
+
+    def _start_message_broker(self) -> None:
+        self.message_broker: "KombuDispatcher"
+        self.logger.info("Starting the dispatcher")
+        self.message_broker.start(retry=True, block=False)
+
+    @property
+    def message_broker(self) -> "KombuDispatcher":
+        if self._message_broker is None:
+            raise AttributeError(
+                "'message_broker' is not valid as the message broker between "
+                "Ouranos and Gaia is not used. To use it, set the config "
+                "parameter 'COMMUNICATE_WITH_OURANOS' to True, and the "
+                "parameter 'AGGREGATOR_COMMUNICATION_URL' to a valid url")
+        return self._message_broker
+
+    @message_broker.setter
+    def message_broker(self, value: "KombuDispatcher" | None) -> None:
+        self._message_broker = value
+
+    @property
+    def use_message_broker(self) -> bool:
+        return self._event_handler is not None
+
+    @property
+    def event_handler(self) -> "Events":
+        """Return the event handler"""
+        if self._event_handler is not None:
+            return self._event_handler
+        raise AttributeError("'event_handler' has not been set")
+
+    @event_handler.setter
+    def event_handler(self, event_handler: "Events"):
+        self._event_handler = event_handler
+
+    # ---------------------------------------------------------------------------
+    #   Engine functionalities
+    # ---------------------------------------------------------------------------
     def _start_background_tasks(self) -> None:
         self.logger.debug("Starting background tasks")
         self.config.start_watchdog()
@@ -121,21 +198,6 @@ class Engine(metaclass=SingletonMeta):
     @thread.setter
     def thread(self, thread: Thread | None):
         self._thread = thread
-
-    @property
-    def event_handler(self) -> "Events":
-        """Return the event handler"""
-        if self._event_handler is not None:
-            return self._event_handler
-        raise AttributeError("'event_handler' has not been set")
-
-    @event_handler.setter
-    def event_handler(self, event_handler: "Events"):
-        self._event_handler = event_handler
-
-    @property
-    def use_message_broker(self) -> bool:
-        return self._event_handler is not None
 
     def init_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
         """Initialize an Ecosystem
@@ -334,6 +396,8 @@ class Engine(metaclass=SingletonMeta):
         if not self.started:
             self.logger.info("Starting the Engine ...")
             self._start_background_tasks()
+            if self.use_message_broker:
+                self.message_broker.start(retry=True, block=False)
             self._engine_startup()
             self._started_event.set()
             self.thread = Thread(target=self._loop)
@@ -351,6 +415,8 @@ class Engine(metaclass=SingletonMeta):
         """Stop the Engine"""
         if self.started:
             self.logger.info("Stopping the Engine ...")
+            if self.use_message_broker:
+                self.message_broker.stop()
             if clear_engine:
                 stop_ecosystems = True
             # send a config signal so a last loops starts
