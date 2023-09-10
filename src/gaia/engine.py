@@ -4,8 +4,9 @@ from json.decoder import JSONDecodeError
 import logging
 import logging.config
 from threading import Event, Thread
-import weakref
+from time import sleep
 import typing as t
+import weakref
 
 from gaia.config import (
     EngineConfig, get_cache_dir, get_config, get_ecosystem_IDs)
@@ -35,9 +36,7 @@ class Engine(metaclass=SingletonMeta):
     def __init__(self) -> None:
         self._config: EngineConfig = weakref.proxy(EngineConfig())
         self._config.engine = self
-        self.logger: logging.Logger = logging.getLogger(
-            f"gaia.engine"
-        )
+        self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
         self.logger.debug("Initializing")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = get_config().ENGINE_UID
@@ -478,3 +477,11 @@ class Engine(metaclass=SingletonMeta):
                     self.dismount_ecosystem(ecosystem)
             self._stop_background_tasks()
             self.logger.info("The Engine has stopped")
+
+    def wait(self):
+        if self.started:
+            self.logger.info("Running")
+            while True:
+                sleep(1)
+        else:
+            raise RuntimeError("Gaia needs to be started in order to wait")
