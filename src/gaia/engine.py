@@ -19,6 +19,7 @@ from gaia.virtual import get_virtual_ecosystem
 
 if t.TYPE_CHECKING:
     from dispatcher import KombuDispatcher
+    from sqlalchemy_wrapper import SQLAlchemyWrapper
 
     from gaia.events import Events
 
@@ -42,8 +43,12 @@ class Engine(metaclass=SingletonMeta):
         self._uid: str = get_config().ENGINE_UID
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
-        if get_config().COMMUNICATE_WITH_OURANOS:
+        gaia_config = get_config()
+        if gaia_config.COMMUNICATE_WITH_OURANOS:
             self._init_message_broker()
+        self._db: "SQLAlchemyWrapper" | None = None
+        if gaia_config.USE_DATABASE:
+            self._init_database()
         self._thread: Thread | None = None
         self._started_event = Event()
 
@@ -98,7 +103,7 @@ class Engine(metaclass=SingletonMeta):
         if self._message_broker is None:
             raise AttributeError(
                 "'message_broker' is not valid as the message broker between "
-                "Ouranos and Gaia is not used. To use it, set the config "
+                "Ouranos and Gaia is not used. To use it, set the Gaia app config "
                 "parameter 'COMMUNICATE_WITH_OURANOS' to True, and the "
                 "parameter 'AGGREGATOR_COMMUNICATION_URL' to a valid url")
         return self._message_broker
@@ -123,6 +128,39 @@ class Engine(metaclass=SingletonMeta):
         self._event_handler = event_handler
 
     # ---------------------------------------------------------------------------
+    #   DB
+    # ---------------------------------------------------------------------------
+    def _init_database(self) -> None:
+        self.logger.info("Initialising the database")
+        from gaia.database import routines, db
+        self.db = db
+        self.db.init(get_config())
+        self.db.create_all()
+        if get_config().SENSORS_LOGGING_PERIOD:
+            scheduler = get_scheduler()
+            scheduler.add_job(
+                routines.log_sensors_data,
+                kwargs={"scoped_session": self.db.scoped_session, "engine": self},
+                trigger="cron", minute="*", misfire_grace_time=10,
+                id="log_sensors_data")
+
+    @property
+    def db(self) -> "SQLAlchemyWrapper":
+        if self._db is None:
+            raise AttributeError(
+                "'db' is not valid as the database is currently not used. To use "
+                "it, set the Gaia app config parameter 'USE_DATABASE' to True")
+        return self._db
+
+    @db.setter
+    def db(self, value: "SQLAlchemyWrapper" | None) -> None:
+        self._db = value
+
+    @property
+    def use_db(self) -> bool:
+        return self._db is not None
+
+    # ---------------------------------------------------------------------------
     #   Engine functionalities
     # ---------------------------------------------------------------------------
     def _start_background_tasks(self) -> None:
@@ -144,6 +182,8 @@ class Engine(metaclass=SingletonMeta):
         scheduler = get_scheduler()
         scheduler.remove_job("refresh_sun_times")
         scheduler.remove_job("refresh_chaos")
+        scheduler.remove_all_jobs()  # To be 100% sure
+        scheduler.shutdown()
 
     def _engine_startup(self) -> None:
         if get_config().VIRTUALIZATION:
@@ -417,6 +457,9 @@ class Engine(metaclass=SingletonMeta):
             self.logger.info("Stopping the Engine ...")
             if self.use_message_broker:
                 self.message_broker.stop()
+            if self.use_db:
+                scheduler = get_scheduler()
+                scheduler.remove_job("log_sensors_data")
             if clear_engine:
                 stop_ecosystems = True
             # send a config signal so a last loops starts
