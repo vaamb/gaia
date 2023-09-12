@@ -30,6 +30,7 @@ class SubroutineTemplate(ABC):
         )
         self.logger.debug("Initializing")
         self.hardware: dict[str, Hardware] = {}
+        self._hardware_choices: dict[str, Type[Hardware]] = {}
         self.manageable: bool = True
         self._started: bool = False
 
@@ -38,33 +39,6 @@ class SubroutineTemplate(ABC):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.name}, status={self.status})"
-
-    def _add_hardware(
-            self,
-            hardware_config: HardwareConfig,
-            hardware_choice: dict[str, Type[Hardware]],
-    ) -> BaseSensor | Camera | Dimmer | Hardware | Switch | None:
-        try:
-            model: str = hardware_config.model
-            if model not in hardware_choice:
-                raise HardwareNotFound(
-                    f"{model} is not in the list of the hardware available."
-                )
-            hardware_class: Type[Hardware] = hardware_choice[model]
-            hardware = hardware_class.from_hardware_config(hardware_config, self)
-            if isinstance(hardware, Switch):
-                hardware.turn_off()
-            if isinstance(hardware, Dimmer):
-                hardware.set_pwm_level(0)
-            self.logger.debug(f"Hardware {hardware.name} has been set up")
-            self.hardware[hardware.uid] = hardware
-            return hardware
-        except Exception as e:
-            uid = hardware_config.uid
-            self.logger.error(
-                f"Encountered an exception while setting up hardware '{uid}'. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`."
-            )
 
     @abstractmethod
     def _update_manageable(self) -> None:
@@ -109,11 +83,41 @@ class SubroutineTemplate(ABC):
     def management(self, value: bool) -> None:
         self.config.set_management(self.name, value)
 
-    @abstractmethod
-    def add_hardware(self, hardware_config: HardwareConfig) -> None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+    @property
+    def hardware_choices(self) -> dict[str, Type[Hardware]]:
+        return self._hardware_choices
+
+    @hardware_choices.setter
+    def hardware_choices(self, choices: dict[str, Type[Hardware]]) -> None:
+        self._hardware_choices = choices
+
+    def add_hardware(
+            self,
+            hardware_config: HardwareConfig,
+    ) -> BaseSensor | Camera | Dimmer | Hardware | Switch | None:
+        if not self.hardware_choices:
+            raise RuntimeError("No 'hardware_choices' available")
+        try:
+            model: str = hardware_config.model
+            if model not in self.hardware_choices:
+                raise HardwareNotFound(
+                    f"{model} is not in the list of the hardware available."
+                )
+            hardware_class: Type[Hardware] = self.hardware_choices[model]
+            hardware = hardware_class.from_hardware_config(hardware_config, self)
+            if isinstance(hardware, Switch):
+                hardware.turn_off()
+            if isinstance(hardware, Dimmer):
+                hardware.set_pwm_level(0)
+            self.logger.debug(f"Hardware {hardware.name} has been set up")
+            self.hardware[hardware.uid] = hardware
+            return hardware
+        except Exception as e:
+            uid = hardware_config.uid
+            self.logger.error(
+                f"Encountered an exception while setting up hardware '{uid}'. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
 
     def remove_hardware(self, hardware_uid: str) -> None:
         try:

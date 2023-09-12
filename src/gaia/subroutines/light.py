@@ -44,6 +44,7 @@ def _is_time_between(
 class Light(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.hardware_choices = actuator_models
         self.hardware: dict[str, "Switch"]
         self._light_status_thread: Thread | None = None
         self._light_intensity_thread: Thread | None = None
@@ -181,8 +182,8 @@ class Light(SubroutineTemplate):
     def light_intensity_thread(self, thread: Thread | None) -> None:
         self._light_intensity_thread = thread
 
-    def add_hardware(self, hardware_config: HardwareConfig) -> None:
-        hardware: Switch = self._add_hardware(hardware_config, actuator_models)
+    def add_hardware(self, hardware_config: HardwareConfig) -> Hardware:
+        hardware = super().add_hardware(hardware_config)
         if isinstance(hardware, Dimmer):
             self._dimmers.add(hardware.uid)
 
