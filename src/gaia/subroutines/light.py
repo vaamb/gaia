@@ -87,9 +87,11 @@ class Light(SubroutineTemplate):
 
     async def _light_status_routine(self) -> None:
         # If lighting == True, lights should be on
+        async with self.ecosystem.lighting_hours_lock:
+            lighting_hours = self.lighting_hours
         lighting = await self.actuator.compute_expected_status(
             method=self.ecosystem.light_method,
-            lighting_hours=self.lighting_hours,
+            lighting_hours=lighting_hours,
         )
         light: Switch
         if lighting:

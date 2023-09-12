@@ -1,7 +1,5 @@
-import eventlet
-
-eventlet.monkey_patch()
+import asyncio
 
 from gaia import main
 
-main()
+asyncio.run(main())

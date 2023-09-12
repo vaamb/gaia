@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from asyncio import get_event_loop, sleep, Task
 from json.decoder import JSONDecodeError
 import logging
 import logging.config
 import signal
-from threading import Event, Thread
-from time import sleep
+import threading
+from threading import Event
 import typing as t
 from typing import Type
 import weakref
@@ -58,8 +59,8 @@ class Engine(metaclass=SingletonMeta):
             or self. gaia_config.COMMUNICATE_WITH_OURANOS
         )
         self.plugins_initialized: bool = False
-        self._thread: Thread | None = None
-        self._started_event = Event()
+        self._task: Task | None = None
+        self._started_event: Event = Event()
 
     def __del__(self):
         self._config.engine = None
@@ -70,7 +71,7 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Events dispatcher
     # ---------------------------------------------------------------------------
-    def init_message_broker(self) -> None:
+    async def init_message_broker(self) -> None:
         broker_url = self.gaia_config.AGGREGATOR_COMMUNICATION_URL
         broker_type = broker_url[:broker_url.index("://")]
         if broker_type == "amqp":
@@ -117,13 +118,13 @@ class Engine(metaclass=SingletonMeta):
         self.message_broker.register_event_handler(events_handler)
         self.event_handler = events_handler
 
-    def start_message_broker(self) -> None:
+    async def start_message_broker(self) -> None:
         self.logger.info("Starting the dispatcher")
-        self.message_broker.start(retry=True, block=False)
+        await self.message_broker.start(retry=True, block=False)
 
-    def stop_message_broker(self) -> None:
+    async def stop_message_broker(self) -> None:
         self.logger.info("Stopping the dispatcher")
-        self.message_broker.stop()
+        await self.message_broker.stop()
 
     @property
     def message_broker(self) -> "AsyncDispatcher":
@@ -157,14 +158,14 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   DB
     # ---------------------------------------------------------------------------
-    def init_database(self) -> None:
+    async def init_database(self) -> None:
         self.logger.info("Initialising the database")
         from gaia.database import db
         self.db = db
         self.db.init(self.gaia_config)
         self.db.create_all()
 
-    def start_database(self) -> None:
+    async def start_database(self) -> None:
         from gaia.database import routines
         if self.gaia_config.SENSORS_LOGGING_PERIOD:
             scheduler = get_scheduler()
@@ -174,7 +175,7 @@ class Engine(metaclass=SingletonMeta):
                 trigger="cron", minute="*", misfire_grace_time=10,
                 id="log_sensors_data")
 
-    def stop_database(self) -> None:
+    async def stop_database(self) -> None:
         scheduler = get_scheduler()
         scheduler.remove_job("log_sensors_data")
 
@@ -197,24 +198,24 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Plugins management
     # ---------------------------------------------------------------------------
-    def init_plugins(self) -> None:
+    async def init_plugins(self) -> None:
         if self.gaia_config.COMMUNICATE_WITH_OURANOS:
-            self.init_message_broker()
+            await self.init_message_broker()
         if self.gaia_config.USE_DATABASE:
-            self.init_database()
+            await self.init_database()
         self.plugins_initialized = True
 
-    def start_plugins(self) -> None:
+    async def start_plugins(self) -> None:
         if self.use_message_broker:
-            self.start_message_broker()
+            await self.start_message_broker()
         if self.use_db:
-            self.start_database()
+            await self.start_database()
 
-    def stop_plugins(self) -> None:
+    async def stop_plugins(self) -> None:
         if self.use_message_broker:
-            self.stop_message_broker()
+            await self.stop_message_broker()
         if self.use_db:
-            self.stop_database()
+            await self.stop_database()
 
     # ---------------------------------------------------------------------------
     #   Engine functionalities
@@ -243,16 +244,16 @@ class Engine(metaclass=SingletonMeta):
             for ecosystem_uid in self.config.ecosystems_uid:
                 get_virtual_ecosystem(ecosystem_uid, start=True)
 
-    def _loop(self) -> None:
+    async def _loop(self) -> None:
         while True:
-            with self.config.new_config:
-                self.config.new_config.wait()
+            async with self.config.new_config:
+                await self.config.new_config.wait()
             if not self.started:
                 break
-            self.refresh_ecosystems()
+            await self.refresh_ecosystems()
             if self.use_message_broker:
-                self.event_handler.send_full_config()
-                self.event_handler.send_light_data()
+                await self.event_handler.send_full_config()
+                await self.event_handler.send_light_data()
 
     """
     API calls
@@ -281,15 +282,15 @@ class Engine(metaclass=SingletonMeta):
         ])
 
     @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise AttributeError("Engine thread has not been set up")
+    def task(self) -> Task:
+        if self._task is None:
+            raise AttributeError("Engine management task has not been set up")
         else:
-            return self._thread
+            return self._task
 
-    @thread.setter
-    def thread(self, thread: Thread | None):
-        self._thread = thread
+    @task.setter
+    def task(self, task: Task | None):
+        self._task = task
 
     # ---------------------------------------------------------------------------
     #   Ecosystem managements
@@ -316,7 +317,7 @@ class Engine(metaclass=SingletonMeta):
             f"Ecosystem {ecosystem_id} already exists"
         )
 
-    def start_ecosystem(self, ecosystem_id: str) -> None:
+    async def start_ecosystem(self, ecosystem_id: str) -> None:
         """Start an Ecosystem
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -329,7 +330,7 @@ class Engine(metaclass=SingletonMeta):
                 self.logger.debug(
                     f"Starting ecosystem {ecosystem_name}"
                 )
-                ecosystem.start()
+                await ecosystem.start()
             else:
                 raise RuntimeError(
                     f"Ecosystem {ecosystem_id} is already running"
@@ -339,7 +340,7 @@ class Engine(metaclass=SingletonMeta):
                 f"Neet to initialise Ecosystem {ecosystem_id} first"
             )
 
-    def stop_ecosystem(self, ecosystem_id: str, dismount: bool = False) -> None:
+    async def stop_ecosystem(self, ecosystem_id: str, dismount: bool = False) -> None:
         """Stop an Ecosystem
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -352,7 +353,7 @@ class Engine(metaclass=SingletonMeta):
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 ecosystem = self.ecosystems[ecosystem_uid]
-                ecosystem.stop()
+                await ecosystem.stop()
                 if dismount:
                     self.dismount_ecosystem(ecosystem_uid)
                 self.logger.info(
@@ -407,7 +408,7 @@ class Engine(metaclass=SingletonMeta):
             _ecosystem = self.init_ecosystem(ecosystem_uid)
         return _ecosystem
 
-    def refresh_ecosystems(self):
+    async def refresh_ecosystems(self):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file"""
         expected_started = set(self.config.get_ecosystems_expected_to_run())
         to_delete = set(self.ecosystems.keys())
@@ -423,12 +424,12 @@ class Engine(metaclass=SingletonMeta):
         # start Ecosystems which are expected to run and are not running
         to_start = expected_started - self.ecosystems_started
         for ecosystem_uid in to_start:
-            self.start_ecosystem(ecosystem_uid)
+            await self.start_ecosystem(ecosystem_uid)
         # stop Ecosystems which are not expected to run and are currently
         # running
         to_stop = self.ecosystems_started - expected_started
         for ecosystem_uid in to_stop:
-            self.stop_ecosystem(ecosystem_uid)
+            await self.stop_ecosystem(ecosystem_uid)
         # refresh Ecosystems that were already running and did not stop
         started_before = self.ecosystems_started - to_start
         for ecosystem_uid in started_before:
@@ -436,13 +437,13 @@ class Engine(metaclass=SingletonMeta):
         # delete Ecosystems which were created and are no longer on the
         # config file
         for ecosystem_uid in to_delete:
-            self.stop_ecosystem(ecosystem_uid)
+            await self.stop_ecosystem(ecosystem_uid)
             self.dismount_ecosystem(ecosystem_uid)
 
-    def refresh_sun_times(self) -> None:
+    async def refresh_sun_times(self) -> None:
         """Download sunrise and sunset times if needed by an Ecosystem"""
         self.logger.debug("Refreshing sun times")
-        self.config.refresh_sun_times()
+        await self.config.refresh_sun_times()
         if self.config.sun_times is None:
             return
         need_refresh = []
@@ -461,7 +462,7 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem in need_refresh:
             try:
                 if self.ecosystems[ecosystem].status:
-                    self.ecosystems[ecosystem].refresh_lighting_hours()
+                    await self.ecosystems[ecosystem].refresh_lighting_hours()
             except KeyError:
                 # Occur
                 pass
@@ -484,7 +485,7 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Engine start and stop
     # ---------------------------------------------------------------------------
-    def startup(self) -> None:
+    async def startup(self) -> None:
         """Start the Engine
 
         When started, the Engine will automatically manage the Ecosystems based
@@ -500,50 +501,48 @@ class Engine(metaclass=SingletonMeta):
                 "the 'init_plugins()' method to start them."
             )
         # Load the ecosystem configs into memory and start the watchdog
-        self.config.initialize_configs()
+        await self.config.initialize_configs()
         self._init_virtualization()
         self.config.start_watchdog()
         # Get the info required just before starting the ecosystems
-        self.refresh_sun_times()
+        await self.refresh_sun_times()
         # Start background tasks and plugins
         self.start_background_tasks()
-        self.start_plugins()
-        # Start the engine loop
-        self.thread = Thread(
-            target=self._loop,
+        await self.start_plugins()
+        self.task = Task(
+            self._loop(),
             name="engine")
-        self.refresh_ecosystems()
+        await self.refresh_ecosystems()
         self._started_event.set()
-        self.thread.start()
         self.logger.info("Gaia started")
 
-    def shutdown(self) -> None:
+    async def shutdown(self) -> None:
         """Shutdown the Engine"""
         if not self.started:
             raise RuntimeError("Cannot shutdown a non-started Engine")
         self.logger.info("Stopping Gaia ...")
         # Send a config signal so the loops unlocks
         self._started_event.clear()
-        with self.config.new_config:
+        async with self.config.new_config:
             self.config.new_config.notify_all()
-        self.thread.join()
-        self.thread = None
+        self.task.cancel()
+        self.task = None
         # Stop and dismount ecosystems
         for ecosystem_uid in [*self.ecosystems_started]:
-            self.stop_ecosystem(ecosystem_uid)
+            await self.stop_ecosystem(ecosystem_uid)
         to_delete = [*self.ecosystems.keys()]
         for ecosystem in to_delete:
             self.dismount_ecosystem(ecosystem)
         # Stop plugins and background tasks
-        self.stop_plugins()
+        await self.stop_plugins()
         self.stop_background_tasks()
         self.logger.info("Gaia has stopped")
 
-    def wait(self):
+    async def wait(self):
         if self.started:
             self.logger.info("Running")
             while self.started:
-                sleep(0.5)
+                await sleep(0.5)
         else:
             raise RuntimeError("Gaia needs to be started in order to wait")
 
@@ -554,14 +553,22 @@ class Engine(metaclass=SingletonMeta):
         self._started_event.clear()
 
     def add_signal_handler(self) -> None:
+        assert threading.current_thread() is threading.main_thread()
+
         def signal_handler(signum, frame) -> None:
             self.stop()
 
-        for sig in SIGNALS:
-            signal.signal(sig, signal_handler)
+        loop = get_event_loop()
 
-    def run(self) -> None:
+        try:
+            for sig in SIGNALS:
+                loop.add_signal_handler(sig, signal_handler, sig, None)
+        except NotImplementedError:
+            for sig in SIGNALS:
+                signal.signal(sig, signal_handler)
+
+    async def run(self) -> None:
         self.add_signal_handler()
-        self.startup()
-        self.wait()
-        self.shutdown()
+        await self.startup()
+        await self.wait()
+        await self.shutdown()

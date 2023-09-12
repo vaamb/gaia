@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+import aiofiles
+from aiohttp import ClientError, ClientSession
+from asyncio import Condition, Lock, sleep, Task
+from contextlib import asynccontextmanager
 from datetime import date, datetime, time
 from enum import Enum
 import hashlib
@@ -8,9 +11,8 @@ from json.decoder import JSONDecodeError
 import logging
 import pathlib
 import random
-from requests import ConnectionError, Session
 import string
-from threading import Condition, Event, Lock, Thread
+import threading
 import typing as t
 from typing import Literal, TypedDict
 import weakref
@@ -43,11 +45,14 @@ class ConfigType(Enum):
     private = "_private_config"
 
 
-def _file_hash(file_path: pathlib.Path) -> str:
+async def _file_hash(file_path: pathlib.Path) -> str:
     try:
         h = hashlib.md5(usedforsecurity=False)
-        with open(file_path, "rb") as f:
-            for block in iter(lambda: f.read(4096), b""):
+        async with aiofiles.open(file_path, "rb") as f:
+            while True:
+                block = await f.read(4096)
+                if not block:
+                    break
                 h.update(block)
         return h.hexdigest()
     except FileNotFoundError:
@@ -142,6 +147,7 @@ class EngineConfig(metaclass=SingletonMeta):
     class should be used.
     """
     def __init__(self, base_dir=get_base_dir()) -> None:
+        assert threading.current_thread() is threading.main_thread()
         logger.debug("Initializing EngineConfig")
         self._base_dir = pathlib.Path(base_dir)
         self._engine: "Engine" | None = None
@@ -152,8 +158,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._hash_dict: dict[ConfigType, str] = {}
         self._config_files_lock = Lock()
         self.new_config = Condition()
-        self._stop_event = Event()
-        self._thread: Thread | None = None
+        self._task: Task | None = None
         self.configs_loaded: bool = False
 
     def __repr__(self) -> str:
@@ -161,23 +166,23 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def started(self) -> bool:
-        return self._thread is not None
+        return self._task is not None
 
     @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise AttributeError("'thread' has not been set up")
-        return self._thread
+    def task(self) -> Task:
+        if self._task is None:
+            raise AttributeError("EngineConfig task has not been set up")
+        return self._task
 
-    @thread.setter
-    def thread(self, thread: Thread | None) -> None:
-        self._thread = thread
+    @task.setter
+    def task(self, task: Task | None) -> None:
+        self._task = task
 
     @property
     def engine(self) -> "Engine":
         if self._engine is not None:
             return self._engine
-        raise AttributeError("'engine' has not been set up")
+        raise AttributeError("engine has not been set up")
 
     @engine.setter
     def engine(self, value: "Engine") -> None:
@@ -191,34 +196,34 @@ class EngineConfig(metaclass=SingletonMeta):
                 "`engine_config.with config_files_lock():` block"
             )
 
-    def _load_config(self, cfg_type: ConfigType) -> None:
+    async def _load_config(self, cfg_type: ConfigType) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
         config_path = self._base_dir/f"{cfg_type.name}.cfg"
         if cfg_type == ConfigType.ecosystems:
-            with open(config_path, "r") as file:
-                unvalidated = yaml.load(file)
-                try:
-                    validated = RootEcosystemsConfigValidator(
-                        **{"config": unvalidated}
-                    ).model_dump()["config"]
-                except ValidationError as e:
-                    # TODO: log formatted error message
-                    raise e
-                else:
-                    self._ecosystems_config = validated
+            async with aiofiles.open(config_path, "r") as file:
+                unvalidated = yaml.load(file.buffer)
+            try:
+                validated = RootEcosystemsConfigValidator(
+                    **{"config": unvalidated}
+                ).model_dump()["config"]
+            except ValidationError as e:
+                # TODO: log formatted error message
+                raise e
+            else:
+                self._ecosystems_config = validated
         elif cfg_type == ConfigType.private:
-            with open(config_path, "r") as file:
-                self._private_config = yaml.load(file)
+            async with aiofiles.open(config_path, "r") as file:
+                self._private_config = yaml.load(file.buffer)
 
-    def _dump_config(self, cfg_type: ConfigType):
+    async def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
         # TODO: shorten dicts used ?
         config_path = self._base_dir/f"{cfg_type.name}.cfg"
-        with open(config_path, "w") as file:
-            cfg = getattr(self, cfg_type.value)
-            yaml.dump(cfg, file)
+        cfg = getattr(self, cfg_type.value)
+        async with aiofiles.open(config_path, "w") as file:
+            yaml.dump(cfg, file.buffer)
 
     def _create_ecosystems_config_file(self):
         self._ecosystems_config = {}
@@ -229,11 +234,11 @@ class EngineConfig(metaclass=SingletonMeta):
         self._private_config = {}
         self._dump_config(ConfigType.private)
 
-    def initialize_configs(self) -> None:
-        with self.config_files_lock():
+    async def initialize_configs(self) -> None:
+        async with self.config_files_lock():
             for cfg_type in ConfigType:
                 try:
-                    self._load_config(cfg_type)
+                    await self._load_config(cfg_type)
                 except OSError:
                     if cfg_type == ConfigType.ecosystems:
                         logger.warning(
@@ -247,23 +252,24 @@ class EngineConfig(metaclass=SingletonMeta):
                         self._create_private_config_file()
         self.configs_loaded = True
 
-    def save(self, cfg_type: ConfigType) -> None:
+    async def save(self, cfg_type: ConfigType) -> None:
         with self.config_files_lock():
             logger.debug(f"Updating {cfg_type.name} configuration file(s)")
-            self._dump_config(cfg_type)
+            await self._dump_config(cfg_type)
 
     # File watchdog
-    def _update_cfg_hash(self) -> None:
+    async def _update_cfg_hash(self) -> None:
         for cfg_type in ConfigType:
             path = self._base_dir/f"{cfg_type.name}.cfg"
-            self._hash_dict[cfg_type] = _file_hash(path)
+            self._hash_dict[cfg_type] = await _file_hash(path)
 
-    def _watchdog_loop(self) -> None:
-        while not self._stop_event.is_set():
+    async def _watchdog_loop(self) -> None:
+        await self._update_cfg_hash()
+        while True:
             reloaded = False
-            with self.config_files_lock():
+            async with self.config_files_lock():
                 old_hash = {**self._hash_dict}
-                self._update_cfg_hash()
+                await self._update_cfg_hash()
                 # Need to reload the config if its hash has changed
                 reload_cfg: list[ConfigType] = [
                     cfg_type for cfg_type in ConfigType
@@ -274,16 +280,16 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"Change in config file(s) detected. Updating "
                         f"configuration file(s) {[cfg.name for cfg in reload_cfg]}")
                     for cfg in reload_cfg:
-                        self._load_config(cfg_type=cfg)
-                    with self.new_config:
+                        await self._load_config(cfg_type=cfg)
+                    async with self.new_config:
                         self.new_config.notify_all()
                     reloaded = True
             if reloaded:
                 if "ecosystems" in reload_cfg:
-                    self.refresh_sun_times()
+                    await self.refresh_sun_times()
                 if self.engine.use_message_broker:
-                    self.engine.event_handler.send_full_config()
-            self._stop_event.wait(get_gaia_config().CONFIG_WATCHER_PERIOD)
+                    await self.engine.event_handler.send_full_config()
+            await sleep(get_gaia_config().CONFIG_WATCHER_PERIOD)
 
     def start_watchdog(self) -> None:
         if not self.configs_loaded:  # pragma: no cover
@@ -297,32 +303,30 @@ class EngineConfig(metaclass=SingletonMeta):
             raise RuntimeError("Configuration files watchdog is already running")
 
         logger.info("Starting the configuration files watchdog")
-        self._update_cfg_hash()
-        self.thread = Thread(
-            target=self._watchdog_loop,
+        self.task = Task(
+            self._watchdog_loop(),
             name="config_watchdog")
-        self.thread.start()
         logger.debug("Configuration files watchdog successfully started")
 
     def stop_watchdog(self) -> None:
         if not self.started:  # pragma: no cover
             raise RuntimeError("Configuration files watchdog is not running")
 
-        logger.info("Stopping the configuration files watchdog")
-        self._stop_event.set()
-        self.thread.join()
-        self.thread = None
-        logger.debug("Configuration files watchdog successfully stopped")
+        if self.started:
+            logger.info("Stopping the configuration files watchdog")
+            self.task.cancel()
+            self.task = None
+            logger.debug("Configuration files watchdog successfully stopped")
 
-    @contextmanager
-    def config_files_lock(self):
+    @asynccontextmanager
+    async def config_files_lock(self):
         """A context manager that makes sure only one process access file
         content at the time"""
-        with self._config_files_lock:
+        async with self._config_files_lock:
             try:
                 yield
             finally:
-                self._update_cfg_hash()
+                await self._update_cfg_hash()
 
     # API
     def _create_new_ecosystem_uid(self) -> str:
@@ -484,7 +488,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def sun_times(self) -> gv.SunTimes | None:
         return self._sun_times
 
-    def refresh_sun_times(self) -> None:
+    async def refresh_sun_times(self) -> None:
         needed = False
         for ecosystem_config in self._ecosystems_config.values():
             sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
@@ -499,10 +503,11 @@ class EngineConfig(metaclass=SingletonMeta):
         sun_times_data: gv.SunTimesDict | None = None
         logger.debug("Trying to load cached sun times")
         try:
-            with sun_times_file.open("r") as file:
-                payload: SunTimesCacheDict = json.loads(file.read())
-                last_update: datetime = \
-                    datetime.fromisoformat(payload["last_update"]).astimezone()
+            async with aiofiles.open(sun_times_file, "r") as file:
+                data_raw = await file.read()
+            payload: SunTimesCacheDict = json.loads(data_raw)
+            last_update: datetime = \
+                datetime.fromisoformat(payload["last_update"]).astimezone()
         except (FileNotFoundError, JSONDecodeError, KeyError):
             pass
         else:
@@ -510,7 +515,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 sun_times_data = payload["data"]["home"]
                 logger.info("Sun times already up to date")
         if sun_times_data is None:
-            sun_times_data = self.download_sun_times()
+            sun_times_data = await self.download_sun_times()
 
         if sun_times_data is not None:
             def import_daytime_event(daytime_event: DaytimeEvents) -> time:
@@ -537,7 +542,7 @@ class EngineConfig(metaclass=SingletonMeta):
             )
             self._sun_times = None
 
-    def download_sun_times(self) -> gv.SunTimesDict | None:
+    async def download_sun_times(self) -> gv.SunTimesDict | None:
         sun_times_file = get_cache_dir()/"sunrise.json"
         logger.info("Trying to download sun times")
         try:
@@ -554,18 +559,18 @@ class EngineConfig(metaclass=SingletonMeta):
                     "Trying to update sunrise and sunset times on "
                     "sunrise-sunset.org"
                 )
-                with Session() as session:
-                    response = session.get(
-                        url=f"https://api.sunrise-sunset.org/json",
-                        params={
-                            "lat": home_coordinates.latitude,
-                            "lng": home_coordinates.longitude
-                        },
-                        timeout=3.0,
-                    )
-                data = response.json()
+                async with ClientSession() as session:
+                    async with session.get(
+                            url=f"https://api.sunrise-sunset.org/json",
+                            params={
+                                "lat": home_coordinates.latitude,
+                                "lng": home_coordinates.longitude
+                            },
+                            timeout=3.0,
+                    ) as response:
+                        data = await response.json()
                 results: gv.SunTimesDict = data["results"]
-            except ConnectionError:
+            except ClientError:
                 logger.debug(
                     "Failed to update sunrise and sunset times due to a "
                     "connection error"
@@ -576,8 +581,8 @@ class EngineConfig(metaclass=SingletonMeta):
                     "last_update": datetime.now().astimezone().isoformat(),
                     "data": {"home": results},
                 }
-                with open(sun_times_file, "w") as file:
-                    file.write(json.dumps(payload))
+                async with aiofiles.open(sun_times_file, "w") as file:
+                    await file.write(json.dumps(payload))
                 logger.info(
                     "Sunrise and sunset times successfully updated")
                 return results
@@ -712,14 +717,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return gv.LightMethod.fixed
         return safe_enum_from_name(gv.LightMethod, self.sky["lighting"])
 
-    def set_light_method(self, method: gv.LightMethod) -> None:
+    async def set_light_method(self, method: gv.LightMethod) -> None:
         try:
             validated_method = safe_enum_from_name(gv.LightMethod, method)
         except KeyError:
             raise ValueError("'method' is not a valid 'LightMethod'")
         self.sky["lighting"] = validated_method
         if validated_method != gv.LightMethod.fixed:
-            self.general.refresh_sun_times()
+            await self.general.refresh_sun_times()
 
     @property
     def chaos(self) -> gv.ChaosConfig:
@@ -896,7 +901,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         uid = validated_value.pop("uid")
         if uid not in self.IO_dict:
             raise HardwareNotFound
-        self.IO_dict[uid] = validated_value
+        self.IO_dict[uid].update(**validated_value)
 
     def delete_hardware(self, uid: str) -> None:
         """

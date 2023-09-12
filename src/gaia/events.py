@@ -4,7 +4,7 @@ from asyncio import create_task, Event, sleep, Task
 import inspect
 import logging
 import typing as t
-from typing import Callable, cast, Literal, Type
+from typing import Awaitable, Callable, cast, Literal, Type
 import weakref
 
 from pydantic import ValidationError
@@ -313,7 +313,7 @@ class Events(AsyncEventHandler):
         ecosystem_uid: str = data["ecosystem_uid"]
         if ecosystem_uid in self.ecosystems:
             self.logger.debug("Received turn_actuator event")
-            self.ecosystems[ecosystem_uid].turn_actuator(
+            await self.ecosystems[ecosystem_uid].turn_actuator(
                 actuator=data["actuator"],
                 mode=data["mode"],
                 countdown=message.get("countdown", 0.0)
@@ -326,7 +326,7 @@ class Events(AsyncEventHandler):
         if ecosystem_uid in self.ecosystems:
             for management, status in data["data"].items():
                 self.ecosystems[ecosystem_uid].config.set_management(management, status)
-            self.engine.config.save(ConfigType.ecosystems)
+            await self.engine.config.save(ConfigType.ecosystems)
             await self.emit_event("management", ecosystem_uids=[ecosystem_uid])
 
     def get_CRUD_function(
@@ -417,7 +417,7 @@ class Events(AsyncEventHandler):
             return
         try:
             crud_function(data["data"])
-            self.engine.config.save(ConfigType.ecosystems)
+            await self.engine.config.save(ConfigType.ecosystems)
             await self.emit(
                 event="crud_result",
                 data=gv.RequestResult(

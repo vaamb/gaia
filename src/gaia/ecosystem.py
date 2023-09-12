@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from asyncio import Lock
 from datetime import date, datetime, time
 import logging
 import logging.config
-from threading import Lock
 import typing as t
 from typing import cast, TypedDict
 import weakref
@@ -88,7 +88,7 @@ class Ecosystem:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"status={self.status}, engine={self._engine})"
 
-    def _refresh_subroutines(self) -> None:
+    async def _refresh_subroutines(self) -> None:
         # Need to start sensors and lights before other subroutines
         subroutines_ordered = set(subroutines.keys())
         subroutines_needed = subroutines_ordered.intersection(
@@ -96,14 +96,14 @@ class Ecosystem:
         )
         to_stop = self.subroutines_started - subroutines_needed
         for subroutine in to_stop:
-            self.stop_subroutine(subroutine)
+            await self.stop_subroutine(subroutine)
         if not subroutines_needed:
             raise StoppingEcosystem
         for subroutine in self.subroutines_started:
-            self.subroutines[subroutine].refresh_hardware()
+            await self.subroutines[subroutine].refresh_hardware()
         to_start = subroutines_needed - self.subroutines_started
         for subroutine in to_start:
-            self.start_subroutine(subroutine)
+            await self.start_subroutine(subroutine)
 
     """
     API calls
@@ -159,19 +159,17 @@ class Ecosystem:
         except UndefinedParameter:
             return LightMethod.fixed
 
-    def set_light_method(self, value: LightMethod) -> None:
-        self.config.set_light_method(value)
-        self.refresh_lighting_hours(send=True)
+    async def set_light_method(self, value: LightMethod) -> None:
+        await self.config.set_light_method(value)
+        await self.refresh_lighting_hours(send=True)
 
     @property
     def lighting_hours(self) -> LightingHours:
-        with self.lighting_hours_lock:
-            return self._lighting_hours
+        return self._lighting_hours
 
     @lighting_hours.setter
     def lighting_hours(self, value: LightingHours) -> None:
-        with self.lighting_hours_lock:
-            self._lighting_hours = value
+        self._lighting_hours = value
 
     @property
     def light_info(self) -> LightData:
@@ -214,14 +212,14 @@ class Ecosystem:
         """
         self.subroutines[subroutine_name] = subroutines[subroutine_name](self)
 
-    def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
+    async def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Start a Subroutines
 
         :param subroutine_name: The name of the Subroutines to start
         """
-        self.subroutines[subroutine_name].start()
+        await self.subroutines[subroutine_name].start()
 
-    def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
+    async def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutines
 
         :param subroutine_name: The name of the Subroutines to stop
@@ -255,7 +253,7 @@ class Ecosystem:
         self.chaos.intensity = values.intensity
         self.chaos.update()
 
-    def start(self):
+    async def start(self):
         """Start the Ecosystem
 
         When started, the Ecosystem will automatically start and stop the
@@ -263,11 +261,11 @@ class Ecosystem:
         """
         if not self.status:
             try:
-                self.refresh_lighting_hours()
+                await self.refresh_lighting_hours()
                 self.logger.info("Starting the Ecosystem")
-                self._refresh_subroutines()
+                await self._refresh_subroutines()
                 if self.engine.use_message_broker and self.event_handler.registered:
-                    self.event_handler.send_ecosystems_info(self.uid)
+                    await self.event_handler.send_ecosystems_info(self.uid)
                 self.logger.debug(f"Ecosystem successfully started")
                 self._started = True
             except StoppingEcosystem:
@@ -277,13 +275,13 @@ class Ecosystem:
         else:
             raise RuntimeError(f"Ecosystem {self._name} is already running")
 
-    def stop(self):
+    async def stop(self):
         """Stop the Ecosystem"""
         if self.status:
             self.logger.info("Stopping the Ecosystem ...")
             subroutines_to_stop: list[SubroutineNames] = [*subroutines.keys()]
             for subroutine in reversed(subroutines_to_stop):
-                self.subroutines[subroutine].stop()
+                await self.subroutines[subroutine].stop()
             if not any([self.subroutines[subroutine].status
                         for subroutine in self.subroutines]):
                 self.logger.debug("Ecosystem successfully stopped")
@@ -299,7 +297,7 @@ class Ecosystem:
 
     actuator_data = actuator_info
 
-    def turn_actuator(
+    async def turn_actuator(
             self,
             actuator: HardwareType | str,
             mode: ActuatorModePayload | str = ActuatorModePayload.automatic,
@@ -319,7 +317,7 @@ class Ecosystem:
             if validated_actuator == HardwareType.light:
                 if self.get_subroutine_status("light"):
                     light_subroutine: Light = self.subroutines["light"]
-                    light_subroutine.turn_light(
+                    await light_subroutine.turn_light(
                         turn_to=validated_mode, countdown=countdown)
                 else:
                     raise ValueError("Light subroutine is not running")
@@ -329,7 +327,7 @@ class Ecosystem:
             ]:
                 if self.get_subroutine_status("climate"):
                     climate_subroutine: Climate = self.subroutines["climate"]
-                    climate_subroutine.turn_climate_actuator(
+                    await climate_subroutine.turn_climate_actuator(
                         climate_actuator=validated_actuator, turn_to=validated_mode,
                         countdown=countdown)
                 else:
@@ -346,7 +344,7 @@ class Ecosystem:
         else:
             if self.engine.use_message_broker and self.event_handler.registered:
                 try:
-                    self.event_handler.send_actuator_data(
+                    await self.event_handler.send_actuator_data(
                         ecosystem_uids=[self._uid])
                 except Exception as e:
                     msg = e.args[1] if len(e.args) > 1 else e.args[0]
@@ -366,16 +364,17 @@ class Ecosystem:
         return Empty()
 
     # Light
-    def refresh_lighting_hours(self, send: bool = True) -> None:
+    async def refresh_lighting_hours(self, send: bool = True) -> None:
         self.logger.debug("Refreshing sun times")
         time_parameters = self.config.time_parameters
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
         if self.config.light_method == LightMethod.fixed:
-            self.lighting_hours = LightingHours(
-                morning_start=time_parameters.day,
-                evening_end=time_parameters.night,
-            )
+            async with self.lighting_hours_lock:
+                self.lighting_hours = LightingHours(
+                    morning_start=time_parameters.day,
+                    evening_end=time_parameters.night,
+                )
 
         elif self.config.light_method == LightMethod.mimic:
             if self.config.sun_times is None:
@@ -383,13 +382,14 @@ class Ecosystem:
                     "Cannot use lighting method 'place' without sun times available. "
                     "Using 'fixed' method instead."
                 )
-                self.config.set_light_method(LightMethod.fixed)
-                self.refresh_lighting_hours(send=send)
+                await self.config.set_light_method(LightMethod.fixed)
+                await self.refresh_lighting_hours(send=send)
             else:
-                self.lighting_hours = LightingHours(
-                    morning_start=self.config.sun_times.sunrise,
-                    evening_end=self.config.sun_times.sunset,
-                )
+                async with self.lighting_hours_lock:
+                    self.lighting_hours = LightingHours(
+                        morning_start=self.config.sun_times.sunrise,
+                        evening_end=self.config.sun_times.sunset,
+                    )
 
         elif self.config.light_method == LightMethod.elongate:
             if (
@@ -401,19 +401,20 @@ class Ecosystem:
                     "Cannot use lighting method 'elongate' without time parameters set in "
                     "config and sun times available. Using 'fixed' method instead."
                 )
-                self.config.set_light_method(LightMethod.fixed)
-                self.refresh_lighting_hours(send=send)
+                await self.config.set_light_method(LightMethod.fixed)
+                await self.refresh_lighting_hours(send=send)
             else:
                 sunrise = _to_dt(self.config.sun_times.sunrise)
                 sunset = _to_dt(self.config.sun_times.sunset)
                 twilight_begin = _to_dt(self.config.sun_times.twilight_begin)
                 offset = sunrise - twilight_begin
-                self.lighting_hours = LightingHours(
-                    morning_start=time_parameters.day,
-                    morning_end=(sunrise + offset).time(),
-                    evening_start=(sunset - offset).time(),
-                    evening_end=time_parameters.night,
-                )
+                async with self.lighting_hours_lock:
+                    self.lighting_hours = LightingHours(
+                        morning_start=time_parameters.day,
+                        morning_end=(sunrise + offset).time(),
+                        evening_start=(sunset - offset).time(),
+                        evening_end=time_parameters.night,
+                    )
 
         if (
                 send
@@ -421,7 +422,7 @@ class Ecosystem:
                 and self.event_handler.registered
         ):
             try:
-                self.event_handler.send_light_data(
+                await self.event_handler.send_light_data(
                     ecosystem_uids=[self._uid])
             except Exception as e:
                 msg = e.args[1] if len(e.args) > 1 else e.args[0]
