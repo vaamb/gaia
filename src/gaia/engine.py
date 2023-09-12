@@ -21,7 +21,7 @@ from gaia.virtual import get_virtual_ecosystem
 
 
 if t.TYPE_CHECKING:
-    from dispatcher import KombuDispatcher
+    from dispatcher import AsyncDispatcher
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
     from gaia.events import Events
@@ -50,7 +50,7 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Initializing Gaia")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = self.gaia_config.ENGINE_UID
-        self._message_broker: "KombuDispatcher" | None = None
+        self._message_broker: "AsyncDispatcher" | None = None
         self._event_handler: "Events" | None = None
         self._db: "SQLAlchemyWrapper" | None = None
         self.plugins_needed = (
@@ -73,29 +73,45 @@ class Engine(metaclass=SingletonMeta):
     def init_message_broker(self) -> None:
         broker_url = self.gaia_config.AGGREGATOR_COMMUNICATION_URL
         broker_type = broker_url[:broker_url.index("://")]
-        if broker_type not in {"amqp", "redis"}:
-            raise ValueError(f"{broker_type} is not supported")
-        self.logger.info("Initialising the message broker")
-        self.logger.debug("Initializing the dispatcher")
-        if broker_url == "amqp://":
-            broker_url = "amqp://guest:guest@localhost:5672//"
-        elif broker_url == "redis://":
-            broker_url = "redis://localhost:6379/0"
-        try:
-            from dispatcher import KombuDispatcher
-        except ImportError:
-            raise RuntimeError(
-                "Event-dispatcher is required to use the dispatcher. Download it "
-                "from `https://github.com/vaamb/dispatcher` and install it in "
-                "your virtual env"
-            )
-        self.message_broker = KombuDispatcher(
-            "gaia", url=broker_url, queue_options={
-                "name": f"gaia-{self.gaia_config.ENGINE_UID}",
-                # Delete the queue after one week, CRUD requests will be lost
-                #  at this point
-                "expires": 60 * 60 * 24 * 7
-            })
+        if broker_type == "amqp":
+            try:
+                from dispatcher import AsyncAMQPDispatcher
+            except ImportError:
+                raise RuntimeError(
+                    "Event-dispatcher is required to use the dispatcher. "
+                    "Download it from `https://github.com/vaamb/dispatcher` and "
+                    "install it in your virtual env"
+                )
+            if broker_url == "amqp://":
+                broker_url = "amqp://guest:guest@localhost:5672//"
+            self.message_broker = AsyncAMQPDispatcher(
+                "gaia", url=broker_url, queue_options={
+                    "name": f"gaia-{self.gaia_config.ENGINE_UID}",
+                    "durable": True,
+                    "arguments": {
+                        # Delete the queue after one week, CRUD requests will be lost
+                        #  at this point
+                        "x-expires": 60 * 60 * 24 * 7 * 1000,
+                    },
+                })
+        elif broker_type == "redis":
+            try:
+                from dispatcher import AsyncRedisDispatcher
+            except ImportError:
+                raise RuntimeError(
+                    "Event-dispatcher is required to use the dispatcher. "
+                    "Download it from `https://github.com/vaamb/dispatcher` and "
+                    "install it in your virtual env"
+                )
+            if broker_url == "redis://":
+                broker_url = "redis://localhost:6379/0"
+            self.message_broker = AsyncRedisDispatcher(
+                "gaia", url=broker_url, queue_options={
+                    "name": f"gaia-{self.gaia_config.ENGINE_UID}",
+                })
+        else:
+            raise ValueError(
+                f"'{broker_type}' is not supported, it should be AMQP or redis")
         from gaia.events import Events
         events_handler = Events(engine=self)
         self.message_broker.register_event_handler(events_handler)
@@ -110,7 +126,7 @@ class Engine(metaclass=SingletonMeta):
         self.message_broker.stop()
 
     @property
-    def message_broker(self) -> "KombuDispatcher":
+    def message_broker(self) -> "AsyncDispatcher":
         if self._message_broker is None:
             raise AttributeError(
                 "'message_broker' is not valid as the message broker between "
@@ -120,8 +136,8 @@ class Engine(metaclass=SingletonMeta):
         return self._message_broker
 
     @message_broker.setter
-    def message_broker(self, value: "KombuDispatcher" | None) -> None:
-        self._message_broker = value
+    def message_broker(self, broker: "AsyncDispatcher" | None) -> None:
+        self._message_broker = broker
 
     @property
     def use_message_broker(self) -> bool:

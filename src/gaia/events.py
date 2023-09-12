@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+from asyncio import create_task, Event, sleep, Task
 import inspect
 import logging
-from threading import Event, Thread
-from time import sleep
 import typing as t
 from typing import Callable, cast, Literal, Type
 import weakref
 
 from pydantic import ValidationError
 
-from dispatcher import EventHandler
+from dispatcher import AsyncEventHandler
 import gaia_validators as gv
 
 from gaia.config import EcosystemConfig, get_config
@@ -48,7 +47,7 @@ payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
 }
 
 
-class Events(EventHandler):
+class Events(AsyncEventHandler):
     """A class holding all the events coming from event-dispatcher
 
     :param engine: an `Engine` instance
@@ -59,7 +58,7 @@ class Events(EventHandler):
         self.engine: "Engine" = weakref.proxy(engine)
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
-        self._thread: Thread | None = None
+        self._task: Task | None = None
         self._stop_event = Event()
         self.logger = logging.getLogger(f"gaia.events_handler")
 
@@ -72,18 +71,18 @@ class Events(EventHandler):
         return self.engine.use_db
 
     @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise AttributeError("Events thread has not been set up")
-        return self._thread
+    def task(self) -> Task:
+        if self._task is None:
+            AttributeError("Events task has not been set up")
+        return self._task
 
-    @thread.setter
-    def thread(self, thread: Thread | None) -> None:
-        self._thread = thread
+    @task.setter
+    def task(self, task: Task | None) -> None:
+        self._task = task
 
     @property
     def background_tasks_running(self) -> bool:
-        return self._thread is not None
+        return self._task is not None
 
     def validate_payload(
             self,
@@ -113,14 +112,14 @@ class Events(EventHandler):
             return True
         return False
 
-    def emit_event_if_connected(self, event_name: EventNames) -> None:
+    async def emit_event_if_connected(self, event_name: EventNames) -> None:
         if not self.is_connected():
             self.logger.info(
                 f"Events handler not currently connected. Scheduled emission "
                 f"of event '{event_name}' aborted")
             return
         try:
-            self.emit_event(event_name)
+            await self.emit_event(event_name)
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while tying to emit event `{event_name}`. "
@@ -153,52 +152,50 @@ class Events(EventHandler):
     def start_background_tasks(self) -> None:
         self._schedule_jobs()
         self._stop_event.clear()
-        self.thread = Thread(
-            target=self.ping_loop,
+        self.task = create_task(
+            self.ping_loop(),
             name="events_ping")
-        self.thread.start()
 
     def stop_background_tasks(self) -> None:
         self._unschedule_jobs()
         self._stop_event.set()
-        self.thread.join()
-        self.thread = None
+        self.task.cancel()
+        self.task = None
 
-    def ping_loop(self) -> None:
-        sleep(0.1)  # Sleep to allow the end of dispatcher initialization if it directly connects
+    async def ping_loop(self) -> None:
+        await sleep(0.1)  # Sleep to allow the end of dispatcher initialization if it directly connects
         while not self._stop_event.is_set():
-            if self.is_connected():
-                self.ping()
-            sleep(15)
+            await self.ping()
+            await sleep(15)
 
-    def ping(self) -> None:
+    async def ping(self) -> None:
         ecosystems = [ecosystem.uid for ecosystem in self.ecosystems.values()]
-        self.emit("ping", data=ecosystems, ttl=20)
+        await self.emit("ping", data=ecosystems, ttl=20)
 
-    def register(self) -> None:
+    async def register(self) -> None:
         data = gv.EnginePayload(
             engine_uid=get_config().ENGINE_UID,
             address=local_ip_address(),
         ).model_dump()
-        self.emit("register_engine", data=data, ttl=2)
+        await self.emit("register_engine", data=data, ttl=2)
 
-    def send_ecosystems_info(
+    async def send_ecosystems_info(
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
         uids = self.filter_uids(ecosystem_uids)
-        self.send_full_config(uids)
+        await self.send_full_config(uids)
         # self.send_sensors_data(uids)
-        self.send_actuator_data(uids)
-        self.send_light_data(uids)
-        self.send_health_data(uids)
+        await self.send_actuator_data(uids)
+        await self.send_light_data(uids)
+        await self.send_health_data(uids)
 
-    def on_connect(self, environment) -> None:  # noqa
+    async def on_connect(self, environment) -> None:  # noqa
         self.logger.info("Connection to message broker successful")
         if not self.registered:
-            self.register()
+            await self.register()
 
-    def on_disconnect(self, *args) -> None:  # noqa
+    async def on_disconnect(self, *args) -> None:  # noqa
         if self.registered:
             self.logger.warning("Disconnected from server")
         else:
@@ -206,21 +203,21 @@ class Events(EventHandler):
         if self.background_tasks_running:
             self.stop_background_tasks()
 
-    def on_register(self) -> None:
+    async def on_register(self) -> None:
         self.registered = False
         self.logger.info("Received registration request from Ouranos")
-        sleep(1)
-        self.register()
+        await sleep(1)
+        await self.register()
         if not self.background_tasks_running:
             self.start_background_tasks()
 
-    def on_registration_ack(self) -> None:
+    async def on_registration_ack(self) -> None:
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info")
-        self.send_ecosystems_info()
+        await self.send_ecosystems_info()
         self.logger.info("Initial ecosystems info sent")
         if self.use_db:
-            self.send_buffered_data()
+            await self.send_buffered_data()
         self.registered = True
 
 
@@ -260,7 +257,7 @@ class Events(EventHandler):
                 rv.append(payload_dict)
         return rv
 
-    def emit_event(
+    async def emit_event(
             self,
             event_name: EventNames,
             ecosystem_uids: str | list[str] | None = None
@@ -269,48 +266,48 @@ class Events(EventHandler):
         payload = self.get_event_payload(event_name, ecosystem_uids)
         if payload:
             self.logger.debug(f"Payload for event {event_name} sent")
-            return self.emit(event_name, data=payload)
+            return await self.emit(event_name, data=payload)
         else:
             self.logger.debug(f"No payload for event {event_name}")
             return False
 
-    def send_full_config(
+    async def send_full_config(
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
         for cfg in ("base_info", "management", "environmental_parameters", "hardware"):
             cfg = cast(EventNames, cfg)
-            self.emit_event(cfg, ecosystem_uids)
+            await self.emit_event(cfg, ecosystem_uids)
 
-    def send_sensors_data(
+    async def send_sensors_data(
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
-        self.emit_event("sensors_data", ecosystem_uids)
+        await self.emit_event("sensors_data", ecosystem_uids)
 
-    def send_health_data(
+    async def send_health_data(
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
-        self.emit_event("health_data", ecosystem_uids)
+        await self.emit_event("health_data", ecosystem_uids)
 
-    def send_light_data(
+    async def send_light_data(
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
-        self.emit_event("light_data", ecosystem_uids)
+        await self.emit_event("light_data", ecosystem_uids)
 
-    def send_actuator_data(
+    async def send_actuator_data(
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
-        self.emit_event("actuator_data", ecosystem_uids)
+        await self.emit_event("actuator_data", ecosystem_uids)
 
-    def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
+    async def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
         message["actuator"] = gv.HardwareType.light
-        self.on_turn_actuator(message)
+        await self.on_turn_actuator(message)
 
-    def on_turn_actuator(self, message: gv.TurnActuatorPayloadDict) -> None:
+    async def on_turn_actuator(self, message: gv.TurnActuatorPayloadDict) -> None:
         data: gv.TurnActuatorPayloadDict = self.validate_payload(
             message, gv.TurnActuatorPayload)
         ecosystem_uid: str = data["ecosystem_uid"]
@@ -322,7 +319,7 @@ class Events(EventHandler):
                 countdown=message.get("countdown", 0.0)
             )
 
-    def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
+    async def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
         data: gv.ManagementConfigPayloadDict = self.validate_payload(
             message, gv.ManagementConfigPayload)
         ecosystem_uid: str = data["uid"]
@@ -330,7 +327,7 @@ class Events(EventHandler):
             for management, status in data["data"].items():
                 self.ecosystems[ecosystem_uid].config.set_management(management, status)
             self.engine.config.save(ConfigType.ecosystems)
-            self.emit_event("management", ecosystem_uids=[ecosystem_uid])
+            await self.emit_event("management", ecosystem_uids=[ecosystem_uid])
 
     def get_CRUD_function(
             self,
@@ -397,7 +394,7 @@ class Events(EventHandler):
             #"update_place": ,
         }[crud_key]
 
-    def on_crud(self, message: gv.CrudPayloadDict) -> None:
+    async def on_crud(self, message: gv.CrudPayloadDict) -> None:
         data: gv.CrudPayloadDict = self.validate_payload(
             message, gv.CrudPayload)
         crud_uuid = data["uuid"]
@@ -421,7 +418,7 @@ class Events(EventHandler):
         try:
             crud_function(data["data"])
             self.engine.config.save(ConfigType.ecosystems)
-            self.emit(
+            await self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
                     uuid=crud_uuid,
@@ -438,10 +435,10 @@ class Events(EventHandler):
                     f"on target '{data['target']}' was found. New data won't be "
                     f"sent to Ouranos")
             else:
-                self.emit_event(
+                await self.emit_event(
                     event_name=event_name, ecosystem_uids=ecosystem_uid)
         except Exception as e:
-            self.emit(
+            await self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
                     uuid=crud_uuid,
@@ -459,7 +456,7 @@ class Events(EventHandler):
                 "parameter 'USE_DATABASE' to 'True'")
         with self.db.scoped_session() as session:
             for data in SensorBuffer.get_buffered_data(session):
-                self.emit(
+                await self.emit(
                     event="buffered_sensors_data", data=data)
 
     def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
