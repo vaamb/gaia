@@ -3,6 +3,7 @@ from __future__ import annotations
 from json.decoder import JSONDecodeError
 import logging
 import logging.config
+import signal
 from threading import Event, Thread
 from time import sleep
 import typing as t
@@ -23,6 +24,12 @@ if t.TYPE_CHECKING:
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
     from gaia.events import Events
+
+
+SIGNALS = (
+    signal.SIGINT,
+    signal.SIGTERM,
+)
 
 
 class Engine(metaclass=SingletonMeta):
@@ -478,6 +485,9 @@ class Engine(metaclass=SingletonMeta):
             self._stop_background_tasks()
             self.logger.info("The Engine has stopped")
 
+    def stop_and_clear(self) -> None:
+        self.stop(stop_ecosystems=True, clear_engine=True)
+
     def wait(self):
         if self.started:
             self.logger.info("Running")
@@ -486,6 +496,11 @@ class Engine(metaclass=SingletonMeta):
         else:
             raise RuntimeError("Gaia needs to be started in order to wait")
 
-    def run(self):
+    def add_signal_handler(self) -> None:
+        for sig in SIGNALS:
+            signal.signal(sig, self.stop_and_clear)
+
+    def run(self) -> None:
+        self.add_signal_handler()
         self.start()
         self.wait()
