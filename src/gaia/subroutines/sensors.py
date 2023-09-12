@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 from asyncio import create_task, sleep, Lock, Task
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from statistics import mean
 from time import monotonic
@@ -112,12 +112,9 @@ class Sensors(SubroutineTemplate):
         to_average: dict[str, list[float]] = {}
         cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
         cache["records"] = []
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(hardware.get_data)
-                for hardware in self.hardware.values()
-            ]
-            sensors_data = [future.result() for future in futures]
+        sensors_data = await asyncio.gather(*[
+            hardware.get_data() for hardware in self.hardware.values()
+        ])
         for sensor in sensors_data:
             cache["records"].extend(
                 sensor_record for sensor_record in sensor
