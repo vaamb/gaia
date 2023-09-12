@@ -21,9 +21,8 @@ def main():
     gaia_engine = Engine()
     try:
         logger.info("Starting Gaia")
-        gaia_engine.start()
+        gaia_engine.run()
         logger.info("GAIA started successfully")
-        gaia_engine.wait()
     finally:
         logger.info("Stopping")
         gaia_engine.stop()

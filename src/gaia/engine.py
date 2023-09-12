@@ -485,3 +485,7 @@ class Engine(metaclass=SingletonMeta):
                 sleep(1)
         else:
             raise RuntimeError("Gaia needs to be started in order to wait")
+
+    def run(self):
+        self.start()
+        self.wait()
