@@ -7,15 +7,16 @@ import signal
 from threading import Event, Thread
 from time import sleep
 import typing as t
+from typing import Type
 import weakref
 
 from gaia.config import (
-    EngineConfig, get_cache_dir, get_config, get_ecosystem_IDs)
+    EngineConfig, GaiaConfig, get_cache_dir, get_config, get_ecosystem_IDs)
 from gaia.config.from_files import config_condition, detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import get_scheduler, start_scheduler
-from gaia.utils import json, SingletonMeta
+from gaia.utils import configure_logging, json, SingletonMeta
 from gaia.virtual import get_virtual_ecosystem
 
 
@@ -43,17 +44,18 @@ class Engine(metaclass=SingletonMeta):
     def __init__(self) -> None:
         self._config: EngineConfig = weakref.proxy(EngineConfig())
         self._config.engine = self
+        self.gaia_config: Type[GaiaConfig] = get_config()
+        configure_logging(self.gaia_config)
         self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
         self.logger.debug("Initializing")
         self._ecosystems: dict[str, Ecosystem] = {}
-        self._uid: str = get_config().ENGINE_UID
+        self._uid: str = self.gaia_config.ENGINE_UID
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
-        gaia_config = get_config()
-        if gaia_config.COMMUNICATE_WITH_OURANOS:
+        if self.gaia_config.COMMUNICATE_WITH_OURANOS:
             self._init_message_broker()
         self._db: "SQLAlchemyWrapper" | None = None
-        if gaia_config.USE_DATABASE:
+        if self.gaia_config.USE_DATABASE:
             self._init_database()
         self._thread: Thread | None = None
         self._started_event = Event()
@@ -68,8 +70,7 @@ class Engine(metaclass=SingletonMeta):
     #   Events dispatcher
     # ---------------------------------------------------------------------------
     def _init_message_broker(self) -> None:
-        gaia_config = get_config()
-        broker_url = gaia_config.AGGREGATOR_COMMUNICATION_URL
+        broker_url = self.gaia_config.AGGREGATOR_COMMUNICATION_URL
         broker_type = broker_url[:broker_url.index("://")]
         if broker_type not in {"amqp", "redis"}:
             raise ValueError(f"{broker_type} is not supported")
@@ -89,7 +90,7 @@ class Engine(metaclass=SingletonMeta):
             )
         self.message_broker = KombuDispatcher(
             "gaia", url=broker_url, queue_options={
-                "name": f"gaia-{gaia_config.ENGINE_UID}",
+                "name": f"gaia-{self.gaia_config.ENGINE_UID}",
                 # Delete the queue after one week, CRUD requests will be lost
                 #  at this point
                 "expires": 60 * 60 * 24 * 7
@@ -140,9 +141,9 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Initialising the database")
         from gaia.database import routines, db
         self.db = db
-        self.db.init(get_config())
+        self.db.init(self.gaia_config)
         self.db.create_all()
-        if get_config().SENSORS_LOGGING_PERIOD:
+        if self.gaia_config.SENSORS_LOGGING_PERIOD:
             scheduler = get_scheduler()
             scheduler.add_job(
                 routines.log_sensors_data,
@@ -192,7 +193,7 @@ class Engine(metaclass=SingletonMeta):
         scheduler.shutdown()
 
     def _engine_startup(self) -> None:
-        if get_config().VIRTUALIZATION:
+        if self.gaia_config.VIRTUALIZATION:
             for ecosystem_uid in self.config.ecosystems_uid:
                 get_virtual_ecosystem(ecosystem_uid, start=True)
         self.refresh_ecosystems()

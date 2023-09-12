@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Type
 
-from gaia.config import GaiaConfig, get_config
-from gaia.engine import Engine
-from gaia.utils import configure_logging
+from gaia import Engine
 
 
 def main():
     from setproctitle import setproctitle
 
     setproctitle("gaia")
-
-    config_cls: Type[GaiaConfig] = get_config()
-    configure_logging(config_cls)
 
     logger = logging.getLogger("gaia")
     logger.info("Initializing Gaia")
