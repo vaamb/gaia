@@ -5,7 +5,7 @@ import io
 import typing as t
 
 from gaia_validators import (
-    ActuatorMode, ActuatorModePayload, Empty, HardwareConfig, HealthRecord)
+    ActuatorMode, ActuatorModePayload, Empty, HealthRecord)
 
 from gaia.config import get_config
 from gaia.hardware import camera_models
@@ -22,6 +22,7 @@ class Health(SubroutineTemplate):
     # TODO: fix
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.hardware_choices = camera_models
         self.hardware: dict[str, Camera]
         self._plants_health: HealthRecord | Empty = Empty()
         self._imageIO = io.BytesIO()
@@ -115,9 +116,6 @@ class Health(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_config: HardwareConfig) -> None:
-        self._add_hardware(hardware_config, camera_models)
-
     def get_hardware_needed_uid(self) -> set[str]:
         # TODO
         pass

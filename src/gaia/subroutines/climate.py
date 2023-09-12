@@ -8,7 +8,7 @@ from typing import cast, Literal, TypedDict
 from simple_pid import PID
 
 from gaia_validators import (
-    ActuatorModePayload, Empty, HardwareConfig, HardwareType, LightData,
+    ActuatorModePayload, Empty, HardwareType, LightData,
     LightingHours, safe_enum_from_name)
 
 from gaia.exceptions import UndefinedParameter
@@ -97,6 +97,7 @@ PID_THRESHOLD = 5
 class Climate(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.hardware_choices = actuator_models
         self._sensor_miss: int = 0
         self.actuators: ClimateActuators = self._setup_actuators()
         self._parameters: ClimateParameters = climate_parameters_template()
@@ -366,9 +367,6 @@ class Climate(SubroutineTemplate):
         scheduler.remove_job(job_id=f"{self._ecosystem_name}-climate")
 
     """API calls"""
-    def add_hardware(self, hardware_config: HardwareConfig) -> None:
-        self._add_hardware(hardware_config, actuator_models)
-
     def remove_hardware(self, hardware_uid: str) -> None:
         try:
             del self.hardware[hardware_uid]

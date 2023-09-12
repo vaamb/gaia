@@ -8,8 +8,7 @@ import typing as t
 from typing import cast
 
 from gaia_validators import (
-    Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict,
-    SensorRecord)
+    Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict)
 
 from gaia.config import get_config
 from gaia.hardware import sensor_models
@@ -27,6 +26,7 @@ lock = Lock()
 class Sensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.hardware_choices = sensor_models
         self.hardware: dict[str, BaseSensor]
         self._thread: Thread | None = None
         self._stop_event = Event()
@@ -98,7 +98,7 @@ class Sensors(SubroutineTemplate):
         if get_config().VIRTUALIZATION:
             if not model.startswith("virtual"):
                 hardware_config.model = f"virtual{model}"
-        return self._add_hardware(hardware_config, sensor_models)
+        return super().add_hardware(hardware_config)
 
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids("sensor"))
