@@ -4,7 +4,8 @@ from gaia_validators import SensorRecord
 
 from gaia.hardware.abc import BaseSensor
 from gaia.utils import (
-    get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
+    get_absolute_humidity, get_dew_point, get_unit, run_sync_as_async,
+    temperature_converter)
 
 
 class TempHumSensor(BaseSensor):
@@ -13,8 +14,8 @@ class TempHumSensor(BaseSensor):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[SensorRecord]:
-        raw_humidity, raw_temperature = self._get_raw_data()
+    async def get_data(self) -> list[SensorRecord]:
+        raw_humidity, raw_temperature = await run_sync_as_async(self._get_raw_data)
         data = []
         if "humidity" in self.measures:
             data.append(SensorRecord(

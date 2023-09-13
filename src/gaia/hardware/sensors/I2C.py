@@ -4,13 +4,15 @@ from time import sleep
 import typing as t
 from typing import Type
 
+from greenletio import patch_blocking
+
 from gaia_validators import SensorRecord
 
 from gaia.hardware.abc import (
     BaseSensor, hardware_logger, i2cSensor, LightSensor, PlantLevelHardware)
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
-from gaia.utils import get_unit, temperature_converter
+from gaia.utils import get_unit, run_sync_as_async, temperature_converter
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -37,14 +39,16 @@ class AHT20(TempHumSensor, i2cSensor):
     def _get_device(self) -> "AHTx0":
         if is_raspi():
             try:
-                from adafruit_ahtx0 import AHTx0
+                with patch_blocking():
+                    from adafruit_ahtx0 import AHTx0
             except ImportError:
                 raise RuntimeError(
                     "Adafruit aht0 package is required. Run `pip install "
                     "adafruit-circuitpython-ahtx0` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import AHTx0
+            with patch_blocking():
+                from gaia.hardware._compatibility import AHTx0
         return AHTx0(self._get_i2c(), self._address_book.primary.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
@@ -67,14 +71,16 @@ class ENS160(i2cSensor):
     def _get_device(self) -> "_ENS160":
         if is_raspi():
             try:
-                from adafruit_ens160 import ENS160 as _ENS160
+                with patch_blocking():
+                    from adafruit_ens160 import ENS160 as _ENS160
             except ImportError:
                 raise RuntimeError(
                     "Adafruit ens160 package is required. Run `pip install "
                     "adafruit-circuitpython-ens160` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import _ENS160
+            with patch_blocking():
+                from gaia.hardware._compatibility import _ENS160
         return _ENS160(self._get_i2c(), self._address_book.primary.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None, float | None]:
@@ -101,10 +107,10 @@ class ENS160(i2cSensor):
         self.device.temperature_compensation = temperature
         self.device.humidity_compensation = humidity
 
-    def get_data(self) -> list[SensorRecord]:
+    async def get_data(self) -> list[SensorRecord]:
         # TODO: access temperature and humidity data to compensate
         data = []
-        AQI, eCO2, TVOC = self._get_raw_data()
+        AQI, eCO2, TVOC = await run_sync_as_async(self._get_raw_data)
         if "AQI" in self.measures:
             data.append(SensorRecord(
                 sensor_uid=self.uid,
@@ -137,34 +143,39 @@ class VEML7700(i2cSensor, LightSensor):
     def _get_device(self) -> "_VEML7700":
         if is_raspi():
             try:
-                from adafruit_veml7700 import VEML7700 as _VEML7700
+                with patch_blocking():
+                    from adafruit_veml7700 import VEML7700 as _VEML7700
             except ImportError:
                 raise RuntimeError(
                     "Adafruit veml7700 package is required. Run `pip install "
                     "adafruit-circuitpython-veml7700` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import VEML7700 as _VEML7700
+            with patch_blocking():
+                from gaia.hardware._compatibility import VEML7700 as _VEML7700
         return _VEML7700(self._get_i2c(), self._address_book.primary.main)
 
     # To catch data fast from light routine
-    def get_lux(self) -> float | None:
-        try:
-            return round(self.device.lux, 2)
-        except Exception as e:
-            hardware_logger.error(
-                f"Sensor {self._name} encountered an error. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-            return None
+    async def get_lux(self) -> float | None:
+        def _wrapper():
+            try:
+                return round(self.device.lux, 2)
+            except Exception as e:
+                hardware_logger.error(
+                    f"Sensor {self._name} encountered an error. "
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                )
+                return None
 
-    def get_data(self) -> list[SensorRecord]:
+        return await run_sync_as_async(_wrapper)
+
+    async def get_data(self) -> list[SensorRecord]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
             data.append(SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
-                value=self.get_lux()
+                value=await self.get_lux()
             ))
         return data
 
@@ -178,34 +189,39 @@ class VCNL4040(i2cSensor, LightSensor):
     def _get_device(self) -> "_VCNL4040":
         if is_raspi():
             try:
-                from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
+                with patch_blocking():
+                    from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
             except ImportError:
                 raise RuntimeError(
                     "Adafruit vcnl4040 package is required. Run `pip install "
                     "adafruit-circuitpython-vcnl4040` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
+            with patch_blocking():
+                from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
         return _VCNL4040(self._get_i2c(), self._address_book.primary.main)
 
     # To catch data fast from light routine
-    def get_lux(self) -> float | None:
-        try:
-            return round(self.device.lux, 2)
-        except Exception as e:
-            hardware_logger.error(
-                f"Sensor {self._name} encountered an error. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-            return None
+    async def get_lux(self) -> float | None:
+        def _wrapper():
+            try:
+                return round(self.device.lux, 2)
+            except Exception as e:
+                hardware_logger.error(
+                    f"Sensor {self._name} encountered an error. "
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                )
+                return None
 
-    def get_data(self) -> list[SensorRecord]:
+        return await run_sync_as_async(_wrapper)
+
+    async def get_data(self) -> list[SensorRecord]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
             data.append(SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
-                value=self.get_lux()
+                value=await self.get_lux()
             ))
         return data
 
@@ -219,17 +235,19 @@ class CapacitiveSensor(i2cSensor):
     def _get_device(self) -> "Seesaw":
         if is_raspi():
             try:
-                from adafruit_seesaw.seesaw import Seesaw
+                with patch_blocking():
+                    from adafruit_seesaw.seesaw import Seesaw
             except ImportError:
                 raise RuntimeError(
                     "Adafruit seesaw package is required. Run `pip install "
                     "adafruit-circuitpython-seesaw` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import Seesaw
+            with patch_blocking():
+                from gaia.hardware._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self._address_book.primary.main)
 
-    def get_data(self) -> list[SensorRecord]:
+    async def get_data(self) -> list[SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -263,9 +281,9 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                 break
         return moisture, temperature
 
-    def get_data(self) -> list[SensorRecord]:
+    async def get_data(self) -> list[SensorRecord]:
         try:
-            moisture, raw_temperature = self._get_raw_data()
+            moisture, raw_temperature = await run_sync_as_async(self._get_raw_data)
         except RuntimeError:
             moisture = raw_temperature = None
         data = []

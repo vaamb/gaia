@@ -11,13 +11,15 @@ class gpioSwitch(gpioHardware, Switch):
         super().__init__(*args, **kwargs)
         self.pin.init(mode=self.OUT)
 
-    def turn_on(self) -> None:
+    async def turn_on(self) -> None:
         self.pin.value(val=1)
+        # TODO: remove
         if get_config().VIRTUALIZATION:
             get_virtual_ecosystem(self.subroutine.ecosystem.uid)._light = True
 
-    def turn_off(self) -> None:
+    async def turn_off(self) -> None:
         self.pin.value(val=0)
+        # TODO: remove
         if get_config().VIRTUALIZATION:
             get_virtual_ecosystem(self.subroutine.ecosystem.uid)._light = False
 
