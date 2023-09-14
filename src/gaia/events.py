@@ -61,14 +61,14 @@ class Events(EventHandler):
         self._thread: Thread | None = None
         self._stop_event = Event()
         self.logger = logging.getLogger(f"gaia.events_handler")
-        self.db: "SQLAlchemyWrapper" | None
-        if get_config().USE_DATABASE:
-            from gaia.database.models import db
-            self.db = db
-            self.db.init(get_config())
-            self.db.create_all()
-        else:
-            self.db = None
+
+    @property
+    def db(self) -> "SQLAlchemyWrapper":
+        return self.engine.db
+
+    @property
+    def use_db(self) -> bool:
+        return self.engine.use_db
 
     @property
     def thread(self) -> Thread:
@@ -217,7 +217,7 @@ class Events(EventHandler):
             "Engine registration successful, sending initial ecosystems info")
         self.send_ecosystems_info()
         self.logger.info("Initial ecosystems info sent")
-        if self.db:
+        if self.use_db:
             self.send_buffered_data()
         self.registered = True
 
@@ -450,7 +450,7 @@ class Events(EventHandler):
                 f"CRUD request '{crud_uuid}' could not be treated")
 
     def send_buffered_data(self) -> None:
-        if self.db is None:
+        if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'")
@@ -460,7 +460,7 @@ class Events(EventHandler):
                     event="buffered_sensors_data", data=data)
 
     def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
-        if self.db is None:
+        if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'")

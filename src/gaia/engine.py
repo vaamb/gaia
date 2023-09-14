@@ -52,11 +52,7 @@ class Engine(metaclass=SingletonMeta):
         self._uid: str = self.gaia_config.ENGINE_UID
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
-        if self.gaia_config.COMMUNICATE_WITH_OURANOS:
-            self._init_message_broker()
         self._db: "SQLAlchemyWrapper" | None = None
-        if self.gaia_config.USE_DATABASE:
-            self._init_database()
         self._thread: Thread | None = None
         self._started_event = Event()
 
@@ -173,7 +169,6 @@ class Engine(metaclass=SingletonMeta):
     def _start_background_tasks(self) -> None:
         self.logger.debug("Starting background tasks")
         self.config.start_watchdog()
-        self.refresh_sun_times()
         scheduler = get_scheduler()
         scheduler.add_job(self.refresh_sun_times, "cron",
                           hour="1", misfire_grace_time=15 * 60,
@@ -433,6 +428,13 @@ class Engine(metaclass=SingletonMeta):
         except (FileNotFoundError, JSONDecodeError):  # Empty or absent file
             pass
 
+    def init_plugins(self):
+        if self.gaia_config.COMMUNICATE_WITH_OURANOS:
+            self._init_message_broker()
+            self.message_broker.start(retry=True, block=False)
+        if self.gaia_config.USE_DATABASE:
+            self._init_database()
+
     def start(self) -> None:
         """Start the Engine
 
@@ -442,9 +444,8 @@ class Engine(metaclass=SingletonMeta):
         """
         if not self.started:
             self.logger.info("Starting the Engine ...")
+            self.refresh_sun_times()
             self._start_background_tasks()
-            if self.use_message_broker:
-                self.message_broker.start(retry=True, block=False)
             self._engine_startup()
             self._started_event.set()
             self.thread = Thread(target=self._loop)
