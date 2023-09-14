@@ -64,7 +64,7 @@ class Address:
         :param address_string: properly written address. cf the _hint method
                                to see different address formats possible
         """
-        address_components = address_string.split("_")
+        address_components = address_string.split("_", maxsplit=2)
         if len(address_components) != 2:
             raise ValueError(self._hint())
 
@@ -103,12 +103,16 @@ class Address:
         Here are some examples for the different address types:
         GPIO:
             Board numbers: "BOARD_37"
+                    where "37" is the pin number using the board notation
             BCM/GPIO numbers: "BCM_27"  == "GPIO_27"
+                    where "32" is the pin number using the gpio notation
         I2C:
             Without a multiplexer: "I2C_0x10"
-            With a multiplexer: "I2C_0x70#1.0x10", where "0x70" is the
-                                address of the multiplexer and "1" the
-                                channel used
+                    where "0x10" is the address of the hardware in hexadecimal
+            With a multiplexer: "I2C_0x70#1_0x10"
+                    where "0x70" is the address of the multiplexer in hexadecimal,
+                    "1" the channel used and "0x10" the address of the hardware
+                    in hexadecimal
         SPI:
             Not implemented yet
         """
@@ -150,14 +154,18 @@ class Address:
                 main = number
         # I2C type address
         elif address_type == AddressType.I2C:
-            i2c_components = re.split("[#.]", numbers_str)
-            if len(i2c_components) == 1:
-                main = str_to_hex(i2c_components[0])
-            elif len(i2c_components) == 3:
-                multiplexer_address = str_to_hex(i2c_components[0])
-                multiplexer_channel = str_to_hex(i2c_components[1])
-                main = str_to_hex(i2c_components[2])
-            else:
+            i2c_components = numbers_str.split("_")
+            try:
+                if len(i2c_components) == 1:
+                    main = str_to_hex(i2c_components[0])
+                elif len(i2c_components) == 2:
+                    multiplexer_components = i2c_components[0].split("#")
+                    multiplexer_address = str_to_hex(multiplexer_components[0])
+                    multiplexer_channel = int(multiplexer_components[1])
+                    main = str_to_hex(i2c_components[1])
+                else:
+                    raise ValueError
+            except ValueError:
                 raise ValueError(self._hint())
         return address_type, main, multiplexer_address, multiplexer_channel
 
