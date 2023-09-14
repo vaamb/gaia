@@ -449,25 +449,25 @@ class Events(AsyncEventHandler):
             self.logger.info(
                 f"CRUD request '{crud_uuid}' could not be treated")
 
-    def send_buffered_data(self) -> None:
+    async def send_buffered_data(self) -> None:
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'")
-        with self.db.scoped_session() as session:
-            for data in SensorBuffer.get_buffered_data(session):
+        async with self.db.scoped_session() as session:
+            async for data in SensorBuffer.get_buffered_data(session):
                 await self.emit(
                     event="buffered_sensors_data", data=data)
 
-    def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
+    async def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'")
         data: gv.RequestResultDict = self.validate_payload(
             message, gv.RequestResult)
-        with self.db.scoped_session() as session:
+        async with self.db.scoped_session() as session:
             if data["status"] == gv.Result.success:
-                SensorBuffer.clear_buffer(session, data["uuid"])
+                await SensorBuffer.clear_buffer(session, data["uuid"])
             else:
-                SensorBuffer.clear_uuid(session, data["uuid"])
+                await SensorBuffer.clear_uuid(session, data["uuid"])

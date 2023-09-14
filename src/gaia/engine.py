@@ -23,7 +23,7 @@ from gaia.virtual import get_virtual_ecosystem
 
 if t.TYPE_CHECKING:
     from dispatcher import AsyncDispatcher
-    from sqlalchemy_wrapper import SQLAlchemyWrapper
+    from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
     from gaia.events import Events
 
@@ -53,7 +53,7 @@ class Engine(metaclass=SingletonMeta):
         self._uid: str = self.gaia_config.ENGINE_UID
         self._message_broker: "AsyncDispatcher" | None = None
         self._event_handler: "Events" | None = None
-        self._db: "SQLAlchemyWrapper" | None = None
+        self._db: "AsyncSQLAlchemyWrapper" | None = None
         self.plugins_needed = (
             self.gaia_config.USE_DATABASE
             or self. gaia_config.COMMUNICATE_WITH_OURANOS
@@ -163,7 +163,7 @@ class Engine(metaclass=SingletonMeta):
         from gaia.database import db
         self.db = db
         self.db.init(self.gaia_config)
-        self.db.create_all()
+        await self.db.create_all()
 
     async def start_database(self) -> None:
         from gaia.database import routines
@@ -180,7 +180,7 @@ class Engine(metaclass=SingletonMeta):
         scheduler.remove_job("log_sensors_data")
 
     @property
-    def db(self) -> "SQLAlchemyWrapper":
+    def db(self) -> "AsyncSQLAlchemyWrapper":
         if self._db is None:
             raise AttributeError(
                 "'db' is not valid as the database is currently not used. To use "
@@ -188,7 +188,7 @@ class Engine(metaclass=SingletonMeta):
         return self._db
 
     @db.setter
-    def db(self, value: "SQLAlchemyWrapper" | None) -> None:
+    def db(self, value: "AsyncSQLAlchemyWrapper" | None) -> None:
         self._db = value
 
     @property

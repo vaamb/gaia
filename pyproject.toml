@@ -12,6 +12,7 @@ dependencies = [
     "adafruit-blinka~=8.20.0",
     "aiofiles~=23.2.1",
     "aiohttp~=3.8.5",
+    "aiosqlite~=0.19.0",
     "apscheduler~=3.7.0",
     "cryptography~=40.0.1",
     "greenletio~=0.10.1",
@@ -35,7 +36,6 @@ database = [
     "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git",
 ]
 dispatcher = [
-    "kombu~=5.3.1",
     "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git",
 ]
 test = [

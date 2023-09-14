@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import typing as t
 from typing import Callable
 
-from sqlalchemy.orm import scoped_session, Session
+from sqlalchemy.ext.asyncio import async_scoped_session, AsyncSession
 
 from gaia_validators import SensorsData
 
@@ -17,12 +17,12 @@ if t.TYPE_CHECKING:
 sensors_logging_period = get_config().SENSORS_LOGGING_PERIOD
 
 
-def log_sensors_data(
-        scoped_session_: Callable[..., scoped_session],
+async def log_sensors_data(
+        scoped_session_: Callable[..., async_scoped_session],
         engine: "Engine"
 ) -> None:
-    with scoped_session_() as session:
-        session: Session
+    async with scoped_session_() as session:
+        session: AsyncSession
         for ecosystem_uid, ecosystem in engine.ecosystems.items():
             sensors_data = ecosystem.sensors_data
             database_management = ecosystem.config.get_management("database")
@@ -48,4 +48,4 @@ def log_sensors_data(
                         ):
                             sensor_buffer = SensorBuffer(**formatted_data)
                             session.add(sensor_buffer)
-        session.commit()
+        await session.commit()
