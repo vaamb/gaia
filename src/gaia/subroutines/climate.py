@@ -359,12 +359,12 @@ class Climate(SubroutineTemplate):
         scheduler.add_job(
             self._climate_routine,
             trigger="cron", minute="*", misfire_grace_time=10,
-            id=f"{self._ecosystem_name}-climate"
+            id=f"{self.ecosystem.name}-climate"
         )
 
     def _stop(self) -> None:
         scheduler = get_scheduler()
-        scheduler.remove_job(job_id=f"{self._ecosystem_name}-climate")
+        scheduler.remove_job(job_id=f"{self.ecosystem.name}-climate")
 
     """API calls"""
     def remove_hardware(self, hardware_uid: str) -> None:
