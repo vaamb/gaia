@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import date, datetime, time
 from enum import Enum
+import hashlib
 from json.decoder import JSONDecodeError
 import logging
 import pathlib
@@ -26,13 +27,14 @@ from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
 from gaia.subroutines import subroutines
-from gaia.utils import (
-    file_hash, json, SingletonMeta, utc_time_to_local_time, yaml)
+from gaia.utils import json, SingletonMeta, utc_time_to_local_time, yaml
 
 
 if t.TYPE_CHECKING:
     from gaia.engine import Engine
 
+
+logger = logging.getLogger("gaia.config.environments")
 
 config_condition = Condition()
 
@@ -42,7 +44,15 @@ class ConfigType(Enum):
     private = "_private_config"
 
 
-logger = logging.getLogger("gaia.config.environments")
+def _file_hash(file_path: pathlib.Path) -> str:
+    try:
+        h = hashlib.md5(usedforsecurity=False)
+        with open(file_path, "rb") as f:
+            for block in iter(lambda: f.read(4096), b""):
+                h.update(block)
+        return h.hexdigest()
+    except FileNotFoundError:
+        return "0x0"
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +246,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def _update_cfg_hash(self) -> None:
         for cfg_type in ConfigType:
             path = self._base_dir/f"{cfg_type.name}.cfg"
-            self._hash_dict[cfg_type] = file_hash(path)
+            self._hash_dict[cfg_type] = _file_hash(path)
 
     def _watchdog_loop(self) -> None:
         while not self._stop_event.is_set():
