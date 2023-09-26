@@ -387,6 +387,7 @@ class Climate(SubroutineTemplate):
             actuator: HardwareType,
             mode: ActuatorModePayload
     ) -> None:
+        # TODO
         pass
 
     def update_climate_parameters(self) -> None:
