@@ -8,7 +8,7 @@ from json.decoder import JSONDecodeError
 import logging
 import pathlib
 import random
-import requests
+from requests import ConnectionError, Session
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
@@ -534,17 +534,18 @@ class EngineConfig(metaclass=SingletonMeta):
                     "Trying to update sunrise and sunset times on "
                     "sunrise-sunset.org"
                 )
-                response = requests.get(
-                    url=f"https://api.sunrise-sunset.org/json",
-                    params={
-                        "lat": home_coordinates.latitude,
-                        "lng": home_coordinates.longitude
-                    },
-                    timeout=3.0,
-                )
+                with Session() as session:
+                    response = session.get(
+                        url=f"https://api.sunrise-sunset.org/json",
+                        params={
+                            "lat": home_coordinates.latitude,
+                            "lng": home_coordinates.longitude
+                        },
+                        timeout=3.0,
+                    )
                 data = response.json()
                 results: gv.SunTimesDict = data["results"]
-            except requests.exceptions.ConnectionError:
+            except ConnectionError:
                 logger.debug(
                     "Failed to update sunrise and sunset times due to a "
                     "connection error"
