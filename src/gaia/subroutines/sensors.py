@@ -5,7 +5,6 @@ from statistics import mean
 from threading import Event, Lock, Thread
 from time import monotonic
 import typing as t
-from typing import cast
 
 from gaia_validators import (
     Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict)
@@ -77,7 +76,7 @@ class Sensors(SubroutineTemplate):
         self.thread.join()
         self.thread = None
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine = cast("Climate", self.ecosystem.subroutines["climate"])
+            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.stop()
         self.hardware = {}
 
@@ -106,7 +105,7 @@ class Sensors(SubroutineTemplate):
     def refresh_hardware(self) -> None:
         super().refresh_hardware()
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine = cast("Climate", self.ecosystem.subroutines["climate"])
+            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.refresh_hardware()
 
     def update_sensors_data(self) -> None:

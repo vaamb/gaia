@@ -20,7 +20,7 @@ from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    pass
+    from gaia.subroutines.sensors import Sensors
 
 
 ClimateParameterNames = Literal["temperature", "humidity"]
@@ -270,7 +270,7 @@ class Climate(SubroutineTemplate):
                 self._check_misses()
                 return
 
-        sensors_subroutine = cast("Sensors", self.ecosystem.subroutines["sensors"])
+        sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
         sensors_data = sensors_subroutine.sensors_data
         if isinstance(sensors_data, Empty):
             self.logger.debug(
