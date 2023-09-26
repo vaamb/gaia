@@ -868,7 +868,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             base = self.IO_dict[uid].copy()
             base.update(non_null_value)
             validated_value = gv.HardwareConfig(uid=uid, **base).model_dump()
-            self.IO_dict[uid] = validated_value
+            self.IO_dict[uid].update(**validated_value)
         except KeyError:
             raise HardwareNotFound
 
