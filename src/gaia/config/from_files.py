@@ -308,17 +308,15 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def _create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
-        ecosystem_cfg = EcosystemConfigValidator(name=ecosystem_name).dict()
+        ecosystem_cfg = EcosystemConfigValidator(name=ecosystem_name).model_dump()
         self._ecosystems_config.update({uid: ecosystem_cfg})
 
     def create_ecosystem(self, ecosystem_name: str) -> None:
         self._create_ecosystem(ecosystem_name)
-        self.save(ConfigType.ecosystems)
 
     def delete_ecosystem(self, ecosystem_id: str) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
         del self._ecosystems_config[ecosystem_ids.uid]
-        self.save(ConfigType.ecosystems)
 
     @property
     def ecosystems_config(self) -> dict[str, EcosystemConfigDict]:
@@ -414,15 +412,14 @@ class EngineConfig(metaclass=SingletonMeta):
                 latitude=coordinates[0],
                 longitude=coordinates[1]
             )
-        validated_coordinates: CoordinatesDict = CoordinatesValidator(**coordinates).dict()
+        validated_coordinates: CoordinatesDict = CoordinatesValidator(
+            **coordinates).model_dump()
         self.places[place] = validated_coordinates
-        self.save(ConfigType.private)
 
     def CRUD_create_place(self, value: PlaceDict):
         validated_value: PlaceDict = PlaceValidator(**value).model_dump()
         place = validated_value.pop("name")
         self.places[place] = validated_value["coordinates"]
-        self.save(ConfigType.private)
 
     def CRUD_update_place(self, value: PlaceDict) -> None:
         validated_value: PlaceDict = PlaceValidator(**value).model_dump()
@@ -432,7 +429,6 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"No place named '{place}' was found in the private "
                 f"configuration file")
         self.places[place] = validated_value["coordinates"]
-        self.save(ConfigType.private)
 
     @property
     def home(self) -> PlaceValidator:
@@ -623,7 +619,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     @name.setter
     def name(self, value: str) -> None:
         self.__dict["name"] = value
-        self.save()
 
     @property
     def status(self) -> bool:
@@ -632,7 +627,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     @status.setter
     def status(self, value: bool) -> None:
         self.__dict["status"] = value
-        self.save()
 
     """Parameters related to sub-routines control"""
     @property
@@ -641,8 +635,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @managements.setter
     def managements(self, value: gv.ManagementConfigDict) -> None:
-        self.__dict["management"] = gv.ManagementConfig(**value).dict()
-        self.save()
+        self.__dict["management"] = gv.ManagementConfig(**value).model_dump()
 
     def get_management(self, management: gv.ManagementNames) -> bool:
         try:
@@ -654,7 +647,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         validated_management = safe_enum_from_name(gv.ManagementFlags, management)
         management_name: gv.ManagementNames = validated_management.name
         self.__dict["management"][management_name] = value
-        self.save()
 
     def get_managed_subroutines(self) -> list[gv.ManagementNames]:
         return [subroutine for subroutine in subroutines
@@ -669,7 +661,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         try:
             return self.__dict["environment"]
         except KeyError:
-            self.__dict["environment"] = EnvironmentConfigValidator().dict()
+            self.__dict["environment"] = EnvironmentConfigValidator().model_dump()
             return self.__dict["environment"]
 
     @property
@@ -680,7 +672,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         try:
             return self.environment["sky"]
         except KeyError:
-            self.environment["sky"] = gv.SkyConfig().dict()
+            self.environment["sky"] = gv.SkyConfig().model_dump()
             return self.environment["sky"]
 
     @property
@@ -698,7 +690,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.sky["lighting"] = validated_method
         if validated_method != gv.LightMethod.fixed:
             self.general.refresh_sun_times()
-        self.save()
 
     @property
     def chaos(self) -> gv.ChaosConfig:
@@ -714,9 +705,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param values: A dict with the entries 'frequency': int,
                        'duration': int and 'intensity': float.
         """
-        validated_values = gv.ChaosConfig(**values).dict()
+        validated_values = gv.ChaosConfig(**values).model_dump()
         self.environment["chaos"] = validated_values
-        self.save()
 
     @property
     def climate(self) -> dict[gv.ClimateParameterNames, gv.AnonymousClimateConfigDict]:
@@ -745,7 +735,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         validated_value = gv.AnonymousClimateConfig(**value).model_dump()
         self.climate[parameter] = validated_value
-        self.save()
 
     def delete_climate_parameter(
             self,
@@ -753,7 +742,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         try:
             del self.climate[parameter]
-            self.save()
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
@@ -763,7 +751,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).model_dump()
         parameter = validated_value.pop("parameter")
         self.climate[parameter] = validated_value
-        self.save()
 
     def CRUD_update_climate_parameter(self, value: gv.AnonymousClimateConfigDict) -> None:
         validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).model_dump()
@@ -773,7 +760,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
         self.climate[parameter] = validated_value
-        self.save()
 
     """Parameters related to IO"""    
     @property
@@ -857,11 +843,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_repr = new_hardware.dict_repr(shorten=True)
         hardware_repr.pop("uid")
         self.IO_dict.update({uid: hardware_repr})
-        self.save()
 
     def CRUD_create_hardware(self, value: gv.HardwareConfigDict) -> None:
         self.create_new_hardware(**value)
-        self.save()
 
     def update_hardware(self, uid: str, update_value: dict) -> None:
         try:
@@ -871,19 +855,18 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             }
             base = self.IO_dict[uid].copy()
             base.update(non_null_value)
-            validated_value = gv.HardwareConfig(uid=uid, **base).dict()
+            validated_value = gv.HardwareConfig(uid=uid, **base).model_dump()
             self.IO_dict[uid] = validated_value
-            self.save()
         except KeyError:
             raise HardwareNotFound
 
     def CRUD_update_hardware(self, value: gv.HardwareConfigDict) -> None:
-        validated_value: gv.HardwareConfigDict = gv.HardwareConfig(**value).dict()
+        validated_value: gv.HardwareConfigDict = gv.HardwareConfig(
+            **value).model_dump()
         uid = validated_value.pop("uid")
         if uid not in self.IO_dict:
             raise HardwareNotFound
         self.IO_dict[uid] = validated_value
-        self.save()
 
     def delete_hardware(self, uid: str) -> None:
         """
@@ -892,7 +875,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             del self.IO_dict[uid]
-            self.save()
         except KeyError:
             raise HardwareNotFound
 
@@ -921,7 +903,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         :param value: A dict in the form {'day': '8h00', 'night': '22h00'}
         """
-        validated_value = gv.DayConfig(**value).dict()
+        validated_value = gv.DayConfig(**value).model_dump()
         self.environment["sky"].update(validated_value)
 
     @property
