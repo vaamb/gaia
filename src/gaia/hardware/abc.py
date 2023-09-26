@@ -6,10 +6,9 @@ from enum import Enum
 import io
 import os
 from pathlib import Path
-import re
 import textwrap
 import typing as t
-from typing import Any, cast, Literal, Self, Type
+from typing import Any, Literal, Self, Type
 import weakref
 
 from gaia_validators import (
@@ -232,10 +231,8 @@ class Hardware(metaclass=_MetaHardware):
         else:
             self._subroutine = weakref.proxy(subroutine)
         self._uid: str = uid
-        self._level: HardwareLevel = cast(
-            HardwareLevel, safe_enum_from_name(HardwareLevel, level))
-        self._type: HardwareType = cast(
-            HardwareType, safe_enum_from_name(HardwareType, type))
+        self._level: HardwareLevel = safe_enum_from_name(HardwareLevel, level)
+        self._type: HardwareType = safe_enum_from_name(HardwareType, type)
         self._model: str = model
         self._name: str = name or uid
         address_list: list = address.split(":")
