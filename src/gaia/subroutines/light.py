@@ -216,7 +216,7 @@ class Light(SubroutineTemplate):
             self.actuator.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
-                f"{self.name} is not started in engine {self.ecosystem}")
+                f"{self.name} is not started in ecosystem {self.ecosystem}")
 
     @property
     def PID_tunings(self) -> tuple:
