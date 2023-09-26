@@ -53,6 +53,7 @@ class Engine(metaclass=SingletonMeta):
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
         self._db: "SQLAlchemyWrapper" | None = None
+        self.init_plugins()
         self._thread: Thread | None = None
         self._started_event = Event()
 
@@ -97,9 +98,12 @@ class Engine(metaclass=SingletonMeta):
         self.event_handler = events_handler
 
     def _start_message_broker(self) -> None:
-        self.message_broker: "KombuDispatcher"
         self.logger.info("Starting the dispatcher")
         self.message_broker.start(retry=True, block=False)
+
+    def _stop_message_broker(self) -> None:
+        self.logger.info("Stopping the dispatcher")
+        self.message_broker.stop()
 
     @property
     def message_broker(self) -> "KombuDispatcher":
@@ -135,10 +139,13 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     def _init_database(self) -> None:
         self.logger.info("Initialising the database")
-        from gaia.database import routines, db
+        from gaia.database import db
         self.db = db
         self.db.init(self.gaia_config)
         self.db.create_all()
+
+    def _start_database(self) -> None:
+        from gaia.database import routines
         if self.gaia_config.SENSORS_LOGGING_PERIOD:
             scheduler = get_scheduler()
             scheduler.add_job(
@@ -146,6 +153,10 @@ class Engine(metaclass=SingletonMeta):
                 kwargs={"scoped_session": self.db.scoped_session, "engine": self},
                 trigger="cron", minute="*", misfire_grace_time=10,
                 id="log_sensors_data")
+
+    def _stop_database(self) -> None:
+        scheduler = get_scheduler()
+        scheduler.remove_job("log_sensors_data")
 
     @property
     def db(self) -> "SQLAlchemyWrapper":
@@ -187,11 +198,10 @@ class Engine(metaclass=SingletonMeta):
         scheduler.remove_all_jobs()  # To be 100% sure
         scheduler.shutdown()
 
-    def _engine_startup(self) -> None:
+    def _init_virtualization(self) -> None:
         if self.gaia_config.VIRTUALIZATION:
             for ecosystem_uid in self.config.ecosystems_uid:
                 get_virtual_ecosystem(ecosystem_uid, start=True)
-        self.refresh_ecosystems()
 
     def _loop(self) -> None:
         while True:
@@ -413,7 +423,7 @@ class Engine(metaclass=SingletonMeta):
                 # Occur
                 pass
 
-    def refresh_chaos(self):
+    def refresh_chaos(self) -> None:
         for ecosystem in self.ecosystems.values():
             ecosystem.refresh_chaos()
         chaos_file = get_cache_dir()/"chaos.json"
@@ -428,12 +438,23 @@ class Engine(metaclass=SingletonMeta):
         except (FileNotFoundError, JSONDecodeError):  # Empty or absent file
             pass
 
-    def init_plugins(self):
+    def init_plugins(self) -> None:
         if self.gaia_config.COMMUNICATE_WITH_OURANOS:
             self._init_message_broker()
-            self.message_broker.start(retry=True, block=False)
         if self.gaia_config.USE_DATABASE:
             self._init_database()
+
+    def start_plugins(self) -> None:
+        if self.use_message_broker:
+            self._start_message_broker()
+        if self.use_db:
+            self._start_database()
+
+    def stop_plugins(self) -> None:
+        if self.use_message_broker:
+            self._stop_message_broker()
+        if self.use_db:
+            self._start_database()
 
     def start(self) -> None:
         """Start the Engine
@@ -446,7 +467,10 @@ class Engine(metaclass=SingletonMeta):
             self.logger.info("Starting the Engine ...")
             self.refresh_sun_times()
             self._start_background_tasks()
-            self._engine_startup()
+            if self.use_message_broker:
+                self._start_message_broker()
+            self._init_virtualization()
+            self.refresh_ecosystems()
             self._started_event.set()
             self.thread = Thread(target=self._loop)
             self.thread.name = "engine"
@@ -463,11 +487,7 @@ class Engine(metaclass=SingletonMeta):
         """Stop the Engine"""
         if self.started:
             self.logger.info("Stopping the Engine ...")
-            if self.use_message_broker:
-                self.message_broker.stop()
-            if self.use_db:
-                scheduler = get_scheduler()
-                scheduler.remove_job("log_sensors_data")
+            self.stop_plugins()
             if clear_engine:
                 stop_ecosystems = True
             # send a config signal so a last loops starts
