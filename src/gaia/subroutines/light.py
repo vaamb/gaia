@@ -159,8 +159,10 @@ class Light(SubroutineTemplate):
     def _stop(self) -> None:
         self.logger.info("Stopping light loop")
         self._stop_event.set()
-        self.light_intensity_thread.join()
-        self.light_intensity_thread = None
+        self.light_status_thread.join()
+        self.light_status_thread = None
+        # self.light_intensity_thread.join()
+        # self.light_intensity_thread = None
         self.actuator.active = False
         self.hardware = {}
 
