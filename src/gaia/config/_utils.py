@@ -44,7 +44,7 @@ def _get_config() -> Type[GaiaConfig]:
             pass
     else:
         if not issubclass(Config, BaseConfig):
-            raise RuntimeError(
+            raise ValueError(
                 "Your custom config should be a subclass of "
                 "'gaia.config.BaseConfig'"
             )

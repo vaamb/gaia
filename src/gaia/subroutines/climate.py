@@ -20,7 +20,7 @@ from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    pass
+    from gaia.subroutines.sensors import Sensors
 
 
 ClimateParameterNames = Literal["temperature", "humidity"]
@@ -270,7 +270,7 @@ class Climate(SubroutineTemplate):
                 self._check_misses()
                 return
 
-        sensors_subroutine = cast("Sensors", self.ecosystem.subroutines["sensors"])
+        sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
         sensors_data = sensors_subroutine.sensors_data
         if isinstance(sensors_data, Empty):
             self.logger.debug(
@@ -359,12 +359,12 @@ class Climate(SubroutineTemplate):
         scheduler.add_job(
             self._climate_routine,
             trigger="cron", minute="*", misfire_grace_time=10,
-            id=f"{self._ecosystem_name}-climate"
+            id=f"{self.ecosystem.name}-climate"
         )
 
     def _stop(self) -> None:
         scheduler = get_scheduler()
-        scheduler.remove_job(job_id=f"{self._ecosystem_name}-climate")
+        scheduler.remove_job(job_id=f"{self.ecosystem.name}-climate")
 
     """API calls"""
     def remove_hardware(self, hardware_uid: str) -> None:
@@ -387,6 +387,7 @@ class Climate(SubroutineTemplate):
             actuator: HardwareType,
             mode: ActuatorModePayload
     ) -> None:
+        # TODO
         pass
 
     def update_climate_parameters(self) -> None:

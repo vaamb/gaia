@@ -63,39 +63,45 @@ class SensorBuffer(BaseSensorRecord):
     def get_buffered_data(
             cls,
             session: Session,
-            limit: int = 50
+            per_page: int = 50
     ) -> Generator[BufferedSensorsDataPayload]:
-        while True:
-            stmt = (
-                select(cls)
-                .where(cls.exchange_uuid == None)
-                .limit(limit)
-            )
-            result = session.execute(stmt)
-            buffered_data: Sequence[SensorBuffer] = result.scalars().all()
-            if not buffered_data:
-                break
-            uuid = uuid4()
-            rv: list[BufferedSensorRecord] = [
-                BufferedSensorRecord(
-                    ecosystem_uid=data.ecosystem_uid,
-                    sensor_uid=data.sensor_uid,
-                    measure=data.measure,
-                    value=data.measure,
-                    timestamp=data.timestamp
+        page: int = 0
+        try:
+            while True:
+                stmt = (
+                    select(cls)
+                    .where(cls.exchange_uuid == None)
+                    .offset(per_page * page)
+                    .limit(per_page)
                 )
-                for data in buffered_data
-            ]
-            for data in buffered_data:
-                data.exchange_uuid = uuid
+                result = session.execute(stmt)
+                buffered_data: Sequence[SensorBuffer] = result.scalars().all()
+                if not buffered_data:
+                    break
+                uuid = uuid4()
+                rv: list[BufferedSensorRecord] = []
+                for data in buffered_data:
+                    data.exchange_uuid = uuid
+                    rv.append(
+                        BufferedSensorRecord(
+                            ecosystem_uid=data.ecosystem_uid,
+                            sensor_uid=data.sensor_uid,
+                            measure=data.measure,
+                            value=data.measure,
+                            timestamp=data.timestamp
+                        )
+                    )
+
+                yield BufferedSensorsDataPayload(
+                    data=rv,
+                    uuid=uuid,
+                )
+                page += 1
+        finally:
             session.commit()
-            yield BufferedSensorsDataPayload(
-                data=rv,
-                uuid=uuid,
-            )
 
     @classmethod
-    def clear_buffer(cls, session: Session, uuid: UUID | str):
+    def clear_buffer(cls, session: Session, uuid: UUID | str) -> None:
         stmt = (
             delete(cls)
             .where(cls.exchange_uuid == uuid)
@@ -103,7 +109,7 @@ class SensorBuffer(BaseSensorRecord):
         session.execute(stmt)
 
     @classmethod
-    def clear_uuid(cls, session: Session, uuid: UUID | str):
+    def clear_uuid(cls, session: Session, uuid: UUID | str) -> None:
         stmt = (
             update(cls)
             .where(cls.exchange_uuid == uuid)

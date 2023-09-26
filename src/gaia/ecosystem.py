@@ -5,7 +5,7 @@ import logging
 import logging.config
 from threading import Lock
 import typing as t
-from typing import cast
+from typing import cast, TypedDict
 import weakref
 
 from gaia_validators import (
@@ -17,8 +17,7 @@ from gaia_validators import (
 from gaia.config import EcosystemConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
 from gaia.subroutines import (
-    Climate, Health, Light, Sensors, subroutines, SubroutineTemplate,
-    SubroutineTypes)
+    Climate, Health, Light, Sensors, subroutines, SubroutineNames)
 from gaia.subroutines.chaos import Chaos
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
@@ -45,6 +44,13 @@ def _generate_actuators_state_dict() -> ActuatorsDataDict:
     }
 
 
+class SubroutineDict(TypedDict):
+    sensors: Sensors
+    light: Light
+    climate: Climate
+    health: Health
+
+
 class Ecosystem:
     """An Ecosystem class that manages subroutines
 
@@ -69,7 +75,7 @@ class Ecosystem:
             evening_end=self.config.time_parameters.night,
         )
         self.actuators_state: ActuatorsDataDict = _generate_actuators_state_dict()
-        self.subroutines:  dict[SubroutineTypes, SubroutineTemplate] = {}
+        self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine in subroutines:
             self.init_subroutine(subroutine)
         self._chaos: Chaos = Chaos(self, 0, 0, 1)
@@ -130,10 +136,10 @@ class Ecosystem:
         return self._chaos
 
     @property
-    def subroutines_started(self) -> set:
-        return set([
-            subroutine for subroutine in self.subroutines
-            if self.subroutines[subroutine].status
+    def subroutines_started(self) -> set[SubroutineNames]:
+        return set([  # noqa
+            subroutine_name for subroutine_name, subroutine in self.subroutines.items()
+            if subroutine.status
         ])
 
     @property
@@ -174,7 +180,7 @@ class Ecosystem:
         base_management = self.config.managements
         management = {}
         for m in base_management:
-            m = cast(SubroutineTypes, m)
+            m = cast(SubroutineNames, m)
             try:
                 management[m] = self.config.get_management(m) & self.subroutines[m].manageable
             except KeyError:
@@ -191,21 +197,21 @@ class Ecosystem:
         hardware_dict = self.config.IO_dict
         return [HardwareConfig(uid=key, **value) for key, value in hardware_dict.items()]
 
-    def init_subroutine(self, subroutine_name: SubroutineTypes) -> None:
+    def init_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Initialize a Subroutines
 
         :param subroutine_name: The name of the Subroutines to initialize
         """
         self.subroutines[subroutine_name] = subroutines[subroutine_name](self)
 
-    def start_subroutine(self, subroutine_name: SubroutineTypes) -> None:
+    def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Start a Subroutines
 
         :param subroutine_name: The name of the Subroutines to start
         """
         self.subroutines[subroutine_name].start()
 
-    def stop_subroutine(self, subroutine_name: SubroutineTypes) -> None:
+    def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutines
 
         :param subroutine_name: The name of the Subroutines to stop
@@ -223,7 +229,7 @@ class Ecosystem:
                 self.logger.info("No subroutine are running, stopping the Ecosystem")
                 self.stop()
 
-    def get_subroutine_status(self, subroutine_name: SubroutineTypes) -> bool:
+    def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
         try:
             return self.subroutines[subroutine_name].status
         except KeyError:
@@ -265,7 +271,8 @@ class Ecosystem:
         """Stop the Ecosystem"""
         if self.status:
             self.logger.info("Stopping the Ecosystem ...")
-            for subroutine in reversed(list(subroutines.keys())):
+            subroutines_to_stop: list[SubroutineNames] = list(subroutines.keys())
+            for subroutine in reversed(subroutines_to_stop):
                 self.subroutines[subroutine].stop()
             if not any([self.subroutines[subroutine].status
                         for subroutine in self.subroutines]):
@@ -301,21 +308,22 @@ class Ecosystem:
         try:
             if validated_actuator == HardwareType.light:
                 if self.get_subroutine_status("light"):
-                    light_subroutine: Light = cast(Light, self.subroutines["light"])
+                    light_subroutine: Light = self.subroutines["light"]
                     light_subroutine.turn_light(
                         turn_to=validated_mode, countdown=countdown)
                 else:
-                    raise RuntimeError
+                    raise ValueError("Light subroutine is not running")
             elif validated_actuator in [
                 HardwareType.heater, HardwareType.cooler, HardwareType.humidifier,
                 HardwareType.dehumidifier
             ]:
                 if self.get_subroutine_status("climate"):
-                    climate_subroutine: Climate = cast(Climate, self.subroutines["climate"])
+                    climate_subroutine: Climate = self.subroutines["climate"]
                     climate_subroutine.turn_climate_actuator(
-                        climate_actuator=validated_actuator, turn_to=validated_mode, countdown=countdown)
+                        climate_actuator=validated_actuator, turn_to=validated_mode,
+                        countdown=countdown)
                 else:
-                    raise RuntimeError
+                    raise ValueError("Climate subroutine is not running")
             else:
                 raise ValueError(
                     f"Actuator '{validated_actuator.value}' is not currently supported"
@@ -343,12 +351,12 @@ class Ecosystem:
     @property
     def sensors_data(self) -> SensorsData | Empty:
         if self.get_subroutine_status("sensors"):
-            sensors_subroutine: Sensors = cast(Sensors, self.subroutines["sensors"])
+            sensors_subroutine: Sensors = self.subroutines["sensors"]
             return sensors_subroutine.sensors_data
         return Empty()
 
     # Light
-    def refresh_lighting_hours(self, send=True) -> None:
+    def refresh_lighting_hours(self, send: bool = True) -> None:
         self.logger.debug("Refreshing sun times")
         time_parameters = self.config.time_parameters
         # Check we've got the info required
@@ -421,7 +429,7 @@ class Ecosystem:
     @property
     def plants_health(self) -> HealthRecord | Empty:
         if self.get_subroutine_status("health"):
-            health_subroutine: Health = cast(Health, self.subroutines["health"])
+            health_subroutine: Health = self.subroutines["health"]
             return health_subroutine.plants_health
         return Empty()
 
@@ -430,12 +438,12 @@ class Ecosystem:
     # Climate
     def climate_parameters_regulated(self) -> set[str]:
         if self.get_subroutine_status("climate"):
-            climate_subroutine: Climate = cast(Climate, self.subroutines["climate"])
+            climate_subroutine: Climate = self.subroutines["climate"]
             return climate_subroutine.regulated
         return set()
 
     def climate_targets(self) -> dict[ClimateParameterNames, ClimateTarget]:
         if self.get_subroutine_status("climate"):
-            climate_subroutine: Climate = cast(Climate, self.subroutines["climate"])
+            climate_subroutine: Climate = self.subroutines["climate"]
             return climate_subroutine.targets
         return {}

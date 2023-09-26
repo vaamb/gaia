@@ -146,9 +146,14 @@ class Light(SubroutineTemplate):
 
     def _start(self) -> None:
         self._stop_event.clear()
-        self.light_intensity_thread = Thread(target=self._light_status_loop, args=())
-        self.light_intensity_thread.name = f"{self._uid}-light_loop"
-        self.light_intensity_thread.start()
+        self.light_status_thread = Thread(
+            target=self._light_status_loop,
+            name=f"{self._uid}-light-status")
+        self.light_status_thread.start()
+        # self.light_intensity_thread = Thread(
+        #     target=self._light_intensity_loop,
+        #     name=f"{self._uid}-light-intensity")
+        # self.light_intensity_thread.start()
         self.actuator.active = True
 
     def _stop(self) -> None:
@@ -163,7 +168,7 @@ class Light(SubroutineTemplate):
     @property
     def light_status_thread(self) -> Thread:
         if self._light_status_thread is None:
-            raise ValueError("Light status thread has not been set up")
+            raise AttributeError("Light status thread has not been set up")
         else:
             return self._light_status_thread
 
@@ -174,7 +179,7 @@ class Light(SubroutineTemplate):
     @property
     def light_intensity_thread(self) -> Thread:
         if self._light_intensity_thread is None:
-            raise ValueError("Light intensity thread has not been set up")
+            raise AttributeError("Light intensity thread has not been set up")
         else:
             return self._light_intensity_thread
 
@@ -211,7 +216,7 @@ class Light(SubroutineTemplate):
             self.actuator.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
-                f"{self.name} is not started in engine {self.ecosystem}")
+                f"{self.name} is not started in ecosystem {self.ecosystem}")
 
     @property
     def PID_tunings(self) -> tuple:

@@ -3,12 +3,10 @@ from __future__ import annotations
 import base64
 from enum import Enum
 from datetime import date, datetime, time, timezone
-import hashlib
 import logging
 import logging.config
 from math import log, e
 import os
-import pathlib
 import platform
 import socket
 from typing import Any
@@ -138,17 +136,6 @@ pin_bcm_to_board = {
     20: 38,
     21: 40
 }
-
-
-def file_hash(file_path: pathlib.Path) -> str:
-    try:
-        h = hashlib.md5(usedforsecurity=False)
-        with open(file_path, "rb") as f:
-            for block in iter(lambda: f.read(4096), b""):
-                h.update(block)
-        return h.hexdigest()
-    except FileNotFoundError:
-        return "0x0"
 
 
 def utc_time_to_local_time(utc_time: time) -> time:

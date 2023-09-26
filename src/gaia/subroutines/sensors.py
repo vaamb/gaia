@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from statistics import mean
 from threading import Event, Lock, Thread
 from time import monotonic
 import typing as t
-from typing import cast
 
 from gaia_validators import (
     Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict)
@@ -66,8 +66,9 @@ class Sensors(SubroutineTemplate):
         self.logger.info(
             f"Starting sensors loop. It will run every {time_out} s")
         self._stop_event.clear()
-        self.thread = Thread(target=self._sensors_loop, args=())
-        self.thread.name = f"{self._uid}-sensors_loop"
+        self.thread = Thread(
+            target=self._sensors_loop,
+            name=f"{self._uid}-sensors")
         self.thread.start()
         self.logger.debug(f"Sensors loop successfully started")
 
@@ -77,7 +78,7 @@ class Sensors(SubroutineTemplate):
         self.thread.join()
         self.thread = None
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine = cast("Climate", self.ecosystem.subroutines["climate"])
+            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.stop()
         self.hardware = {}
 
@@ -85,7 +86,7 @@ class Sensors(SubroutineTemplate):
     @property
     def thread(self) -> Thread:
         if self._thread is None:
-            raise ValueError("Thread has not been set up")
+            raise AttributeError("Sensors thread has not been set up")
         else:
             return self._thread
 
@@ -106,7 +107,7 @@ class Sensors(SubroutineTemplate):
     def refresh_hardware(self) -> None:
         super().refresh_hardware()
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine = cast("Climate", self.ecosystem.subroutines["climate"])
+            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
             climate_subroutine.refresh_hardware()
 
     def update_sensors_data(self) -> None:
@@ -117,10 +118,16 @@ class Sensors(SubroutineTemplate):
         to_average: dict[str, list[float]] = {}
         cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
         cache["records"] = []
-        for uid in self.hardware:
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(hardware.get_data)
+                for hardware in self.hardware.values()
+            ]
+            sensors_data = [future.result() for future in futures]
+        for sensor in sensors_data:
             cache["records"].extend(
-                data for data in self.hardware[uid].get_data()
-                if data.value is not None
+                sensor_record for sensor_record in sensor
+                if sensor_record.value is not None
             )
         for record in cache["records"]:
             try:

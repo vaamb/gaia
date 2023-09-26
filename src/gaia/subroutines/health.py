@@ -34,13 +34,13 @@ class Health(SubroutineTemplate):
         scheduler.add_job(
             self.health_routine,
             trigger="cron", hour=h, minute=m, misfire_grace_time=15 * 60,
-            id=f"{self._ecosystem_name}-health"
+            id=f"{self.ecosystem.name}-health"
         )
 
     def _stop_scheduler(self) -> None:
         self.logger.info("Closing the tasks scheduler")
         scheduler = get_scheduler()
-        scheduler.remove_job(f"{self._ecosystem_name}-health")
+        scheduler.remove_job(f"{self.ecosystem.name}-health")
         self.logger.info("The tasks scheduler was closed properly")
 
     def analyse_picture(self) -> None:

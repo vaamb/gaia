@@ -14,6 +14,7 @@ from dispatcher import EventHandler
 import gaia_validators as gv
 
 from gaia.config import EcosystemConfig, get_config
+from gaia.config.from_files import ConfigType
 from gaia.shared_resources import get_scheduler
 from gaia.utils import humanize_list, local_ip_address
 
@@ -73,7 +74,7 @@ class Events(EventHandler):
     @property
     def thread(self) -> Thread:
         if self._thread is None:
-            raise RuntimeError("Thread has not been set up")
+            raise AttributeError("Events thread has not been set up")
         return self._thread
 
     @thread.setter
@@ -152,8 +153,9 @@ class Events(EventHandler):
     def start_background_tasks(self) -> None:
         self._schedule_jobs()
         self._stop_event.clear()
-        self.thread = Thread(target=self.ping_loop)
-        self.thread.name = "ping"
+        self.thread = Thread(
+            target=self.ping_loop,
+            name="events_ping")
         self.thread.start()
 
     def stop_background_tasks(self) -> None:
@@ -327,7 +329,7 @@ class Events(EventHandler):
         if ecosystem_uid in self.ecosystems:
             for management, status in data["data"].items():
                 self.ecosystems[ecosystem_uid].config.set_management(management, status)
-            self.ecosystems[ecosystem_uid].config.save()
+            self.engine.config.save(ConfigType.ecosystems)
             self.emit_event("management", ecosystem_uids=[ecosystem_uid])
 
     def get_CRUD_function(
@@ -418,6 +420,7 @@ class Events(EventHandler):
             return
         try:
             crud_function(data["data"])
+            self.engine.config.save(ConfigType.ecosystems)
             self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
