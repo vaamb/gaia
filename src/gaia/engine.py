@@ -233,7 +233,7 @@ class Engine(metaclass=SingletonMeta):
     @property
     def thread(self) -> Thread:
         if self._thread is None:
-            raise RuntimeError("Thread has not been set up")
+            raise AttributeError("Engine thread has not been set up")
         else:
             return self._thread
 

@@ -312,7 +312,7 @@ class Ecosystem:
                     light_subroutine.turn_light(
                         turn_to=validated_mode, countdown=countdown)
                 else:
-                    raise RuntimeError
+                    raise ValueError("Light subroutine is not running")
             elif validated_actuator in [
                 HardwareType.heater, HardwareType.cooler, HardwareType.humidifier,
                 HardwareType.dehumidifier
@@ -323,7 +323,7 @@ class Ecosystem:
                         climate_actuator=validated_actuator, turn_to=validated_mode,
                         countdown=countdown)
                 else:
-                    raise RuntimeError
+                    raise ValueError("Climate subroutine is not running")
             else:
                 raise ValueError(
                     f"Actuator '{validated_actuator.value}' is not currently supported"

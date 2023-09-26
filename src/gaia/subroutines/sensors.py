@@ -84,7 +84,7 @@ class Sensors(SubroutineTemplate):
     @property
     def thread(self) -> Thread:
         if self._thread is None:
-            raise ValueError("Thread has not been set up")
+            raise AttributeError("Sensors thread has not been set up")
         else:
             return self._thread
 

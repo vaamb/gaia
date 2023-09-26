@@ -163,7 +163,7 @@ class Light(SubroutineTemplate):
     @property
     def light_status_thread(self) -> Thread:
         if self._light_status_thread is None:
-            raise ValueError("Light status thread has not been set up")
+            raise AttributeError("Light status thread has not been set up")
         else:
             return self._light_status_thread
 
@@ -174,7 +174,7 @@ class Light(SubroutineTemplate):
     @property
     def light_intensity_thread(self) -> Thread:
         if self._light_intensity_thread is None:
-            raise ValueError("Light intensity thread has not been set up")
+            raise AttributeError("Light intensity thread has not been set up")
         else:
             return self._light_intensity_thread
 

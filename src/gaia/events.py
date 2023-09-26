@@ -73,7 +73,7 @@ class Events(EventHandler):
     @property
     def thread(self) -> Thread:
         if self._thread is None:
-            raise RuntimeError("Thread has not been set up")
+            raise AttributeError("Events thread has not been set up")
         return self._thread
 
     @thread.setter
