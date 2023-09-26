@@ -153,8 +153,9 @@ class Events(EventHandler):
     def start_background_tasks(self) -> None:
         self._schedule_jobs()
         self._stop_event.clear()
-        self.thread = Thread(target=self.ping_loop)
-        self.thread.name = "ping"
+        self.thread = Thread(
+            target=self.ping_loop,
+            name="events_ping")
         self.thread.start()
 
     def stop_background_tasks(self) -> None:

@@ -66,8 +66,9 @@ class Sensors(SubroutineTemplate):
         self.logger.info(
             f"Starting sensors loop. It will run every {time_out} s")
         self._stop_event.clear()
-        self.thread = Thread(target=self._sensors_loop, args=())
-        self.thread.name = f"{self._uid}-sensors_loop"
+        self.thread = Thread(
+            target=self._sensors_loop,
+            name=f"{self._uid}-sensors")
         self.thread.start()
         self.logger.debug(f"Sensors loop successfully started")
 

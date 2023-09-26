@@ -279,8 +279,9 @@ class EngineConfig(metaclass=SingletonMeta):
         if not self.started:
             logger.info("Starting the configuration files watchdog")
             self._update_cfg_hash()
-            self.thread = Thread(target=self._watchdog_loop)
-            self.thread.name = "config_watchdog"
+            self.thread = Thread(
+                target=self._watchdog_loop,
+                name="config_watchdog")
             self.thread.start()
             logger.debug("Configuration files watchdog successfully started")
         else:  # pragma: no cover

@@ -480,8 +480,9 @@ class Engine(metaclass=SingletonMeta):
             self._init_virtualization()
             self.refresh_ecosystems()
             self._started_event.set()
-            self.thread = Thread(target=self._loop)
-            self.thread.name = "engine"
+            self.thread = Thread(
+                target=self._loop,
+                name="engine")
             self.thread.start()
             self.logger.info("Engine started")
         else:  # pragma: no cover
