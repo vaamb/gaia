@@ -53,7 +53,7 @@ class Engine(metaclass=SingletonMeta):
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
         self._db: "SQLAlchemyWrapper" | None = None
-        self.init_plugins()
+        self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._started_event = Event()
 
@@ -150,7 +150,7 @@ class Engine(metaclass=SingletonMeta):
             scheduler = get_scheduler()
             scheduler.add_job(
                 routines.log_sensors_data,
-                kwargs={"scoped_session": self.db.scoped_session, "engine": self},
+                kwargs={"scoped_session_": self.db.scoped_session, "engine": self},
                 trigger="cron", minute="*", misfire_grace_time=10,
                 id="log_sensors_data")
 
@@ -182,6 +182,7 @@ class Engine(metaclass=SingletonMeta):
             self.init_message_broker()
         if self.gaia_config.USE_DATABASE:
             self.init_database()
+        self.plugins_initialized = True
 
     def start_plugins(self) -> None:
         if self.use_message_broker:
@@ -465,59 +466,50 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Engine start and stop
     # ---------------------------------------------------------------------------
-    def start(self) -> None:
+    def startup(self) -> None:
         """Start the Engine
 
         When started, the Engine will automatically manage the Ecosystems based
         on the 'ecosystem.cfg' file and refresh the Ecosystems when changes are
         made in the file.
         """
-        if not self.started:
-            self.logger.info("Starting the Engine ...")
-            self.refresh_sun_times()
-            self.start_background_tasks()
-            self.start_plugins()
-            self._init_virtualization()
-            self.refresh_ecosystems()
-            self._started_event.set()
-            self.thread = Thread(
-                target=self._loop,
-                name="engine")
-            self.thread.start()
-            self.logger.info("Engine started")
-        else:  # pragma: no cover
+        if self.started:  # pragma: no cover
             raise RuntimeError("Engine can only be started once")
+        self.logger.info("Starting the Engine ...")
+        self._init_virtualization()
+        if not self.plugins_initialized:
+            self.init_plugins()
+        self.refresh_sun_times()
+        self.start_background_tasks()
+        self.start_plugins()
+        self.thread = Thread(
+            target=self._loop,
+            name="engine")
+        self.refresh_ecosystems()
+        self._started_event.set()
+        self.thread.start()
+        self.logger.info("Engine started")
 
-    def stop(
-            self,
-            stop_ecosystems: bool = True,
-            clear_engine: bool = True
-    ) -> None:
-        """Stop the Engine"""
-        if self.started:
-            self.logger.info("Stopping the Engine ...")
-            if clear_engine:
-                stop_ecosystems = True
-            # send a config signal so a last loops starts
-            self._started_event.clear()
-            with config_condition:
-                config_condition.notify_all()
-            self.thread.join()
-            self.thread = None
+    def shutdown(self) -> None:
+        """Shutdown the Engine"""
+        if not self.started:
+            raise RuntimeError("Cannot shutdown a non-started Engine")
+        self.logger.info("Stopping the Engine ...")
+        # send a config signal so a last loops starts
+        self._started_event.clear()
+        with config_condition:
+            config_condition.notify_all()
+        self.thread.join()
+        self.thread = None
 
-            if stop_ecosystems:
-                for ecosystem_uid in set(self.ecosystems_started):
-                    self.stop_ecosystem(ecosystem_uid)
-            if clear_engine:
-                to_delete = set(self.ecosystems.keys())
-                for ecosystem in to_delete:
-                    self.dismount_ecosystem(ecosystem)
-            self.stop_plugins()
-            self.stop_background_tasks()
-            self.logger.info("The Engine has stopped")
-
-    def stop_and_clear(self) -> None:
-        self.stop(stop_ecosystems=True, clear_engine=True)
+        for ecosystem_uid in set(self.ecosystems_started):
+            self.stop_ecosystem(ecosystem_uid)
+        to_delete = [*self.ecosystems.keys()]
+        for ecosystem in to_delete:
+            self.dismount_ecosystem(ecosystem)
+        self.stop_plugins()
+        self.stop_background_tasks()
+        self.logger.info("The Engine has stopped")
 
     def wait(self):
         if self.started:
@@ -527,15 +519,17 @@ class Engine(metaclass=SingletonMeta):
         else:
             raise RuntimeError("Gaia needs to be started in order to wait")
 
-    def _handle_stop_signal(self) -> None:
+    def stop(self) -> None:
+        if not self.started:
+            raise RuntimeError("Cannot shutdown a non-started Engine")
         self._started_event.clear()
 
     def add_signal_handler(self) -> None:
         for sig in SIGNALS:
-            signal.signal(sig, self._handle_stop_signal)
+            signal.signal(sig, self.stop)
 
     def run(self) -> None:
         self.add_signal_handler()
-        self.start()
+        self.startup()
         self.wait()
-        self.stop_and_clear()
+        self.shutdown()
