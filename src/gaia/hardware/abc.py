@@ -395,12 +395,6 @@ class gpioHardware(Hardware):
 
 
 class Switch(Hardware):
-    def __del__(self) -> None:
-        try:
-            self.turn_off()
-        except AttributeError:  # Pin not yet setup
-            pass
-
     def turn_on(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
@@ -422,9 +416,6 @@ class Dimmer(Hardware):
                 "address 1 being for the main (on/off) switch and address 2 "
                 "being PWM-able"
             )
-
-    def __del__(self):
-        self.set_pwm_level(0)
 
     def set_pwm_level(self, level) -> None:
         raise NotImplementedError(
