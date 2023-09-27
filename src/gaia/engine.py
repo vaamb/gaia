@@ -205,7 +205,6 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     def start_background_tasks(self) -> None:
         self.logger.debug("Starting background tasks")
-        self.config.start_watchdog()
         scheduler = get_scheduler()
         scheduler.add_job(self.refresh_sun_times, "cron",
                           hour="1", misfire_grace_time=15 * 60,
@@ -217,7 +216,6 @@ class Engine(metaclass=SingletonMeta):
 
     def stop_background_tasks(self) -> None:
         self.logger.debug("Stopping background tasks")
-        self.config.stop_watchdog()
         scheduler = get_scheduler()
         scheduler.remove_job("refresh_sun_times")
         scheduler.remove_job("refresh_chaos")
@@ -485,8 +483,11 @@ class Engine(metaclass=SingletonMeta):
                 "Plugins are needed but have not been initialized. Please use "
                 "the 'init_plugins()' method to start them."
             )
-        # Get the info required just before starting the ecosystems
+        # Load the ecosystem configs into memory and start the watchdog
+        self.config.initialize_configs()
         self._init_virtualization()
+        self.config.start_watchdog()
+        # Get the info required just before starting the ecosystems
         self.refresh_sun_times()
         # Start background tasks and plugins
         self.start_background_tasks()

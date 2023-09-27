@@ -143,7 +143,7 @@ class EngineConfig(metaclass=SingletonMeta):
     class should be used.
     """
     def __init__(self, base_dir=get_base_dir()) -> None:
-        logger.debug("Initializing GeneralConfig")
+        logger.debug("Initializing EngineConfig")
         self._base_dir = pathlib.Path(base_dir)
         self._engine: "Engine" | None = None
         self._ecosystems_config: dict = {}
@@ -154,10 +154,10 @@ class EngineConfig(metaclass=SingletonMeta):
         self._lock = Lock()
         self._stop_event = Event()
         self._thread: Thread | None = None
-        self.initialize_configs()
+        self.configs_loaded: bool = False
 
     def __repr__(self) -> str:
-        return f"GeneralConfig(watchdog={self.started})"
+        return f"EngineConfig(watchdog={self.started})"
 
     @property
     def started(self) -> bool:
@@ -236,6 +236,7 @@ class EngineConfig(metaclass=SingletonMeta):
                             "No custom `private.cfg` configuration file "
                             "detected. Creating a default file.")
                         self._create_private_config_file()
+        self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType) -> None:
         with self.config_files_lock():
@@ -276,24 +277,33 @@ class EngineConfig(metaclass=SingletonMeta):
             self._stop_event.wait(get_gaia_config().CONFIG_WATCHER_PERIOD)
 
     def start_watchdog(self) -> None:
-        if not self.started:
-            logger.info("Starting the configuration files watchdog")
-            self._update_cfg_hash()
-            self.thread = Thread(
-                target=self._watchdog_loop,
-                name="config_watchdog")
-            self.thread.start()
-            logger.debug("Configuration files watchdog successfully started")
-        else:  # pragma: no cover
-            logger.debug("Configuration files watchdog is already running")
+        if not self.configs_loaded:  # pragma: no cover
+            raise RuntimeError(
+                "Configuration files need to be loaded in order to start "
+                "the config file watchdog. To do so, use the "
+                "`EngineConfig().initialize_configs()` method."
+            )
+
+        if self.started:  # pragma: no cover
+            raise RuntimeError("Configuration files watchdog is already running")
+
+        logger.info("Starting the configuration files watchdog")
+        self._update_cfg_hash()
+        self.thread = Thread(
+            target=self._watchdog_loop,
+            name="config_watchdog")
+        self.thread.start()
+        logger.debug("Configuration files watchdog successfully started")
 
     def stop_watchdog(self) -> None:
-        if self.started:
-            logger.info("Stopping the configuration files watchdog")
-            self._stop_event.set()
-            self.thread.join()
-            self.thread = None
-            logger.debug("Configuration files watchdog successfully stopped")
+        if not self.started:  # pragma: no cover
+            raise RuntimeError("Configuration files watchdog is not running")
+
+        logger.info("Stopping the configuration files watchdog")
+        self._stop_event.set()
+        self.thread.join()
+        self.thread = None
+        logger.debug("Configuration files watchdog successfully stopped")
 
     @contextmanager
     def config_files_lock(self):
@@ -569,7 +579,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
 
 # ---------------------------------------------------------------------------
-#   SpecificConfig class
+#   EcosystemConfig class
 # ---------------------------------------------------------------------------
 class _MetaEcosystemConfig(type):
     instances: dict[str, "EcosystemConfig"] = {}
@@ -580,6 +590,12 @@ class _MetaEcosystemConfig(type):
         else:
             ecosystem = kwargs["ecosystem"]
         general_config = EngineConfig()
+        if not general_config.configs_loaded:
+            raise RuntimeError(
+                "Configuration files need to be loaded by `EngineConfig` in"
+                "order to get an `EcosystemConfig` instance. To do so, use the "
+                "`EngineConfig().initialize_configs()` method."
+            )
         ecosystem_uid =  general_config.get_IDs(ecosystem).uid
         try:
             return cls.instances[ecosystem_uid]
@@ -597,7 +613,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         ids = self._general_config.get_IDs(ecosystem)
         self.uid = ids.uid
         self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
-        self.logger.debug(f"Initializing SpecificConfig for {ids.name}")
+        self.logger.debug(f"Initializing EcosystemConfig for {ids.name}")
 
     def __del__(self):
         try:
