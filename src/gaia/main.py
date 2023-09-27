@@ -13,8 +13,8 @@ def main():
     logger = logging.getLogger("gaia")
     logger.info("Initializing Gaia")
     gaia_engine = Engine()
+    gaia_engine.init_plugins()
     try:
-        gaia_engine.init_plugins()
         logger.info("Starting Gaia")
         gaia_engine.run()
         logger.info("GAIA started successfully")
