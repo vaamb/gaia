@@ -134,12 +134,12 @@ class RootEcosystemsConfigValidator(gv.BaseModel):
 
 
 # ---------------------------------------------------------------------------
-#   GeneralConfig class
+#   EngineConfig class
 # ---------------------------------------------------------------------------
 class EngineConfig(metaclass=SingletonMeta):
     """Class to interact with the configuration files
 
-    To interact with a specific ecosystem configuration, the SpecificConfig
+    To interact with a specific ecosystem configuration, the EcosystemConfig
     class should be used.
     """
     def __init__(self, base_dir=get_base_dir()) -> None:
@@ -609,8 +609,8 @@ class _MetaEcosystemConfig(type):
 
 class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def __init__(self, ecosystem: str) -> None:
-        self._general_config: EngineConfig = weakref.proxy(EngineConfig())
-        ids = self._general_config.get_IDs(ecosystem)
+        self._engine_config: EngineConfig = weakref.proxy(EngineConfig())
+        ids = self._engine_config.get_IDs(ecosystem)
         self.uid = ids.uid
         self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
         self.logger.debug(f"Initializing EcosystemConfig for {ids.name}")
@@ -623,22 +623,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
-               f"general_config={self._general_config})"
+               f"engine_config={self._engine_config})"
 
     @property
     def __dict(self) -> EcosystemConfigDict:
-        return self._general_config.ecosystems_config[self.uid]
+        return self._engine_config.ecosystems_config[self.uid]
 
     def as_dict(self) -> EcosystemConfigDict:
         return self.__dict
 
     def save(self) -> None:
         if not get_gaia_config().TESTING:
-            self._general_config.save(ConfigType.ecosystems)
+            self._engine_config.save(ConfigType.ecosystems)
 
     @property
     def general(self) -> EngineConfig:
-        return self._general_config
+        return self._engine_config
 
     @property
     def name(self) -> str:
