@@ -1,23 +1,14 @@
-from __future__ import annotations
-
-import logging
-
-from gaia import Engine
+from setproctitle import setproctitle
 
 
 def main():
-    from setproctitle import setproctitle
-
     setproctitle("gaia")
 
-    logger = logging.getLogger("gaia")
-    logger.info("Initializing Gaia")
+    from gaia import Engine
+
     gaia_engine = Engine()
     gaia_engine.init_plugins()
     try:
-        logger.info("Starting Gaia")
         gaia_engine.run()
-        logger.info("GAIA started successfully")
     finally:
-        logger.info("Stopping")
         gaia_engine.stop()

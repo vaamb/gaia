@@ -47,7 +47,7 @@ class Engine(metaclass=SingletonMeta):
         self.gaia_config: Type[GaiaConfig] = get_config()
         configure_logging(self.gaia_config)
         self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
-        self.logger.debug("Initializing")
+        self.logger.info("Initializing Gaia")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = self.gaia_config.ENGINE_UID
         self._message_broker: "KombuDispatcher" | None = None
@@ -479,7 +479,7 @@ class Engine(metaclass=SingletonMeta):
         """
         if self.started:  # pragma: no cover
             raise RuntimeError("Engine can only be started once")
-        self.logger.info("Starting the Engine ...")
+        self.logger.info("Starting Gaia ...")
         if self.plugins_needed and not self.plugins_initialized:
             raise RuntimeError(
                 "Plugins are needed but have not been initialized. Please use "
@@ -498,13 +498,13 @@ class Engine(metaclass=SingletonMeta):
         self.refresh_ecosystems()
         self._started_event.set()
         self.thread.start()
-        self.logger.info("Engine started")
+        self.logger.info("Gaia started")
 
     def shutdown(self) -> None:
         """Shutdown the Engine"""
         if not self.started:
             raise RuntimeError("Cannot shutdown a non-started Engine")
-        self.logger.info("Stopping the Engine ...")
+        self.logger.info("Stopping Gaia ...")
         # Send a config signal so the loops unlocks
         self._started_event.clear()
         with config_condition:
@@ -520,7 +520,7 @@ class Engine(metaclass=SingletonMeta):
         # Stop plugins and background tasks
         self.stop_plugins()
         self.stop_background_tasks()
-        self.logger.info("The Engine has stopped")
+        self.logger.info("Gaia has stopped")
 
     def wait(self):
         if self.started:
@@ -533,6 +533,7 @@ class Engine(metaclass=SingletonMeta):
     def stop(self) -> None:
         if not self.started:
             raise RuntimeError("Cannot shutdown a non-started Engine")
+        self.logger.info("Received a stop signal")
         self._started_event.clear()
 
     def add_signal_handler(self) -> None:
