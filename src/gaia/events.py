@@ -317,8 +317,8 @@ class Events(EventHandler):
         if ecosystem_uid in self.ecosystems:
             self.logger.debug("Received turn_actuator event")
             self.ecosystems[ecosystem_uid].turn_actuator(
-                validated_actuator=data["actuator"],
-                validated_mode=data["mode"],
+                actuator=data["actuator"],
+                mode=data["mode"],
                 countdown=message.get("countdown", 0.0)
             )
 
