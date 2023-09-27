@@ -9,9 +9,10 @@ from math import log, e
 import os
 import platform
 import socket
-from typing import Any
+from typing import Any, Callable, TypeVar
 from weakref import WeakValueDictionary
 
+from greenletio import async_
 import ruamel.yaml
 from ruamel.yaml import SafeRepresenter, ScalarNode
 
@@ -73,6 +74,16 @@ else:
         @staticmethod
         def loads(*args, **kwargs) -> Any:
             return orjson.loads(*args, **kwargs)
+
+
+_T = TypeVar("_T")
+
+
+async def run_sync_as_async(
+        function: Callable[..., _T],
+        *func_args,
+) -> _T:
+    return await async_(fn=function)(*func_args)
 
 
 pin_board_to_bcm = {

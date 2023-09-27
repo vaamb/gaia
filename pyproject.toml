@@ -14,6 +14,7 @@ dependencies = [
     "aiohttp~=3.8.5",
     "apscheduler~=3.7.0",
     "cryptography~=40.0.1",
+    "greenletio~=0.10.1",
     "orjson~=3.8.10",
     "pydantic",
     "ruamel.yaml~=0.17.21",
