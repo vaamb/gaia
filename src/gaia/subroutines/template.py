@@ -119,10 +119,17 @@ class SubroutineTemplate(ABC):
             )
 
     def remove_hardware(self, hardware_uid: str) -> None:
-        try:
-            del self.hardware[hardware_uid]
-        except KeyError:
-            self.logger.error(f"Hardware '{hardware_uid}' does not exist")
+        if not self.hardware.get(hardware_uid):
+            self.logger.error(
+                f"Hardware '{hardware_uid}' is not managed by this subroutine"
+            )
+
+        hardware = self.hardware[hardware_uid]
+        if isinstance(hardware, Switch):
+            hardware.turn_off()
+        if isinstance(hardware, Dimmer):
+            hardware.set_pwm_level(0)
+        del self.hardware[hardware_uid]
 
     @abstractmethod
     def get_hardware_needed_uid(self) -> set[str]:

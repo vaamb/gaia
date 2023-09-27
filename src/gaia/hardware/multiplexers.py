@@ -37,7 +37,7 @@ class Multiplexer(metaclass=_MetaMultiplexer):
         self._address: int = i2c_address
         self.device = self._get_device()
 
-    def __del__(self):
+    def __del__(self) -> None:
         str_address = str(self._address)
         del _MetaMultiplexer.instances[str_address]
 
