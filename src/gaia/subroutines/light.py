@@ -95,12 +95,12 @@ class Light(SubroutineTemplate):
             # Reset pid so there is no internal value overshoot
             if not self.actuator.last_status:
                 self._pid.reset()
-            self.actuator.status = True
+            self.actuator.set_status(True)
             for light in self.hardware.values():
                 light.turn_on()
         # If lighting == False, lights should be off
         else:
-            self.actuator.status = False
+            self.actuator.set_status(False)
             for light in self.hardware.values():
                 light.turn_off()
 
