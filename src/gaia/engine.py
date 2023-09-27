@@ -47,12 +47,16 @@ class Engine(metaclass=SingletonMeta):
         self.gaia_config: Type[GaiaConfig] = get_config()
         configure_logging(self.gaia_config)
         self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
-        self.logger.debug("Initializing")
+        self.logger.info("Initializing Gaia")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = self.gaia_config.ENGINE_UID
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
         self._db: "SQLAlchemyWrapper" | None = None
+        self.plugins_needed = (
+            self.gaia_config.USE_DATABASE
+            or self. gaia_config.COMMUNICATE_WITH_OURANOS
+        )
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._started_event = Event()
@@ -475,41 +479,48 @@ class Engine(metaclass=SingletonMeta):
         """
         if self.started:  # pragma: no cover
             raise RuntimeError("Engine can only be started once")
-        self.logger.info("Starting the Engine ...")
+        self.logger.info("Starting Gaia ...")
+        if self.plugins_needed and not self.plugins_initialized:
+            raise RuntimeError(
+                "Plugins are needed but have not been initialized. Please use "
+                "the 'init_plugins()' method to start them."
+            )
+        # Get the info required just before starting the ecosystems
         self._init_virtualization()
-        if not self.plugins_initialized:
-            self.init_plugins()
         self.refresh_sun_times()
+        # Start background tasks and plugins
         self.start_background_tasks()
         self.start_plugins()
+        # Start the engine loop
         self.thread = Thread(
             target=self._loop,
             name="engine")
         self.refresh_ecosystems()
         self._started_event.set()
         self.thread.start()
-        self.logger.info("Engine started")
+        self.logger.info("Gaia started")
 
     def shutdown(self) -> None:
         """Shutdown the Engine"""
         if not self.started:
             raise RuntimeError("Cannot shutdown a non-started Engine")
-        self.logger.info("Stopping the Engine ...")
-        # send a config signal so a last loops starts
+        self.logger.info("Stopping Gaia ...")
+        # Send a config signal so the loops unlocks
         self._started_event.clear()
         with config_condition:
             config_condition.notify_all()
         self.thread.join()
         self.thread = None
-
-        for ecosystem_uid in set(self.ecosystems_started):
+        # Stop and dismount ecosystems
+        for ecosystem_uid in [*self.ecosystems_started]:
             self.stop_ecosystem(ecosystem_uid)
         to_delete = [*self.ecosystems.keys()]
         for ecosystem in to_delete:
             self.dismount_ecosystem(ecosystem)
+        # Stop plugins and background tasks
         self.stop_plugins()
         self.stop_background_tasks()
-        self.logger.info("The Engine has stopped")
+        self.logger.info("Gaia has stopped")
 
     def wait(self):
         if self.started:
@@ -522,6 +533,7 @@ class Engine(metaclass=SingletonMeta):
     def stop(self) -> None:
         if not self.started:
             raise RuntimeError("Cannot shutdown a non-started Engine")
+        self.logger.info("Received a stop signal")
         self._started_event.clear()
 
     def add_signal_handler(self) -> None:
