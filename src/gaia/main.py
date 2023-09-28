@@ -8,7 +8,4 @@ def main():
 
     gaia_engine = Engine()
     gaia_engine.init_plugins()
-    try:
-        gaia_engine.run()
-    finally:
-        gaia_engine.stop()
+    gaia_engine.run()
