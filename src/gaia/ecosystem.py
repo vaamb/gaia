@@ -168,10 +168,9 @@ class Ecosystem:
         except UndefinedParameter:
             return LightMethod.fixed
 
-    @light_method.setter
-    def light_method(self, value: LightMethod) -> None:
-        if value in (LightMethod.elongate, LightMethod.mimic):
-            self.refresh_lighting_hours(send=True)
+    def set_light_method(self, value: LightMethod) -> None:
+        self.config.set_light_method(value)
+        self.refresh_lighting_hours(send=True)
 
     @property
     def management(self) -> ManagementConfig:
@@ -374,7 +373,7 @@ class Ecosystem:
                     "Cannot use lighting method 'place' without sun times available. "
                     "Using 'fixed' method instead."
                 )
-                self.config.light_method = LightMethod.fixed
+                self.config.set_light_method(LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
             else:
                 with lock:
@@ -393,7 +392,7 @@ class Ecosystem:
                     "Cannot use lighting method 'elongate' without time parameters set in "
                     "config and sun times available. Using 'fixed' method instead."
                 )
-                self.config.light_method = LightMethod.fixed
+                self.config.set_light_method(LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
             else:
                 sunrise = _to_dt(self.config.sun_times.sunrise)

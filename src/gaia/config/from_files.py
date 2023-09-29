@@ -709,8 +709,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return gv.LightMethod.fixed
         return safe_enum_from_name(gv.LightMethod, self.sky["lighting"])
 
-    @light_method.setter
-    def light_method(self, method: gv.LightMethod) -> None:
+    def set_light_method(self, method: gv.LightMethod) -> None:
         try:
             validated_method = safe_enum_from_name(gv.LightMethod, method)
         except KeyError:
