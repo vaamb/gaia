@@ -21,7 +21,6 @@ from gaia.subroutines.template import SubroutineTemplate
 Kp = 0.05
 Ki = 0.005
 Kd = 0.01
-lock = Lock()
 
 
 # TODO: improve
@@ -90,7 +89,9 @@ class Light(SubroutineTemplate):
     def _light_status_routine(self) -> None:
         # If lighting == True, lights should be on
         lighting = self.actuator.compute_expected_status(
-            method=self.ecosystem.light_method, lighting_hours=self.lighting_hours)
+            method=self.ecosystem.light_method,
+            lighting_hours=self.lighting_hours,
+        )
         if lighting:
             # Reset pid so there is no internal value overshoot
             if not self.actuator.last_status:

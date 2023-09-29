@@ -70,10 +70,11 @@ class Ecosystem:
         )
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
-        self.lighting_hours = LightingHours(
+        self._lighting_hours = LightingHours(
             morning_start=self.config.time_parameters.day,
             evening_end=self.config.time_parameters.night,
         )
+        self.lighting_hours_lock = Lock()
         self.actuators_state: ActuatorsDataDict = _generate_actuators_state_dict()
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine in subroutines:
@@ -152,16 +153,6 @@ class Ecosystem:
         )
 
     @property
-    def light_info(self) -> LightData:
-        return LightData(
-            method=self.config.light_method,
-            morning_start=self.config.time_parameters.day,
-            evening_end=self.config.time_parameters.night,
-        )
-
-    light_data = light_info
-
-    @property
     def light_method(self) -> LightMethod:
         try:
             return self.config.light_method
@@ -171,6 +162,26 @@ class Ecosystem:
     def set_light_method(self, value: LightMethod) -> None:
         self.config.set_light_method(value)
         self.refresh_lighting_hours(send=True)
+
+    @property
+    def lighting_hours(self) -> LightingHours:
+        with self.lighting_hours_lock:
+            return self._lighting_hours
+
+    @lighting_hours.setter
+    def lighting_hours(self, value: LightingHours) -> None:
+        with self.lighting_hours_lock:
+            self._lighting_hours = value
+
+    @property
+    def light_info(self) -> LightData:
+        return LightData(
+            method=self.config.light_method,
+            morning_start=self.config.time_parameters.day,
+            evening_end=self.config.time_parameters.night,
+        )
+
+    light_data = light_info
 
     @property
     def management(self) -> ManagementConfig:
@@ -361,11 +372,10 @@ class Ecosystem:
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
         if self.config.light_method == LightMethod.fixed:
-            with lock:
-                self.lighting_hours = LightingHours(
-                    morning_start=time_parameters.day,
-                    evening_end=time_parameters.night,
-                )
+            self.lighting_hours = LightingHours(
+                morning_start=time_parameters.day,
+                evening_end=time_parameters.night,
+            )
 
         elif self.config.light_method == LightMethod.mimic:
             if self.config.sun_times is None:
@@ -376,11 +386,10 @@ class Ecosystem:
                 self.config.set_light_method(LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
             else:
-                with lock:
-                    self.lighting_hours = LightingHours(
-                        morning_start=self.config.sun_times.sunrise,
-                        evening_end=self.config.sun_times.sunset,
-                    )
+                self.lighting_hours = LightingHours(
+                    morning_start=self.config.sun_times.sunrise,
+                    evening_end=self.config.sun_times.sunset,
+                )
 
         elif self.config.light_method == LightMethod.elongate:
             if (
@@ -399,13 +408,12 @@ class Ecosystem:
                 sunset = _to_dt(self.config.sun_times.sunset)
                 twilight_begin = _to_dt(self.config.sun_times.twilight_begin)
                 offset = sunrise - twilight_begin
-                with lock:
-                    self.lighting_hours = LightingHours(
-                        morning_start=time_parameters.day,
-                        morning_end=(sunrise + offset).time(),
-                        evening_start=(sunset - offset).time(),
-                        evening_end=time_parameters.night,
-                    )
+                self.lighting_hours = LightingHours(
+                    morning_start=time_parameters.day,
+                    morning_end=(sunrise + offset).time(),
+                    evening_start=(sunset - offset).time(),
+                    evening_end=time_parameters.night,
+                )
 
         if (
                 send

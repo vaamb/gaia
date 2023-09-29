@@ -20,9 +20,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.climate import Climate
 
 
-lock = Lock()
-
-
 class Sensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -30,7 +27,8 @@ class Sensors(SubroutineTemplate):
         self.hardware: dict[str, BaseSensor]
         self._thread: Thread | None = None
         self._stop_event = Event()
-        self._data: SensorsData | Empty = Empty()
+        self._sensors_data: SensorsData | Empty = Empty()
+        self._data_lock = Lock()
         self._finish__init__()
 
     def _sensors_loop(self) -> None:
@@ -142,12 +140,17 @@ class Sensors(SubroutineTemplate):
             )
             for measure, value in to_average.items()
         ]
-        with lock:
-            if len(cache["records"]) > 0:
-                self._data = SensorsData(**cache)
-            else:
-                self._data = Empty()
+        if len(cache["records"]) > 0:
+            self.sensors_data = SensorsData(**cache)
+        else:
+            self.sensors_data = Empty()
 
     @property
     def sensors_data(self) -> SensorsData | Empty:
-        return self._data
+        with self._data_lock:
+            return self._sensors_data
+
+    @sensors_data.setter
+    def sensors_data(self, data: SensorsData | Empty) -> None:
+        with self._data_lock:
+            self._sensors_data = data

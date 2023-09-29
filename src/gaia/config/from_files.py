@@ -36,8 +36,6 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger("gaia.config.environments")
 
-config_condition = Condition()
-
 
 class ConfigType(Enum):
     ecosystems = "_ecosystems_config"
@@ -151,7 +149,8 @@ class EngineConfig(metaclass=SingletonMeta):
         self._sun_times: gv.SunTimes | None = None
         # Watchdog threading securities
         self._hash_dict: dict[ConfigType, str] = {}
-        self._lock = Lock()
+        self._config_files_lock = Lock()
+        self.new_config = Condition()
         self._stop_event = Event()
         self._thread: Thread | None = None
         self.configs_loaded: bool = False
@@ -184,8 +183,16 @@ class EngineConfig(metaclass=SingletonMeta):
         self._engine = value
 
     # Load, dump and save config
+    def _check_files_lock_acquired(self) -> None:
+        if not self._config_files_lock.locked():
+            raise RuntimeError(
+                "_load_config must be used within a "
+                "`engine_config.with config_files_lock():` block"
+            )
+
     def _load_config(self, cfg_type: ConfigType) -> None:
         # /!\ must be used with the config_files_lock acquired
+        self._check_files_lock_acquired()
         config_path = self._base_dir/f"{cfg_type.name}.cfg"
         if cfg_type == ConfigType.ecosystems:
             with open(config_path, "r") as file:
@@ -205,6 +212,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
+        self._check_files_lock_acquired()
         # TODO: shorten dicts used ?
         config_path = self._base_dir/f"{cfg_type.name}.cfg"
         with open(config_path, "w") as file:
@@ -266,8 +274,8 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"configuration file(s) {[cfg.name for cfg in reload_cfg]}")
                     for cfg in reload_cfg:
                         self._load_config(cfg_type=cfg)
-                    with config_condition:
-                        config_condition.notify_all()
+                    with self.new_config:
+                        self.new_config.notify_all()
                     reloaded = True
             if reloaded:
                 if "ecosystems" in reload_cfg:
@@ -309,7 +317,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def config_files_lock(self):
         """A context manager that makes sure only one process access file
         content at the time"""
-        with self._lock:
+        with self._config_files_lock:
             try:
                 yield
             finally:
