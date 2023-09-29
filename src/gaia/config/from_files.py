@@ -36,8 +36,6 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger("gaia.config.environments")
 
-config_condition = Condition()
-
 
 class ConfigType(Enum):
     ecosystems = "_ecosystems_config"
@@ -152,6 +150,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # Watchdog threading securities
         self._hash_dict: dict[ConfigType, str] = {}
         self._config_files_lock = Lock()
+        self.new_config = Condition()
         self._stop_event = Event()
         self._thread: Thread | None = None
         self.configs_loaded: bool = False
@@ -275,8 +274,8 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"configuration file(s) {[cfg.name for cfg in reload_cfg]}")
                     for cfg in reload_cfg:
                         self._load_config(cfg_type=cfg)
-                    with config_condition:
-                        config_condition.notify_all()
+                    with self.new_config:
+                        self.new_config.notify_all()
                     reloaded = True
             if reloaded:
                 if "ecosystems" in reload_cfg:

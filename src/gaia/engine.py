@@ -12,7 +12,7 @@ import weakref
 
 from gaia.config import (
     EngineConfig, GaiaConfig, get_cache_dir, get_config, get_ecosystem_IDs)
-from gaia.config.from_files import config_condition, detach_config
+from gaia.config.from_files import detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import get_scheduler, start_scheduler
@@ -229,8 +229,8 @@ class Engine(metaclass=SingletonMeta):
 
     def _loop(self) -> None:
         while True:
-            with config_condition:
-                config_condition.wait()
+            with self.config.new_config:
+                self.config.new_config.wait()
             if not self.started:
                 break
             self.refresh_ecosystems()
@@ -508,8 +508,8 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Stopping Gaia ...")
         # Send a config signal so the loops unlocks
         self._started_event.clear()
-        with config_condition:
-            config_condition.notify_all()
+        with self.config.new_config:
+            self.config.new_config.notify_all()
         self.thread.join()
         self.thread = None
         # Stop and dismount ecosystems
