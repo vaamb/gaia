@@ -198,7 +198,7 @@ class Engine(metaclass=SingletonMeta):
         if self.use_message_broker:
             self.stop_message_broker()
         if self.use_db:
-            self.start_database()
+            self.stop_database()
 
     # ---------------------------------------------------------------------------
     #   Engine functionalities

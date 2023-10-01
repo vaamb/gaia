@@ -367,12 +367,6 @@ class Climate(SubroutineTemplate):
         scheduler.remove_job(job_id=f"{self.ecosystem.name}-climate")
 
     """API calls"""
-    def remove_hardware(self, hardware_uid: str) -> None:
-        try:
-            del self.hardware[hardware_uid]
-        except KeyError:
-            self.logger.error(f"Regulator '{hardware_uid}' does not exist")
-
     def get_hardware_needed_uid(self) -> set[str]:
         self.update_climate_parameters()
         hardware_needed: set[str] = set()
