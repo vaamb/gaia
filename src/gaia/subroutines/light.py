@@ -196,12 +196,9 @@ class Light(SubroutineTemplate):
             self._dimmers.add(hardware.uid)
 
     def remove_hardware(self, hardware_uid: str) -> None:
-        try:
-            if isinstance(self.hardware[hardware_uid], Dimmer):
-                self._dimmers.remove(hardware_uid)
-            del self.hardware[hardware_uid]
-        except KeyError:
-            self.logger.error(f"Light '{hardware_uid}' does not exist")
+        super().remove_hardware(hardware_uid)
+        if hardware_uid in self._dimmers:
+            self._dimmers.remove(hardware_uid)
 
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids("light"))
