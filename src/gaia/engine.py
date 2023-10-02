@@ -42,7 +42,7 @@ class Engine(metaclass=SingletonMeta):
     When used within Gaia, the Engine is automatically instantiated when needed.
     """
     def __init__(self) -> None:
-        self._config: EngineConfig = weakref.proxy(EngineConfig())
+        self._config: EngineConfig = EngineConfig()
         self._config.engine = self
         self.gaia_config: Type[GaiaConfig] = get_config()
         configure_logging(self.gaia_config)

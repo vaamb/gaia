@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 from typing import Any
+from weakref import WeakValueDictionary
 
 import busio
 
@@ -14,7 +15,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class _MetaMultiplexer(type):
-    instances: dict[str, "Multiplexer"] = {}
+    instances: dict[str, "Multiplexer"] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> "Multiplexer":
         address: int = kwargs["address"]
@@ -36,10 +37,6 @@ class Multiplexer(metaclass=_MetaMultiplexer):
             self._i2c = i2c
         self._address: int = i2c_address
         self.device = self._get_device()
-
-    def __del__(self) -> None:
-        str_address = str(self._address)
-        del _MetaMultiplexer.instances[str_address]
 
     def _get_device(self) -> Any:
         raise NotImplementedError(

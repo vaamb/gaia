@@ -10,6 +10,7 @@ import os
 import platform
 import socket
 from typing import Any
+from weakref import WeakValueDictionary
 
 import ruamel.yaml
 from ruamel.yaml import SafeRepresenter, ScalarNode
@@ -443,7 +444,7 @@ def configure_logging(config_class):
 
 
 class SingletonMeta(type):
-    _instances: dict[type, type] = {}
+    _instances: dict[type, type] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
