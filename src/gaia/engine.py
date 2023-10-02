@@ -457,7 +457,7 @@ class Engine(metaclass=SingletonMeta):
         try:
             with chaos_file.open("r+") as file:
                 ecosystem_chaos = json.loads(file.read())
-                ecosystems = list(ecosystem_chaos.keys())
+                ecosystems = [*ecosystem_chaos.keys()]
                 for ecosystem in ecosystems:
                     if ecosystem not in self.ecosystems:
                         del ecosystem_chaos[ecosystem]
