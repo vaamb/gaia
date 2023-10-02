@@ -22,7 +22,6 @@ class SubroutineTemplate(ABC):
         """Base class to manage an ecosystem subroutine
         """
         self._ecosystem: "Ecosystem" = weakref.proxy(ecosystem)
-        self._uid: str = self._ecosystem.uid
         self.name: str = self.__class__.__name__.lower()
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{self.ecosystem.name}.{self.name}"
