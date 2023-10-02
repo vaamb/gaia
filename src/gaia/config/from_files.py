@@ -14,6 +14,7 @@ from threading import Condition, Event, Lock, Thread
 import typing as t
 from typing import Literal, TypedDict
 import weakref
+from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
@@ -180,7 +181,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @engine.setter
     def engine(self, value: "Engine") -> None:
-        self._engine = value
+        self._engine = weakref.proxy(value)
 
     # Load, dump and save config
     def _check_files_lock_acquired(self) -> None:
@@ -590,7 +591,7 @@ class EngineConfig(metaclass=SingletonMeta):
 #   EcosystemConfig class
 # ---------------------------------------------------------------------------
 class _MetaEcosystemConfig(type):
-    instances: dict[str, "EcosystemConfig"] = {}
+    instances: dict[str, "EcosystemConfig"] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> "EcosystemConfig":
         if len(args) > 0:
@@ -622,12 +623,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.uid = ids.uid
         self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
         self.logger.debug(f"Initializing EcosystemConfig for {ids.name}")
-
-    def __del__(self):
-        try:
-            del _MetaEcosystemConfig.instances[self.uid]
-        except KeyError:  # already removed or failed to init
-            pass
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \

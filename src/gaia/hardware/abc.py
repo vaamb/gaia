@@ -10,6 +10,7 @@ import textwrap
 import typing as t
 from typing import Any, Literal, Self, Type
 import weakref
+from weakref import WeakValueDictionary
 
 from gaia_validators import (
     safe_enum_from_name, HardwareConfig, HardwareLevel, HardwareLevelNames,
@@ -174,7 +175,7 @@ class Address:
 
 
 class _MetaHardware(type):
-    instances: dict[str, "Hardware"] = {}
+    instances: dict[str, "Hardware"] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> "Hardware":
         uid = kwargs["uid"]
@@ -208,8 +209,8 @@ class Hardware(metaclass=_MetaHardware):
     ecosystems.cfg
     """
     __slots__ = (
-        "_subroutine", "_uid", "_name", "_address_book", "_level", "_type",
-        "_model", "_measures", "_multiplexer_model", "_plants"
+        "__weakref__", "_subroutine", "_uid", "_name", "_address_book",
+        "_level", "_type", "_model", "_measures", "_multiplexer_model", "_plants"
     )
 
     def __init__(
@@ -247,12 +248,6 @@ class Hardware(metaclass=_MetaHardware):
             plants = [plants]
         self._plants = plants or []
         self._multiplexer_model = multiplexer_model
-
-    def __del__(self) -> None:
-        # If an error arises during __init__ (because of a missing package), no
-        #  instance will be registered
-        if _MetaHardware.instances.get(self._uid):
-            del _MetaHardware.instances[self._uid]
 
     def __repr__(self) -> str:
         return (
