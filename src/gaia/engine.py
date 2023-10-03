@@ -457,7 +457,7 @@ class Engine(metaclass=SingletonMeta):
         try:
             with chaos_file.open("r+") as file:
                 ecosystem_chaos = json.loads(file.read())
-                ecosystems = list(ecosystem_chaos.keys())
+                ecosystems = [*ecosystem_chaos.keys()]
                 for ecosystem in ecosystems:
                     if ecosystem not in self.ecosystems:
                         del ecosystem_chaos[ecosystem]
@@ -538,8 +538,11 @@ class Engine(metaclass=SingletonMeta):
         self._started_event.clear()
 
     def add_signal_handler(self) -> None:
+        def signal_handler(signum, frame) -> None:
+            self.stop()
+
         for sig in SIGNALS:
-            signal.signal(sig, self.stop)
+            signal.signal(sig, signal_handler)
 
     def run(self) -> None:
         self.add_signal_handler()

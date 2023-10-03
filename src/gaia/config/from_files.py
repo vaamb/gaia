@@ -814,7 +814,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def _create_new_IO_uid(self) -> str:
         length = 16
-        used_ids = list(self.IO_dict.keys())
+        used_ids = set(self.IO_dict.keys())
         while True:
             x = random.choice(string.ascii_letters) + "".join(
                 random.choices(string.ascii_letters + string.digits,
