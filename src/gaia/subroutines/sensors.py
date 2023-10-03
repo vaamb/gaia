@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from statistics import mean
 from threading import Event, Lock, Thread
@@ -116,12 +115,11 @@ class Sensors(SubroutineTemplate):
         to_average: dict[str, list[float]] = {}
         cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
         cache["records"] = []
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(hardware.get_data)
-                for hardware in self.hardware.values()
-            ]
-            sensors_data = [future.result() for future in futures]
+        futures = [
+            self.executor.submit(hardware.get_data)
+            for hardware in self.hardware.values()
+        ]
+        sensors_data = [future.result() for future in futures]
         for sensor in sensors_data:
             cache["records"].extend(
                 sensor_record for sensor_record in sensor
