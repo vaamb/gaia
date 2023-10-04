@@ -8,7 +8,6 @@ from threading import Event, Thread
 from time import sleep
 import typing as t
 from typing import Type
-import weakref
 
 from gaia.config import (
     EngineConfig, GaiaConfig, get_cache_dir, get_config, get_ecosystem_IDs)
@@ -228,6 +227,7 @@ class Engine(metaclass=SingletonMeta):
                 get_virtual_ecosystem(ecosystem_uid, start=True)
 
     def _loop(self) -> None:
+        self.refresh_ecosystems()
         while True:
             with self.config.new_config:
                 self.config.new_config.wait()
@@ -496,7 +496,6 @@ class Engine(metaclass=SingletonMeta):
         self.thread = Thread(
             target=self._loop,
             name="engine")
-        self.refresh_ecosystems()
         self._started_event.set()
         self.thread.start()
         self.logger.info("Gaia started")
@@ -521,6 +520,7 @@ class Engine(metaclass=SingletonMeta):
         # Stop plugins and background tasks
         self.stop_plugins()
         self.stop_background_tasks()
+        self.config.stop_watchdog()
         self.logger.info("Gaia has stopped")
 
     def wait(self):
