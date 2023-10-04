@@ -3,10 +3,11 @@ import click
 
 @click.command()
 @click.option(
-    "--use-green-threads",
+    "--use-green-threads", "-gt",
     type=bool,
+    is_flag=True,
     default=False,
-    help="Monkey patch Gaia with eventlet to use green threads",
+    help="Monkey patch Gaia with gevent to use green threads",
     show_default=True,
 )
 def main(
@@ -15,9 +16,9 @@ def main(
     """Launch Gaia
     """
     if use_green_threads:
-        import eventlet
+        from gevent.monkey import patch_all
 
-        eventlet.monkey_patch()
+        patch_all()
 
     from setproctitle import setproctitle
 
