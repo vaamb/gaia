@@ -3,10 +3,10 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import date, datetime, time
 from enum import Enum
-import hashlib
 from json.decoder import JSONDecodeError
 import logging
-import pathlib
+import os
+from pathlib import Path
 import random
 from requests import ConnectionError, Session
 import string
@@ -39,19 +39,8 @@ logger = logging.getLogger("gaia.config.environments")
 
 
 class ConfigType(Enum):
-    ecosystems = "_ecosystems_config"
-    private = "_private_config"
-
-
-def _file_hash(file_path: pathlib.Path) -> str:
-    try:
-        h = hashlib.md5(usedforsecurity=False)
-        with open(file_path, "rb") as f:
-            for block in iter(lambda: f.read(4096), b""):
-                h.update(block)
-        return h.hexdigest()
-    except FileNotFoundError:
-        return "0x0"
+    ecosystems = "ecosystems.cfg"
+    private = "private.cfg"
 
 
 # ---------------------------------------------------------------------------
@@ -141,15 +130,16 @@ class EngineConfig(metaclass=SingletonMeta):
     To interact with a specific ecosystem configuration, the EcosystemConfig
     class should be used.
     """
-    def __init__(self, base_dir=get_base_dir()) -> None:
+    def __init__(self, base_dir: Path | None = None) -> None:
         logger.debug("Initializing EngineConfig")
-        self._base_dir = pathlib.Path(base_dir)
+        base_dir = base_dir or get_base_dir()
+        self._base_dir = Path(base_dir)
         self._engine: "Engine" | None = None
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
         self._sun_times: gv.SunTimes | None = None
         # Watchdog threading securities
-        self._hash_dict: dict[ConfigType, str] = {}
+        self._config_files_modif: dict[Path, int] = {}
         self._config_files_lock = Lock()
         self.new_config = Condition()
         self._stop_event = Event()
@@ -253,37 +243,43 @@ class EngineConfig(metaclass=SingletonMeta):
             self._dump_config(cfg_type)
 
     # File watchdog
-    def _update_cfg_hash(self) -> None:
-        for cfg_type in ConfigType:
-            path = self._base_dir/f"{cfg_type.name}.cfg"
-            self._hash_dict[cfg_type] = _file_hash(path)
+    def _get_changed_config_files(self) -> set[ConfigType]:
+        config_files_mtime: dict[Path, int] = {}
+        changed: set[ConfigType] = set()
+        for file_path, file_modif in self._config_files_modif.items():
+            modif = os.stat(file_path).st_mtime_ns
+            if modif != file_modif:
+                changed.add(ConfigType(file_path.name))
+            config_files_mtime[file_path] = modif
+        self._config_files_modif = config_files_mtime
+        return changed
 
     def _watchdog_loop(self) -> None:
+        # Fill config files modification dict
+        ecosystem = self._base_dir / ConfigType.ecosystems.value
+        private = self._base_dir / ConfigType.private.value
+        self._config_files_modif = {
+            ecosystem: os.stat(ecosystem).st_mtime_ns,
+            private: os.stat(private).st_mtime_ns,
+        }
+        del ecosystem, private
+        sleep_period = get_gaia_config().CONFIG_WATCHER_PERIOD / 1000
         while not self._stop_event.is_set():
-            reloaded = False
             with self.config_files_lock():
-                old_hash = {**self._hash_dict}
-                self._update_cfg_hash()
-                # Need to reload the config if its hash has changed
-                reload_cfg: list[ConfigType] = [
-                    cfg_type for cfg_type in ConfigType
-                    if old_hash[cfg_type] != self._hash_dict[cfg_type]
-                ]
-                if reload_cfg:
-                    logger.info(
-                        f"Change in config file(s) detected. Updating "
-                        f"configuration file(s) {[cfg.name for cfg in reload_cfg]}")
-                    for cfg in reload_cfg:
-                        self._load_config(cfg_type=cfg)
+                changed_configs = self._get_changed_config_files()
+                if changed_configs:
+                    for config_type in changed_configs:
+                        logger.info(
+                            f"Change in '{config_type.value}' detected. Updating "
+                            f"{config_type.name} configuration.")
+                        self._load_config(cfg_type=config_type)
+                        if config_type is ConfigType.ecosystems:
+                            self.refresh_sun_times()
                     with self.new_config:
                         self.new_config.notify_all()
-                    reloaded = True
-            if reloaded:
-                if "ecosystems" in reload_cfg:
-                    self.refresh_sun_times()
-                if self.engine.use_message_broker:
-                    self.engine.event_handler.send_full_config()
-            self._stop_event.wait(get_gaia_config().CONFIG_WATCHER_PERIOD)
+                    if self.engine.use_message_broker:
+                        self.engine.event_handler.send_full_config()
+            self._stop_event.wait(sleep_period)
 
     def start_watchdog(self) -> None:
         if not self.configs_loaded:  # pragma: no cover
@@ -297,7 +293,6 @@ class EngineConfig(metaclass=SingletonMeta):
             raise RuntimeError("Configuration files watchdog is already running")
 
         logger.info("Starting the configuration files watchdog")
-        self._update_cfg_hash()
         self.thread = Thread(
             target=self._watchdog_loop,
             name="config_watchdog")
@@ -322,7 +317,7 @@ class EngineConfig(metaclass=SingletonMeta):
             try:
                 yield
             finally:
-                self._update_cfg_hash()
+                self._get_changed_config_files()
 
     # API
     def _create_new_ecosystem_uid(self) -> str:
@@ -371,7 +366,7 @@ class EngineConfig(metaclass=SingletonMeta):
             raise AttributeError("can't set attribute 'private_config'")
 
     @property
-    def base_dir(self) -> pathlib.Path:
+    def base_dir(self) -> Path:
         return self._base_dir
 
     @property
