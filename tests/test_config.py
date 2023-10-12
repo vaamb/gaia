@@ -28,8 +28,8 @@ def test_config_files_created(general_config: GeneralConfig):
 
 def test_config_files_watchdog(general_config: GeneralConfig):
     general_config.start_watchdog()
-    for cfg in general_config._hash_dict:
-        assert(isinstance(general_config._hash_dict[cfg], str))
+    for cfg in general_config._config_files_modif:
+        assert(isinstance(general_config._config_files_modif[cfg], str))
     general_config.stop_watchdog()
 
 
