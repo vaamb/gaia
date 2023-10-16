@@ -10,12 +10,13 @@ import typing as t
 from typing import Type
 
 from gaia.config import (
-    EngineConfig, GaiaConfig, get_cache_dir, get_config, get_ecosystem_IDs)
+    configure_logging, EngineConfig, GaiaConfig, get_cache_dir, get_config,
+    get_ecosystem_IDs)
 from gaia.config.from_files import detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import get_scheduler, start_scheduler
-from gaia.utils import configure_logging, json, SingletonMeta
+from gaia.utils import json, SingletonMeta
 from gaia.virtual import get_virtual_ecosystem
 
 
