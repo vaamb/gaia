@@ -66,8 +66,7 @@ class Ecosystem:
         self._name: str = self._config.name
         self._engine: "Engine" = weakref.proxy(engine)
         self.logger: logging.Logger = logging.getLogger(
-            f"gaia.engine.{self._name}"
-        )
+            f"gaia.engine.{self._name.replace(' ', '_')}")
         self.logger.info("Initializing Ecosystem")
         self._alarms: list = []
         self._lighting_hours = LightingHours(

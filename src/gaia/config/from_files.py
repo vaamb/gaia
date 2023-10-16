@@ -614,7 +614,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self._engine_config: EngineConfig = weakref.proxy(EngineConfig())
         ids = self._engine_config.get_IDs(ecosystem)
         self.uid = ids.uid
-        self.logger = logging.getLogger(f"gaia.engine.{ids.name}.config")
+        name = ids.name.replace(" ", "_")
+        self.logger = logging.getLogger(f"gaia.engine.{name}.config")
         self.logger.debug(f"Initializing EcosystemConfig for {ids.name}")
 
     def __repr__(self) -> str:
