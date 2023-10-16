@@ -17,7 +17,7 @@ _i2c: "I2C" | None = None
 _store: dict[str, "I2C"] = {}
 
 
-hardware_logger = logging.getLogger("engine.hardware_lib")
+hardware_logger = logging.getLogger("gaia.hardware_store")
 
 
 def is_raspi() -> bool:
