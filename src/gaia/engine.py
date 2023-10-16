@@ -10,12 +10,13 @@ import typing as t
 from typing import Type
 
 from gaia.config import (
-    EngineConfig, GaiaConfig, get_cache_dir, get_config, get_ecosystem_IDs)
+    configure_logging, EngineConfig, GaiaConfig, get_cache_dir, get_config,
+    get_ecosystem_IDs)
 from gaia.config.from_files import detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import get_scheduler, start_scheduler
-from gaia.utils import configure_logging, json, SingletonMeta
+from gaia.utils import json, SingletonMeta
 from gaia.virtual import get_virtual_ecosystem
 
 
@@ -59,9 +60,7 @@ class Engine(metaclass=SingletonMeta):
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._started_event = Event()
-
-    def __del__(self):
-        self._config.engine = None
+        self._shutting_down = Event()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
@@ -74,8 +73,7 @@ class Engine(metaclass=SingletonMeta):
         broker_type = broker_url[:broker_url.index("://")]
         if broker_type not in {"amqp", "redis"}:
             raise ValueError(f"{broker_type} is not supported")
-        self.logger.info("Initialising the message broker")
-        self.logger.debug("Initializing the dispatcher")
+        self.logger.info("Initialising the event dispatcher")
         if broker_url == "amqp://":
             broker_url = "amqp://guest:guest@localhost:5672//"
         elif broker_url == "redis://":
@@ -101,11 +99,11 @@ class Engine(metaclass=SingletonMeta):
         self.event_handler = events_handler
 
     def start_message_broker(self) -> None:
-        self.logger.info("Starting the dispatcher")
+        self.logger.info("Starting the event dispatcher")
         self.message_broker.start(retry=True, block=False)
 
     def stop_message_broker(self) -> None:
-        self.logger.info("Stopping the dispatcher")
+        self.logger.info("Stopping the event dispatcher")
         self.message_broker.stop()
 
     @property
@@ -250,6 +248,13 @@ class Engine(metaclass=SingletonMeta):
         return self._started_event.is_set()
 
     @property
+    def shutting_down(self) -> bool:
+        return (
+            not self._started_event.is_set()
+            and self._shutting_down.is_set()
+        )
+
+    @property
     def ecosystems(self) -> dict[str, Ecosystem]:
         return self._ecosystems
 
@@ -359,22 +364,22 @@ class Engine(metaclass=SingletonMeta):
         :param detach_config_: Whether to remove the Ecosystem's config from
                                memory or not.
         """
-        ecosystem_id, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
-        if ecosystem_id in self.ecosystems:
-            if ecosystem_id in self.ecosystems_started:
+        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
+        if ecosystem_uid in self.ecosystems:
+            if ecosystem_uid in self.ecosystems_started:
                 raise RuntimeError(
-                    "Cannot dismount a started Ecosystem. First stop it"
+                    "Cannot dismount a started ecosystem. First stop it"
                 )
             else:
-                del self.ecosystems[ecosystem_id]
+                del self.ecosystems[ecosystem_uid]
                 if detach_config_:
-                    detach_config(ecosystem_id)
+                    detach_config(ecosystem_uid)
                 self.logger.info(
-                    f"Ecosystem '{ecosystem_id}' has been dismounted"
+                    f"Ecosystem {ecosystem_name} has been dismounted"
                 )
         else:
             raise RuntimeError(
-                f"Cannot dismount Ecosystem '{ecosystem_id}' as it has not been "
+                f"Cannot dismount ecosystem {ecosystem_uid} as it has not been "
                 f"initialised"
             )
 
@@ -480,8 +485,8 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Starting Gaia ...")
         if self.plugins_needed and not self.plugins_initialized:
             raise RuntimeError(
-                "Plugins are needed but have not been initialized. Please use "
-                "the 'init_plugins()' method to start them."
+                "Some plugins are needed but have not been initialized. Please "
+                "use the 'init_plugins()' method to start them."
             )
         # Load the ecosystem configs into memory and start the watchdog
         self.config.initialize_configs()
@@ -497,13 +502,17 @@ class Engine(metaclass=SingletonMeta):
             target=self._loop,
             name="engine")
         self._started_event.set()
+        self._shutting_down.clear()
         self.thread.start()
         self.logger.info("Gaia started")
 
     def shutdown(self) -> None:
         """Shutdown the Engine"""
-        if not self.started:
-            raise RuntimeError("Cannot shutdown a non-started Engine")
+        if not self.shutting_down:
+            raise RuntimeError(
+                "Cannot shutdown a running engine. Use the 'stop()' method "
+                "before attempting to shutdown the engine."
+            )
         self.logger.info("Stopping Gaia ...")
         # Send a config signal so the loops unlocks
         self._started_event.clear()
@@ -533,9 +542,10 @@ class Engine(metaclass=SingletonMeta):
 
     def stop(self) -> None:
         if not self.started:
-            raise RuntimeError("Cannot shutdown a non-started Engine")
-        self.logger.info("Received a stop signal")
+            raise RuntimeError("Cannot shutdown a non-started engine")
+        self.logger.info("Received a 'stop' signal")
         self._started_event.clear()
+        self._shutting_down.set()
 
     def add_signal_handler(self) -> None:
         def signal_handler(signum, frame) -> None:

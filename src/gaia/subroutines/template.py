@@ -26,9 +26,9 @@ class SubroutineTemplate(ABC):
         """
         self._ecosystem: "Ecosystem" = weakref.proxy(ecosystem)
         self.name: str = self.__class__.__name__.lower()
+        eco_name = self._ecosystem.name.replace(" ", "_")
         self.logger: logging.Logger = logging.getLogger(
-            f"gaia.engine.{self.ecosystem.name}.{self.name}"
-        )
+            f"gaia.engine.{eco_name}.{self.name}")
         self.logger.debug("Initializing")
         self.hardware: dict[str, Hardware] = {}
         self._hardware_choices: dict[str, Type[Hardware]] = {}

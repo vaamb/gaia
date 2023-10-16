@@ -66,9 +66,8 @@ class Ecosystem:
         self._name: str = self._config.name
         self._engine: "Engine" = weakref.proxy(engine)
         self.logger: logging.Logger = logging.getLogger(
-            f"gaia.engine.{self._name}"
-        )
-        self.logger.info("Initializing Ecosystem")
+            f"gaia.engine.{self._name.replace(' ', '_')}")
+        self.logger.info("Initializing the ecosystem")
         self._alarms: list = []
         self._lighting_hours = LightingHours(
             morning_start=self.config.time_parameters.day,
@@ -264,7 +263,7 @@ class Ecosystem:
         if not self.status:
             try:
                 self.refresh_lighting_hours()
-                self.logger.info("Starting the Ecosystem")
+                self.logger.info("Starting the ecosystem")
                 self._refresh_subroutines()
                 if self.engine.use_message_broker and self.event_handler.registered:
                     self.event_handler.send_ecosystems_info(self.uid)
@@ -272,15 +271,15 @@ class Ecosystem:
                 self._started = True
             except StoppingEcosystem:
                 self.logger.info(
-                    "The Ecosystem isn't managing any subroutine, it will stop"
+                    "The ecosystem is not managing any subroutine, it will stop"
                 )
         else:
-            raise RuntimeError(f"Ecosystem {self._name} is already running")
+            raise RuntimeError(f"Ecosystem {self.name} is already running")
 
     def stop(self):
         """Stop the Ecosystem"""
         if self.status:
-            self.logger.info("Stopping the Ecosystem ...")
+            self.logger.info("Shutting down the ecosystem")
             subroutines_to_stop: list[SubroutineNames] = [*subroutines.keys()]
             for subroutine in reversed(subroutines_to_stop):
                 self.subroutines[subroutine].stop()
@@ -288,8 +287,8 @@ class Ecosystem:
                         for subroutine in self.subroutines]):
                 self.logger.debug("Ecosystem successfully stopped")
             else:
-                self.logger.error("Failed to stop Ecosystem")
-                raise Exception(f"Failed to stop Ecosystem {self._name}")
+                self.logger.error("Failed to stop the ecosystem")
+                raise Exception(f"Failed to stop ecosystem {self.name}")
             self._started = False
 
     # Actuator
