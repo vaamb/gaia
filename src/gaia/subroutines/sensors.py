@@ -26,6 +26,7 @@ class Sensors(SubroutineTemplate):
         self.hardware: dict[str, BaseSensor]
         self._thread: Thread | None = None
         self._stop_event = Event()
+        self._loop_timeout: float = float(get_config().SENSORS_TIMEOUT)
         self._sensors_data: SensorsData | Empty = Empty()
         self._data_lock = Lock()
         self._finish__init__()
@@ -36,7 +37,7 @@ class Sensors(SubroutineTemplate):
             self.logger.debug("Starting sensors data update routine ...")
             self.update_sensors_data()
             loop_time = monotonic() - start_time
-            sleep_time = get_config().SENSORS_TIMEOUT - loop_time
+            sleep_time = self._loop_timeout - loop_time
             if sleep_time < 0:  # pragma: no cover
                 self.logger.warning(
                     f"Sensors data loop took {loop_time}. This either indicates "
@@ -59,9 +60,8 @@ class Sensors(SubroutineTemplate):
             self.manageable = False
 
     def _start(self) -> None:
-        time_out: float = get_config().SENSORS_TIMEOUT
         self.logger.info(
-            f"Starting sensors loop. It will run every {time_out} s")
+            f"Starting sensors loop. It will run every {self._loop_timeout} s")
         self._stop_event.clear()
         self.thread = Thread(
             target=self._sensors_loop,
