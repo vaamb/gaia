@@ -199,8 +199,10 @@ class Events(EventHandler):
             self.register()
 
     def on_disconnect(self, *args) -> None:  # noqa
-        if self.registered:
-            self.logger.warning("Disconnected from server")
+        if self.engine.shutting_down:
+            self.logger.info("Disconnecting from the server")
+        elif self.registered:
+            self.logger.warning("Disconnected from the server")
         else:
             self.logger.error("Failed to register engine")
         if self.background_tasks_running:
