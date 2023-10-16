@@ -79,10 +79,6 @@ class SubroutineTemplate(ABC):
         return self._ecosystem.config
 
     @property
-    def ecosystem_uid(self) -> str:
-        return self._ecosystem.uid
-
-    @property
     def status(self) -> bool:
         return self._started
 
