@@ -35,9 +35,6 @@ if t.TYPE_CHECKING:
     from gaia.engine import Engine
 
 
-logger = logging.getLogger("gaia.config.environments")
-
-
 class ConfigType(Enum):
     ecosystems = "ecosystems.cfg"
     private = "private.cfg"
@@ -131,7 +128,8 @@ class EngineConfig(metaclass=SingletonMeta):
     class should be used.
     """
     def __init__(self, base_dir: Path | None = None) -> None:
-        logger.debug("Initializing EngineConfig")
+        self.logger = logging.getLogger("gaia.engine.config")
+        self.logger.debug("Initializing EngineConfig")
         base_dir = base_dir or get_base_dir()
         self._base_dir = Path(base_dir)
         self._engine: "Engine" | None = None
@@ -226,12 +224,12 @@ class EngineConfig(metaclass=SingletonMeta):
                     self._load_config(cfg_type)
                 except OSError:
                     if cfg_type == ConfigType.ecosystems:
-                        logger.warning(
+                        self.logger.warning(
                             "No custom `ecosystems.cfg` configuration file "
                             "detected. Creating a default file.")
                         self._create_ecosystems_config_file()
                     elif cfg_type == ConfigType.private:
-                        logger.warning(
+                        self.logger.warning(
                             "No custom `private.cfg` configuration file "
                             "detected. Creating a default file.")
                         self._create_private_config_file()
@@ -239,7 +237,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def save(self, cfg_type: ConfigType) -> None:
         with self.config_files_lock():
-            logger.debug(f"Updating {cfg_type.name} configuration file(s)")
+            self.logger.debug(f"Updating {cfg_type.name} configuration file(s)")
             self._dump_config(cfg_type)
 
     # File watchdog
@@ -269,7 +267,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 changed_configs = self._get_changed_config_files()
                 if changed_configs:
                     for config_type in changed_configs:
-                        logger.info(
+                        self.logger.info(
                             f"Change in '{config_type.value}' detected. Updating "
                             f"{config_type.name} configuration.")
                         self._load_config(cfg_type=config_type)
@@ -292,22 +290,22 @@ class EngineConfig(metaclass=SingletonMeta):
         if self.started:  # pragma: no cover
             raise RuntimeError("Configuration files watchdog is already running")
 
-        logger.info("Starting the configuration files watchdog")
+        self.logger.info("Starting the configuration files watchdog")
         self.thread = Thread(
             target=self._watchdog_loop,
             name="config_watchdog")
         self.thread.start()
-        logger.debug("Configuration files watchdog successfully started")
+        self.logger.debug("Configuration files watchdog successfully started")
 
     def stop_watchdog(self) -> None:
         if not self.started:  # pragma: no cover
             raise RuntimeError("Configuration files watchdog is not running")
 
-        logger.info("Stopping the configuration files watchdog")
+        self.logger.info("Stopping the configuration files watchdog")
         self._stop_event.set()
         self.thread.join()
         self.thread = None
-        logger.debug("Configuration files watchdog successfully stopped")
+        self.logger.debug("Configuration files watchdog successfully stopped")
 
     @contextmanager
     def config_files_lock(self):
@@ -487,12 +485,12 @@ class EngineConfig(metaclass=SingletonMeta):
                 needed = True
                 break
         if not needed:
-            logger.debug("No need to refresh sun times")
+            self.logger.debug("No need to refresh sun times")
             return
         sun_times_file = get_cache_dir()/"sunrise.json"
         # Determine if the file needs to be updated
         sun_times_data: gv.SunTimesDict | None = None
-        logger.debug("Trying to load cached sun times")
+        self.logger.debug("Trying to load cached sun times")
         try:
             with sun_times_file.open("r") as file:
                 payload: SunTimesCacheDict = json.loads(file.read())
@@ -503,7 +501,7 @@ class EngineConfig(metaclass=SingletonMeta):
         else:
             if last_update.date() >= date.today():
                 sun_times_data = payload["data"]["home"]
-                logger.info("Sun times already up to date")
+                self.logger.info("Sun times already up to date")
         if sun_times_data is None:
             sun_times_data = self.download_sun_times()
 
@@ -526,7 +524,7 @@ class EngineConfig(metaclass=SingletonMeta):
             )
 
         else:
-            logger.warning(
+            self.logger.warning(
                 "Could not refresh sun times, some functionalities might not "
                 "work as expected. All 'light_method's were set to 'fixed'."
             )
@@ -534,18 +532,18 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def download_sun_times(self) -> gv.SunTimesDict | None:
         sun_times_file = get_cache_dir()/"sunrise.json"
-        logger.info("Trying to download sun times")
+        self.logger.info("Trying to download sun times")
         try:
             home_coordinates = self.home_coordinates
         except UndefinedParameter:
-            logger.warning(
+            self.logger.warning(
                 "You need to define your home city coordinates in "
                 "'private.cfg' in order to download sun times."
             )
             return None
         else:
             try:
-                logger.debug(
+                self.logger.debug(
                     "Trying to update sunrise and sunset times on "
                     "sunrise-sunset.org"
                 )
@@ -561,7 +559,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 data = response.json()
                 results: gv.SunTimesDict = data["results"]
             except ConnectionError:
-                logger.debug(
+                self.logger.debug(
                     "Failed to update sunrise and sunset times due to a "
                     "connection error"
                 )
@@ -573,7 +571,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 }
                 with open(sun_times_file, "w") as file:
                     file.write(json.dumps(payload))
-                logger.info(
+                self.logger.info(
                     "Sunrise and sunset times successfully updated")
                 return results
 
