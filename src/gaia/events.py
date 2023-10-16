@@ -61,7 +61,7 @@ class Events(EventHandler):
         self.registered = False
         self._thread: Thread | None = None
         self._stop_event = Event()
-        self.logger = logging.getLogger(f"gaia.events_handler")
+        self.logger = logging.getLogger(f"gaia.engine.events_handler")
 
     @property
     def db(self) -> "SQLAlchemyWrapper":
