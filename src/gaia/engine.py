@@ -364,22 +364,22 @@ class Engine(metaclass=SingletonMeta):
         :param detach_config_: Whether to remove the Ecosystem's config from
                                memory or not.
         """
-        ecosystem_id, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
-        if ecosystem_id in self.ecosystems:
-            if ecosystem_id in self.ecosystems_started:
+        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
+        if ecosystem_uid in self.ecosystems:
+            if ecosystem_uid in self.ecosystems_started:
                 raise RuntimeError(
-                    "Cannot dismount a started Ecosystem. First stop it"
+                    "Cannot dismount a started ecosystem. First stop it"
                 )
             else:
-                del self.ecosystems[ecosystem_id]
+                del self.ecosystems[ecosystem_uid]
                 if detach_config_:
-                    detach_config(ecosystem_id)
+                    detach_config(ecosystem_uid)
                 self.logger.info(
-                    f"Ecosystem '{ecosystem_id}' has been dismounted"
+                    f"Ecosystem '{ecosystem_name}' has been dismounted"
                 )
         else:
             raise RuntimeError(
-                f"Cannot dismount Ecosystem '{ecosystem_id}' as it has not been "
+                f"Cannot dismount ecosystem '{ecosystem_uid}' as it has not been "
                 f"initialised"
             )
 
@@ -485,8 +485,8 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Starting Gaia ...")
         if self.plugins_needed and not self.plugins_initialized:
             raise RuntimeError(
-                "Plugins are needed but have not been initialized. Please use "
-                "the 'init_plugins()' method to start them."
+                "Some plugins are needed but have not been initialized. Please "
+                "use the 'init_plugins()' method to start them."
             )
         # Load the ecosystem configs into memory and start the watchdog
         self.config.initialize_configs()
@@ -510,8 +510,8 @@ class Engine(metaclass=SingletonMeta):
         """Shutdown the Engine"""
         if not self.shutting_down:
             raise RuntimeError(
-                "Cannot shutdown a running Engine. Use 'engine.stop()' before "
-                "attempting to shutdown the Engine."
+                "Cannot shutdown a running engine. Use the 'stop()' method "
+                "before attempting to shutdown the engine."
             )
         self.logger.info("Stopping Gaia ...")
         # Send a config signal so the loops unlocks
@@ -542,8 +542,8 @@ class Engine(metaclass=SingletonMeta):
 
     def stop(self) -> None:
         if not self.started:
-            raise RuntimeError("Cannot shutdown a non-started Engine")
-        self.logger.info("Received a stop signal")
+            raise RuntimeError("Cannot shutdown a non-started engine")
+        self.logger.info("Received a 'stop' signal")
         self._started_event.clear()
         self._shutting_down.set()
 
