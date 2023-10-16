@@ -72,8 +72,7 @@ class Engine(metaclass=SingletonMeta):
         broker_type = broker_url[:broker_url.index("://")]
         if broker_type not in {"amqp", "redis"}:
             raise ValueError(f"{broker_type} is not supported")
-        self.logger.info("Initialising the message broker")
-        self.logger.debug("Initializing the dispatcher")
+        self.logger.info("Initialising the event dispatcher")
         if broker_url == "amqp://":
             broker_url = "amqp://guest:guest@localhost:5672//"
         elif broker_url == "redis://":
@@ -99,11 +98,11 @@ class Engine(metaclass=SingletonMeta):
         self.event_handler = events_handler
 
     def start_message_broker(self) -> None:
-        self.logger.info("Starting the dispatcher")
+        self.logger.info("Starting the event dispatcher")
         self.message_broker.start(retry=True, block=False)
 
     def stop_message_broker(self) -> None:
-        self.logger.info("Stopping the dispatcher")
+        self.logger.info("Stopping the event dispatcher")
         self.message_broker.stop()
 
     @property
