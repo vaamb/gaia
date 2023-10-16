@@ -59,9 +59,7 @@ class Engine(metaclass=SingletonMeta):
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._started_event = Event()
-
-    def __del__(self):
-        self._config.engine = None
+        self._shutting_down = Event()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
@@ -248,6 +246,13 @@ class Engine(metaclass=SingletonMeta):
     @property
     def started(self) -> bool:
         return self._started_event.is_set()
+
+    @property
+    def shutting_down(self) -> bool:
+        return (
+            not self._started_event.is_set()
+            and self._shutting_down.is_set()
+        )
 
     @property
     def ecosystems(self) -> dict[str, Ecosystem]:
@@ -497,13 +502,17 @@ class Engine(metaclass=SingletonMeta):
             target=self._loop,
             name="engine")
         self._started_event.set()
+        self._shutting_down.clear()
         self.thread.start()
         self.logger.info("Gaia started")
 
     def shutdown(self) -> None:
         """Shutdown the Engine"""
-        if not self.started:
-            raise RuntimeError("Cannot shutdown a non-started Engine")
+        if not self.shutting_down:
+            raise RuntimeError(
+                "Cannot shutdown a running Engine. Use 'engine.stop()' before "
+                "attempting to shutdown the Engine."
+            )
         self.logger.info("Stopping Gaia ...")
         # Send a config signal so the loops unlocks
         self._started_event.clear()
@@ -536,6 +545,7 @@ class Engine(metaclass=SingletonMeta):
             raise RuntimeError("Cannot shutdown a non-started Engine")
         self.logger.info("Received a stop signal")
         self._started_event.clear()
+        self._shutting_down.set()
 
     def add_signal_handler(self) -> None:
         def signal_handler(signum, frame) -> None:
