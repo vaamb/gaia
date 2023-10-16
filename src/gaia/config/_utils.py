@@ -161,6 +161,10 @@ def configure_logging(config_class: Type[GaiaConfig]):
                 "handlers": handlers,
                 "level": f"{'DEBUG' if DEBUG else 'INFO'}"
             },
+            "dispatcher": {
+                "handlers": handlers,
+                "level": f"{'DEBUG' if DEBUG else 'WARNING'}"
+            },
             "urllib3": {
                 "handlers": handlers,
                 "level": "WARNING"
