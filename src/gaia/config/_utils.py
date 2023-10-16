@@ -28,7 +28,7 @@ def get_base_dir() -> Path:
         _base_dir = Path(DIR)
         if not _base_dir.exists():
             raise ValueError(
-                "Environment variable `OURANOS_DIR` is not set to a valid path"
+                "Environment variable `GAIA_DIR` is not set to a valid path"
             )
     return _base_dir
 
