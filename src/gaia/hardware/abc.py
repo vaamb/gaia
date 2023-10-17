@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import io
 import os
@@ -17,6 +17,7 @@ from gaia_validators import (
     HardwareType, HardwareTypeNames, SensorRecord)
 
 from gaia.config import get_base_dir
+from gaia.dependencies.camera import check_dependencies, Image
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import (
@@ -24,9 +25,8 @@ from gaia.utils import (
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    import numpy as np
-
     from gaia.subroutines.template import SubroutineTemplate
+
     if is_raspi():
         import pwmio
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -48,12 +48,6 @@ def str_to_hex(address: str) -> int:
     if address.lower() in ("def", "default"):
         return 0
     return int(address, base=16)
-
-
-@dataclass(slots=True)
-class Image:
-    array: "np.array"
-    timestamp: datetime
 
 
 class Address:
@@ -539,8 +533,7 @@ class i2cSensor(BaseSensor, i2cHardware):
 
 class Camera(Hardware):
     def __init__(self, *args, **kwargs) -> None:
-        import numpy as np
-        from PIL import Image as _Image
+        check_dependencies()
         super().__init__(*args, **kwargs)
         self.device: Any = self._get_device()
         self._camera_dir: Path | None = None
@@ -565,7 +558,7 @@ class Camera(Hardware):
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
             base_dir = get_base_dir()
-            self._camera_dir = base_dir/f"camera/{self.subroutine.ecosystem_uid}"
+            self._camera_dir = base_dir/f"camera/{self.subroutine.ecosystem.name}"
             if not self._camera_dir.exists():
                 os.mkdir(self._camera_dir)
         return self._camera_dir
@@ -575,10 +568,11 @@ class Camera(Hardware):
             image: Image,
             name: str | None = None,
     ) -> Path:
-        from PIL import Image as _Image  # TODO: fix this ugliness
         if name is None:
-            name = f"{self.uid}-{image.timestamp.isoformat(timespec='seconds')}"
+            timestamp: datetime | None = image.metadata.get("timestamp")
+            if timestamp is None:
+                timestamp = datetime.now(tz=timezone.utc)
+            name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
         path = self.camera_dir/name
-        img = _Image.fromarray(image.array)
-        img.save(path)
+        image.save(path)
         return path
