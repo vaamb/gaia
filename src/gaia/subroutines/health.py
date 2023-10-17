@@ -8,6 +8,7 @@ from gaia_validators import (
     ActuatorMode, ActuatorModePayload, Empty, HealthRecord)
 
 from gaia.config import get_config
+from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
 from gaia.shared_resources import get_scheduler
@@ -105,6 +106,7 @@ class Health(SubroutineTemplate):
             self.manageable = False
 
     def _start(self) -> None:
+        check_dependencies("camera")
         if not self.ecosystem.get_subroutine_status("light"):
             self.logger.warning(
                 "The Ecosystem is not managing light subroutine, be sure the "

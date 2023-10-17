@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from gaia.dependencies import check_dependencies
+
+check_dependencies("dispatcher")
+
 import inspect
 import logging
 from threading import Event, Thread
@@ -19,8 +23,6 @@ from gaia.shared_resources import get_scheduler
 from gaia.utils import humanize_list, local_ip_address
 
 if get_config().USE_DATABASE:
-    from sqlalchemy_wrapper import SQLAlchemyWrapper
-
     from gaia.database.models import SensorBuffer
 
 
