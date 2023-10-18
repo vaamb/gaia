@@ -211,7 +211,10 @@ class EngineConfig(metaclass=SingletonMeta):
         # TODO: shorten dicts used ?
         config_path = self._base_dir/f"{cfg_type.name}.cfg"
         with open(config_path, "w") as file:
-            cfg = getattr(self, cfg_type.value)
+            if cfg_type == ConfigType.ecosystems:
+                cfg = self._ecosystems_config
+            else:
+                cfg = self._private_config
             yaml.dump(cfg, file)
 
     def _create_ecosystems_config_file(self):
