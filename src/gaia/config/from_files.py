@@ -127,18 +127,12 @@ class EngineConfig(metaclass=SingletonMeta):
     To interact with a specific ecosystem configuration, the EcosystemConfig
     class should be used.
     """
-    def __init__(
-            self,
-            engine: "Engine" | None = None,
-            base_dir: Path | None = None
-    ) -> None:
+    def __init__(self, base_dir: Path | None = None) -> None:
         self.logger = logging.getLogger("gaia.engine.config")
         self.logger.debug("Initializing EngineConfig")
         base_dir = base_dir or get_base_dir()
         self._base_dir = Path(base_dir)
         self._engine: "Engine" | None = None
-        if engine:
-            self.engine = engine
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
         self._sun_times: gv.SunTimes | None = None
