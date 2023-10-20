@@ -16,7 +16,6 @@ from gaia_validators import (
     safe_enum_from_name, HardwareConfig, HardwareLevel, HardwareLevelNames,
     HardwareType, HardwareTypeNames, SensorRecord)
 
-from gaia.config import get_base_dir
 from gaia.dependencies.camera import check_dependencies, Image
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
@@ -557,7 +556,10 @@ class Camera(Hardware):
     @property
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
-            base_dir = get_base_dir()
+            if self.subroutine is None:
+                base_dir = Path(os.getcwd())
+            else:
+                base_dir = self.subroutine.ecosystem.engine.config.base_dir
             self._camera_dir = base_dir/f"camera/{self.subroutine.ecosystem.name}"
             if not self._camera_dir.exists():
                 os.mkdir(self._camera_dir)

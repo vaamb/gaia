@@ -12,7 +12,7 @@ from requests import ConnectionError, Session
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
-from typing import Literal, TypedDict
+from typing import Literal, Type, TypedDict
 import weakref
 from weakref import WeakValueDictionary
 
@@ -22,8 +22,7 @@ from gaia_validators import safe_enum_from_name
 # TODO: move up once compatibility issues are solved
 from pydantic import Field, field_validator, ValidationError  # noqa
 
-from gaia.config._utils import (
-    get_base_dir, get_cache_dir, get_config as get_gaia_config)
+from gaia.config._utils import GaiaConfig, get_config as get_gaia_config
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
@@ -127,11 +126,11 @@ class EngineConfig(metaclass=SingletonMeta):
     To interact with a specific ecosystem configuration, the EcosystemConfig
     class should be used.
     """
-    def __init__(self, base_dir: Path | None = None) -> None:
+    def __init__(self, gaia_config: GaiaConfig | None = None) -> None:
         self.logger = logging.getLogger("gaia.engine.config")
         self.logger.debug("Initializing EngineConfig")
-        base_dir = base_dir or get_base_dir()
-        self._base_dir = Path(base_dir)
+        self._app_config = gaia_config or get_gaia_config()
+        self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
         self._ecosystems_config: dict = {}
         self._private_config: dict = {}
@@ -171,6 +170,43 @@ class EngineConfig(metaclass=SingletonMeta):
     def engine(self, value: "Engine") -> None:
         self._engine = weakref.proxy(value)
 
+    @property
+    def app_config(self) -> Type[GaiaConfig]:
+        return self._app_config
+
+    def _get_dir(self, dir_name: str) -> Path:
+        try:
+            return self._dirs[dir_name]
+        except KeyError:
+            try:
+                path = Path(getattr(self.app_config, dir_name))
+            except ValueError:
+                raise ValueError(f"Config.{dir_name} is not a valid directory.")
+            else:
+                if not path.exists():
+                    self.logger.warning(
+                        f"'Config.{dir_name}' variable is set to a non-existing "
+                        f"directory, trying to create it.")
+                    path.mkdir(parents=True)
+                self._dirs[dir_name] = path
+                return path
+
+    @property
+    def base_dir(self) -> Path:
+        return self._get_dir("DIR")
+
+    @property
+    def config_dir(self) -> Path:
+        return self._get_dir("DIR")
+
+    @property
+    def logs_dir(self) -> Path:
+        return self._get_dir("LOG_DIR")
+
+    @property
+    def cache_dir(self) -> Path:
+        return self._get_dir("CACHE_DIR")
+
     # Load, dump and save config
     def _check_files_lock_acquired(self) -> None:
         if not self._config_files_lock.locked():
@@ -182,7 +218,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def _load_config(self, cfg_type: ConfigType) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
-        config_path = self._base_dir/f"{cfg_type.name}.cfg"
+        config_path = self.config_dir/f"{cfg_type.name}.cfg"
         if cfg_type == ConfigType.ecosystems:
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
@@ -203,7 +239,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
         # TODO: shorten dicts used ?
-        config_path = self._base_dir/f"{cfg_type.name}.cfg"
+        config_path = self.config_dir/f"{cfg_type.name}.cfg"
         with open(config_path, "w") as file:
             if cfg_type == ConfigType.ecosystems:
                 cfg = self._ecosystems_config
@@ -257,8 +293,8 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def _watchdog_loop(self) -> None:
         # Fill config files modification dict
-        ecosystem = self._base_dir / ConfigType.ecosystems.value
-        private = self._base_dir / ConfigType.private.value
+        ecosystem = self.config_dir/ConfigType.ecosystems.value
+        private = self.config_dir/ConfigType.private.value
         self._config_files_modif = {
             ecosystem: os.stat(ecosystem).st_mtime_ns,
             private: os.stat(private).st_mtime_ns,
@@ -365,10 +401,6 @@ class EngineConfig(metaclass=SingletonMeta):
             self._private_config = value
         else:
             raise AttributeError("can't set attribute 'private_config'")
-
-    @property
-    def base_dir(self) -> Path:
-        return self._base_dir
 
     @property
     def ecosystems_uid(self) -> list[str]:
@@ -490,7 +522,7 @@ class EngineConfig(metaclass=SingletonMeta):
         if not needed:
             self.logger.debug("No need to refresh sun times")
             return
-        sun_times_file = get_cache_dir()/"sunrise.json"
+        sun_times_file = self.cache_dir/"sunrise.json"
         # Determine if the file needs to be updated
         sun_times_data: gv.SunTimesDict | None = None
         self.logger.debug("Trying to load cached sun times")
@@ -534,7 +566,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self._sun_times = None
 
     def download_sun_times(self) -> gv.SunTimesDict | None:
-        sun_times_file = get_cache_dir()/"sunrise.json"
+        sun_times_file = self.cache_dir/"sunrise.json"
         self.logger.info("Trying to download sun times")
         try:
             home_coordinates = self.home_coordinates

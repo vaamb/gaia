@@ -10,8 +10,7 @@ import typing as t
 from typing import Type
 
 from gaia.config import (
-    configure_logging, EngineConfig, GaiaConfig, get_cache_dir, get_config,
-    get_ecosystem_IDs)
+    configure_logging, EngineConfig, GaiaConfig, get_config, get_ecosystem_IDs)
 from gaia.config.from_files import detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
@@ -458,7 +457,7 @@ class Engine(metaclass=SingletonMeta):
     def refresh_chaos(self) -> None:
         for ecosystem in self.ecosystems.values():
             ecosystem.refresh_chaos()
-        chaos_file = get_cache_dir()/"chaos.json"
+        chaos_file = self.config.cache_dir/"chaos.json"
         try:
             with chaos_file.open("r+") as file:
                 ecosystem_chaos = json.loads(file.read())

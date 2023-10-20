@@ -2,13 +2,11 @@ import os
 import uuid
 
 
-DIR = os.environ.get("GAIA_DIR") or os.getcwd()
-
-
 class BaseConfig:
     DEBUG = False
     TESTING = False
 
+    DIR = os.environ.get("GAIA_DIR") or os.getcwd()
     LOG_DIR = os.environ.get("GAIA_LOG_DIR") or os.path.join(DIR, "logs")
     CACHE_DIR = os.environ.get("GAIA_CACHE_DIR") or os.path.join(DIR, ".cache")
 

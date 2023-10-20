@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 import logging.config
+import os
 from pathlib import Path
 import sys
 from typing import Type
-import warnings
 
 from gaia import __version__ as version
-from gaia.config.base import BaseConfig, DIR
+from gaia.config.base import BaseConfig
 
 
 class AppInfo:
@@ -20,24 +20,12 @@ class GaiaConfig(AppInfo, BaseConfig):
     pass
 
 
-_base_dir: Path | None = None
 _config: Type[GaiaConfig] | None = None
-
-
-def get_base_dir() -> Path:
-    global _base_dir
-    if _base_dir is None:
-        _base_dir = Path(DIR)
-        if not _base_dir.exists():
-            raise ValueError(
-                "Environment variable `GAIA_DIR` is not set to a valid path"
-            )
-    return _base_dir
+_lookup_dir = os.environ.get("GAIA_DIR") or os.getcwd()
 
 
 def _get_config() -> Type[GaiaConfig]:
-    base_dir = get_base_dir()
-    sys.path.insert(0, str(base_dir))
+    sys.path.insert(0, str(_lookup_dir))
     try:
         from config import Config
     except ImportError:
@@ -63,36 +51,13 @@ def get_config() -> Type[GaiaConfig]:
     return _config
 
 
-def _get_dir(name: str, fallback_path: str) -> Path:
-    config: Type[GaiaConfig] = get_config()
-    path = getattr(config, name)
-    try:
-        dir_ = Path(path)
-    except ValueError:
-        warnings.warn(
-            f"The dir specified by {name} is not valid, using fallback path "
-            f"{fallback_path}"
-        )
-        base_dir = get_base_dir()
-        dir_ = base_dir / fallback_path
-    if not dir_.exists():
-        dir_.mkdir(parents=True)
-    return dir_
-
-
-def get_cache_dir() -> Path:
-    return _get_dir("CACHE_DIR", ".cache")
-
-
-def get_log_dir() -> Path:
-    return _get_dir("LOG_DIR", ".logs")
-
-
 def configure_logging(config_class: Type[GaiaConfig]):
     DEBUG = config_class.DEBUG
     LOG_TO_STDOUT = config_class.LOG_TO_STDOUT
     LOG_TO_FILE = config_class.LOG_TO_FILE
     LOG_ERROR = config_class.LOG_ERROR
+
+    log_dir = Path(config_class.LOG_DIR)
 
     handlers = []
 
@@ -134,7 +99,7 @@ def configure_logging(config_class: Type[GaiaConfig]):
                 "level": f"{'DEBUG' if DEBUG else 'INFO'}",
                 "formatter": "fileFormat",
                 "class": "logging.handlers.RotatingFileHandler",
-                'filename': f"{get_log_dir()/'base.log'}",
+                'filename': f"{log_dir/'base.log'}",
                 "mode": "w+",
                 "maxBytes": 1024 * 512,
                 "backupCount": 5,
@@ -143,7 +108,7 @@ def configure_logging(config_class: Type[GaiaConfig]):
                 "level": "ERROR",
                 "formatter": "fileFormat",
                 "class": "logging.FileHandler",
-                "filename": f"{get_log_dir()/'errors.log'}",
+                "filename": f"{log_dir/'errors.log'}",
                 "mode": "a",
             }
         },
