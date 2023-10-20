@@ -9,8 +9,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia.config import (
-    configure_logging, EngineConfig, GaiaConfig, get_config, get_ecosystem_IDs)
+from gaia.config import EngineConfig, GaiaConfig, get_config, get_ecosystem_IDs
 from gaia.config.from_files import detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
@@ -44,7 +43,6 @@ class Engine(metaclass=SingletonMeta):
         self._config: EngineConfig = EngineConfig()
         self._config.engine = self
         self.gaia_config: Type[GaiaConfig] = get_config()
-        configure_logging(self.gaia_config)
         self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
         self.logger.info("Initializing Gaia")
         self._ecosystems: dict[str, Ecosystem] = {}

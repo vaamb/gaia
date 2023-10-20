@@ -22,7 +22,8 @@ from gaia_validators import safe_enum_from_name
 # TODO: move up once compatibility issues are solved
 from pydantic import Field, field_validator, ValidationError  # noqa
 
-from gaia.config._utils import GaiaConfig, get_config as get_gaia_config
+from gaia.config._utils import (
+    configure_logging, GaiaConfig, get_config as get_gaia_config)
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
@@ -130,6 +131,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self.logger = logging.getLogger("gaia.engine.config")
         self.logger.debug("Initializing EngineConfig")
         self._app_config = gaia_config or get_gaia_config()
+        configure_logging(self.app_config)
         self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
         self._ecosystems_config: dict = {}
