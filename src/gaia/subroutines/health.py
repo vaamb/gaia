@@ -7,7 +7,6 @@ import typing as t
 from gaia_validators import (
     ActuatorMode, ActuatorModePayload, Empty, HealthRecord)
 
-from gaia.config import get_config
 from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
@@ -30,7 +29,7 @@ class Health(SubroutineTemplate):
         self._finish__init__()
 
     def _start_scheduler(self) -> None:
-        h, m = get_config().HEALTH_LOGGING_TIME.split("h")
+        h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
         scheduler = get_scheduler()
         scheduler.add_job(
             self.health_routine,

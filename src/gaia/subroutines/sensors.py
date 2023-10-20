@@ -9,7 +9,6 @@ import typing as t
 from gaia_validators import (
     Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict)
 
-from gaia.config import get_config
 from gaia.hardware import sensor_models
 from gaia.hardware.abc import BaseSensor
 from gaia.subroutines.template import SubroutineTemplate
@@ -26,7 +25,8 @@ class Sensors(SubroutineTemplate):
         self.hardware: dict[str, BaseSensor]
         self._thread: Thread | None = None
         self._stop_event = Event()
-        self._loop_timeout: float = float(get_config().SENSORS_TIMEOUT)
+        self._loop_timeout: float = float(
+            self.ecosystem.engine.config.app_config.SENSORS_TIMEOUT)
         self._sensors_data: SensorsData | Empty = Empty()
         self._data_lock = Lock()
         self._finish__init__()
@@ -93,7 +93,7 @@ class Sensors(SubroutineTemplate):
 
     def add_hardware(self, hardware_config: HardwareConfig) -> BaseSensor:
         model = hardware_config.model
-        if get_config().VIRTUALIZATION:
+        if self.ecosystem.engine.config.app_config.VIRTUALIZATION:
             if not model.startswith("virtual"):
                 hardware_config.model = f"virtual{model}"
         return super().add_hardware(hardware_config)
