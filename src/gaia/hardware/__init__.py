@@ -1,13 +1,17 @@
 from typing import Type
 
 from gaia.hardware.abc import Hardware
-from gaia.hardware.actuators import actuator_models, gpioDimmable, gpioSwitch
+from gaia.hardware.actuators import actuator_models
+from gaia.hardware.actuators.GPIO import (
+    gpioDimmable, gpioSwitch, gpio_actuator_models)
+from gaia.hardware.actuators.virtual import (
+    virtualgpioDimmable, virtualgpioSwitch, virtual_actuator_models)
 from gaia.hardware.camera import camera_models
+from gaia.hardware.multiplexers import multiplexer_models, TCA9548A
 from gaia.hardware.sensors import sensor_models
 from gaia.hardware.sensors.GPIO import DHT11, DHT22, gpio_sensor_models
 from gaia.hardware.sensors.I2C import (
     CapacitiveMoisture, i2c_sensor_models, VEML7700)
-from gaia.hardware.multiplexers import multiplexer_models, TCA9548A
 from gaia.hardware.sensors.virtual import (
     virtualCapacitiveMoisture, virtualDHT11, virtualDHT22, virtual_sensor_models,
     virtualVEML7700)
