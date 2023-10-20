@@ -1,8 +1,8 @@
 import typing as t
 from typing import Type
 
-from gaia.config import get_config
 from gaia.hardware.abc import BaseSensor
+from gaia.hardware.virtual import virtualHardware
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, VCNL4040, VEML7700)
@@ -14,12 +14,8 @@ if t.TYPE_CHECKING:  # pragma: no cover
         VEML7700 as _VEML7700)
 
 
-class virtualSensor(BaseSensor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if get_config().VIRTUALIZATION:
-            from gaia.virtual import get_virtual_ecosystem
-            get_virtual_ecosystem(self.subroutine.ecosystem.uid, start=True)
+class virtualSensor(virtualHardware, BaseSensor):
+    pass
 
 
 class virtualDHT(DHTSensor, virtualSensor):
