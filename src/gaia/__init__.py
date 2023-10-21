@@ -5,7 +5,7 @@ import typing as t
 
 if t.TYPE_CHECKING:
     from gaia.config import (
-        EcosystemConfig, EngineConfig, get_config)
+        EcosystemConfig, EngineConfig, get_config, set_config)
     from gaia.ecosystem import Ecosystem
     from gaia.engine import Engine
     from gaia.main import main
@@ -16,7 +16,8 @@ else:
     from gaia.main import main
 
     def __getattr__(name):
-        if name in ("EcosystemConfig", "EngineConfig", "get_config"):
+        if name in (
+                "EcosystemConfig", "EngineConfig", "get_config", "set_config"):
             return getattr(import_module("gaia.config"), name)
         if name == "Ecosystem":
             return getattr(import_module("gaia.ecosystem"), name)
