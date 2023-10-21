@@ -52,25 +52,25 @@ def get_config() -> Type[GaiaConfig]:
 
 
 def configure_logging(config_class: Type[GaiaConfig]):
-    DEBUG = config_class.DEBUG
-    LOG_TO_STDOUT = config_class.LOG_TO_STDOUT
-    LOG_TO_FILE = config_class.LOG_TO_FILE
-    LOG_ERROR = config_class.LOG_ERROR
+    debug = config_class.DEBUG
+    log_to_stdout = config_class.LOG_TO_STDOUT
+    log_to_file = config_class.LOG_TO_FILE
+    log_error = config_class.LOG_ERROR
 
     log_dir = Path(config_class.LOG_DIR)
 
     handlers = []
 
-    if LOG_TO_STDOUT:
+    if log_to_stdout:
         handlers.append("streamHandler")
 
-    if LOG_TO_FILE:
+    if log_to_file:
         handlers.append("fileHandler")
 
-    if LOG_ERROR:
+    if log_error:
         handlers.append("errorFileHandler")
 
-    LOGGING_CONFIG = {
+    logging_config = {
         "version": 1,
         "disable_existing_loggers": False,
 
@@ -78,7 +78,7 @@ def configure_logging(config_class: Type[GaiaConfig]):
             "streamFormat": {
                 "format": (
                     "%(asctime)s %(levelname)-4.4s [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s"
-                    if DEBUG else
+                    if debug else
                     "%(asctime)s %(levelname)-4.4s %(name)-35.35s: %(message)s"
                 ),
                 "datefmt": "%Y-%m-%d %H:%M:%S"
@@ -91,12 +91,12 @@ def configure_logging(config_class: Type[GaiaConfig]):
 
         "handlers": {
             "streamHandler": {
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}",
+                "level": f"{'DEBUG' if debug else 'INFO'}",
                 "formatter": "streamFormat",
                 "class": "logging.StreamHandler",
             },
             "fileHandler": {
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}",
+                "level": f"{'DEBUG' if debug else 'INFO'}",
                 "formatter": "fileFormat",
                 "class": "logging.handlers.RotatingFileHandler",
                 'filename': f"{log_dir/'base.log'}",
@@ -116,19 +116,19 @@ def configure_logging(config_class: Type[GaiaConfig]):
         "loggers": {
             "": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
+                "level": f"{'DEBUG' if debug else 'INFO'}"
             },
             "apscheduler": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'WARNING'}"
+                "level": f"{'DEBUG' if debug else 'WARNING'}"
             },
             "engineio": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
+                "level": f"{'DEBUG' if debug else 'INFO'}"
             },
             "dispatcher": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'WARNING'}"
+                "level": f"{'DEBUG' if debug else 'WARNING'}"
             },
             "urllib3": {
                 "handlers": handlers,
@@ -136,4 +136,4 @@ def configure_logging(config_class: Type[GaiaConfig]):
             },
         },
     }
-    logging.config.dictConfig(LOGGING_CONFIG)
+    logging.config.dictConfig(logging_config)
