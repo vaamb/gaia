@@ -61,7 +61,8 @@ def set_config(config: Type[GaiaConfig]) -> None:
 
 
 def configure_logging(config_class: GaiaConfig):
-    debug = config_class.DEBUG
+    testing = config_class.TESTING
+    debug = config_class.DEBUG or testing
     log_to_stdout = config_class.LOG_TO_STDOUT
     log_to_file = config_class.LOG_TO_FILE
     log_error = config_class.LOG_ERROR
@@ -69,6 +70,8 @@ def configure_logging(config_class: GaiaConfig):
     log_dir = Path(config_class.LOG_DIR)
     if not log_dir.exists():
         log_dir.mkdir(parents=True)
+
+    base_level = 'DEBUG' if (debug or testing) else 'INFO'
 
     handlers = []
 
@@ -92,11 +95,14 @@ def configure_logging(config_class: GaiaConfig):
                     if debug else
                     "%(asctime)s %(levelname)-4.4s %(name)-35.35s: %(message)s"
                 ),
-                "datefmt": "%Y-%m-%d %H:%M:%S"
+                "datefmt": "%Y-%m-%d %H:%M:%S",
             },
             "fileFormat": {
                 "format": "%(asctime)s -- %(levelname)-7.7s  -- %(name)s -- %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S"
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+            "testingFormat": {
+                "format": "%(message)s",
             },
         },
 
@@ -108,7 +114,7 @@ def configure_logging(config_class: GaiaConfig):
             },
             "fileHandler": {
                 "level": f"{'DEBUG' if debug else 'INFO'}",
-                "formatter": "fileFormat",
+                "formatter": "fileFormat" if not testing else "testingFormat",
                 "class": "logging.handlers.RotatingFileHandler",
                 'filename': f"{log_dir/'base.log'}",
                 "mode": "w+",
@@ -127,7 +133,7 @@ def configure_logging(config_class: GaiaConfig):
         "loggers": {
             "": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if debug else 'INFO'}"
+                "level": base_level
             },
             "apscheduler": {
                 "handlers": handlers,
