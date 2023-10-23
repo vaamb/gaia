@@ -612,9 +612,8 @@ class EngineConfig(metaclass=SingletonMeta):
                     "Sunrise and sunset times successfully updated")
                 return results
 
-    @staticmethod
-    def get_ecosystem_config(ecosystem: str) -> "EcosystemConfig":
-        return EcosystemConfig(ecosystem=ecosystem)
+    def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
+        return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
 
 
 # ---------------------------------------------------------------------------
@@ -624,32 +623,37 @@ class _MetaEcosystemConfig(type):
     instances: dict[str, "EcosystemConfig"] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> "EcosystemConfig":
-        if len(args) > 0:
-            ecosystem = args[0]
-        else:
-            ecosystem = kwargs["ecosystem"]
-        general_config = EngineConfig()
-        if not general_config.configs_loaded:
+        try:
+            ecosystem_id = kwargs["ecosystem_id"]
+        except KeyError:
+            ecosystem_id = args[0]
+        engine_config = EngineConfig()
+        if not engine_config.configs_loaded:
             raise RuntimeError(
                 "Configuration files need to be loaded by `EngineConfig` in"
                 "order to get an `EcosystemConfig` instance. To do so, use the "
                 "`EngineConfig().initialize_configs()` method."
             )
-        ecosystem_uid =  general_config.get_IDs(ecosystem).uid
+        ecosystem_uid = engine_config.get_IDs(ecosystem_id).uid
         try:
             return cls.instances[ecosystem_uid]
         except KeyError:
             ecosystem_config: EcosystemConfig = \
-                cls.__new__(cls, ecosystem, *args, **kwargs)
+                cls.__new__(cls, ecosystem_uid, *args, **kwargs)
             ecosystem_config.__init__(*args, **kwargs)
             cls.instances[ecosystem_uid] = ecosystem_config
             return ecosystem_config
 
 
 class EcosystemConfig(metaclass=_MetaEcosystemConfig):
-    def __init__(self, ecosystem: str) -> None:
-        self._engine_config: EngineConfig = weakref.proxy(EngineConfig())
-        ids = self._engine_config.get_IDs(ecosystem)
+    def __init__(
+            self,
+            ecosystem_id: str,
+            engine_config: EngineConfig | None = None
+    ) -> None:
+        engine_config = engine_config or EngineConfig()
+        self._engine_config: EngineConfig = weakref.proxy(engine_config)
+        ids = self._engine_config.get_IDs(ecosystem_id)
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")

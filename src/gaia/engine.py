@@ -38,8 +38,8 @@ class Engine(metaclass=SingletonMeta):
     manages the config watchdog and updates the sun times once a day.
     When used within Gaia, the Engine is automatically instantiated when needed.
     """
-    def __init__(self) -> None:
-        self._config: EngineConfig = EngineConfig()
+    def __init__(self, engine_config: EngineConfig | None = None) -> None:
+        self._config: EngineConfig = engine_config or EngineConfig()
         self.config.engine = self
         self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
         self.logger.info("Initializing Gaia")
