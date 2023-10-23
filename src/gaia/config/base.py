@@ -7,8 +7,14 @@ class BaseConfig:
     TESTING = False
 
     DIR = os.environ.get("GAIA_DIR") or os.getcwd()
-    LOG_DIR = os.environ.get("GAIA_LOG_DIR") or os.path.join(DIR, "logs")
-    CACHE_DIR = os.environ.get("GAIA_CACHE_DIR") or os.path.join(DIR, ".cache")
+
+    @property
+    def LOG_DIR(self):
+        return os.environ.get("GAIA_LOG_DIR") or os.path.join(self.DIR, "logs")
+
+    @property
+    def CACHE_DIR(self):
+        return os.environ.get("GAIA_CACHE_DIR") or os.path.join(self.DIR, ".cache")
 
     LOG_TO_STDOUT = True
     LOG_TO_FILE = True
@@ -18,10 +24,13 @@ class BaseConfig:
     VIRTUALIZATION = os.environ.get("GAIA_VIRTUALIZATION", False)
 
     USE_DATABASE = False
-    SQLALCHEMY_DATABASE_URI = (
-        os.environ.get("GAIA_DATABASE_URI") or
-        "sqlite:///" + os.path.join(DIR, "gaia_data.db")
-    )
+
+    @property
+    def SQLALCHEMY_DATABASE_URI(self):
+        return (
+            os.environ.get("GAIA_DATABASE_URI") or
+            "sqlite:///" + os.path.join(self.DIR, "gaia_data.db")
+        )
 
     COMMUNICATE_WITH_OURANOS = False
     AGGREGATOR_COMMUNICATION_URL = (

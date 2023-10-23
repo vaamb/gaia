@@ -44,10 +44,11 @@ def _get_config() -> Type[GaiaConfig]:
     return GaiaConfig
 
 
-def get_config() -> Type[GaiaConfig]:
+def get_config() -> GaiaConfig:
     global _config
     if _config is None:
-        _config = _get_config()
+        config = _get_config()
+        _config = config()
     return _config
 
 
@@ -55,11 +56,11 @@ def set_config(config: Type[GaiaConfig]) -> None:
     global _config
     if _config is not None:
         raise RuntimeError(
-            "'set_config' cannot be called once 'get_config' is called")
+            "'set_config' cannot be called once 'get_config' has been called")
     _config = config
 
 
-def configure_logging(config_class: Type[GaiaConfig]):
+def configure_logging(config_class: GaiaConfig):
     debug = config_class.DEBUG
     log_to_stdout = config_class.LOG_TO_STDOUT
     log_to_file = config_class.LOG_TO_FILE

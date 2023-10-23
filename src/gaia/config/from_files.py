@@ -12,7 +12,7 @@ from requests import ConnectionError, Session
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
-from typing import Literal, Type, TypedDict
+from typing import Literal, TypedDict
 import weakref
 from weakref import WeakValueDictionary
 
@@ -173,7 +173,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._engine = weakref.proxy(value)
 
     @property
-    def app_config(self) -> Type[GaiaConfig]:
+    def app_config(self) -> GaiaConfig:
         return self._app_config
 
     def _get_dir(self, dir_name: str) -> Path:

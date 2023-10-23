@@ -137,7 +137,12 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Initialising the database")
         from gaia.database import db
         self.db = db
-        self.db.init(self.config.app_config)
+        dict_cfg = {
+            key: getattr(self.config.app_config, key)
+            for key in dir(self.config.app_config)
+            if key.isupper()
+        }
+        self.db.init(dict_cfg)
         self.db.create_all()
 
     def start_database(self) -> None:
