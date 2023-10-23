@@ -1,71 +1,90 @@
-import tempfile
+import os
 import shutil
+import tempfile
+from typing import Generator, Type, TypeVar
 
 import pytest
 
-from src import GeneralConfig, SpecificConfig
-from src import Ecosystem
-from src import Engine
-from src import Climate, Light, Sensors
-from config import Config
+from gaia.config import EcosystemConfig, EngineConfig, GaiaConfig, set_config
+from gaia.ecosystem import Ecosystem
+from gaia.engine import Engine
+from gaia.subroutines import Climate, Light, Sensors
+from gaia.utils import yaml
+
+from .data import ecosystem_info, ecosystem_name
+from .utils import get_logs_content
 
 
-from .utils import ECOSYSTEM_UID, TESTING_ECOSYSTEM_CFG
+T = TypeVar("T")
 
-
-Config.TESTING = True
+YieldFixture = Generator[T, None, None]
 
 
 @pytest.fixture(scope="session")
-def temp_dir():
+def testing_cfg() -> YieldFixture[GaiaConfig]:
     temp_dir = tempfile.mkdtemp(prefix="gaia-")
-    yield temp_dir
+    GaiaConfig.LOG_TO_STDOUT = False
+    GaiaConfig.TESTING = True
+    GaiaConfig.DIR = temp_dir
+    set_config(GaiaConfig)
+    with open(os.path.join(temp_dir, "ecosystems.cfg"), "w") as file:
+        yaml.dump(ecosystem_info, file)
+    yield GaiaConfig
     shutil.rmtree(temp_dir)
 
 
-@pytest.fixture(scope="session")
-def general_config(temp_dir):
-    config = GeneralConfig(temp_dir)
-    config.ecosystems_config = TESTING_ECOSYSTEM_CFG
-    yield config
+@pytest.fixture(scope="function")
+def engine_config(testing_cfg: Type[GaiaConfig]) -> YieldFixture[EngineConfig]:
+    engine_config = EngineConfig(gaia_config=testing_cfg())
+    engine_config.initialize_configs()
+    for files in engine_config.cache_dir.iterdir():
+        files.unlink()
+    with get_logs_content(engine_config.logs_dir/"base.log"):
+        pass  # Clear logs
+    yield engine_config
+    del engine_config
 
 
-@pytest.fixture
-def specific_config(general_config):
-    config = SpecificConfig(general_config, ECOSYSTEM_UID)
-    yield config
-
-
-@pytest.fixture(scope="session")
-def engine(general_config):
-    engine = Engine(general_config)
+@pytest.fixture(scope="function")
+def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
+    engine = Engine(engine_config=engine_config)
+    with get_logs_content(engine_config.logs_dir/"base.log"):
+        pass  # Clear logs
     yield engine
+    del engine
 
 
-@pytest.fixture
-def ecosystem(engine):
-    ecosystem = Ecosystem(ECOSYSTEM_UID, engine)
+@pytest.fixture(scope="function")
+def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfig]:
+    ecosystem_config = engine_config.get_ecosystem_config(ecosystem_name)
+    with get_logs_content(ecosystem_config.general.logs_dir/"base.log"):
+        pass  # Clear logs
+    yield ecosystem_config
+    del ecosystem_config
+
+
+@pytest.fixture(scope="function")
+def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
+    ecosystem = engine.get_ecosystem(ecosystem_name)
+    with get_logs_content(engine.config.logs_dir/"base.log"):
+        pass  # Clear logs
     yield ecosystem
+    del ecosystem
 
 
-@pytest.fixture
-def climate_subroutine(ecosystem):
-    climate_subroutine = Climate(ecosystem)
+@pytest.fixture(scope="function")
+def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
+    climate_subroutine: Climate = ecosystem.subroutines["climate"]
     yield climate_subroutine
 
 
-@pytest.fixture
-def light_subroutine(ecosystem):
-    light_subroutine = Light(ecosystem)
+@pytest.fixture(scope="function")
+def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
+    light_subroutine: Light = ecosystem.subroutines["light"]
     yield light_subroutine
 
 
-@pytest.fixture
-def sensors_subroutine(ecosystem):
-    sensor_subroutine = Sensors(ecosystem)
+@pytest.fixture(scope="function")
+def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
+    sensor_subroutine: Sensors = ecosystem.subroutines["sensors"]
     yield sensor_subroutine
-
-
-@pytest.fixture
-def subroutines_list(climate_subroutine, light_subroutine, sensors_subroutine):
-    return [climate_subroutine, light_subroutine, sensors_subroutine]
