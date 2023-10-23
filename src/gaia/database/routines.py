@@ -6,7 +6,6 @@ from sqlalchemy.orm import scoped_session, Session
 
 from gaia_validators import SensorsData
 
-from gaia.config import get_config
 from gaia.database.models import SensorBuffer, SensorRecord
 
 
@@ -14,13 +13,11 @@ if t.TYPE_CHECKING:
     from gaia.engine import Engine
 
 
-sensors_logging_period = get_config().SENSORS_LOGGING_PERIOD
-
-
 def log_sensors_data(
         scoped_session_: Callable[..., scoped_session],
         engine: "Engine"
 ) -> None:
+    sensors_logging_period = engine.config.app_config.SENSORS_LOGGING_PERIOD
     with scoped_session_() as session:
         session: Session
         for ecosystem_uid, ecosystem in engine.ecosystems.items():

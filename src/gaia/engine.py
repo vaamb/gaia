@@ -7,11 +7,8 @@ import signal
 from threading import Event, Thread
 from time import sleep
 import typing as t
-from typing import Type
 
-from gaia.config import (
-    configure_logging, EngineConfig, GaiaConfig, get_cache_dir, get_config,
-    get_ecosystem_IDs)
+from gaia.config import EngineConfig
 from gaia.config.from_files import detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
@@ -41,21 +38,19 @@ class Engine(metaclass=SingletonMeta):
     manages the config watchdog and updates the sun times once a day.
     When used within Gaia, the Engine is automatically instantiated when needed.
     """
-    def __init__(self) -> None:
-        self._config: EngineConfig = EngineConfig()
-        self._config.engine = self
-        self.gaia_config: Type[GaiaConfig] = get_config()
-        configure_logging(self.gaia_config)
+    def __init__(self, engine_config: EngineConfig | None = None) -> None:
+        self._config: EngineConfig = engine_config or EngineConfig()
+        self.config.engine = self
         self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
         self.logger.info("Initializing Gaia")
         self._ecosystems: dict[str, Ecosystem] = {}
-        self._uid: str = self.gaia_config.ENGINE_UID
+        self._uid: str = self.config.app_config.ENGINE_UID
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
         self._db: "SQLAlchemyWrapper" | None = None
         self.plugins_needed = (
-            self.gaia_config.USE_DATABASE
-            or self. gaia_config.COMMUNICATE_WITH_OURANOS
+            self.config.app_config.USE_DATABASE
+            or self. config.app_config.COMMUNICATE_WITH_OURANOS
         )
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
@@ -69,7 +64,7 @@ class Engine(metaclass=SingletonMeta):
     #   Events dispatcher
     # ---------------------------------------------------------------------------
     def init_message_broker(self) -> None:
-        broker_url = self.gaia_config.AGGREGATOR_COMMUNICATION_URL
+        broker_url = self.config.app_config.AGGREGATOR_COMMUNICATION_URL
         broker_type = broker_url[:broker_url.index("://")]
         if broker_type not in {"amqp", "redis"}:
             raise ValueError(f"{broker_type} is not supported")
@@ -88,7 +83,7 @@ class Engine(metaclass=SingletonMeta):
             )
         self.message_broker = KombuDispatcher(
             "gaia", url=broker_url, queue_options={
-                "name": f"gaia-{self.gaia_config.ENGINE_UID}",
+                "name": f"gaia-{self.config.app_config.ENGINE_UID}",
                 # Delete the queue after one week, CRUD requests will be lost
                 #  at this point
                 "expires": 60 * 60 * 24 * 7
@@ -142,12 +137,17 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Initialising the database")
         from gaia.database import db
         self.db = db
-        self.db.init(self.gaia_config)
+        dict_cfg = {
+            key: getattr(self.config.app_config, key)
+            for key in dir(self.config.app_config)
+            if key.isupper()
+        }
+        self.db.init(dict_cfg)
         self.db.create_all()
 
     def start_database(self) -> None:
         from gaia.database import routines
-        if self.gaia_config.SENSORS_LOGGING_PERIOD:
+        if self.config.app_config.SENSORS_LOGGING_PERIOD:
             scheduler = get_scheduler()
             scheduler.add_job(
                 routines.log_sensors_data,
@@ -179,9 +179,9 @@ class Engine(metaclass=SingletonMeta):
     #   Plugins management
     # ---------------------------------------------------------------------------
     def init_plugins(self) -> None:
-        if self.gaia_config.COMMUNICATE_WITH_OURANOS:
+        if self.config.app_config.COMMUNICATE_WITH_OURANOS:
             self.init_message_broker()
-        if self.gaia_config.USE_DATABASE:
+        if self.config.app_config.USE_DATABASE:
             self.init_database()
         self.plugins_initialized = True
 
@@ -220,7 +220,7 @@ class Engine(metaclass=SingletonMeta):
         scheduler.shutdown()
 
     def _init_virtualization(self) -> None:
-        if self.gaia_config.VIRTUALIZATION:
+        if self.config.app_config.VIRTUALIZATION:
             for ecosystem_uid in self.config.ecosystems_uid:
                 get_virtual_ecosystem(ecosystem_uid, start=True)
 
@@ -291,7 +291,7 @@ class Engine(metaclass=SingletonMeta):
         :param start: Whether to immediately start the ecosystem after its
                       creation or not
         """
-        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
+        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid not in self.ecosystems:
             ecosystem = Ecosystem(ecosystem_uid, self)
             self.ecosystems[ecosystem_uid] = ecosystem
@@ -311,7 +311,7 @@ class Engine(metaclass=SingletonMeta):
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
                              'ecosystems.cfg'
         """
-        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
+        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid not in self.ecosystems_started:
                 ecosystem: Ecosystem = self.ecosystems[ecosystem_uid]
@@ -337,7 +337,7 @@ class Engine(metaclass=SingletonMeta):
                          If dismounted, the Ecosystem will need to be recreated
                          before being able to restart.
         """
-        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
+        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 ecosystem = self.ecosystems[ecosystem_uid]
@@ -364,7 +364,7 @@ class Engine(metaclass=SingletonMeta):
         :param detach_config_: Whether to remove the Ecosystem's config from
                                memory or not.
         """
-        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem_id)
+        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 raise RuntimeError(
@@ -389,7 +389,7 @@ class Engine(metaclass=SingletonMeta):
         :param ecosystem: The name or the uid of an ecosystem, as written in
                           'ecosystems.cfg'
         """
-        ecosystem_uid, ecosystem_name = get_ecosystem_IDs(ecosystem)
+        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem)
         if ecosystem_uid in self.ecosystems:
             _ecosystem = self.ecosystems[ecosystem_uid]
         else:
@@ -458,7 +458,7 @@ class Engine(metaclass=SingletonMeta):
     def refresh_chaos(self) -> None:
         for ecosystem in self.ecosystems.values():
             ecosystem.refresh_chaos()
-        chaos_file = get_cache_dir()/"chaos.json"
+        chaos_file = self.config.cache_dir/"chaos.json"
         try:
             with chaos_file.open("r+") as file:
                 ecosystem_chaos = json.loads(file.read())

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, time
 from statistics import mean
-from threading import Event, Lock, Thread
+from threading import Event, Thread
 
 from simple_pid import PID
 
@@ -10,7 +10,6 @@ from gaia_validators import (
     ActuatorModePayload, HardwareConfig, HardwareType, LightingHours,
     LightMethod)
 
-from gaia.config import get_config
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
@@ -79,7 +78,7 @@ class Light(SubroutineTemplate):
             )
 
     def _light_status_loop(self) -> None:
-        cfg = get_config()
+        cfg = self.ecosystem.engine.config.app_config
         self.logger.info(
             f"Starting light loop at a frequency of {1/cfg.LIGHT_LOOP_PERIOD} Hz")
         while not self._stop_event.is_set():

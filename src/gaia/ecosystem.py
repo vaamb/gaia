@@ -60,11 +60,19 @@ class Ecosystem:
     :param ecosystem_id: The name or the uid of an ecosystem, as written in
                           'ecosystems.cfg'
     """
-    def __init__(self, ecosystem_id: str, engine: "Engine"):
-        self._config: EcosystemConfig = EcosystemConfig(ecosystem_id)
-        self._uid: str = self._config.uid
-        self._name: str = self._config.name
+    def __init__(
+            self,
+            ecosystem_id: str,
+            engine: "Engine" | None = None
+    ) -> None:
+        if engine is None:
+            from gaia import Engine
+            engine = Engine()
         self._engine: "Engine" = weakref.proxy(engine)
+        self._config: EcosystemConfig = \
+            self.engine.config.get_ecosystem_config(ecosystem_id)
+        self._uid: str = self.config.uid
+        self._name: str = self.config.name
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{self._name.replace(' ', '_')}")
         self.logger.info("Initializing the ecosystem")

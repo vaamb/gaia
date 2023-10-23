@@ -17,18 +17,16 @@ from pydantic import ValidationError
 from dispatcher import EventHandler
 import gaia_validators as gv
 
-from gaia.config import EcosystemConfig, get_config
+from gaia.config import EcosystemConfig
 from gaia.config.from_files import ConfigType
 from gaia.shared_resources import get_scheduler
 from gaia.utils import humanize_list, local_ip_address
-
-if get_config().USE_DATABASE:
-    from gaia.database.models import SensorBuffer
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
+    from gaia.database.models import SensorBuffer
     from gaia.ecosystem import Ecosystem
     from gaia.engine import Engine
 
@@ -63,15 +61,18 @@ class Events(EventHandler):
         self.registered = False
         self._thread: Thread | None = None
         self._stop_event = Event()
+        self._sensor_buffer_cls: "SensorBuffer" | None = None
+        if self.use_db:
+            self.load_sensor_buffer_cls()
         self.logger = logging.getLogger(f"gaia.engine.events_handler")
-
-    @property
-    def db(self) -> "SQLAlchemyWrapper":
-        return self.engine.db
 
     @property
     def use_db(self) -> bool:
         return self.engine.use_db
+
+    @property
+    def db(self) -> "SQLAlchemyWrapper":
+        return self.engine.db
 
     @property
     def thread(self) -> Thread:
@@ -86,6 +87,22 @@ class Events(EventHandler):
     @property
     def background_tasks_running(self) -> bool:
         return self._thread is not None
+
+    @property
+    def sensor_buffer_cls(self) -> "SensorBuffer":
+        if self._sensor_buffer_cls is None:
+            raise AttributeError(
+                "'SensorBuffer' is not a valid attribute when the database is "
+                "not used")
+        return self._sensor_buffer_cls
+
+    def load_sensor_buffer_cls(self) -> None:
+        if self.use_db:
+            from gaia.database.models import SensorBuffer
+            self._sensor_buffer_cls = SensorBuffer
+        else:
+            raise ValueError(
+                "Cannot load 'SensorBuffer' when the database is not used")
 
     def validate_payload(
             self,
@@ -179,7 +196,7 @@ class Events(EventHandler):
 
     def register(self) -> None:
         data = gv.EnginePayload(
-            engine_uid=get_config().ENGINE_UID,
+            engine_uid=self.engine.config.app_config.ENGINE_UID,
             address=local_ip_address(),
         ).model_dump()
         self.emit("register_engine", data=data, ttl=2)
@@ -461,6 +478,7 @@ class Events(EventHandler):
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'")
+        SensorBuffer = self.sensor_buffer_cls  # noqa
         with self.db.scoped_session() as session:
             for data in SensorBuffer.get_buffered_data(session):
                 self.emit(
@@ -473,6 +491,7 @@ class Events(EventHandler):
                 "parameter 'USE_DATABASE' to 'True'")
         data: gv.RequestResultDict = self.validate_payload(
             message, gv.RequestResult)
+        SensorBuffer = self.sensor_buffer_cls  # noqa
         with self.db.scoped_session() as session:
             if data["status"] == gv.Result.success:
                 SensorBuffer.clear_buffer(session, data["uuid"])

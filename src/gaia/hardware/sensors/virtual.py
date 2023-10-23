@@ -6,6 +6,7 @@ from gaia.hardware.virtual import virtualHardware
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, VCNL4040, VEML7700)
+from gaia.virtual import get_virtual_ecosystem
 
 
 if t.TYPE_CHECKING:  # pragma: no cover

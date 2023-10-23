@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 import logging.config
+import os
 from pathlib import Path
 import sys
 from typing import Type
-import warnings
 
 from gaia import __version__ as version
-from gaia.config.base import BaseConfig, DIR
+from gaia.config.base import BaseConfig
 
 
 class AppInfo:
@@ -20,24 +20,12 @@ class GaiaConfig(AppInfo, BaseConfig):
     pass
 
 
-_base_dir: Path | None = None
 _config: Type[GaiaConfig] | None = None
-
-
-def get_base_dir() -> Path:
-    global _base_dir
-    if _base_dir is None:
-        _base_dir = Path(DIR)
-        if not _base_dir.exists():
-            raise ValueError(
-                "Environment variable `GAIA_DIR` is not set to a valid path"
-            )
-    return _base_dir
+_lookup_dir = os.environ.get("GAIA_DIR") or os.getcwd()
 
 
 def _get_config() -> Type[GaiaConfig]:
-    base_dir = get_base_dir()
-    sys.path.insert(0, str(base_dir))
+    sys.path.insert(0, str(_lookup_dir))
     try:
         from config import Config
     except ImportError:
@@ -56,56 +44,44 @@ def _get_config() -> Type[GaiaConfig]:
     return GaiaConfig
 
 
-def get_config() -> Type[GaiaConfig]:
+def get_config() -> GaiaConfig:
     global _config
     if _config is None:
-        _config = _get_config()
+        config = _get_config()
+        _config = config()
     return _config
 
 
-def _get_dir(name: str, fallback_path: str) -> Path:
-    config: Type[GaiaConfig] = get_config()
-    path = getattr(config, name)
-    try:
-        dir_ = Path(path)
-    except ValueError:
-        warnings.warn(
-            f"The dir specified by {name} is not valid, using fallback path "
-            f"{fallback_path}"
-        )
-        base_dir = get_base_dir()
-        dir_ = base_dir / fallback_path
-    if not dir_.exists():
-        dir_.mkdir(parents=True)
-    return dir_
+def set_config(config: Type[GaiaConfig]) -> None:
+    global _config
+    if _config is not None:
+        raise RuntimeError(
+            "'set_config' cannot be called once 'get_config' has been called")
+    _config = config
 
 
-def get_cache_dir() -> Path:
-    return _get_dir("CACHE_DIR", ".cache")
+def configure_logging(config_class: GaiaConfig):
+    debug = config_class.DEBUG
+    log_to_stdout = config_class.LOG_TO_STDOUT
+    log_to_file = config_class.LOG_TO_FILE
+    log_error = config_class.LOG_ERROR
 
-
-def get_log_dir() -> Path:
-    return _get_dir("LOG_DIR", ".logs")
-
-
-def configure_logging(config_class: Type[GaiaConfig]):
-    DEBUG = config_class.DEBUG
-    LOG_TO_STDOUT = config_class.LOG_TO_STDOUT
-    LOG_TO_FILE = config_class.LOG_TO_FILE
-    LOG_ERROR = config_class.LOG_ERROR
+    log_dir = Path(config_class.LOG_DIR)
+    if not log_dir.exists():
+        log_dir.mkdir(parents=True)
 
     handlers = []
 
-    if LOG_TO_STDOUT:
+    if log_to_stdout:
         handlers.append("streamHandler")
 
-    if LOG_TO_FILE:
+    if log_to_file:
         handlers.append("fileHandler")
 
-    if LOG_ERROR:
+    if log_error:
         handlers.append("errorFileHandler")
 
-    LOGGING_CONFIG = {
+    logging_config = {
         "version": 1,
         "disable_existing_loggers": False,
 
@@ -113,7 +89,7 @@ def configure_logging(config_class: Type[GaiaConfig]):
             "streamFormat": {
                 "format": (
                     "%(asctime)s %(levelname)-4.4s [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s"
-                    if DEBUG else
+                    if debug else
                     "%(asctime)s %(levelname)-4.4s %(name)-35.35s: %(message)s"
                 ),
                 "datefmt": "%Y-%m-%d %H:%M:%S"
@@ -126,15 +102,15 @@ def configure_logging(config_class: Type[GaiaConfig]):
 
         "handlers": {
             "streamHandler": {
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}",
+                "level": f"{'DEBUG' if debug else 'INFO'}",
                 "formatter": "streamFormat",
                 "class": "logging.StreamHandler",
             },
             "fileHandler": {
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}",
+                "level": f"{'DEBUG' if debug else 'INFO'}",
                 "formatter": "fileFormat",
                 "class": "logging.handlers.RotatingFileHandler",
-                'filename': f"{get_log_dir()/'base.log'}",
+                'filename': f"{log_dir/'base.log'}",
                 "mode": "w+",
                 "maxBytes": 1024 * 512,
                 "backupCount": 5,
@@ -143,7 +119,7 @@ def configure_logging(config_class: Type[GaiaConfig]):
                 "level": "ERROR",
                 "formatter": "fileFormat",
                 "class": "logging.FileHandler",
-                "filename": f"{get_log_dir()/'errors.log'}",
+                "filename": f"{log_dir/'errors.log'}",
                 "mode": "a",
             }
         },
@@ -151,19 +127,19 @@ def configure_logging(config_class: Type[GaiaConfig]):
         "loggers": {
             "": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
+                "level": f"{'DEBUG' if debug else 'INFO'}"
             },
             "apscheduler": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'WARNING'}"
+                "level": f"{'DEBUG' if debug else 'WARNING'}"
             },
             "engineio": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'INFO'}"
+                "level": f"{'DEBUG' if debug else 'INFO'}"
             },
             "dispatcher": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if DEBUG else 'WARNING'}"
+                "level": f"{'DEBUG' if debug else 'WARNING'}"
             },
             "urllib3": {
                 "handlers": handlers,
@@ -171,4 +147,4 @@ def configure_logging(config_class: Type[GaiaConfig]):
             },
         },
     }
-    logging.config.dictConfig(LOGGING_CONFIG)
+    logging.config.dictConfig(logging_config)

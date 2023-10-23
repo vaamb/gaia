@@ -1,4 +1,3 @@
-from gaia.config import get_config
 from gaia.hardware.abc import gpioDimmer, gpioHardware, Switch
 
 
