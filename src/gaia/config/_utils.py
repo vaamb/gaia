@@ -67,6 +67,8 @@ def configure_logging(config_class: GaiaConfig):
     log_error = config_class.LOG_ERROR
 
     log_dir = Path(config_class.LOG_DIR)
+    if not log_dir.exists():
+        log_dir.mkdir(parents=True)
 
     handlers = []
 
