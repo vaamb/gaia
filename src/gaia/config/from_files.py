@@ -626,7 +626,12 @@ class _MetaEcosystemConfig(type):
         try:
             ecosystem_id = kwargs["ecosystem_id"]
         except KeyError:
-            ecosystem_id = args[0]
+            try:
+                ecosystem_id = args[0]
+            except IndexError:
+                raise TypeError(
+                    "EcosystemConfig() missing 1 required argument: 'ecosystem_id'"
+                )
         engine_config = EngineConfig()
         if not engine_config.configs_loaded:
             raise RuntimeError(
@@ -985,8 +990,3 @@ def get_IDs(ecosystem: str) -> gv.IDs:
     :param ecosystem: str, either an ecosystem uid or ecosystem name
     """
     return EngineConfig().get_IDs(ecosystem)
-
-
-def detach_config(ecosystem: str) -> None:
-    config = EcosystemConfig(ecosystem=ecosystem)
-    del _MetaEcosystemConfig.instances[config.uid]

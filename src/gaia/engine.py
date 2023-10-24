@@ -9,7 +9,6 @@ from time import sleep
 import typing as t
 
 from gaia.config import EngineConfig
-from gaia.config.from_files import detach_config
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import get_scheduler, start_scheduler
@@ -372,8 +371,6 @@ class Engine(metaclass=SingletonMeta):
                 )
             else:
                 del self.ecosystems[ecosystem_uid]
-                if detach_config_:
-                    detach_config(ecosystem_uid)
                 self.logger.info(
                     f"Ecosystem {ecosystem_name} has been dismounted"
                 )
