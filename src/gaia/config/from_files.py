@@ -28,7 +28,7 @@ from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
 from gaia.subroutines import subroutines
-from gaia.utils import json, SingletonMeta, utc_time_to_local_time, yaml
+from gaia.utils import json, SingletonMeta, yaml
 
 
 if t.TYPE_CHECKING:
@@ -515,6 +515,7 @@ class EngineConfig(metaclass=SingletonMeta):
         return self._sun_times
 
     def refresh_sun_times(self) -> None:
+        # TODO: don't update if already up to date in instance
         needed = False
         for ecosystem_config in self._ecosystems_config.values():
             sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
@@ -543,22 +544,7 @@ class EngineConfig(metaclass=SingletonMeta):
             sun_times_data = self.download_sun_times()
 
         if sun_times_data is not None:
-            def import_daytime_event(daytime_event: DaytimeEvents) -> time:
-                try:
-                    my_time = datetime.strptime(
-                        sun_times_data[daytime_event], "%I:%M:%S %p").astimezone().time()
-                    local_time = utc_time_to_local_time(my_time)
-                    return local_time
-                except Exception:
-                    raise UndefinedParameter(
-                        f"Could not find {daytime_event} in sun times file.")
-
-            self._sun_times = gv.SunTimes(
-                twilight_begin=import_daytime_event("civil_twilight_begin"),
-                sunrise=import_daytime_event("sunrise"),
-                sunset=import_daytime_event("sunset"),
-                twilight_end=import_daytime_event("civil_twilight_end"),
-            )
+            self._sun_times = sun_times_data
 
         else:
             self.logger.warning(
@@ -594,7 +580,7 @@ class EngineConfig(metaclass=SingletonMeta):
                         timeout=3.0,
                     )
                 data = response.json()
-                results: gv.SunTimesDict = data["results"]
+                results: gv.SunTimesDict = gv.SunTimes(**data["results"]).model_dump()
             except ConnectionError:
                 self.logger.debug(
                     "Failed to update sunrise and sunset times due to a "
