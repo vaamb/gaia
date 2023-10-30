@@ -137,11 +137,6 @@ pin_bcm_to_board = {
 }
 
 
-def utc_time_to_local_time(utc_time: time) -> time:
-    dt = datetime.combine(date.today(), utc_time).replace(tzinfo=timezone.utc)
-    return dt.astimezone().time()
-
-
 def human_time_parser(human_time: str) -> time:
     """
     Returns the time from config file written in a human readable manner
