@@ -18,7 +18,6 @@ from gaia.config import EcosystemConfig
 from gaia.exceptions import StoppingEcosystem, UndefinedParameter
 from gaia.subroutines import (
     Climate, Health, Light, Sensors, subroutines, SubroutineNames)
-from gaia.subroutines.chaos import Chaos
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
@@ -86,8 +85,7 @@ class Ecosystem:
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine in subroutines:
             self.init_subroutine(subroutine)
-        self._chaos: Chaos = Chaos(self, 0, 0, 1)
-        self.refresh_chaos()
+        self.config.update_chaos_time_window()
         self._started: bool = False
         self.logger.debug(f"Ecosystem initialization successful")
 
@@ -138,10 +136,6 @@ class Ecosystem:
     @property
     def event_handler(self) -> "Events":
         return self._engine.event_handler
-
-    @property
-    def chaos(self) -> Chaos:
-        return self._chaos
 
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
@@ -251,16 +245,6 @@ class Ecosystem:
             return self.subroutines[subroutine_name].status
         except KeyError:
             return False
-
-    def refresh_chaos(self):
-        try:
-            values = self.config.chaos
-        except UndefinedParameter:
-            values = ChaosConfig()
-        self.chaos.frequency = values.frequency
-        self.chaos.duration = values.duration
-        self.chaos.intensity = values.intensity
-        self.chaos.update()
 
     def start(self):
         """Start the Ecosystem

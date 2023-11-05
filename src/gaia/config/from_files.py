@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import date, datetime, time
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from json.decoder import JSONDecodeError
 import logging
 import os
+from math import pi, sin
 from pathlib import Path
 import random
 import string
@@ -46,6 +47,11 @@ def format_pydantic_error(error: pydantic.ValidationError) -> str:
 class ConfigType(Enum):
     ecosystems = "ecosystems.cfg"
     private = "private.cfg"
+
+
+class CacheType(Enum):
+    chaos = "chaos.json"
+    sun_times = "sun_time.json"
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +133,47 @@ class RootEcosystemsConfigValidator(gv.BaseModel):
 
 
 # ---------------------------------------------------------------------------
+#   Ecosystem chaos models
+# ---------------------------------------------------------------------------
+class ChaosTimeWindowValidator(gv.BaseModel):
+    beginning: datetime | None = None
+    end: datetime | None = None
+
+    @field_validator("beginning", "end", mode="before")
+    def parse_time(cls, value):
+        if isinstance(value, str):
+            dt = datetime.fromisoformat(value)
+            dt.astimezone(timezone.utc)
+            return dt
+        return value
+
+
+class ChaosTimeWindow(TypedDict):
+    beginning: datetime | None
+    end: datetime | None
+
+
+class ChaosMemoryValidator(gv.BaseModel):
+    last_update: date = Field(default_factory=date.today)
+    time_window: ChaosTimeWindowValidator = ChaosTimeWindowValidator()
+
+    @field_validator("last_update", mode="before")
+    def parse_last_update(cls, value):
+        if isinstance(value, str):
+            return date.fromisoformat(value)
+        return value
+
+
+class ChaosMemory(TypedDict):
+    last_update: date
+    time_window: ChaosTimeWindow
+
+
+class ChaosMemoryRootValidator(gv.BaseModel):
+    root: dict[str, ChaosMemoryValidator]
+
+
+# ---------------------------------------------------------------------------
 #   EngineConfig class
 # ---------------------------------------------------------------------------
 class EngineConfig(metaclass=SingletonMeta):
@@ -142,9 +189,10 @@ class EngineConfig(metaclass=SingletonMeta):
         configure_logging(self.app_config)
         self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
-        self._ecosystems_config: dict = {}
+        self._ecosystems_config: dict[str, EcosystemConfigDict] = {}
         self._private_config: dict = {}
         self._sun_times: gv.SunTimes | None = None
+        self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
         self._config_files_modif: dict[Path, int] = {}
         self._config_files_lock = Lock()
@@ -221,6 +269,12 @@ class EngineConfig(metaclass=SingletonMeta):
     def cache_dir(self) -> Path:
         return self._get_dir("CACHE_DIR")
 
+    def get_file_path(self, file_type: ConfigType | CacheType) -> Path:
+        if isinstance(file_type, ConfigType):
+            return self.config_dir / file_type.value
+        if isinstance(file_type, CacheType):
+            return self.cache_dir / file_type.value
+
     # Load, dump and save config
     def _check_files_lock_acquired(self) -> None:
         if not self._config_files_lock.locked():
@@ -232,7 +286,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def _load_config(self, cfg_type: ConfigType) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
-        config_path = self.config_dir/cfg_type.value
+        config_path = self.get_file_path(cfg_type)
         if cfg_type == ConfigType.ecosystems:
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
@@ -256,7 +310,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
         # TODO: shorten dicts used ?
-        config_path = self.config_dir/cfg_type.value
+        config_path = self.get_file_path(cfg_type)
         with open(config_path, "w") as file:
             if cfg_type == ConfigType.ecosystems:
                 cfg = self._ecosystems_config
@@ -290,19 +344,27 @@ class EngineConfig(metaclass=SingletonMeta):
                             "detected. Creating a default file.")
                         self._create_private_config_file()
                 finally:
-                    path = self.config_dir / cfg_type.value
+                    path = self.get_file_path(cfg_type)
                     self._config_files_modif[path] = os.stat(path).st_mtime_ns
         self.configs_loaded = True
 
-    def save(self, cfg_type: ConfigType) -> None:
-        with self.config_files_lock():
-            self.logger.debug(f"Updating {cfg_type.name} configuration file(s)")
-            self._dump_config(cfg_type)
+    def save(self, cfg_type: ConfigType | CacheType) -> None:
+        if isinstance(cfg_type, ConfigType):
+            with self.config_files_lock():
+                self.logger.debug(f"Updating {cfg_type.name} configuration file(s)")
+                self._dump_config(cfg_type)
+        else:
+            if cfg_type == CacheType.chaos:
+                self._dump_chaos_memory()
 
-    def load(self, cfg_type: ConfigType) -> None:
-        with self.config_files_lock():
-            self.logger.debug(f"Loading {cfg_type.name} configuration file(s)")
-            self._load_config(cfg_type)
+    def load(self, cfg_type: ConfigType | CacheType) -> None:
+        if isinstance(cfg_type, ConfigType):
+            with self.config_files_lock():
+                self.logger.debug(f"Loading {cfg_type.name} configuration file(s)")
+                self._load_config(cfg_type)
+        else:
+            if cfg_type == CacheType.chaos:
+                self._load_chaos_memory()
 
     # File watchdog
     def _get_changed_config_files(self) -> set[ConfigType]:
@@ -537,12 +599,12 @@ class EngineConfig(metaclass=SingletonMeta):
         if not needed:
             self.logger.debug("No need to refresh sun times")
             return
-        sun_times_file = self.cache_dir/"sunrise.json"
         # Determine if the file needs to be updated
         sun_times_data: gv.SunTimesDict | None = None
         self.logger.debug("Trying to load cached sun times")
         try:
-            with sun_times_file.open("r") as file:
+            file_path = self.get_file_path(CacheType.sun_times)
+            with file_path.open("r") as file:
                 payload: SunTimesCacheDict = json.loads(file.read())
                 last_update: datetime = \
                     datetime.fromisoformat(payload["last_update"]).astimezone()
@@ -566,7 +628,6 @@ class EngineConfig(metaclass=SingletonMeta):
             self._sun_times = None
 
     def download_sun_times(self) -> gv.SunTimesDict | None:
-        sun_times_file = self.cache_dir/"sunrise.json"
         self.logger.info("Trying to download sun times")
         try:
             home_coordinates = self.home_coordinates
@@ -604,11 +665,54 @@ class EngineConfig(metaclass=SingletonMeta):
                     "last_update": datetime.now().astimezone().isoformat(),
                     "data": {"home": results},
                 }
-                with open(sun_times_file, "w") as file:
+                file_path = self.get_file_path(CacheType.sun_times)
+                with file_path.open("w") as file:
                     file.write(json.dumps(payload))
                 self.logger.info(
                     "Sunrise and sunset times successfully updated")
                 return results
+
+    def _create_chaos_memory(self, ecosystem_uid) -> dict[str, ChaosMemory]:
+        return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
+
+    def _load_chaos_memory(self) -> None:
+        chaos_path = self.get_file_path(CacheType.chaos)
+        validated: dict[str, ChaosMemory]
+        try:
+            with chaos_path.open("r") as file:
+                unvalidated = json.loads(file.read())
+                try:
+                    validated = ChaosMemoryRootValidator(
+                        root=unvalidated
+                    ).model_dump()["root"]
+                except pydantic.ValidationError:
+                    self.engine.logger.error("Error while loading chaos")
+                    raise
+        except (FileNotFoundError, JSONDecodeError):
+            validated = {}
+        incomplete = False
+        for ecosystem_uid in self._ecosystems_config:
+            if ecosystem_uid not in validated:
+                incomplete = True
+                validated.update(self._create_chaos_memory(ecosystem_uid))
+        self._chaos_memory = validated
+        if incomplete:
+            self._dump_chaos_memory()
+
+    def _dump_chaos_memory(self) -> None:
+        chaos_path = self.get_file_path(CacheType.chaos)
+        with chaos_path.open("w") as file:
+            file.write(json.dumps(self._chaos_memory))
+
+    def get_chaos_memory(self, ecosystem_uid) -> ChaosMemory:
+        if ecosystem_uid not in self._ecosystems_config:
+            raise ValueError(
+                f"No ecosystem with uid '{ecosystem_uid}' found in ecosystems "
+                f"config"
+            )
+        if ecosystem_uid not in self._chaos_memory:
+            self._chaos_memory.update(self._create_chaos_memory(ecosystem_uid))
+        return self._chaos_memory[ecosystem_uid]
 
     def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
         return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
@@ -771,14 +875,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.general.refresh_sun_times()
 
     @property
-    def chaos(self) -> gv.ChaosConfig:
+    def chaos_parameters(self) -> gv.ChaosConfig:
         try:
             return gv.ChaosConfig(**self.environment["chaos"])
         except KeyError:
             raise UndefinedParameter(f"Chaos as not been set in {self.name}")
 
-    @chaos.setter
-    def chaos(self, values: gv.ChaosConfigDict) -> None:
+    @chaos_parameters.setter
+    def chaos_parameters(self, values: gv.ChaosConfigDict) -> None:
         """Set chaos parameter
 
         :param values: A dict with the entries 'frequency': int,
@@ -792,6 +896,57 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
         self.environment["chaos"] = validated_values
+
+    @property
+    def chaos_time_window(self) -> ChaosTimeWindow:
+        return self.general.get_chaos_memory(self.uid)["time_window"]
+
+    @chaos_time_window.setter
+    def chaos_time_window(self, value: ChaosTimeWindow) -> None:
+        chaos_memory = self.general.get_chaos_memory(self.uid)
+        chaos_memory["time_window"] = value
+        chaos_memory["last_update"] = date.today()
+
+    def update_chaos_time_window(self) -> None:
+        self.logger.info("Updating chaos time window")
+        if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
+            self._update_chaos_time_window()
+        else:
+            self.logger.debug("Chaos time window is already up to date")
+
+    def _update_chaos_time_window(self) -> None:
+        beginning = self.chaos_time_window["beginning"]
+        end = self.chaos_time_window["end"]
+        if beginning and end:
+            if not (beginning <= date.today() <= end):  # End of chaos period
+                beginning = None
+                end = None
+        else:
+            if self.chaos_parameters.frequency:
+                chaos_probability = random.randint(1, self.chaos_parameters.frequency)
+            else:
+                chaos_probability = 0
+            if chaos_probability == 1:
+                now = datetime.now(timezone.utc)
+                beginning = now
+                end = now + timedelta(days=self.chaos_parameters.duration)
+        self.chaos_time_window = {
+            "beginning": beginning,
+            "end": end
+        }
+
+    @property
+    def chaos_factor(self) -> float:
+        if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
+            self._update_chaos_time_window()
+        now = datetime.now(timezone.utc)
+        beginning = self.chaos_time_window["beginning"]
+        end = self.chaos_time_window["end"]
+        chaos_duration = (end - beginning).total_seconds() // 60
+        chaos_start_to_now = (now - beginning).total_seconds() // 60
+        chaos_fraction = chaos_start_to_now / chaos_duration
+        chaos_radian = chaos_fraction * pi
+        return (sin(chaos_radian) * (self.chaos_parameters.intensity - 1.0)) + 1.0
 
     @property
     def climate(self) -> dict[gv.ClimateParameterNames, gv.AnonymousClimateConfigDict]:
