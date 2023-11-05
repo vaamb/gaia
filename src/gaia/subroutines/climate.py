@@ -312,7 +312,7 @@ class Climate(SubroutineTemplate):
             current_value = data.value
             target_value, hysteresis = self._compute_target(
                 self._parameters[climate_param], self.lighting_hours,
-                self.ecosystem.chaos.factor)
+                self.ecosystem.config.chaos_factor)
             if target_value is None:
                 continue
             actuator_couple: ActuatorCouple = REGULATORS[climate_param]

@@ -8,11 +8,11 @@ from threading import Event, Thread
 from time import sleep
 import typing as t
 
-from gaia.config import EngineConfig
+from gaia.config import CacheType, EngineConfig
 from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import get_scheduler, start_scheduler
-from gaia.utils import json, SingletonMeta
+from gaia.utils import SingletonMeta
 from gaia.virtual import get_virtual_ecosystem
 
 
@@ -206,7 +206,7 @@ class Engine(metaclass=SingletonMeta):
         scheduler.add_job(self.refresh_sun_times, "cron",
                           hour="1", misfire_grace_time=15 * 60,
                           id="refresh_sun_times")
-        scheduler.add_job(self.refresh_chaos, "cron",
+        scheduler.add_job(self.update_chaos_time_window, "cron",
                           hour="0", minute="5", misfire_grace_time=15 * 60,
                           id="refresh_chaos")
         start_scheduler()
