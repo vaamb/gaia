@@ -16,9 +16,9 @@ hardware_address = "GPIO_10"
 hardware_info = {
     "name": hardware_name,
     "address": hardware_address,
-    "model": "DHT22",
-    "type": "sensor",
-    "level": "plants",
+    "model": "gpioSwitch",
+    "type": "light",
+    "level": "environment",
     "measures": ["testMeasure"],
     "plants": ["testPlant"],
 }
