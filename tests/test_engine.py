@@ -1,53 +1,199 @@
-import typing as t
-
 import pytest
 
-from src import Engine
-from .utils import ECOSYSTEM_UID
+from dispatcher import EventHandler, KombuDispatcher
+from sqlalchemy_wrapper import SQLAlchemyWrapper
 
-if t.TYPE_CHECKING:
-    from src import GeneralConfig
+from gaia import EcosystemConfig, Engine, EngineConfig
 
-
-def test_engine_singleton(general_config: "GeneralConfig", engine: Engine):
-    assert engine is Engine(general_config)
+from .data import ecosystem_uid, hardware_info, sun_times
+from .utils import get_logs_content
 
 
-def test_properties(general_config: "GeneralConfig", engine: Engine):
-    assert engine.ecosystems == {}
-    assert engine.config.__dict__ == general_config.__dict__
-    assert engine.ecosystems_started == set()
-    assert engine.event_handler is None
+def test_engine_singleton(engine: Engine, engine_config: EngineConfig):
+    assert engine is Engine(engine_config)
 
 
-def test_ecosystems_procedures(engine: Engine):
-    with pytest.raises(ValueError):
-        engine.init_ecosystem("DoesNotExist")
-        engine.start_ecosystem("DoesNotExist")
-        engine.stop_ecosystem("DoesNotExist")
-        engine.dismount_ecosystem("DoesNotExist")
+def test_engine_dict(engine: Engine, engine_config: EngineConfig):
+    assert engine.config.__dict__ == engine_config.__dict__
+
+
+def test_engine_message_broker(engine: Engine):
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
+
+    assert engine.use_message_broker is False
+    with pytest.raises(RuntimeError, match="COMMUNICATE_WITH_OURANOS"):
+        engine.init_message_broker()
+    with pytest.raises(AttributeError):
+        assert isinstance(engine.message_broker, KombuDispatcher)
+    with pytest.raises(AttributeError):
+        assert isinstance(engine.event_handler, EventHandler)
+
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+
+    url = engine.config.app_config.AGGREGATOR_COMMUNICATION_URL
+
+    engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = None
+    with pytest.raises(RuntimeError, match="AGGREGATOR_COMMUNICATION_URL"):
+        engine.init_message_broker()
+
+    engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = "Invalid"
+    with pytest.raises(ValueError, match="is not a valid broker URL"):
+        engine.init_message_broker()
+
+    engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = "Invalid://"
+    with pytest.raises(ValueError, match="is not supported"):
+        engine.init_message_broker()
+
+    engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = url
+    engine.init_message_broker()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Initialising the event dispatcher" in logs
+
+    assert engine.use_message_broker is True
+    assert isinstance(engine.message_broker, KombuDispatcher)
+    assert isinstance(engine.event_handler, EventHandler)
+
+    # Message broker start and stop are handled by KombuDispatcher
+
+
+def test_engine_database(engine: Engine):
+    engine.config.app_config.USE_DATABASE = False
+
+    with pytest.raises(RuntimeError, match="USE_DATABASE"):
+        engine.init_database()
+    assert engine.use_db is False
+    with pytest.raises(AttributeError):
+        assert isinstance(engine.db, SQLAlchemyWrapper)
+
+    engine.config.app_config.USE_DATABASE = True
+
+    engine.init_database()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Initialising the database" in logs
+    assert engine.use_db is True
+    assert isinstance(engine.db, SQLAlchemyWrapper)
+
+    engine.start_database()
+    engine.stop_database()
+
+
+def test_engine_plugins(engine: Engine):
+    assert engine.plugins_needed == False
+
     with pytest.raises(RuntimeError):
-        engine.start_ecosystem(ECOSYSTEM_UID)
-        engine.stop_ecosystem(ECOSYSTEM_UID)
-        engine.dismount_ecosystem(ECOSYSTEM_UID)
-    engine.init_ecosystem(ECOSYSTEM_UID)
-    engine.start_ecosystem(ECOSYSTEM_UID)
-    # with pytest.raises(RuntimeError):  # Bug in test suite but not when alone
-        # engine.dismount_ecosystem(ECOSYSTEM_UID)
-    engine.stop_ecosystem(ECOSYSTEM_UID)
-    engine.dismount_ecosystem(ECOSYSTEM_UID)
-    engine.refresh_ecosystems()
+        engine.init_plugins()
+    with pytest.raises(RuntimeError):
+        engine.start_plugins()
+
+    engine.plugins_needed = True
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+    engine.config.app_config.USE_DATABASE = True
+
+    engine.init_plugins()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Initialising the plugins" in logs
+    assert engine.plugins_initialized == True
+    engine.start_plugins()
+    engine.stop_plugins()
 
 
-def test_start_stop(engine: Engine):
-    engine.start()
+def test_engine_background_tasks(engine: Engine):
+    engine.start_background_tasks()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Starting the background tasks" in logs
+    engine.stop_background_tasks()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Stopping the background tasks" in logs
+
+
+def test_engine_states(engine: Engine):
+    engine.plugins_needed = False
+
+    engine.startup()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Starting Gaia ..." in logs
+    assert engine.set_up
+    assert engine.running
+    assert not engine.cleaned_up
+    with pytest.raises(RuntimeError):
+        engine.resume()
+    with pytest.raises(RuntimeError):
+        engine.shutdown()
+
     engine.stop()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Stopping Gaia ..." in logs
+    assert engine.set_up
+    assert not engine.running
+    assert not engine.cleaned_up
+    with pytest.raises(RuntimeError):
+        engine.stop()
+
+    engine.resume()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Resuming Gaia ..." in logs
+    assert engine.set_up
+    assert engine.running
+    assert not engine.cleaned_up
+    with pytest.raises(RuntimeError):
+        engine.resume()
+
+    engine.stop()  # Enables shutdown
+    engine.shutdown()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Shutting down Gaia ..." in logs
+    assert not engine.set_up
+    assert not engine.running
+    assert engine.cleaned_up
+    with pytest.raises(RuntimeError):
+        engine.resume()
+
+
+def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig):
+    # /!\ Ecosystem need a runnable subroutine in order to start
+    ecosystem_config.set_management("light", True)
+
+    engine.init_ecosystem(ecosystem_uid)
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert f"Ecosystem {ecosystem_uid} has been created" in logs
+    with pytest.raises(RuntimeError, match=r"Ecosystem .* already exists"):
+        engine.init_ecosystem(ecosystem_uid)
+    with pytest.raises(RuntimeError, match=r"Cannot stop Ecosystem .*"):
+        engine.stop_ecosystem(ecosystem_uid)
+
+    engine.start_ecosystem(ecosystem_uid)
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert f"Starting ecosystem {ecosystem_uid}" in logs
+    with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
+        engine.start_ecosystem(ecosystem_uid)
+    with pytest.raises(RuntimeError, match=r"Cannot dismount a started ecosystem."):
+        engine.dismount_ecosystem(ecosystem_uid)
+
+    engine.stop_ecosystem(ecosystem_uid)
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert f"Ecosystem {ecosystem_uid} has been stopped" in logs
+    with pytest.raises(RuntimeError, match=r"Cannot stop Ecosystem .*"):
+        engine.stop_ecosystem(ecosystem_uid)
+
+    engine.dismount_ecosystem(ecosystem_uid)
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert f"Ecosystem {ecosystem_uid} has been dismounted" in logs
+    with pytest.raises(RuntimeError, match=r"Need to initialise Ecosystem .* first"):
+        engine.start_ecosystem(ecosystem_uid)
 
 
 def test_refresh_sun_times(engine: Engine):
-    # engine.refresh_sun_times()
-    pass
+    # Simply dispatches work to `EngineConfig` and `Ecosystem`, methods are
+    #  tested there
+    engine.config._sun_times = sun_times
+    engine.refresh_sun_times()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Refreshing ecosystems sun times" in logs
 
 
 def test_refresh_chaos(engine: Engine):
-    engine.refresh_chaos()
+    # Simply dispatches work to `EcosystemConfig` and `EngineConfig`, methods are
+    #  tested there
+    engine.update_chaos_time_window()
+    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+        assert "Updating ecosystems chaos time window" in logs
