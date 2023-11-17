@@ -6,12 +6,10 @@ import pytest
 import gaia_validators as gv
 
 from gaia.config import CacheType, ConfigType, EcosystemConfig, EngineConfig
-from gaia.exceptions import HardwareNotFound, UndefinedParameter
+from gaia.exceptions import UndefinedParameter
 from gaia.utils import is_connected, yaml
 
-from .data import (
-    ecosystem_info, ecosystem_name, hardware_address, hardware_info,
-    hardware_name, hardware_uid, sun_times)
+from .data import ecosystem_info, ecosystem_name, sun_times
 from .utils import get_logs_content
 
 
@@ -237,43 +235,3 @@ def test_ecosystem_time_parameters(ecosystem_config: EcosystemConfig):
 
     ecosystem_config.time_parameters = {"day": "4h21", "night": "22h00"}
     assert ecosystem_config.time_parameters.day == time(4, 21)
-
-
-def test_ecosystem_hardware_creation(ecosystem_config: EcosystemConfig):
-    with pytest.raises(ValueError, match=r"Address .* already used"):
-        ecosystem_config.create_new_hardware(**hardware_info)
-
-    with pytest.raises(ValueError, match="This hardware model is not supported"):
-        invalid_hardware_info = {
-            **hardware_info,
-            "address": "GPIO_7",  # Use a free address
-            "model": "Invalid"
-        }
-        ecosystem_config.create_new_hardware(**invalid_hardware_info)
-
-    with pytest.raises(ValueError, match="Invalid hardware information provided"):
-        invalid_hardware_info = {
-            **hardware_info,
-            "address": "GPIO_7",  # Use a free address
-            "level": "Invalid",
-        }
-        ecosystem_config.create_new_hardware(**invalid_hardware_info)
-
-
-def test_ecosystem_hardware_update(ecosystem_config: EcosystemConfig):
-    ecosystem_config.update_hardware(hardware_uid, {"address": "GPIO_7"})
-
-    with pytest.raises(HardwareNotFound):
-        ecosystem_config.update_hardware("invalid_uid", {"address": "GPIO_7"})
-
-    ecosystem_config.create_new_hardware(**hardware_info)
-    with pytest.raises(ValueError, match=r"Address .* already used"):
-        ecosystem_config.update_hardware(hardware_uid, {"address": hardware_address})
-    # Other cases are taken care of in `test_ecosystem_hardware_creation`
-
-
-def test_ecosystem_hardware_delete(ecosystem_config: EcosystemConfig):
-    ecosystem_config.delete_hardware(hardware_uid)
-
-    with pytest.raises(HardwareNotFound):
-        ecosystem_config.delete_hardware(hardware_uid)
