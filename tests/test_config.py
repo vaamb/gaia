@@ -156,6 +156,10 @@ def test_home(engine_config: EngineConfig):
 # ---------------------------------------------------------------------------
 #   Test EcosystemConfig
 # ---------------------------------------------------------------------------
+def test_ecosystem_config_singleton(ecosystem_config: EcosystemConfig):
+    assert ecosystem_config is EcosystemConfig(ecosystem_name)
+
+
 def test_ecosystem_config_dict(
         engine_config: EngineConfig,
         ecosystem_config: EcosystemConfig,
