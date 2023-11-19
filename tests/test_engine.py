@@ -109,6 +109,10 @@ def test_engine_background_tasks(engine: Engine):
 def test_engine_states(engine: Engine):
     engine.plugins_needed = False
 
+    assert not engine.set_up
+    assert not engine.running
+    assert not engine.cleaned_up
+
     engine.startup()
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
         assert "Starting Gaia ..." in logs
