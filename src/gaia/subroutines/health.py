@@ -83,26 +83,16 @@ class Health(SubroutineTemplate):
             self.take_picture()
         self.analyse_picture()
 
-    def _update_manageable(self) -> None:
-        def check_manageable() -> bool:
-            cameras_uid = self.config.get_IO_group_uids("camera")
-            if cameras_uid:
-                for camera_uid in cameras_uid:
-                    camera_dict = self.config.get_hardware_config(camera_uid)
-                    measures = camera_dict.measures
-                    if "health" in measures:
-                        return True
-            return False
-
-        manageable = check_manageable()
-        if manageable:
-            self.manageable = True
-        else:
-            self.config.set_management("health", False)
-            self.logger.warning(
-                "No health camera detected, disabling Health subroutine"
-            )
-            self.manageable = False
+    def _compute_if_manageable(self) -> bool:
+        cameras_uid = self.config.get_IO_group_uids("camera")
+        if cameras_uid:
+            for camera_uid in cameras_uid:
+                camera_dict = self.config.get_hardware_config(camera_uid)
+                measures = camera_dict.measures
+                if "health" in measures:
+                    return True
+        self.logger.warning("No health camera detected.")
+        return False
 
     def _start(self) -> None:
         check_dependencies("camera")

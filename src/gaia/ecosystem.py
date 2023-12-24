@@ -229,8 +229,6 @@ class Ecosystem:
 
     def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
-        for subroutine in self.subroutines.values():
-            subroutine.update_manageable()
         try:
             self._refresh_subroutines()
         except StoppingEcosystem:
@@ -280,6 +278,8 @@ class Ecosystem:
                 self.logger.error("Failed to stop the ecosystem")
                 raise Exception(f"Failed to stop ecosystem {self.name}")
             self._started = False
+        else:
+            raise RuntimeError("Cannot stop an ecosystem that hasn't started")
 
     # Actuator
     @property
