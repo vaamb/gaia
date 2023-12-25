@@ -476,20 +476,11 @@ class Engine(metaclass=SingletonMeta):
                 # Occur
                 pass
 
-    def refresh_chaos(self) -> None:
+    def update_chaos_time_window(self) -> None:
+        self.logger.info("Updating ecosystems chaos time window.")
         for ecosystem in self.ecosystems.values():
-            ecosystem.refresh_chaos()
-        chaos_file = self.config.cache_dir/"chaos.json"
-        try:
-            with chaos_file.open("r+") as file:
-                ecosystem_chaos = json.loads(file.read())
-                ecosystems = [*ecosystem_chaos.keys()]
-                for ecosystem in ecosystems:
-                    if ecosystem not in self.ecosystems:
-                        del ecosystem_chaos[ecosystem]
-                file.write(json.dumps(ecosystem_chaos))
-        except (FileNotFoundError, JSONDecodeError):  # Empty or absent file
-            pass
+            ecosystem.config.update_chaos_time_window()
+        self.config.save(CacheType.chaos)
 
     # ---------------------------------------------------------------------------
     #   Engine start and stop

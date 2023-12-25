@@ -346,6 +346,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 finally:
                     path = self.get_file_path(cfg_type)
                     self._config_files_modif[path] = os.stat(path).st_mtime_ns
+        self.load(CacheType.chaos)
         self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType | CacheType) -> None:
@@ -673,7 +674,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     "Sunrise and sunset times successfully updated")
                 return results
 
-    def _create_chaos_memory(self, ecosystem_uid) -> dict[str, ChaosMemory]:
+    def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
 
     def _load_chaos_memory(self) -> None:
@@ -705,7 +706,7 @@ class EngineConfig(metaclass=SingletonMeta):
         with chaos_path.open("w") as file:
             file.write(json.dumps(self._chaos_memory))
 
-    def get_chaos_memory(self, ecosystem_uid) -> ChaosMemory:
+    def get_chaos_memory(self, ecosystem_uid: str) -> ChaosMemory:
         if ecosystem_uid not in self._ecosystems_config:
             raise ValueError(
                 f"No ecosystem with uid '{ecosystem_uid}' found in ecosystems "
@@ -940,9 +941,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def chaos_factor(self) -> float:
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             self._update_chaos_time_window()
-        now = datetime.now(timezone.utc)
         beginning = self.chaos_time_window["beginning"]
         end = self.chaos_time_window["end"]
+        if beginning is None or end is None:
+            return 1.0
+        now = datetime.now(timezone.utc)
         chaos_duration = (end - beginning).total_seconds() // 60
         chaos_start_to_now = (now - beginning).total_seconds() // 60
         chaos_fraction = chaos_start_to_now / chaos_duration
