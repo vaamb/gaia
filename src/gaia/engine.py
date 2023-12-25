@@ -206,7 +206,7 @@ class Engine(metaclass=SingletonMeta):
         scheduler.add_job(self.refresh_sun_times, "cron",
                           hour="1", misfire_grace_time=15 * 60,
                           id="refresh_sun_times")
-        scheduler.add_job(self.update_chaos_time_window, "cron",
+        scheduler.add_job(self.config.update_chaos_memory, "cron",
                           hour="0", minute="5", misfire_grace_time=15 * 60,
                           id="refresh_chaos")
         start_scheduler()
@@ -475,21 +475,6 @@ class Engine(metaclass=SingletonMeta):
             except KeyError:
                 # Occur
                 pass
-
-    def refresh_chaos(self) -> None:
-        for ecosystem in self.ecosystems.values():
-            ecosystem.refresh_chaos()
-        chaos_file = self.config.cache_dir/"chaos.json"
-        try:
-            with chaos_file.open("r+") as file:
-                ecosystem_chaos = json.loads(file.read())
-                ecosystems = [*ecosystem_chaos.keys()]
-                for ecosystem in ecosystems:
-                    if ecosystem not in self.ecosystems:
-                        del ecosystem_chaos[ecosystem]
-                file.write(json.dumps(ecosystem_chaos))
-        except (FileNotFoundError, JSONDecodeError):  # Empty or absent file
-            pass
 
     # ---------------------------------------------------------------------------
     #   Engine start and stop

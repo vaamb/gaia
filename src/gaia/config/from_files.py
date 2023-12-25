@@ -269,6 +269,10 @@ class EngineConfig(metaclass=SingletonMeta):
     def cache_dir(self) -> Path:
         return self._get_dir("CACHE_DIR")
 
+    @property
+    def linked_ecosystems_config(self) -> t.Iterable["EcosystemConfig"]:
+        return _MetaEcosystemConfig.instances.values()
+
     def get_file_path(self, file_type: ConfigType | CacheType) -> Path:
         if isinstance(file_type, ConfigType):
             return self.config_dir / file_type.value
@@ -346,6 +350,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 finally:
                     path = self.get_file_path(cfg_type)
                     self._config_files_modif[path] = os.stat(path).st_mtime_ns
+        self.load(CacheType.chaos)
         self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType | CacheType) -> None:
@@ -673,7 +678,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     "Sunrise and sunset times successfully updated")
                 return results
 
-    def _create_chaos_memory(self, ecosystem_uid) -> dict[str, ChaosMemory]:
+    def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
 
     def _load_chaos_memory(self) -> None:
@@ -705,7 +710,7 @@ class EngineConfig(metaclass=SingletonMeta):
         with chaos_path.open("w") as file:
             file.write(json.dumps(self._chaos_memory))
 
-    def get_chaos_memory(self, ecosystem_uid) -> ChaosMemory:
+    def get_chaos_memory(self, ecosystem_uid: str) -> ChaosMemory:
         if ecosystem_uid not in self._ecosystems_config:
             raise ValueError(
                 f"No ecosystem with uid '{ecosystem_uid}' found in ecosystems "
@@ -714,6 +719,11 @@ class EngineConfig(metaclass=SingletonMeta):
         if ecosystem_uid not in self._chaos_memory:
             self._chaos_memory.update(self._create_chaos_memory(ecosystem_uid))
         return self._chaos_memory[ecosystem_uid]
+
+    def update_chaos_memory(self) -> None:
+        for ecosystem_config in self.linked_ecosystems_config:
+            ecosystem_config.update_chaos_time_window()
+        self._dump_chaos_memory()
 
     def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
         return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
@@ -912,6 +922,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.logger.info("Updating chaos time window")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             self._update_chaos_time_window()
+            self.general.save(CacheType.chaos)
         else:
             self.logger.debug("Chaos time window is already up to date")
 
@@ -940,9 +951,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def chaos_factor(self) -> float:
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             self._update_chaos_time_window()
-        now = datetime.now(timezone.utc)
         beginning = self.chaos_time_window["beginning"]
         end = self.chaos_time_window["end"]
+        if beginning is None or end is None:
+            return 1.0
+        now = datetime.now(timezone.utc)
         chaos_duration = (end - beginning).total_seconds() // 60
         chaos_start_to_now = (now - beginning).total_seconds() // 60
         chaos_fraction = chaos_start_to_now / chaos_duration
