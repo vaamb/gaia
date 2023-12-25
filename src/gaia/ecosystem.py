@@ -10,7 +10,7 @@ import weakref
 import gaia_validators as gv
 
 from gaia.config import EcosystemConfig
-from gaia.exceptions import StoppingEcosystem, UndefinedParameter
+from gaia.exceptions import UndefinedParameter
 from gaia.subroutines import (
     Climate, Health, Light, Sensors, subroutines, SubroutineNames)
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
@@ -84,23 +84,6 @@ class Ecosystem:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"status={self.status}, engine={self._engine})"
-
-    def _refresh_subroutines(self) -> None:
-        # Need to start sensors and lights before other subroutines
-        subroutines_ordered = set(subroutines.keys())
-        subroutines_needed = subroutines_ordered.intersection(
-            self._config.get_managed_subroutines()
-        )
-        to_stop = self.subroutines_started - subroutines_needed
-        for subroutine in to_stop:
-            self.stop_subroutine(subroutine)
-        if not subroutines_needed:
-            raise StoppingEcosystem
-        for subroutine in self.subroutines_started:
-            self.subroutines[subroutine].refresh_hardware()
-        to_start = subroutines_needed - self.subroutines_started
-        for subroutine in to_start:
-            self.start_subroutine(subroutine)
 
     """
     API calls
@@ -229,12 +212,28 @@ class Ecosystem:
 
     def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
-        try:
-            self._refresh_subroutines()
-        except StoppingEcosystem:
-            if self.status:
-                self.logger.info("No subroutine are running, stopping the Ecosystem")
-                self.stop()
+        self.logger.debug("Refreshing the subroutines.")
+        # Need to start sensors and lights before other subroutines
+        subroutines_ordered = set(subroutines.keys())
+        subroutines_needed = subroutines_ordered.intersection(
+            self._config.get_managed_subroutines()
+        )
+        if not subroutines_needed:
+            self.logger.debug("No subroutine needed.")
+            return
+        # Stop the unneeded subroutines first.
+        to_stop = self.subroutines_started - subroutines_needed
+        for subroutine in to_stop:
+            self.logger.debug(f"Stopping the subroutine '{subroutine}'")
+            self.stop_subroutine(subroutine)
+        # Then update the already running subroutines
+        for subroutine in self.subroutines_started:
+            self.subroutines[subroutine].refresh_hardware()
+        # Finally, start the new subroutines
+        to_start = subroutines_needed - self.subroutines_started
+        for subroutine in to_start:
+            self.logger.debug(f"Starting the subroutine '{subroutine}'")
+            self.start_subroutine(subroutine)
 
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
         try:
@@ -249,18 +248,13 @@ class Ecosystem:
         Subroutines based on the 'ecosystem.cfg' file
         """
         if not self.status:
-            try:
-                self.refresh_lighting_hours()
-                self.logger.info("Starting the ecosystem")
-                self._refresh_subroutines()
-                if self.engine.use_message_broker and self.event_handler.registered:
-                    self.event_handler.send_ecosystems_info(self.uid)
-                self.logger.debug(f"Ecosystem successfully started")
-                self._started = True
-            except StoppingEcosystem:
-                self.logger.info(
-                    "The ecosystem is not managing any subroutine, it will stop"
-                )
+            self.refresh_lighting_hours()
+            self.logger.info("Starting the ecosystem")
+            self.refresh_subroutines()
+            if self.engine.use_message_broker and self.event_handler.registered:
+                self.event_handler.send_ecosystems_info(self.uid)
+            self.logger.debug(f"Ecosystem successfully started")
+            self._started = True
         else:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
 
@@ -283,10 +277,8 @@ class Ecosystem:
 
     # Actuator
     @property
-    def actuator_info(self) -> gv.ActuatorsDataDict:
+    def actuator_data(self) -> gv.ActuatorsDataDict:
         return self.actuators_state
-
-    actuator_data = actuator_info
 
     def turn_actuator(
             self,
