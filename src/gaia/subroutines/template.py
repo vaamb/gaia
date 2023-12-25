@@ -32,7 +32,6 @@ class SubroutineTemplate(ABC):
         self.logger.debug("Initializing")
         self.hardware: dict[str, Hardware] = {}
         self._hardware_choices: dict[str, Type[Hardware]] = {}
-        self.manageable: bool = True
         self._started: bool = False
         self._executor: ThreadPoolExecutor | None = None
 
@@ -52,7 +51,7 @@ class SubroutineTemplate(ABC):
             return executor
 
     @abstractmethod
-    def _update_manageable(self) -> None:
+    def _compute_if_manageable(self) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -83,12 +82,18 @@ class SubroutineTemplate(ABC):
         return self._started
 
     @property
-    def management(self) -> bool:
+    def enabled(self) -> bool:
         return self.config.get_management(self.name)
 
-    @management.setter
-    def management(self, value: bool) -> None:
-        self.config.set_management(self.name, value)
+    def enable(self) -> None:
+        self.config.set_management(self.name, True)
+
+    def disable(self) -> None:
+        self.config.set_management(self.name, False)
+
+    @property
+    def manageable(self) -> bool:
+        return self._compute_if_manageable()
 
     @property
     def hardware_choices(self) -> dict[str, Type[Hardware]]:
@@ -164,36 +169,29 @@ class SubroutineTemplate(ABC):
         for hardware_uid in hardware_existing - hardware_needed:
             self.remove_hardware(hardware_uid)
 
-    def update_manageable(self) -> None:
-        if self.management:
-            self._update_manageable()
-
     def start(self) -> None:
-        self.update_manageable()
-        if self.manageable:
-            if not self._started:
-                self.logger.debug("Starting the subroutine")
-                try:
-                    self.refresh_hardware()
-                    self._start()
-                    self.logger.debug("Successfully started")
-                    self._started = True
-                except Exception as e:
-                    self._started = False
-                    self.logger.error(
-                        f"Starting failed. "
-                        f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                    )
-                    raise e
-            else:
-                raise RuntimeError("Subroutine is already running")
-        else:
+        if self.status:
+            raise RuntimeError("The subroutine is already running.")
+        if not self.enabled:
+            raise RuntimeError("The subroutine is not enabled.")
+        if not self.manageable:
+            raise RuntimeError("The subroutine is not manageable.")
+        self.logger.debug("Starting the subroutine")
+        try:
+            self.refresh_hardware()
+            self._start()
+            self.logger.debug("Successfully started")
+            self._started = True
+        except Exception as e:
+            self._started = False
             self.logger.error(
-                "The subroutine has been disabled and cannot be started"
+                f"Starting failed. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
+            raise e
 
     def stop(self) -> None:
-        if self._started:
+        if self.status:
             self.logger.debug(f"Stopping the subroutine")
             try:
                 self._stop()

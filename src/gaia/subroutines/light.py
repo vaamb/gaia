@@ -126,7 +126,7 @@ class Light(SubroutineTemplate):
         pass
 
     """Functions to switch the light on/off either manually or automatically"""
-    def _update_manageable(self) -> None:
+    def _compute_if_manageable(self) -> bool:
         try:
             time_parameters = bool(self.config.time_parameters)
         except UndefinedParameter:
@@ -136,13 +136,13 @@ class Light(SubroutineTemplate):
                 self.ecosystem.light_method,
                 time_parameters
         )):
-            self.manageable = True
+            return True
         else:
             self.logger.warning(
                 "At least one of light hardware, lighting method, or time "
-                "parameters is missing. Disabling Light subroutine"
+                "parameters is missing."
             )
-            self.manageable = False
+            return False
 
     def _start(self) -> None:
         self._stop_event.clear()
