@@ -2,20 +2,15 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 import logging
-import logging.config
 from threading import Lock
 import typing as t
 from typing import cast, TypedDict
 import weakref
 
-from gaia_validators import (
-    ActuatorModePayload, ActuatorState, ActuatorsDataDict, BaseInfoConfig,
-    ChaosConfig, Empty, EnvironmentConfig, HardwareConfig, HardwareType,
-    HealthRecord, LightData, LightingHours, LightMethod, ManagementConfig,
-    safe_enum_from_name, SensorsData)
+import gaia_validators as gv
 
 from gaia.config import EcosystemConfig
-from gaia.exceptions import StoppingEcosystem, UndefinedParameter
+from gaia.exceptions import UndefinedParameter
 from gaia.subroutines import (
     Climate, Health, Light, Sensors, subroutines, SubroutineNames)
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
@@ -26,18 +21,15 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.events import Events
 
 
-lock = Lock()
-
-
 def _to_dt(_time: time) -> datetime:
     # Transforms time to today's datetime. Needed to use timedelta
     _date = date.today()
     return datetime.combine(_date, _time)
 
 
-def _generate_actuators_state_dict() -> ActuatorsDataDict:
+def _generate_actuators_state_dict() -> gv.ActuatorsDataDict:
     return {
-        actuator: ActuatorState().model_dump()
+        actuator: gv.ActuatorState().model_dump()
         for actuator in [
             "light", "cooler", "heater", "humidifier", "dehumidifier"]
     }
@@ -76,12 +68,12 @@ class Ecosystem:
             f"gaia.engine.{self._name.replace(' ', '_')}")
         self.logger.info("Initializing the ecosystem")
         self._alarms: list = []
-        self._lighting_hours = LightingHours(
+        self._lighting_hours = gv.LightingHours(
             morning_start=self.config.time_parameters.day,
             evening_end=self.config.time_parameters.night,
         )
         self.lighting_hours_lock = Lock()
-        self.actuators_state: ActuatorsDataDict = _generate_actuators_state_dict()
+        self.actuators_state: gv.ActuatorsDataDict = _generate_actuators_state_dict()
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine in subroutines:
             self.init_subroutine(subroutine)
@@ -92,23 +84,6 @@ class Ecosystem:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"status={self.status}, engine={self._engine})"
-
-    def _refresh_subroutines(self) -> None:
-        # Need to start sensors and lights before other subroutines
-        subroutines_ordered = set(subroutines.keys())
-        subroutines_needed = subroutines_ordered.intersection(
-            self._config.get_managed_subroutines()
-        )
-        to_stop = self.subroutines_started - subroutines_needed
-        for subroutine in to_stop:
-            self.stop_subroutine(subroutine)
-        if not subroutines_needed:
-            raise StoppingEcosystem
-        for subroutine in self.subroutines_started:
-            self.subroutines[subroutine].refresh_hardware()
-        to_start = subroutines_needed - self.subroutines_started
-        for subroutine in to_start:
-            self.start_subroutine(subroutine)
 
     """
     API calls
@@ -145,8 +120,8 @@ class Ecosystem:
         ])
 
     @property
-    def base_info(self) -> BaseInfoConfig:
-        return BaseInfoConfig(
+    def base_info(self) -> gv.BaseInfoConfig:
+        return gv.BaseInfoConfig(
             uid=self.uid,
             name=self.name,
             status=self.status,
@@ -154,29 +129,29 @@ class Ecosystem:
         )
 
     @property
-    def light_method(self) -> LightMethod:
+    def light_method(self) -> gv.LightMethod:
         try:
             return self.config.light_method
         except UndefinedParameter:
-            return LightMethod.fixed
+            return gv.LightMethod.fixed
 
-    def set_light_method(self, value: LightMethod) -> None:
+    def set_light_method(self, value: gv.LightMethod) -> None:
         self.config.set_light_method(value)
         self.refresh_lighting_hours(send=True)
 
     @property
-    def lighting_hours(self) -> LightingHours:
+    def lighting_hours(self) -> gv.LightingHours:
         with self.lighting_hours_lock:
             return self._lighting_hours
 
     @lighting_hours.setter
-    def lighting_hours(self, value: LightingHours) -> None:
+    def lighting_hours(self, value: gv.LightingHours) -> None:
         with self.lighting_hours_lock:
             self._lighting_hours = value
 
     @property
-    def light_info(self) -> LightData:
-        return LightData(
+    def light_info(self) -> gv.LightData:
+        return gv.LightData(
             method=self.config.light_method,
             morning_start=self.config.time_parameters.day,
             evening_end=self.config.time_parameters.night,
@@ -185,7 +160,7 @@ class Ecosystem:
     light_data = light_info
 
     @property
-    def management(self) -> ManagementConfig:
+    def management(self) -> gv.ManagementConfig:
         """Return the subroutines' management corrected by whether they are
         manageable or not"""
         base_management = self.config.managements
@@ -193,58 +168,95 @@ class Ecosystem:
         for m in base_management:
             m = cast(SubroutineNames, m)
             try:
-                management[m] = self.config.get_management(m) & self.subroutines[m].manageable
+                management[m] = (
+                    self.config.get_management(m)
+                    & self.subroutines[m].manageable
+                )
             except KeyError:
                 management[m] = self.config.get_management(m)
-        return ManagementConfig(**management)
+        return gv.ManagementConfig(**management)
 
     @property
-    def environmental_parameters(self) -> EnvironmentConfig:
+    def environmental_parameters(self) -> gv.EnvironmentConfig:
         environment_dict = self.config.environment
-        return EnvironmentConfig(**environment_dict)
+        return gv.EnvironmentConfig(**environment_dict)
 
     @property
-    def hardware(self) -> list[HardwareConfig]:
+    def hardware(self) -> list[gv.HardwareConfig]:
         hardware_dict = self.config.IO_dict
-        return [HardwareConfig(uid=key, **value) for key, value in hardware_dict.items()]
+        return [
+            gv.HardwareConfig(uid=key, **value)
+            for key, value in hardware_dict.items()
+        ]
 
     def init_subroutine(self, subroutine_name: SubroutineNames) -> None:
-        """Initialize a Subroutines
+        """Initialize a Subroutine
 
-        :param subroutine_name: The name of the Subroutines to initialize
+        :param subroutine_name: The name of the Subroutine to initialize
         """
         self.subroutines[subroutine_name] = subroutines[subroutine_name](self)
 
-    def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
-        """Start a Subroutines
+    def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        """Enable a Subroutine
 
-        :param subroutine_name: The name of the Subroutines to start
+        This will mark the subroutine as managed in the configuration file.
+
+        :param subroutine_name: The name of the Subroutine to enable
+        """
+        self.subroutines[subroutine_name].enable()
+        self.config.save()
+
+    def disable_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        """Disable a Subroutine
+
+        This will mark the subroutine as not managed in the configuration file.
+
+        :param subroutine_name: The name of the Subroutine to disable
+        """
+        self.subroutines[subroutine_name].disable()
+        self.config.save()
+
+    def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        """Start a Subroutine
+
+        :param subroutine_name: The name of the Subroutine to start
         """
         self.subroutines[subroutine_name].start()
 
     def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
-        """Stop a Subroutines
+        """Stop a Subroutine
 
-        :param subroutine_name: The name of the Subroutines to stop
+        :param subroutine_name: The name of the Subroutine to stop
         """
         self.subroutines[subroutine_name].stop()
 
+    def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
+        return self.subroutines[subroutine_name].status
+
     def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
-        for subroutine in self.subroutines.values():
-            subroutine.update_manageable()
-        try:
-            self._refresh_subroutines()
-        except StoppingEcosystem:
-            if self.status:
-                self.logger.info("No subroutine are running, stopping the Ecosystem")
-                self.stop()
-
-    def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
-        try:
-            return self.subroutines[subroutine_name].status
-        except KeyError:
-            return False
+        self.logger.debug("Refreshing the subroutines.")
+        # Need to start sensors and lights before other subroutines
+        subroutines_ordered = set(subroutines.keys())
+        subroutines_needed = subroutines_ordered.intersection(
+            self._config.get_managed_subroutines()
+        )
+        if not subroutines_needed:
+            self.logger.debug("No subroutine needed.")
+            return
+        # Stop the unneeded subroutines first.
+        to_stop = self.subroutines_started - subroutines_needed
+        for subroutine in to_stop:
+            self.logger.debug(f"Stopping the subroutine '{subroutine}'")
+            self.stop_subroutine(subroutine)
+        # Then update the already running subroutines
+        for subroutine in self.subroutines_started:
+            self.subroutines[subroutine].refresh_hardware()
+        # Finally, start the new subroutines
+        to_start = subroutines_needed - self.subroutines_started
+        for subroutine in to_start:
+            self.logger.debug(f"Starting the subroutine '{subroutine}'")
+            self.start_subroutine(subroutine)
 
     def start(self):
         """Start the Ecosystem
@@ -253,18 +265,13 @@ class Ecosystem:
         Subroutines based on the 'ecosystem.cfg' file
         """
         if not self.status:
-            try:
-                self.refresh_lighting_hours()
-                self.logger.info("Starting the ecosystem")
-                self._refresh_subroutines()
-                if self.engine.use_message_broker and self.event_handler.registered:
-                    self.event_handler.send_ecosystems_info(self.uid)
-                self.logger.debug(f"Ecosystem successfully started")
-                self._started = True
-            except StoppingEcosystem:
-                self.logger.info(
-                    "The ecosystem is not managing any subroutine, it will stop"
-                )
+            self.refresh_lighting_hours()
+            self.logger.info("Starting the ecosystem")
+            self.refresh_subroutines()
+            if self.engine.use_message_broker and self.event_handler.registered:
+                self.event_handler.send_ecosystems_info(self.uid)
+            self.logger.debug(f"Ecosystem successfully started")
+            self._started = True
         else:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
 
@@ -282,18 +289,18 @@ class Ecosystem:
                 self.logger.error("Failed to stop the ecosystem")
                 raise Exception(f"Failed to stop ecosystem {self.name}")
             self._started = False
+        else:
+            raise RuntimeError("Cannot stop an ecosystem that hasn't started")
 
     # Actuator
     @property
-    def actuator_info(self) -> ActuatorsDataDict:
+    def actuator_data(self) -> gv.ActuatorsDataDict:
         return self.actuators_state
-
-    actuator_data = actuator_info
 
     def turn_actuator(
             self,
-            actuator: HardwareType | str,
-            mode: ActuatorModePayload | str = ActuatorModePayload.automatic,
+            actuator: gv.HardwareType | str,
+            mode: gv.ActuatorModePayload | str = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
         """Turn the actuator to the specified mode
@@ -304,10 +311,12 @@ class Ecosystem:
         :param countdown: the delay before which the actuator will be turned to
                           the specified mode.
         """
-        validated_actuator: HardwareType = safe_enum_from_name(HardwareType, actuator)
-        validated_mode: ActuatorModePayload = safe_enum_from_name(ActuatorModePayload, mode)
+        validated_actuator: gv.HardwareType = \
+            gv.safe_enum_from_name(gv.HardwareType, actuator)
+        validated_mode: gv.ActuatorModePayload = \
+            gv.safe_enum_from_name(gv.ActuatorModePayload, mode)
         try:
-            if validated_actuator == HardwareType.light:
+            if validated_actuator == gv.HardwareType.light:
                 if self.get_subroutine_status("light"):
                     light_subroutine: Light = self.subroutines["light"]
                     light_subroutine.turn_light(
@@ -315,8 +324,8 @@ class Ecosystem:
                 else:
                     raise ValueError("Light subroutine is not running")
             elif validated_actuator in [
-                HardwareType.heater, HardwareType.cooler, HardwareType.humidifier,
-                HardwareType.dehumidifier
+                gv.HardwareType.heater, gv.HardwareType.cooler,
+                gv.HardwareType.humidifier, gv.HardwareType.dehumidifier
             ]:
                 if self.get_subroutine_status("climate"):
                     climate_subroutine: Climate = self.subroutines["climate"]
@@ -350,11 +359,11 @@ class Ecosystem:
 
     # Sensors
     @property
-    def sensors_data(self) -> SensorsData | Empty:
+    def sensors_data(self) -> gv.SensorsData | gv.Empty:
         if self.get_subroutine_status("sensors"):
             sensors_subroutine: Sensors = self.subroutines["sensors"]
             return sensors_subroutine.sensors_data
-        return Empty()
+        return gv.Empty()
 
     # Light
     def refresh_lighting_hours(self, send: bool = True) -> None:
@@ -362,27 +371,27 @@ class Ecosystem:
         time_parameters = self.config.time_parameters
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
-        if self.config.light_method == LightMethod.fixed:
-            self.lighting_hours = LightingHours(
+        if self.config.light_method == gv.LightMethod.fixed:
+            self.lighting_hours = gv.LightingHours(
                 morning_start=time_parameters.day,
                 evening_end=time_parameters.night,
             )
 
-        elif self.config.light_method == LightMethod.mimic:
+        elif self.config.light_method == gv.LightMethod.mimic:
             if self.config.sun_times is None:
                 self.logger.warning(
                     "Cannot use lighting method 'place' without sun times available. "
                     "Using 'fixed' method instead."
                 )
-                self.config.set_light_method(LightMethod.fixed)
+                self.config.set_light_method(gv.LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
             else:
-                self.lighting_hours = LightingHours(
+                self.lighting_hours = gv.LightingHours(
                     morning_start=self.config.sun_times.sunrise,
                     evening_end=self.config.sun_times.sunset,
                 )
 
-        elif self.config.light_method == LightMethod.elongate:
+        elif self.config.light_method == gv.LightMethod.elongate:
             if (
                     time_parameters.day is None
                     or time_parameters.night is None
@@ -392,14 +401,14 @@ class Ecosystem:
                     "Cannot use lighting method 'elongate' without time parameters set in "
                     "config and sun times available. Using 'fixed' method instead."
                 )
-                self.config.set_light_method(LightMethod.fixed)
+                self.config.set_light_method(gv.LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
             else:
                 sunrise = _to_dt(self.config.sun_times.sunrise)
                 sunset = _to_dt(self.config.sun_times.sunset)
                 twilight_begin = _to_dt(self.config.sun_times.twilight_begin)
                 offset = sunrise - twilight_begin
-                self.lighting_hours = LightingHours(
+                self.lighting_hours = gv.LightingHours(
                     morning_start=time_parameters.day,
                     morning_end=(sunrise + offset).time(),
                     evening_start=(sunset - offset).time(),
@@ -425,11 +434,11 @@ class Ecosystem:
 
     # Health
     @property
-    def plants_health(self) -> HealthRecord | Empty:
+    def plants_health(self) -> gv.HealthRecord | gv.Empty:
         if self.get_subroutine_status("health"):
             health_subroutine: Health = self.subroutines["health"]
             return health_subroutine.plants_health
-        return Empty()
+        return gv.Empty()
 
     health_data = plants_health
 

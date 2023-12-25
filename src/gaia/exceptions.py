@@ -6,7 +6,7 @@ class HardwareNotFound(ValueError):
     pass
 
 
-class StoppingEcosystem(RuntimeError):
+class NoSubroutineNeeded(RuntimeError):
     pass
 
 

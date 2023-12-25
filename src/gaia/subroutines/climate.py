@@ -200,8 +200,7 @@ class Climate(SubroutineTemplate):
                 parameters[climate_param]["night"] = param_cfg.night
                 parameters[climate_param]["hysteresis"] = param_cfg.hysteresis
         if not self._any_regulated(parameters):
-            self.logger.debug(
-                "No climate parameter found.")
+            self.logger.debug("No climate parameter found.")
             return parameters
 
         # Check if sensors taking regulated params are available
@@ -210,6 +209,11 @@ class Climate(SubroutineTemplate):
             for hardware_uid in self.config.get_IO_group_uids("sensor"):
                 hardware = self.config.get_hardware_config(hardware_uid)
                 measures.update(hardware.measures)
+        else:
+            self.logger.warning(
+                "Climate subroutine requires a running sensors subroutine in "
+                "order to work"
+            )
         for climate_param, value in parameters.items():
             climate_param = cast(ClimateParameterNames, climate_param)
             if not value["regulated"]:
@@ -241,16 +245,16 @@ class Climate(SubroutineTemplate):
             return parameters
         return parameters
 
-    def _update_manageable(self) -> None:
+    def _compute_if_manageable(self) -> bool:
         self._parameters = self._compute_parameters()
-        if not self._any_regulated():
+        if not self._any_regulated(self._parameters):
             self.logger.warning(
                 "No parameters that could be regulated were found. "
                 "Disabling Climate subroutine."
             )
-            self.manageable = False
+            return False
         else:
-            self.manageable = True
+            return True
 
     def _climate_routine(self) -> None:
         if not self.ecosystem.get_subroutine_status("sensors"):

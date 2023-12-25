@@ -50,14 +50,12 @@ class Sensors(SubroutineTemplate):
             )
             self._stop_event.wait(sleep_time)
 
-    def _update_manageable(self) -> None:
+    def _compute_if_manageable(self) -> bool:
         if self.config.get_IO_group_uids("sensor"):
-            self.manageable = True
+            return True
         else:
-            self.logger.warning(
-                "No sensor detected, disabling Sensors subroutine"
-            )
-            self.manageable = False
+            self.logger.warning("No sensor detected.")
+            return False
 
     def _start(self) -> None:
         self.logger.info(
