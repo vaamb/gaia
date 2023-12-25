@@ -1057,15 +1057,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return [self.IO_dict[hardware]["address"]
                 for hardware in self.IO_dict]
 
-    def _validate_hardware_dict(self, hardware_dict: gv.HardwareConfigDict) -> Hardware:
+    def _validate_hardware_dict(
+            self,
+            hardware_dict: gv.HardwareConfigDict,
+            check_address: bool = True,
+    ) -> Hardware:
         try:
             hardware_config = gv.HardwareConfig(**hardware_dict)
         except pydantic.ValidationError as e:
             raise ValueError(
                 f"Invalid hardware information provided. "
-                f"ERROR msg(s): `{format_pydantic_error(e)}`."
+                f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
-        if hardware_config.address in self._used_addresses():
+        if (
+                check_address
+                and hardware_config.address in self._used_addresses()
+        ):
             raise ValueError(f"Address {hardware_config.address} already used.")
         if hardware_config.model not in hardware_models:
             raise ValueError(
@@ -1126,7 +1133,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             hardware_dict: gv.AnonymousHardwareConfigDict = self.IO_dict[uid].copy()
             hardware_dict: gv.HardwareConfigDict = cast(gv.HardwareConfigDict, hardware_dict)
             hardware_dict.update({"uid": uid, **non_null_values})
-            hardware = self._validate_hardware_dict(hardware_dict)
+            check_address = "address" in update_value  # Don't check address if not trying to update it
+            hardware = self._validate_hardware_dict(hardware_dict, check_address)
             hardware_repr = hardware.dict_repr(shorten=True)
             hardware_repr.pop("uid")
             self.IO_dict[uid] = hardware_repr
