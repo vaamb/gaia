@@ -190,25 +190,48 @@ class Ecosystem:
         ]
 
     def init_subroutine(self, subroutine_name: SubroutineNames) -> None:
-        """Initialize a Subroutines
+        """Initialize a Subroutine
 
-        :param subroutine_name: The name of the Subroutines to initialize
+        :param subroutine_name: The name of the Subroutine to initialize
         """
         self.subroutines[subroutine_name] = subroutines[subroutine_name](self)
 
-    def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
-        """Start a Subroutines
+    def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        """Enable a Subroutine
 
-        :param subroutine_name: The name of the Subroutines to start
+        This will mark the subroutine as managed in the configuration file.
+
+        :param subroutine_name: The name of the Subroutine to enable
+        """
+        self.subroutines[subroutine_name].enable()
+        self.config.save()
+
+    def disable_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        """Disable a Subroutine
+
+        This will mark the subroutine as not managed in the configuration file.
+
+        :param subroutine_name: The name of the Subroutine to disable
+        """
+        self.subroutines[subroutine_name].disable()
+        self.config.save()
+
+    def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        """Start a Subroutine
+
+        :param subroutine_name: The name of the Subroutine to start
         """
         self.subroutines[subroutine_name].start()
 
     def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
-        """Stop a Subroutines
+        """Stop a Subroutine
 
-        :param subroutine_name: The name of the Subroutines to stop
+        :param subroutine_name: The name of the Subroutine to stop
         """
         self.subroutines[subroutine_name].stop()
+
+    def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
+        return self.subroutines[subroutine_name].status
 
     def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
@@ -234,12 +257,6 @@ class Ecosystem:
         for subroutine in to_start:
             self.logger.debug(f"Starting the subroutine '{subroutine}'")
             self.start_subroutine(subroutine)
-
-    def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
-        try:
-            return self.subroutines[subroutine_name].status
-        except KeyError:
-            return False
 
     def start(self):
         """Start the Ecosystem
