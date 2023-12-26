@@ -43,14 +43,14 @@ def test_ecosystem_states(ecosystem: "Ecosystem"):
 def test_subroutine_management(ecosystem: "Ecosystem"):
     # Simply dispatches work to subroutine, methods are tested there
 
-    ecosystem.enable_subroutine("light")
-    ecosystem.start_subroutine("light")
-    assert ecosystem.get_subroutine_status("light")
-    assert ecosystem.subroutines_started == {"light"}
+    ecosystem.enable_subroutine("dummy")
+    ecosystem.start_subroutine("dummy")
+    assert ecosystem.get_subroutine_status("dummy")
+    assert ecosystem.subroutines_started == {"dummy"}
     ecosystem.refresh_subroutines()
-    ecosystem.stop_subroutine("light")
+    ecosystem.stop_subroutine("dummy")
     assert ecosystem.subroutines_started == set()
-    ecosystem.disable_subroutine("light")
+    ecosystem.disable_subroutine("dummy")
 
     with pytest.raises(NonValidSubroutine, match=r"is not valid."):
         ecosystem.enable_subroutine("WrongSubroutine")
