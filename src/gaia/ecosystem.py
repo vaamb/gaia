@@ -3,8 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, time
 import logging
 from threading import Lock
-import typing as t
-from typing import cast, TypedDict
+import typing
 import weakref
 
 import gaia_validators as gv
@@ -16,7 +15,7 @@ from gaia.subroutines import (
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
-if t.TYPE_CHECKING:  # pragma: no cover
+if typing.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
     from gaia.events import Events
 
@@ -75,8 +74,9 @@ class Ecosystem:
         self.lighting_hours_lock = Lock()
         self.actuators_state: gv.ActuatorsDataDict = _generate_actuators_state_dict()
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
-        for subroutine in subroutines:
-            self.init_subroutine(subroutine)
+        for subroutine_name in subroutine_dict:
+            subroutine_name = typing.cast(SubroutineNames, subroutine_name)
+            self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
         self.config.update_chaos_time_window()
         self._started: bool = False
         self.logger.debug(f"Ecosystem initialization successful")
@@ -166,7 +166,7 @@ class Ecosystem:
         base_management = self.config.managements
         management = {}
         for m in base_management:
-            m = cast(SubroutineNames, m)
+            m = typing.cast(SubroutineNames, m)
             try:
                 management[m] = (
                     self.config.get_management(m)
@@ -188,13 +188,6 @@ class Ecosystem:
             gv.HardwareConfig(uid=key, **value)
             for key, value in hardware_dict.items()
         ]
-
-    def init_subroutine(self, subroutine_name: SubroutineNames) -> None:
-        """Initialize a Subroutine
-
-        :param subroutine_name: The name of the Subroutine to initialize
-        """
-        self.subroutines[subroutine_name] = subroutines[subroutine_name](self)
 
     def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
