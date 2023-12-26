@@ -182,13 +182,13 @@ def test_ecosystem_config_status(ecosystem_config: EcosystemConfig):
 
 
 def test_ecosystem_config_managed_subroutines(ecosystem_config: EcosystemConfig):
-    assert not ecosystem_config.get_managed_subroutines()
+    assert not ecosystem_config.get_subroutines_enabled()
 
     for management in gv.ManagementFlags:
         ecosystem_config.set_management(management, True)
         assert ecosystem_config.get_management(management)
 
-    managed_subroutines = ecosystem_config.get_managed_subroutines()
+    managed_subroutines = ecosystem_config.get_subroutines_enabled()
     managed_subroutines.sort()
     assert managed_subroutines == ["climate", "health", "light", "sensors"]
 
