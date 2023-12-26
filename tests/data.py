@@ -19,8 +19,8 @@ hardware_info = {
     "model": "gpioSwitch",
     "type": "light",
     "level": "environment",
-    "measures": ["testMeasure"],
-    "plants": ["testPlant"],
+    "measures": [],
+    "plants": [],
 }
 
 sun_times = {
@@ -58,7 +58,25 @@ ecosystem_info = {
             "climate": {},
         },
         "IO": {
-            hardware_uid: hardware_info
+            hardware_uid: hardware_info,
+            "A0oZpCJ50D0ajfJs": {
+                "name": "VirtualHeater",
+                "address": "GPIO_37",
+                "model": "gpioSwitch",
+                "type": "heater",
+                "level": "environment",
+                "measures": [],
+                "plants": [],
+            },
+            "tKstp8EYJx27eQuK": {
+                "name": "VirtualSensor",
+                "address": "GPIO_7",
+                "model": "virtualDHT22",
+                "type": "sensor",
+                "level": "environment",
+                "measures": ["temperature", "humidity"],
+                "plants": [],
+            }
         },
     },
 }
