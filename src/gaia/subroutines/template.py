@@ -86,9 +86,11 @@ class SubroutineTemplate(ABC):
         return self.config.get_management(self.name)
 
     def enable(self) -> None:
+        self.logger.info(f"Enabling the subroutine.")
         self.config.set_management(self.name, True)
 
     def disable(self) -> None:
+        self.logger.info(f"Disabling the subroutine.")
         self.config.set_management(self.name, False)
 
     @property
@@ -118,7 +120,7 @@ class SubroutineTemplate(ABC):
             hardware_config: HardwareConfig,
     ) -> BaseSensor | Camera | Dimmer | Hardware | Switch | None:
         if not self.hardware_choices:
-            raise RuntimeError("No 'hardware_choices' available")
+            raise RuntimeError("No 'hardware_choices' available.")
         try:
             model: str = hardware_config.model
             if model not in self.hardware_choices:
@@ -131,7 +133,7 @@ class SubroutineTemplate(ABC):
                 hardware.turn_off()
             if isinstance(hardware, Dimmer):
                 hardware.set_pwm_level(0)
-            self.logger.debug(f"Hardware {hardware.name} has been set up")
+            self.logger.debug(f"Hardware {hardware.name} has been set up.")
             self.hardware[hardware.uid] = hardware
             return hardware
         except Exception as e:
@@ -143,9 +145,9 @@ class SubroutineTemplate(ABC):
 
     def remove_hardware(self, hardware_uid: str) -> None:
         if not self.hardware.get(hardware_uid):
-            self.logger.error(
-                f"Hardware '{hardware_uid}' is not managed by this subroutine"
-            )
+            error_msg =f"Hardware '{hardware_uid}' not found."
+            self.logger.error(error_msg)
+            raise HardwareNotFound(error_msg)
 
         hardware = self.hardware[hardware_uid]
         if isinstance(hardware, Switch):
@@ -153,11 +155,12 @@ class SubroutineTemplate(ABC):
         if isinstance(hardware, Dimmer):
             hardware.set_pwm_level(0)
         del self.hardware[hardware_uid]
+        self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
     @abstractmethod
     def get_hardware_needed_uid(self) -> set[str]:
         raise NotImplementedError(
-            "This method must be implemented in a subclass"
+            "This method must be implemented in a subclass."
         )
 
     def refresh_hardware(self) -> None:
@@ -176,11 +179,11 @@ class SubroutineTemplate(ABC):
             raise RuntimeError("The subroutine is not enabled.")
         if not self.manageable:
             raise RuntimeError("The subroutine is not manageable.")
-        self.logger.debug("Starting the subroutine")
+        self.logger.debug("Starting the subroutine.")
         try:
             self.refresh_hardware()
             self._start()
-            self.logger.debug("Successfully started")
+            self.logger.debug("Successfully started.")
             self._started = True
         except Exception as e:
             self._started = False
@@ -191,19 +194,20 @@ class SubroutineTemplate(ABC):
             raise e
 
     def stop(self) -> None:
-        if self.status:
-            self.logger.debug(f"Stopping the subroutine")
-            try:
-                self._stop()
-                self.executor.shutdown(wait=False, cancel_futures=True)
-                self.executor = None
-                for hardware_uid in [*self.hardware.keys()]:
-                    self.remove_hardware(hardware_uid)
-                self._started = False
-                self.logger.debug("Successfully stopped")
-            except Exception as e:
-                self._started = True
-                self.logger.error(
-                    f"Stopping failed. ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
-                raise e
+        if not self.status:
+            raise RuntimeError("The subroutine is not running.")
+        self.logger.debug(f"Stopping the subroutine.")
+        try:
+            self._stop()
+            self.executor.shutdown(wait=False, cancel_futures=True)
+            self.executor = None
+            for hardware_uid in [*self.hardware.keys()]:
+                self.remove_hardware(hardware_uid)
+            self._started = False
+            self.logger.debug("Successfully stopped.")
+        except Exception as e:
+            self._started = True
+            self.logger.error(
+                f"Stopping failed. ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
+            raise e
