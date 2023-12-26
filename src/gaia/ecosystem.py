@@ -9,7 +9,7 @@ import weakref
 import gaia_validators as gv
 
 from gaia.config import EcosystemConfig
-from gaia.exceptions import UndefinedParameter
+from gaia.exceptions import NonValidSubroutine, UndefinedParameter
 from gaia.subroutines import (
     Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
@@ -189,8 +189,12 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to enable
         """
-        self.subroutines[subroutine_name].enable()
-        self.config.save()
+        try:
+            self.subroutines[subroutine_name].enable()
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
+        else:
+            self.config.save()
 
     def disable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Disable a Subroutine
@@ -199,25 +203,38 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to disable
         """
-        self.subroutines[subroutine_name].disable()
-        self.config.save()
+        try:
+            self.subroutines[subroutine_name].disable()
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
+        else:
+            self.config.save()
 
     def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Start a Subroutine
 
         :param subroutine_name: The name of the Subroutine to start
         """
-        self.subroutines[subroutine_name].start()
+        try:
+            self.subroutines[subroutine_name].start()
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
 
     def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutine
 
         :param subroutine_name: The name of the Subroutine to stop
         """
-        self.subroutines[subroutine_name].stop()
+        try:
+            self.subroutines[subroutine_name].stop()
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
 
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
-        return self.subroutines[subroutine_name].status
+        try:
+            return self.subroutines[subroutine_name].status
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
 
     def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
@@ -265,7 +282,7 @@ class Ecosystem:
         """Stop the Ecosystem"""
         if self.status:
             self.logger.info("Shutting down the ecosystem")
-            subroutines_to_stop: list[SubroutineNames] = [*subroutine_dict.keys()]
+            subroutines_to_stop: list[SubroutineNames] = subroutine_names
             for subroutine in reversed(subroutines_to_stop):
                 self.subroutines[subroutine].stop()
             if not any([self.subroutines[subroutine].status
