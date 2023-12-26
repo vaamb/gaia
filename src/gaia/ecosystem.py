@@ -232,7 +232,7 @@ class Ecosystem:
         # Need to start sensors and lights before other subroutines
         subroutines_ordered = set(subroutines.keys())
         subroutines_needed = subroutines_ordered.intersection(
-            self._config.get_managed_subroutines()
+            self._config.get_subroutines_enabled()
         )
         if not subroutines_needed:
             self.logger.debug("No subroutine needed.")

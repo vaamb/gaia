@@ -831,8 +831,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         management_name: gv.ManagementNames = validated_management.name
         self.__dict["management"][management_name] = value
 
-    def get_managed_subroutines(self) -> list[gv.ManagementNames]:
-        return [subroutine for subroutine in subroutines
+    def get_subroutines_enabled(self) -> list[gv.ManagementNames]:
+        return [subroutine for subroutine in subroutine_dict
                 if self.get_management(subroutine)]
 
     """EnvironmentConfig related parameters"""
