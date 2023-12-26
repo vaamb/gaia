@@ -88,3 +88,9 @@ def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
 def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
     sensor_subroutine: Sensors = ecosystem.subroutines["sensors"]
     yield sensor_subroutine
+
+
+@pytest.fixture(scope="function")
+def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
+    sensor_subroutine: Sensors = ecosystem.subroutines["dummy"]
+    yield sensor_subroutine
