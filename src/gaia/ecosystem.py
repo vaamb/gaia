@@ -192,7 +192,7 @@ class Ecosystem:
         try:
             self.subroutines[subroutine_name].enable()
         except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
         else:
             self.config.save()
 
@@ -206,7 +206,7 @@ class Ecosystem:
         try:
             self.subroutines[subroutine_name].disable()
         except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
         else:
             self.config.save()
 
@@ -218,7 +218,7 @@ class Ecosystem:
         try:
             self.subroutines[subroutine_name].start()
         except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
     def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutine
@@ -228,19 +228,19 @@ class Ecosystem:
         try:
             self.subroutines[subroutine_name].stop()
         except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
         try:
             return self.subroutines[subroutine_name].status
         except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid")
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
     def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
         # Need to start sensors and lights before other subroutines
-        subroutines_ordered: set[SubroutineNames] = set(*subroutine_names)
+        subroutines_ordered: set[SubroutineNames] = set(subroutine_names)
         subroutines_needed = subroutines_ordered.intersection(
             self._config.get_subroutines_enabled()
         )
