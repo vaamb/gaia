@@ -154,20 +154,16 @@ class Ecosystem:
 
     @property
     def management(self) -> gv.ManagementConfig:
-        """Return the subroutines' management corrected by whether they are
-        manageable or not"""
-        base_management = self.config.managements
-        management = {}
-        for m in base_management:
-            m = typing.cast(SubroutineNames, m)
-            try:
-                management[m] = (
-                    self.config.get_management(m)
-                    & self.subroutines[m].manageable
-                )
-            except KeyError:
-                management[m] = self.config.get_management(m)
-        return gv.ManagementConfig(**management)
+        """Return a dict with the functionalities management status."""
+        return gv.ManagementConfig(**self.config.managements)
+
+    @property
+    def manageable_subroutines(self) -> dict:
+        """Return a dict with the manageability status of the subroutines."""
+        return {
+            subroutine_name: subroutine.manageable
+            for subroutine_name, subroutine in self.subroutines.items()
+        }
 
     @property
     def environmental_parameters(self) -> gv.EnvironmentConfig:
