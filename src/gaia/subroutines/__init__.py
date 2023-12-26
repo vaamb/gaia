@@ -9,6 +9,8 @@ from gaia.subroutines.template import SubroutineTemplate
 
 SubroutineNames = Literal["sensors", "light", "climate", "health"]
 
+subroutine_names: list[SubroutineNames] = ["sensors", "light", "climate", "health"]
+
 class SubroutineDict(TypedDict):
     sensors: Sensors
     light: Light

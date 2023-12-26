@@ -11,7 +11,8 @@ import gaia_validators as gv
 from gaia.config import EcosystemConfig
 from gaia.exceptions import UndefinedParameter
 from gaia.subroutines import (
-    Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict, SubroutineNames)
+    Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict,
+    subroutine_names, SubroutineNames)
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
@@ -222,7 +223,7 @@ class Ecosystem:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
         # Need to start sensors and lights before other subroutines
-        subroutines_ordered = set(subroutine_dict.keys())
+        subroutines_ordered: set[SubroutineNames] = set(*subroutine_names)
         subroutines_needed = subroutines_ordered.intersection(
             self._config.get_subroutines_enabled()
         )
