@@ -28,7 +28,7 @@ from gaia.config._utils import (
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import Hardware, hardware_models
-from gaia.subroutines import subroutines
+from gaia.subroutines import subroutine_dict
 from gaia.utils import json, SingletonMeta, yaml
 
 

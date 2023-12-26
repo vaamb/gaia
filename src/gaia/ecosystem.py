@@ -11,7 +11,7 @@ import gaia_validators as gv
 from gaia.config import EcosystemConfig
 from gaia.exceptions import UndefinedParameter
 from gaia.subroutines import (
-    Climate, Health, Light, Sensors, subroutines, SubroutineNames)
+    Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict, SubroutineNames)
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
@@ -32,13 +32,6 @@ def _generate_actuators_state_dict() -> gv.ActuatorsDataDict:
         for actuator in [
             "light", "cooler", "heater", "humidifier", "dehumidifier"]
     }
-
-
-class SubroutineDict(TypedDict):
-    sensors: Sensors
-    light: Light
-    climate: Climate
-    health: Health
 
 
 class Ecosystem:
@@ -230,7 +223,7 @@ class Ecosystem:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
         # Need to start sensors and lights before other subroutines
-        subroutines_ordered = set(subroutines.keys())
+        subroutines_ordered = set(subroutine_dict.keys())
         subroutines_needed = subroutines_ordered.intersection(
             self._config.get_subroutines_enabled()
         )
@@ -272,7 +265,7 @@ class Ecosystem:
         """Stop the Ecosystem"""
         if self.status:
             self.logger.info("Shutting down the ecosystem")
-            subroutines_to_stop: list[SubroutineNames] = [*subroutines.keys()]
+            subroutines_to_stop: list[SubroutineNames] = [*subroutine_dict.keys()]
             for subroutine in reversed(subroutines_to_stop):
                 self.subroutines[subroutine].stop()
             if not any([self.subroutines[subroutine].status
