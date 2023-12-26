@@ -187,6 +187,8 @@ class EngineConfig(metaclass=SingletonMeta):
         self.logger.debug("Initializing EngineConfig")
         self._app_config = gaia_config or get_gaia_config()
         configure_logging(self.app_config)
+        if self.app_config.TESTING:
+            self._patch_gaia_validators()
         self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
         self._ecosystems_config: dict[str, EcosystemConfigDict] = {}
@@ -199,10 +201,21 @@ class EngineConfig(metaclass=SingletonMeta):
         self.new_config = Condition()
         self._stop_event = Event()
         self._thread: Thread | None = None
+        self._patch_gaia_validators()
         self.configs_loaded: bool = False
 
     def __repr__(self) -> str:
         return f"EngineConfig(watchdog={self.started})"
+
+    def _patch_gaia_validators(self) -> None:
+        # Patch ManagementFlags to add the dummy subroutine into management
+        from enum import IntFlag
+        management_flags = {
+            flag.name: flag.value
+            for flag in gv.ManagementFlags
+        }
+        management_flags["dummy"] = max(management_flags.values()) * 2
+        gv.ManagementFlags = IntFlag("ManagementFlags", management_flags)
 
     @property
     def started(self) -> bool:
@@ -815,12 +828,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             management: gv.ManagementNames | gv.ManagementFlags,
     ) -> bool:
-        if isinstance(management, gv.ManagementFlags):
-            management = management.name
-        try:
-            return self.__dict["management"].get(management, False)
-        except (KeyError, AttributeError):  # pragma: no cover
-            return False
+        validated_management = safe_enum_from_name(gv.ManagementFlags, management)
+        management_name: gv.ManagementNames = validated_management.name
+        return self.__dict["management"].get(management_name, False)
 
     def set_management(
             self,
