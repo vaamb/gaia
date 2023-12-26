@@ -3,8 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, time
 import logging
 from threading import Lock
-import typing as t
-from typing import cast, TypedDict
+import typing
 import weakref
 
 import gaia_validators as gv
@@ -12,11 +11,11 @@ import gaia_validators as gv
 from gaia.config import EcosystemConfig
 from gaia.exceptions import UndefinedParameter
 from gaia.subroutines import (
-    Climate, Health, Light, Sensors, subroutines, SubroutineNames)
+    Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict, SubroutineNames)
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
-if t.TYPE_CHECKING:  # pragma: no cover
+if typing.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
     from gaia.events import Events
 
@@ -33,13 +32,6 @@ def _generate_actuators_state_dict() -> gv.ActuatorsDataDict:
         for actuator in [
             "light", "cooler", "heater", "humidifier", "dehumidifier"]
     }
-
-
-class SubroutineDict(TypedDict):
-    sensors: Sensors
-    light: Light
-    climate: Climate
-    health: Health
 
 
 class Ecosystem:
@@ -75,8 +67,9 @@ class Ecosystem:
         self.lighting_hours_lock = Lock()
         self.actuators_state: gv.ActuatorsDataDict = _generate_actuators_state_dict()
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
-        for subroutine in subroutines:
-            self.init_subroutine(subroutine)
+        for subroutine_name in subroutine_dict:
+            subroutine_name = typing.cast(SubroutineNames, subroutine_name)
+            self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
         self.config.update_chaos_time_window()
         self._started: bool = False
         self.logger.debug(f"Ecosystem initialization successful")
@@ -161,20 +154,16 @@ class Ecosystem:
 
     @property
     def management(self) -> gv.ManagementConfig:
-        """Return the subroutines' management corrected by whether they are
-        manageable or not"""
-        base_management = self.config.managements
-        management = {}
-        for m in base_management:
-            m = cast(SubroutineNames, m)
-            try:
-                management[m] = (
-                    self.config.get_management(m)
-                    & self.subroutines[m].manageable
-                )
-            except KeyError:
-                management[m] = self.config.get_management(m)
-        return gv.ManagementConfig(**management)
+        """Return a dict with the functionalities management status."""
+        return gv.ManagementConfig(**self.config.managements)
+
+    @property
+    def manageable_subroutines(self) -> dict:
+        """Return a dict with the manageability status of the subroutines."""
+        return {
+            subroutine_name: subroutine.manageable
+            for subroutine_name, subroutine in self.subroutines.items()
+        }
 
     @property
     def environmental_parameters(self) -> gv.EnvironmentConfig:
@@ -188,13 +177,6 @@ class Ecosystem:
             gv.HardwareConfig(uid=key, **value)
             for key, value in hardware_dict.items()
         ]
-
-    def init_subroutine(self, subroutine_name: SubroutineNames) -> None:
-        """Initialize a Subroutine
-
-        :param subroutine_name: The name of the Subroutine to initialize
-        """
-        self.subroutines[subroutine_name] = subroutines[subroutine_name](self)
 
     def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
@@ -237,9 +219,9 @@ class Ecosystem:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
         # Need to start sensors and lights before other subroutines
-        subroutines_ordered = set(subroutines.keys())
+        subroutines_ordered = set(subroutine_dict.keys())
         subroutines_needed = subroutines_ordered.intersection(
-            self._config.get_managed_subroutines()
+            self._config.get_subroutines_enabled()
         )
         if not subroutines_needed:
             self.logger.debug("No subroutine needed.")
@@ -279,7 +261,7 @@ class Ecosystem:
         """Stop the Ecosystem"""
         if self.status:
             self.logger.info("Shutting down the ecosystem")
-            subroutines_to_stop: list[SubroutineNames] = [*subroutines.keys()]
+            subroutines_to_stop: list[SubroutineNames] = [*subroutine_dict.keys()]
             for subroutine in reversed(subroutines_to_stop):
                 self.subroutines[subroutine].stop()
             if not any([self.subroutines[subroutine].status
