@@ -6,15 +6,13 @@ import gaia_validators as gv
 ecosystem_uid = "Rfrg5Kiv"
 ecosystem_name = "Testing ecosystem"
 
+hardware_address = "GPIO_10"
 i2c_address = "I2C_default"
 gpio_address = "GPIO_4:BOARD_12"
 
-hardware_uid = "cpgCZFJGGYlIXlLL"
-hardware_name = "TestingHardware"
-hardware_address = "GPIO_10"
-
-hardware_info = {
-    "name": hardware_name,
+light_uid = "cpgCZFJGGYlIXlLL"
+light_info = {
+    "name": "VirtualLight",
     "address": hardware_address,
     "model": "gpioSwitch",
     "type": "light",
@@ -22,6 +20,32 @@ hardware_info = {
     "measures": [],
     "plants": [],
 }
+
+sensor_uid = "tKstp8EYJx27eQuK"
+sensor_info = {
+    "name": "VirtualSensor",
+    "address": "GPIO_7",
+    "model": "virtualDHT22",
+    "type": "sensor",
+    "level": "environment",
+    "measures": ["temperature", "humidity"],
+    "plants": [],
+}
+
+heater_uid = "A0oZpCJ50D0ajfJs"
+heater_info = {
+    "name": "VirtualHeater",
+    "address": "GPIO_37",
+    "model": "gpioSwitch",
+    "type": "heater",
+    "level": "environment",
+    "measures": [],
+    "plants": [],
+}
+
+hardware_uid = light_uid
+hardware_info = light_info
+
 
 sun_times = {
     "twilight_begin": time(6, 15),
@@ -58,25 +82,9 @@ ecosystem_info = {
             "climate": {},
         },
         "IO": {
-            hardware_uid: hardware_info,
-            "A0oZpCJ50D0ajfJs": {
-                "name": "VirtualHeater",
-                "address": "GPIO_37",
-                "model": "gpioSwitch",
-                "type": "heater",
-                "level": "environment",
-                "measures": [],
-                "plants": [],
-            },
-            "tKstp8EYJx27eQuK": {
-                "name": "VirtualSensor",
-                "address": "GPIO_7",
-                "model": "virtualDHT22",
-                "type": "sensor",
-                "level": "environment",
-                "measures": ["temperature", "humidity"],
-                "plants": [],
-            }
+            light_uid: light_info,
+            heater_uid: heater_info,
+            sensor_uid: sensor_info,
         },
     },
 }
