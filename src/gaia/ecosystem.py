@@ -284,7 +284,8 @@ class Ecosystem:
         self.logger.info("Shutting down the ecosystem")
         subroutines_to_stop: list[SubroutineNames] = subroutine_names
         for subroutine in reversed(subroutines_to_stop):
-            self.subroutines[subroutine].stop()
+            if self.subroutines[subroutine].status:
+                self.subroutines[subroutine].stop()
         if not any([self.subroutines[subroutine].status
                     for subroutine in self.subroutines]):
             self.logger.debug("Ecosystem successfully stopped")
