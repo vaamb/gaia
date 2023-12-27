@@ -267,33 +267,31 @@ class Ecosystem:
         When started, the Ecosystem will automatically start and stop the
         Subroutines based on the 'ecosystem.cfg' file
         """
-        if not self.status:
-            self.refresh_lighting_hours()
-            self.logger.info("Starting the ecosystem")
-            self.refresh_subroutines()
-            if self.engine.use_message_broker and self.event_handler.registered:
-                self.event_handler.send_ecosystems_info(self.uid)
-            self.logger.debug(f"Ecosystem successfully started")
-            self._started = True
-        else:
+        if self.status:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
+        self.refresh_lighting_hours()
+        self.logger.info("Starting the ecosystem")
+        self.refresh_subroutines()
+        if self.engine.use_message_broker and self.event_handler.registered:
+            self.event_handler.send_ecosystems_info(self.uid)
+        self.logger.debug(f"Ecosystem successfully started")
+        self._started = True
 
     def stop(self):
         """Stop the Ecosystem"""
-        if self.status:
-            self.logger.info("Shutting down the ecosystem")
-            subroutines_to_stop: list[SubroutineNames] = subroutine_names
-            for subroutine in reversed(subroutines_to_stop):
-                self.subroutines[subroutine].stop()
-            if not any([self.subroutines[subroutine].status
-                        for subroutine in self.subroutines]):
-                self.logger.debug("Ecosystem successfully stopped")
-            else:
-                self.logger.error("Failed to stop the ecosystem")
-                raise Exception(f"Failed to stop ecosystem {self.name}")
-            self._started = False
-        else:
+        if not self.status:
             raise RuntimeError("Cannot stop an ecosystem that hasn't started")
+        self.logger.info("Shutting down the ecosystem")
+        subroutines_to_stop: list[SubroutineNames] = subroutine_names
+        for subroutine in reversed(subroutines_to_stop):
+            self.subroutines[subroutine].stop()
+        if not any([self.subroutines[subroutine].status
+                    for subroutine in self.subroutines]):
+            self.logger.debug("Ecosystem successfully stopped")
+        else:
+            self.logger.error("Failed to stop the ecosystem")
+            raise Exception(f"Failed to stop ecosystem {self.name}")
+        self._started = False
 
     # Actuator
     @property
