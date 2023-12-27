@@ -45,7 +45,7 @@ class BaseSensorRecord(Base):
             "sensor_uid": self.sensor_uid,
             "ecosystem_uid": self.ecosystem_uid,
             "measure": self.measure,
-            "datetime": self.timestamp,
+            "timestamp": self.timestamp,
             "value": self.value,
         }
 
@@ -87,7 +87,7 @@ class SensorBuffer(BaseSensorRecord):
                             ecosystem_uid=data.ecosystem_uid,
                             sensor_uid=data.sensor_uid,
                             measure=data.measure,
-                            value=data.measure,
+                            value=data.value,
                             timestamp=data.timestamp
                         )
                     )
