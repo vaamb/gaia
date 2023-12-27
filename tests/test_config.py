@@ -7,6 +7,7 @@ import gaia_validators as gv
 
 from gaia.config import CacheType, ConfigType, EcosystemConfig, EngineConfig
 from gaia.exceptions import UndefinedParameter
+from gaia.subroutines import subroutine_names
 from gaia.utils import is_connected, yaml
 
 from .data import ecosystem_info, ecosystem_name, sun_times
@@ -190,7 +191,9 @@ def test_ecosystem_config_managed_subroutines(ecosystem_config: EcosystemConfig)
 
     managed_subroutines = ecosystem_config.get_subroutines_enabled()
     managed_subroutines.sort()
-    assert managed_subroutines == ["climate", "health", "light", "sensors"]
+    subroutines_list = subroutine_names.copy()
+    subroutines_list.sort()
+    assert managed_subroutines == subroutines_list
 
 
 def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
