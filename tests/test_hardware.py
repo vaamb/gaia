@@ -14,7 +14,7 @@ def test_hardware_creation_fail_address(ecosystem_config: EcosystemConfig):
 def test_hardware_creation_fail_model(ecosystem_config: EcosystemConfig):
     invalid_hardware_info = {
         **hardware_info,
-        "address": "GPIO_7",  # Use a free address
+        "address": "GPIO_11",  # Use a free address
         "model": "Invalid"
     }
     with pytest.raises(ValueError, match="This hardware model is not supported"):
@@ -46,7 +46,7 @@ def test_hardware_creation_fail_level(ecosystem_config: EcosystemConfig):
 def test_hardware_creation_success(ecosystem_config: EcosystemConfig):
     valid_hardware_info = {
         **hardware_info,
-        "address": "GPIO_7",  # Use a free address
+        "address": "GPIO_11",  # Use a free address
     }
     ecosystem_config.create_new_hardware(**valid_hardware_info)
 
@@ -78,7 +78,7 @@ def test_hardware_update_fail_level(ecosystem_config: EcosystemConfig):
 
 
 def test_hardware_update_success(ecosystem_config: EcosystemConfig):
-    ecosystem_config.update_hardware(hardware_uid, {"address": "GPIO_7"})
+    ecosystem_config.update_hardware(hardware_uid, {"address": "GPIO_11"})
 
 
 def test_hardware_delete_fail_not_found(ecosystem_config: EcosystemConfig):
