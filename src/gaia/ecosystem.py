@@ -68,12 +68,8 @@ class Ecosystem:
         self.lighting_hours_lock = Lock()
         self.actuators_state: gv.ActuatorsDataDict = _generate_actuators_state_dict()
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
-        for subroutine_name in subroutine_dict:
-            subroutine_name = typing.cast(SubroutineNames, subroutine_name)
+        for subroutine_name in subroutine_names:
             self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
-        if self.engine.config.app_config.TESTING:
-            from gaia.subroutines.dummy import Dummy
-            self.subroutines["dummy"] = Dummy(self)
         self.config.update_chaos_time_window()
         self._started: bool = False
         self.logger.debug(f"Ecosystem initialization successful")

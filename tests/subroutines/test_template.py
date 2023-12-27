@@ -5,10 +5,10 @@ import gaia_validators as gv
 from gaia import Ecosystem, EngineConfig
 from gaia.exceptions import HardwareNotFound
 from gaia.hardware.actuators.GPIO import gpioSwitch
-from gaia.subroutines.dummy import Dummy
 
-from ..utils import get_logs_content
 from ..data import hardware_info, hardware_uid
+from ..dummy_subroutine import Dummy
+from ..utils import get_logs_content
 
 
 def test_states(dummy_subroutine: Dummy, engine_config: EngineConfig):

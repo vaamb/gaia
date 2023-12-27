@@ -1,3 +1,4 @@
+from enum import IntFlag
 import os
 import shutil
 import tempfile
@@ -5,13 +6,17 @@ from typing import Generator, Type, TypeVar
 
 import pytest
 
+import gaia_validators as gv
+
 from gaia.config import EcosystemConfig, EngineConfig, GaiaConfig, set_config
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
-from gaia.subroutines import Climate, Light, Sensors
+from gaia.subroutines import (
+    Climate, Light, Sensors, subroutine_dict, subroutine_names)
 from gaia.utils import yaml
 
 from .data import ecosystem_info, ecosystem_name
+from .dummy_subroutine import Dummy
 from .utils import get_logs_content
 
 
@@ -21,7 +26,43 @@ YieldFixture = Generator[T, None, None]
 
 
 @pytest.fixture(scope="session")
-def testing_cfg() -> YieldFixture[GaiaConfig]:
+def patch() -> None:
+    # Patch subroutine dict and list to add the dummy subroutine
+    subroutine_dict["dummy"] = Dummy
+    subroutine_names.append("dummy")
+
+    # Patch gaia_validators.ManagementFlags to add the dummy subroutine
+    from enum import IntFlag
+    management_flags = {
+        flag.name: flag.value
+        for flag in gv.ManagementFlags
+    }
+    management_flags["dummy"] = max(management_flags.values()) * 2
+    gv.ManagementFlags = IntFlag("ManagementFlags", management_flags)
+
+    # Patch gaia_validators.ManagementConfig to add the dummy subroutine
+    class ManagementConfig(gv.ManagementConfig):
+        dummy: bool = False
+
+    gv.ManagementConfig = ManagementConfig
+
+    # Patch gaia.config.from_files to use the new ManagementConfig
+    from pydantic import Field
+    from gaia.config import from_files
+
+    class EcosystemConfigValidator(from_files.EcosystemConfigValidator):
+        management: gv.ManagementConfig = Field(default_factory=gv.ManagementConfig)
+
+    class RootEcosystemsConfigValidator(gv.BaseModel):
+        config: dict[str, EcosystemConfigValidator]
+
+    from_files.RootEcosystemsConfigValidator = RootEcosystemsConfigValidator
+
+    yield
+
+
+@pytest.fixture(scope="session")
+def testing_cfg(patch) -> YieldFixture[GaiaConfig]:
     temp_dir = tempfile.mkdtemp(prefix="gaia-")
     GaiaConfig.LOG_TO_STDOUT = False
     GaiaConfig.TESTING = True
