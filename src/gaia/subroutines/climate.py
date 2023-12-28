@@ -248,8 +248,6 @@ class Climate(SubroutineTemplate):
             for direction in regulator_couple:
                 direction: ClimateActuatorNames
                 if self.config.get_IO_group_uids(direction):
-                    actuator_handler = self.get_actuator_handler(direction)
-                    actuator_handler.activate()
                     any_regulator = True
             if not any_regulator:
                 parameters[climate_param]["regulated"] = False
@@ -359,11 +357,18 @@ class Climate(SubroutineTemplate):
             trigger="cron", minute="*", misfire_grace_time=10,
             id=f"{self.ecosystem.name}-climate"
         )
+        for parameter in self.regulated_parameters:
+            actuator_couple: ActuatorCouple = actuator_couples[parameter]
+            for couple_direction in CoupleDirection:
+                actuator_name: ClimateActuatorNames = getattr(
+                    actuator_couple, couple_direction.name)
+                actuator_handler = self.get_actuator_handler(actuator_name)
+                actuator_handler.activate()
 
     def _stop(self) -> None:
         scheduler = get_scheduler()
         scheduler.remove_job(job_id=f"{self.ecosystem.name}-climate")
-        for parameter in self._parameters:
+        for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for couple_direction in CoupleDirection:
                 actuator_name: ClimateActuatorNames = getattr(

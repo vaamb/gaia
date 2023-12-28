@@ -161,7 +161,6 @@ class Light(SubroutineTemplate):
         # self.light_intensity_thread.join()
         # self.light_intensity_thread = None
         self.actuator_handler.deactivate()
-        self.hardware = {}
 
     """API calls"""
     @property
