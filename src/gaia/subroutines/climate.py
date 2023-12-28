@@ -2,29 +2,31 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import enum
 import typing as t
 from typing import cast, Literal, TypedDict
 
 from simple_pid import PID
 
-from gaia_validators import (
-    ActuatorModePayload, Empty, HardwareType, LightData,
-    LightingHours, safe_enum_from_name)
+import gaia_validators as gv
 
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, Hardware, Switch
 from gaia.shared_resources import get_scheduler
-from gaia.actuator_handler import ActuatorHandler
 from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia.actuator_handler import ActuatorHandler
     from gaia.subroutines.sensors import Sensors
 
 
 ClimateParameterNames = Literal["temperature", "humidity"]
 ClimateActuatorNames = Literal["heater", "cooler", "humidifier", "dehumidifier"]
+
+class CoupleDirection(enum.Enum):
+    increase = enum.auto()
+    decrease = enum.auto()
 
 
 @dataclass(frozen=True)
@@ -41,17 +43,10 @@ class ActuatorCouples(TypedDict):
     humidity: ActuatorCouple
 
 
-REGULATORS: ActuatorCouples = ActuatorCouples(**{
+actuator_couples: ActuatorCouples = {
     "temperature": ActuatorCouple("heater", "cooler"),
     "humidity": ActuatorCouple("humidifier", "dehumidifier"),
-})
-
-
-class ClimateActuators(TypedDict):
-    heater: ActuatorHandler
-    cooler: ActuatorHandler
-    humidifier: ActuatorHandler
-    dehumidifier: ActuatorHandler
+}
 
 
 class ClimateTarget(TypedDict):
@@ -99,7 +94,6 @@ class Climate(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self._sensor_miss: int = 0
-        self.actuators: ClimateActuators = self._setup_actuators()
         self._parameters: ClimateParameters = climate_parameters_template()
         self._Kp = 5.0  # TODO: expose via config
         self._Ki = 0.5
@@ -110,7 +104,7 @@ class Climate(SubroutineTemplate):
     @staticmethod
     def _compute_target(
             target_values: ClimateParameter,
-            lighting_hours: LightingHours,
+            lighting_hours: gv.LightingHours,
             chaos_factor: float = 1.0,
     ) -> tuple[float, float] | tuple[None, None]:
         now = datetime.now().astimezone().time()
@@ -134,17 +128,33 @@ class Climate(SubroutineTemplate):
     @staticmethod
     def expected_status(
             *,
-            current_value: float,
+            current_value: float | None,
             target_value: float,
-            hysteresis: float
+            hysteresis: float | None,
+            pid_output: float | None,
+            couple_direction: CoupleDirection,
     ) -> bool:
+        # Fallback if automatic and missing value
+        if not all((current_value, target_value, hysteresis)):
+            return False
         if abs(target_value - current_value) < hysteresis:
             return False
+        if pid_output is not None and abs(pid_output) < PID_THRESHOLD:
+            return False
         else:
-            return True
+            if target_value < current_value:
+                # We need to increase the value
+                if couple_direction is CoupleDirection.increase:
+                    return True
+                return False
+            else:
+                # We need to decrease the value
+                if couple_direction is CoupleDirection.increase:
+                    return False
+                return True
 
     @property
-    def lighting_hours(self) -> LightData:
+    def lighting_hours(self) -> gv.LightData:
         return self.ecosystem.light_info
 
     @property
@@ -159,22 +169,19 @@ class Climate(SubroutineTemplate):
     def Kd(self) -> float:
         return self._Kd
 
-    def _setup_actuators(self) -> ClimateActuators:
-        return {
-            actuator_name: ActuatorHandler(
-                self,
-                safe_enum_from_name(HardwareType, actuator_name),
-                self.expected_status
-            )
-            for actuator_name in ["heater", "cooler", "humidifier", "dehumidifier"]
-        }
-
     def _setup_pids(self) -> ClimatePIDs:
         return {
             climate_parameter: PID(
                 self.Kp, self.Ki, self.Kd, output_limits=(-100, 100))
             for climate_parameter in ["temperature", "humidity"]
         }
+
+    @property
+    def regulated_parameters(self) -> list[ClimateParameterNames]:
+        return [
+            parameter for parameter in self._parameters
+            if self._parameters[parameter]["regulated"]
+        ]
 
     def _any_regulated(
             self,
@@ -185,8 +192,14 @@ class Climate(SubroutineTemplate):
 
     def _compute_parameters(self) -> ClimateParameters:
         parameters = climate_parameters_template()
-        for actuator_handler in self.actuators.values():
-            actuator_handler.active = False
+
+        # Make sure the sensor subroutine is running
+        if not self.ecosystem.get_subroutine_status("sensors"):
+            self.logger.debug("No climate parameter found.")
+            for climate_param in parameters.keys():
+                climate_param = cast(ClimateParameterNames, climate_param)
+                parameters[climate_param]["regulated"] = False
+            return parameters
 
         # Check if target values in config
         for climate_param in parameters.keys():
@@ -230,12 +243,11 @@ class Climate(SubroutineTemplate):
             climate_param = cast(ClimateParameterNames, climate_param)
             if not value:
                 continue
-            regulator_couple: ActuatorCouple = REGULATORS[climate_param]
+            regulator_couple: ActuatorCouple = actuator_couples[climate_param]
             any_regulator = False
             for direction in regulator_couple:
                 direction: ClimateActuatorNames
                 if self.config.get_IO_group_uids(direction):
-                    self.actuators[direction].active = True
                     any_regulator = True
             if not any_regulator:
                 parameters[climate_param]["regulated"] = False
@@ -276,7 +288,7 @@ class Climate(SubroutineTemplate):
 
         sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
         sensors_data = sensors_subroutine.sensors_data
-        if isinstance(sensors_data, Empty):
+        if isinstance(sensors_data, gv.Empty):
             self.logger.debug(
                 f"No sensor data found, climate subroutine will try again "
                 f"{MISSES_BEFORE_STOP - self._sensor_miss} times before "
@@ -286,63 +298,43 @@ class Climate(SubroutineTemplate):
             self._check_misses()
             return
 
-        def activate(
-                actuator_handler: ActuatorHandler,
-                pid_output: float
-        ) -> None:
-            actuator_handler.set_status(True)
-            actuator_list = cast(
-                list[Switch],
-                Hardware.get_actives_by_type(actuator_handler.type.value).values())
-            for actuator in actuator_list:
-                actuator.turn_on()
-                if isinstance(actuator, Dimmer):
-                    actuator.set_pwm_level(pid_output)
-
-        def deactivate(actuator_handler: ActuatorHandler) -> None:
-            actuator_handler.set_status(False)
-            actuator_list = cast(
-                list[Switch],
-                Hardware.get_actives_by_type(actuator_handler.type.value).values())
-            for actuator in actuator_list:
-                actuator.turn_off()
-
-        average = sensors_data.average
-        for data in average:
-            climate_param = data.measure
-            if not self._parameters.get(climate_param, {}).get("regulated"):
-                continue
-            climate_param = cast(ClimateParameterNames, climate_param)
-            current_value = data.value
+        sensors_average = {
+            data.measure: data.value for data in sensors_data.average
+        }
+        for parameter in self.regulated_parameters:
             target_value, hysteresis = self._compute_target(
-                self._parameters[climate_param], self.lighting_hours,
+                self._parameters[parameter], self.lighting_hours,
                 self.ecosystem.config.chaos_factor)
             if target_value is None:
-                continue
-            actuator_couple: ActuatorCouple = REGULATORS[climate_param]
-            self._pids[climate_param].setpoint = target_value
-            pid_output = self._pids[climate_param](current_value)
+                raise RuntimeError(
+                    f"Error while computing the target for parameter '{parameter}'"
+                )
 
-            for actuator_direction in ["increase", "decrease"]:
+            actuator_couple: ActuatorCouple = actuator_couples[parameter]
+            # Minimal change between run, should be ok to change the setpoint
+            self._pids[parameter].setpoint = target_value
+            # Current value is None if there is no sensor reading for it
+            current_value: float | None = sensors_average.get(parameter, None)
+            if current_value:
+                pid_output = self._pids[parameter](current_value)
+            else:
+                pid_output = None
+                self._pids[parameter].reset()
+
+            for couple_direction in CoupleDirection:
                 actuator_name: ClimateActuatorNames = getattr(
-                    actuator_couple, actuator_direction)
-                actuator_handler: ActuatorHandler = self.actuators[actuator_name]
-                if not actuator_handler.active:
-                    continue
+                    actuator_couple, couple_direction.name)
+                actuator_handler = self.get_actuator_handler(actuator_name)
                 expected_status = actuator_handler.compute_expected_status(
                     current_value=current_value, target_value=target_value,
-                    hysteresis=hysteresis)
+                    hysteresis=hysteresis, pid_output=pid_output,
+                    couple_direction=couple_direction)
                 if expected_status:
-                    if pid_output > PID_THRESHOLD:
-                        if actuator_direction == "increase":
-                            activate(actuator_handler, pid_output)
-                        else:
-                            deactivate(actuator_handler)
-                    elif pid_output < -PID_THRESHOLD:
-                        if actuator_direction == "increase":
-                            deactivate(actuator_handler)
-                        else:
-                            activate(actuator_handler, -pid_output)
+                    actuator_handler.turn_on()
+                    if pid_output is not None:
+                        actuator_handler.set_level(pid_output)
+                else:
+                    actuator_handler.turn_off()
 
     def _check_misses(self) -> None:
         if self._sensor_miss >= MISSES_BEFORE_STOP:
@@ -365,28 +357,41 @@ class Climate(SubroutineTemplate):
             trigger="cron", minute="*", misfire_grace_time=10,
             id=f"{self.ecosystem.name}-climate"
         )
+        for parameter in self.regulated_parameters:
+            actuator_couple: ActuatorCouple = actuator_couples[parameter]
+            for couple_direction in CoupleDirection:
+                actuator_name: ClimateActuatorNames = getattr(
+                    actuator_couple, couple_direction.name)
+                actuator_handler = self.get_actuator_handler(actuator_name)
+                actuator_handler.activate()
 
     def _stop(self) -> None:
         scheduler = get_scheduler()
         scheduler.remove_job(job_id=f"{self.ecosystem.name}-climate")
+        for parameter in self.regulated_parameters:
+            actuator_couple: ActuatorCouple = actuator_couples[parameter]
+            for couple_direction in CoupleDirection:
+                actuator_name: ClimateActuatorNames = getattr(
+                    actuator_couple, couple_direction.name)
+                actuator_handler = self.get_actuator_handler(actuator_name)
+                actuator_handler.deactivate()
 
     """API calls"""
+    def get_actuator_handler(
+            self,
+            actuator_type: gv.HardwareType | ClimateActuatorNames
+    ) -> ActuatorHandler:
+        verified_actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
+        return self.ecosystem.actuator_handlers.get_handler(verified_actuator_type)
+
     def get_hardware_needed_uid(self) -> set[str]:
         self.update_climate_parameters()
         hardware_needed: set[str] = set()
-        for couple in REGULATORS.values():
+        for couple in actuator_couples.values():
             for IO_type in couple:
                 extra = set(self.config.get_IO_group_uids(IO_type))
                 hardware_needed = hardware_needed | extra
         return hardware_needed
-
-    def turn_regulator_to(
-            self,
-            actuator: HardwareType,
-            mode: ActuatorModePayload
-    ) -> None:
-        # TODO
-        pass
 
     def update_climate_parameters(self) -> None:
         self._parameters = self._compute_parameters()
@@ -411,20 +416,22 @@ class Climate(SubroutineTemplate):
 
     def turn_climate_actuator(
             self,
-            climate_actuator: HardwareType | str,
-            turn_to: ActuatorModePayload = ActuatorModePayload.automatic,
+            climate_actuator: gv.HardwareType | str,
+            turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
-        climate_actuator: HardwareType = safe_enum_from_name(
-            HardwareType, climate_actuator)
+        climate_actuator: gv.HardwareType = gv.safe_enum_from_name(
+            gv.HardwareType, climate_actuator)
         if climate_actuator not in [
-            HardwareType.heater, HardwareType.cooler, HardwareType.humidifier,
-            HardwareType.dehumidifier
+            gv.HardwareType.heater, gv.HardwareType.cooler,
+            gv.HardwareType.humidifier, gv.HardwareType.dehumidifier
         ]:
             raise TypeError(
                 "'climate_actuator' should be a valid climate actuator")
         if self._started:
-            self.actuators[climate_actuator.value].turn_to(turn_to, countdown)
+            actuator_handler: ActuatorHandler = \
+                self.ecosystem.actuator_handlers.get_handler(climate_actuator)
+            actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
-                f"{self.name} is not started in engine {self.ecosystem}")
+                f"Climate subroutine is not started in ecosystem {self.ecosystem}")

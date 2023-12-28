@@ -68,8 +68,8 @@ class Health(SubroutineTemplate):
         light_running = self.ecosystem.get_subroutine_status("light")
         if light_running:
             light_subroutine: "Light" = self.ecosystem.subroutines["light"]
-            light_mode = light_subroutine.actuator.mode
-            light_status = light_subroutine.actuator.status
+            light_mode = light_subroutine.actuator_handler.mode
+            light_status = light_subroutine.actuator_handler.status
             light_subroutine.turn_light(ActuatorModePayload.on)
             self.take_picture()
             if light_mode is ActuatorMode.automatic:

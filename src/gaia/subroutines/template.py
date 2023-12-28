@@ -203,6 +203,7 @@ class SubroutineTemplate(ABC):
             self.executor = None
             for hardware_uid in [*self.hardware.keys()]:
                 self.remove_hardware(hardware_uid)
+            self.hardware = {}
             self._started = False
             self.logger.debug("Successfully stopped.")
         except Exception as e:
