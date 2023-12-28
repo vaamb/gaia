@@ -71,7 +71,7 @@ def configure_logging(config_class: GaiaConfig):
     if not log_dir.exists():
         log_dir.mkdir(parents=True)
 
-    base_level = 'DEBUG' if (debug or testing) else 'INFO'
+    base_level = 'DEBUG' if debug else 'INFO'
 
     handlers = []
 
@@ -108,12 +108,12 @@ def configure_logging(config_class: GaiaConfig):
 
         "handlers": {
             "streamHandler": {
-                "level": f"{'DEBUG' if debug else 'INFO'}",
+                "level": base_level,
                 "formatter": "streamFormat",
                 "class": "logging.StreamHandler",
             },
             "fileHandler": {
-                "level": f"{'DEBUG' if debug else 'INFO'}",
+                "level": base_level,
                 "formatter": "fileFormat" if not testing else "testingFormat",
                 "class": "logging.handlers.RotatingFileHandler",
                 'filename': f"{log_dir/'base.log'}",
