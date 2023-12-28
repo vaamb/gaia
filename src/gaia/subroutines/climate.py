@@ -186,6 +186,14 @@ class Climate(SubroutineTemplate):
         for actuator_handler in self.actuators.values():
             actuator_handler.active = False
 
+        # Make sure the sensor subroutine is running
+        if not self.ecosystem.get_subroutine_status("sensors"):
+            self.logger.debug("No climate parameter found.")
+            for climate_param in parameters.keys():
+                climate_param = cast(ClimateParameterNames, climate_param)
+                parameters[climate_param]["regulated"] = False
+            return parameters
+
         # Check if target values in config
         for climate_param in parameters.keys():
             climate_param = cast(ClimateParameterNames, climate_param)
