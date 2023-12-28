@@ -128,14 +128,10 @@ class Light(SubroutineTemplate):
 
     """Functions to switch the light on/off either manually or automatically"""
     def _compute_if_manageable(self) -> bool:
-        try:
-            time_parameters = bool(self.config.time_parameters)
-        except UndefinedParameter:
-            time_parameters = False
         if all((
                 self.config.get_IO_group_uids("light"),
                 self.ecosystem.light_method,
-                time_parameters
+                bool(self.lighting_hours.morning_start)
         )):
             return True
         else:
