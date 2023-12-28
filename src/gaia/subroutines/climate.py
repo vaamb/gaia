@@ -7,9 +7,7 @@ from typing import cast, Literal, TypedDict
 
 from simple_pid import PID
 
-from gaia_validators import (
-    ActuatorModePayload, Empty, HardwareType, LightData,
-    LightingHours, safe_enum_from_name)
+import gaia_validators as gv
 
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
@@ -110,7 +108,7 @@ class Climate(SubroutineTemplate):
     @staticmethod
     def _compute_target(
             target_values: ClimateParameter,
-            lighting_hours: LightingHours,
+            lighting_hours: gv.LightingHours,
             chaos_factor: float = 1.0,
     ) -> tuple[float, float] | tuple[None, None]:
         now = datetime.now().astimezone().time()
@@ -144,7 +142,7 @@ class Climate(SubroutineTemplate):
             return True
 
     @property
-    def lighting_hours(self) -> LightData:
+    def lighting_hours(self) -> gv.LightData:
         return self.ecosystem.light_info
 
     @property
@@ -163,7 +161,7 @@ class Climate(SubroutineTemplate):
         return {
             actuator_name: ActuatorHandler(
                 self,
-                safe_enum_from_name(HardwareType, actuator_name),
+                gv.safe_enum_from_name(gv.HardwareType, actuator_name),
                 self.expected_status
             )
             for actuator_name in ["heater", "cooler", "humidifier", "dehumidifier"]
@@ -276,7 +274,7 @@ class Climate(SubroutineTemplate):
 
         sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
         sensors_data = sensors_subroutine.sensors_data
-        if isinstance(sensors_data, Empty):
+        if isinstance(sensors_data, gv.Empty):
             self.logger.debug(
                 f"No sensor data found, climate subroutine will try again "
                 f"{MISSES_BEFORE_STOP - self._sensor_miss} times before "
@@ -380,14 +378,6 @@ class Climate(SubroutineTemplate):
                 hardware_needed = hardware_needed | extra
         return hardware_needed
 
-    def turn_regulator_to(
-            self,
-            actuator: HardwareType,
-            mode: ActuatorModePayload
-    ) -> None:
-        # TODO
-        pass
-
     def update_climate_parameters(self) -> None:
         self._parameters = self._compute_parameters()
 
@@ -411,15 +401,15 @@ class Climate(SubroutineTemplate):
 
     def turn_climate_actuator(
             self,
-            climate_actuator: HardwareType | str,
-            turn_to: ActuatorModePayload = ActuatorModePayload.automatic,
+            climate_actuator: gv.HardwareType | str,
+            turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
-        climate_actuator: HardwareType = safe_enum_from_name(
-            HardwareType, climate_actuator)
+        climate_actuator: gv.HardwareType = gv.safe_enum_from_name(
+            gv.HardwareType, climate_actuator)
         if climate_actuator not in [
-            HardwareType.heater, HardwareType.cooler, HardwareType.humidifier,
-            HardwareType.dehumidifier
+            gv.HardwareType.heater, gv.HardwareType.cooler,
+            gv.HardwareType.humidifier, gv.HardwareType.dehumidifier
         ]:
             raise TypeError(
                 "'climate_actuator' should be a valid climate actuator")
@@ -427,4 +417,4 @@ class Climate(SubroutineTemplate):
             self.actuators[climate_actuator.value].turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
-                f"{self.name} is not started in engine {self.ecosystem}")
+                f"Climate subroutine is not started in ecosystem {self.ecosystem}")
