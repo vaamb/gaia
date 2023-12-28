@@ -815,12 +815,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             management: gv.ManagementNames | gv.ManagementFlags,
     ) -> bool:
-        if isinstance(management, gv.ManagementFlags):
-            management = management.name
-        try:
-            return self.__dict["management"].get(management, False)
-        except (KeyError, AttributeError):  # pragma: no cover
-            return False
+        validated_management = safe_enum_from_name(gv.ManagementFlags, management)
+        management_name: gv.ManagementNames = validated_management.name
+        return self.__dict["management"].get(management_name, False)
 
     def set_management(
             self,

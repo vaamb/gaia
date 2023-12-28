@@ -9,6 +9,10 @@ from gaia.subroutines.template import SubroutineTemplate
 
 SubroutineNames = Literal["sensors", "light", "climate", "health"]
 
+# Sensors and light subroutines need to remain first as other subroutines depend
+#  on them
+subroutine_names: list[SubroutineNames] = ["sensors", "light", "climate", "health"]
+
 class SubroutineDict(TypedDict):
     sensors: Sensors
     light: Light

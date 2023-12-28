@@ -57,9 +57,10 @@ class Light(SubroutineTemplate):
     def expected_status(
             *,
             method: LightMethod,
-            lighting_hours: LightingHours
+            lighting_hours: LightingHours,
+            _now: time | None = None,
     ) -> bool:
-        now: time = datetime.now().astimezone().time()
+        now: time = _now or datetime.now().astimezone().time()
         if method == LightMethod.elongate:
             # If time between lightning hours
             if (
@@ -218,11 +219,12 @@ class Light(SubroutineTemplate):
                 f"{self.name} is not started in ecosystem {self.ecosystem}")
 
     @property
-    def PID_tunings(self) -> tuple:
+    def PID_tunings(self) -> tuple[float, float, float]:
         """Returns the tunings used by the controller as a tuple: (Kp, Ki, Kd)"""
         return self._pid.tunings
 
     @PID_tunings.setter
-    def PID_tunings(self, tunings: tuple) -> None:
+    def PID_tunings(self, tunings: tuple[float, float, float]) -> None:
         """:param tunings: tuple (Kp, Ki, Kd)"""
         self._pid.tunings = tunings
+        self._pid.reset()

@@ -1,3 +1,7 @@
+class NonValidSubroutine(ValueError):
+    pass
+
+
 class EcosystemNotFound(ValueError):
     pass
 

@@ -9,9 +9,10 @@ import weakref
 import gaia_validators as gv
 
 from gaia.config import EcosystemConfig
-from gaia.exceptions import UndefinedParameter
+from gaia.exceptions import NonValidSubroutine, UndefinedParameter
 from gaia.subroutines import (
-    Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict, SubroutineNames)
+    Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict,
+    subroutine_names, SubroutineNames)
 from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
@@ -67,8 +68,7 @@ class Ecosystem:
         self.lighting_hours_lock = Lock()
         self.actuators_state: gv.ActuatorsDataDict = _generate_actuators_state_dict()
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
-        for subroutine_name in subroutine_dict:
-            subroutine_name = typing.cast(SubroutineNames, subroutine_name)
+        for subroutine_name in subroutine_names:
             self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
         self.config.update_chaos_time_window()
         self._started: bool = False
@@ -185,8 +185,12 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to enable
         """
-        self.subroutines[subroutine_name].enable()
-        self.config.save()
+        try:
+            self.subroutines[subroutine_name].enable()
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+        else:
+            self.config.save()
 
     def disable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Disable a Subroutine
@@ -195,31 +199,44 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to disable
         """
-        self.subroutines[subroutine_name].disable()
-        self.config.save()
+        try:
+            self.subroutines[subroutine_name].disable()
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+        else:
+            self.config.save()
 
     def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Start a Subroutine
 
         :param subroutine_name: The name of the Subroutine to start
         """
-        self.subroutines[subroutine_name].start()
+        try:
+            self.subroutines[subroutine_name].start()
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
     def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutine
 
         :param subroutine_name: The name of the Subroutine to stop
         """
-        self.subroutines[subroutine_name].stop()
+        try:
+            self.subroutines[subroutine_name].stop()
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
-        return self.subroutines[subroutine_name].status
+        try:
+            return self.subroutines[subroutine_name].status
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
     def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
         # Need to start sensors and lights before other subroutines
-        subroutines_ordered = set(subroutine_dict.keys())
+        subroutines_ordered: set[SubroutineNames] = set(subroutine_names)
         subroutines_needed = subroutines_ordered.intersection(
             self._config.get_subroutines_enabled()
         )
@@ -246,33 +263,32 @@ class Ecosystem:
         When started, the Ecosystem will automatically start and stop the
         Subroutines based on the 'ecosystem.cfg' file
         """
-        if not self.status:
-            self.refresh_lighting_hours()
-            self.logger.info("Starting the ecosystem")
-            self.refresh_subroutines()
-            if self.engine.use_message_broker and self.event_handler.registered:
-                self.event_handler.send_ecosystems_info(self.uid)
-            self.logger.debug(f"Ecosystem successfully started")
-            self._started = True
-        else:
+        if self.status:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
+        self.refresh_lighting_hours()
+        self.logger.info("Starting the ecosystem")
+        self.refresh_subroutines()
+        if self.engine.use_message_broker and self.event_handler.registered:
+            self.event_handler.send_ecosystems_info(self.uid)
+        self.logger.debug(f"Ecosystem successfully started")
+        self._started = True
 
     def stop(self):
         """Stop the Ecosystem"""
-        if self.status:
-            self.logger.info("Shutting down the ecosystem")
-            subroutines_to_stop: list[SubroutineNames] = [*subroutine_dict.keys()]
-            for subroutine in reversed(subroutines_to_stop):
-                self.subroutines[subroutine].stop()
-            if not any([self.subroutines[subroutine].status
-                        for subroutine in self.subroutines]):
-                self.logger.debug("Ecosystem successfully stopped")
-            else:
-                self.logger.error("Failed to stop the ecosystem")
-                raise Exception(f"Failed to stop ecosystem {self.name}")
-            self._started = False
-        else:
+        if not self.status:
             raise RuntimeError("Cannot stop an ecosystem that hasn't started")
+        self.logger.info("Shutting down the ecosystem")
+        subroutines_to_stop: list[SubroutineNames] = subroutine_names
+        for subroutine in reversed(subroutines_to_stop):
+            if self.subroutines[subroutine].status:
+                self.subroutines[subroutine].stop()
+        if not any([self.subroutines[subroutine].status
+                    for subroutine in self.subroutines]):
+            self.logger.debug("Ecosystem successfully stopped")
+        else:
+            self.logger.error("Failed to stop the ecosystem")
+            raise Exception(f"Failed to stop ecosystem {self.name}")
+        self._started = False
 
     # Actuator
     @property

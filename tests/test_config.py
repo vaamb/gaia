@@ -1,157 +1,244 @@
 from datetime import time
-import typing as t
+from time import sleep
 
 import pytest
 
-from src import GeneralConfig, get_IDs
-from src import UndefinedParameter
+import gaia_validators as gv
 
-from .utils import ECOSYSTEM_UID, TESTING_ECOSYSTEM_CFG
+from gaia.config import CacheType, ConfigType, EcosystemConfig, EngineConfig
+from gaia.exceptions import UndefinedParameter
+from gaia.subroutines import subroutine_names
+from gaia.utils import is_connected, yaml
 
-
-if t.TYPE_CHECKING:
-    from src import SpecificConfig
+from .data import ecosystem_info, ecosystem_name, sun_times
+from .utils import get_logs_content
 
 
 # ---------------------------------------------------------------------------
-#   Test GeneralConfig
+#   Test EngineConfig
 # ---------------------------------------------------------------------------
-def test_general_config_singleton(temp_dir, general_config: GeneralConfig):
-    assert general_config is GeneralConfig(temp_dir)
+def test_engine_config_singleton(engine_config: EngineConfig):
+    assert engine_config is EngineConfig()
 
 
-def test_config_files_created(general_config: GeneralConfig):
-    for cfg in ("ecosystems", "private"):
-        cfg_file = general_config._base_dir/f"{cfg}.cfg"
-        assert cfg_file.is_file()
+def test_config_initialization(engine_config: EngineConfig):
+    for cfg_type in ConfigType:
+        cfg_path = engine_config.get_file_path(cfg_type)
+        assert cfg_path.exists()
+        assert cfg_path.is_file()
 
 
-def test_config_files_watchdog(general_config: GeneralConfig):
-    general_config.start_watchdog()
-    for cfg in general_config._config_files_modif:
-        assert(isinstance(general_config._config_files_modif[cfg], str))
-    general_config.stop_watchdog()
-
-
-def test_save_reload(general_config: GeneralConfig):
-    ecosystems_cfg = general_config.ecosystems_config
-    private_config = general_config.private_config
-    general_config.save(("ecosystems", "private"))
-    general_config.reload(("ecosystems", "private"))
-    assert general_config.ecosystems_config == ecosystems_cfg
-    assert general_config.private_config == private_config
-
-
-def test_download_sun_times(general_config: GeneralConfig):
-    # general_config.download_sun_times()
-    pass
-
-
-def test_properties(temp_dir, general_config: GeneralConfig):
-    assert str(general_config.base_dir) == str(temp_dir)
-    assert general_config.ecosystems_uid == [ECOSYSTEM_UID]
-    assert general_config.ecosystems_name == [
-        TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]["name"]
-    ]
-    status = general_config.ecosystems_config[ECOSYSTEM_UID]["status"]
-    general_config.ecosystems_config[ECOSYSTEM_UID]["status"] = True
-    assert general_config.get_ecosystems_expected_running() == \
-           {ECOSYSTEM_UID}
-    general_config.ecosystems_config[ECOSYSTEM_UID]["status"] = status
-    with pytest.raises(UndefinedParameter):
-        general_config.sun_times
-
-
-def test_get_IDs():
-    assert get_IDs(ECOSYSTEM_UID).uid == ECOSYSTEM_UID
-    assert get_IDs(ECOSYSTEM_UID) == get_IDs(
-        TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]["name"]
-    )
+def test_ecosystem_config_creation_deletion(engine_config: EngineConfig):
+    engine_config.create_ecosystem("Already fading away")
+    engine_config.delete_ecosystem("Already fading away")
     with pytest.raises(ValueError):
-        get_IDs("not in config")
+        engine_config.delete_ecosystem("Already fading away")
 
 
-def test_home(general_config: GeneralConfig):
-    with pytest.raises(UndefinedParameter):
-        general_config.home_city
-        general_config.home_coordinates
-    general_config.home_city = "Bruxelles"
-    # general_config.home_coordinates["latitude"] = 50.8465573
+def test_config_files_watchdog(engine_config: EngineConfig):
+    # Start watchdog and make sure it can only be started once
+    engine_config.start_watchdog()
+    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+        assert "Starting the configuration files watchdog" in logs
+    with pytest.raises(RuntimeError):
+        engine_config.start_watchdog()
+
+    # Test watchdog for ecosystems cfg
+    engine_config.create_ecosystem("Already fading away")
+    with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
+        yaml.dump(engine_config.ecosystems_config, cfg)
+    sleep(0.5)  # Allow to check at least once if files changed
+    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+        assert "Updating ecosystems configuration" in logs
+
+    # Test watchdog for private cfg
+    engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
+    with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
+        yaml.dump(engine_config.private_config, cfg)
+    sleep(0.5)  # Allow to check at least once if files changed
+    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+        assert "Updating private configuration" in logs
+
+    # Stop watchdog and make sure it can only be stopped once
+    engine_config.stop_watchdog()
+    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+        assert "Stopping the configuration files watchdog" in logs
+    with pytest.raises(RuntimeError):
+        engine_config.stop_watchdog()
+
+    # Restore config files
+    with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
+        yaml.dump(ecosystem_info, cfg)
+    with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
+        yaml.dump({}, cfg)
 
 
-# ---------------------------------------------------------------------------
-#   Test SpecificConfig
-# ---------------------------------------------------------------------------
-def test_specific_properties(
-        general_config: GeneralConfig,
-        specific_config: "SpecificConfig"
+def test_save_load(engine_config: EngineConfig):
+    ecosystems_cfg = engine_config.ecosystems_config
+    private_config = engine_config.private_config
+    for cfg_type in ConfigType:
+        engine_config.save(cfg_type)
+        engine_config.load(cfg_type)
+    assert engine_config.ecosystems_config == ecosystems_cfg
+    assert engine_config.private_config == private_config
+
+
+def test_download_sun_times_no_coordinates(engine_config: EngineConfig):
+    sun_times = engine_config.download_sun_times()
+    assert sun_times is None
+    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+        assert "You need to define your home city coordinates" in logs
+
+
+def test_download_sun_times_success(engine_config: EngineConfig):
+    if not is_connected():
+        pytest.skip("Not connected")
+    engine_config.home_coordinates = (0, 0)
+    engine_config.download_sun_times()
+    cached_result = engine_config.get_file_path(CacheType.sun_times)
+    assert cached_result.exists()
+
+
+def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
+    engine_config.home_coordinates = (0, 0)
+    assert engine_config.sun_times is None
+    engine_config.refresh_sun_times()
+    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+        assert "No need to refresh sun times" in logs
+    assert engine_config.sun_times is None
+
+
+def test_refresh_suntimes_success(
+        engine_config: EngineConfig,
+        ecosystem_config: EcosystemConfig,
 ):
-    assert specific_config.general.__dict__ == general_config.__dict__
-    assert specific_config.__dict == TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]
-    assert specific_config.name == "test"
-    specific_config.name = "name"
-    assert specific_config.name == "name"
-    assert specific_config.status is False
-    specific_config.status = True
-    assert specific_config.status is True
-    assert not specific_config.get_managed_subroutines()
-    for management in (
-            "sensors", "light", "climate", "watering", "health", "alarms",
-            "webcam"
-    ):
-        specific_config.set_management(management, True)
-        assert specific_config.get_management(management)
+    if not is_connected():
+        pytest.skip("Not connected")
+    engine_config.home_coordinates = (0, 0)
+    ecosystem_config.sky["lighting"] = gv.LightMethod.elongate
+    assert engine_config.sun_times is None
+    engine_config.refresh_sun_times()
+    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+        assert "successfully updated" in logs
+    assert engine_config.sun_times is not None
+    engine_config.refresh_sun_times()
+    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+        assert "Sun times already up to date" in logs
+    assert engine_config.sun_times is not None
 
 
-def test_specific_light(specific_config: "SpecificConfig"):
+def test_status(engine_config: EngineConfig, ecosystem_config: EcosystemConfig):
+    assert engine_config.ecosystems_name == [ecosystem_name]
+    assert engine_config.get_ecosystems_expected_to_run() == set()
+    ecosystem_config.status = True
+    assert engine_config.get_ecosystems_expected_to_run() == {ecosystem_config.uid}
+
+
+def test_get_IDs(engine_config: EngineConfig, ecosystem_config: EcosystemConfig):
+    assert engine_config.get_IDs(ecosystem_name).uid == ecosystem_config.uid
+    assert engine_config.get_IDs(ecosystem_name).name == ecosystem_config.name
+    with pytest.raises(ValueError):
+        engine_config.get_IDs("not in config")
+
+
+def test_home(engine_config: EngineConfig):
     with pytest.raises(UndefinedParameter):
-        specific_config.light_method
-    specific_config.set_management("light", True)
+        engine_config.home
     with pytest.raises(UndefinedParameter):
-        specific_config.light_method
-    specific_config.light_method = "fixed"
+        engine_config.home_coordinates
+    engine_config.home_coordinates = (4, 2)
+    assert engine_config.home_coordinates.latitude == \
+           engine_config.home.coordinates.latitude == 4.0
+    assert engine_config.home_coordinates.longitude == \
+           engine_config.home.coordinates.longitude == 2.0
+    assert engine_config.home.name == "home"
 
 
-def test_specific_chaos(specific_config: "SpecificConfig"):
-    with pytest.raises(UndefinedParameter):
-        specific_config.chaos
+# ---------------------------------------------------------------------------
+#   Test EcosystemConfig
+# ---------------------------------------------------------------------------
+def test_ecosystem_config_singleton(ecosystem_config: EcosystemConfig):
+    assert ecosystem_config is EcosystemConfig(ecosystem_name)
+
+
+def test_ecosystem_config_dict(
+        engine_config: EngineConfig,
+        ecosystem_config: EcosystemConfig,
+):
+    assert ecosystem_config.general.__dict__ is engine_config.__dict__
+    assert ecosystem_config._EcosystemConfig__dict is \
+           engine_config.ecosystems_config[ecosystem_config.uid]
+
+
+def test_ecosystem_config_name(ecosystem_config: EcosystemConfig):
+    assert ecosystem_config.name == ecosystem_name
+    ecosystem_config.name = "name"
+    assert ecosystem_config.name == "name"
+
+
+def test_ecosystem_config_status(ecosystem_config: EcosystemConfig):
+    assert ecosystem_config.status is False
+    ecosystem_config.status = True
+    assert ecosystem_config.status is True
+
+
+def test_ecosystem_config_managed_subroutines(ecosystem_config: EcosystemConfig):
+    assert not ecosystem_config.get_subroutines_enabled()
+
+    for management in gv.ManagementFlags:
+        ecosystem_config.set_management(management, True)
+        assert ecosystem_config.get_management(management)
+
+    managed_subroutines = ecosystem_config.get_subroutines_enabled()
+    managed_subroutines.sort()
+    subroutines_list = subroutine_names.copy()
+    subroutines_list.sort()
+    assert managed_subroutines == subroutines_list
+
+
+def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
+    assert ecosystem_config.chaos_parameters == gv.ChaosConfig()
+
+    with pytest.raises(ValueError):
+        ecosystem_config.chaos_parameters = {"wrong": "value"}
+
     parameters = {"frequency": 10, "duration": 2, "intensity": 1.2}
-    specific_config.chaos = parameters
-    assert specific_config.chaos == parameters
+    ecosystem_config.chaos_parameters = parameters
+    assert ecosystem_config.chaos_parameters == gv.ChaosConfig(**parameters)
 
 
-def test_specific_climate(specific_config: "SpecificConfig"):
+def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
+    assert ecosystem_config.light_method is gv.LightMethod.fixed
+
+    new_method = gv.LightMethod.elongate
+    ecosystem_config.set_light_method(new_method)
+    # Sun times is none so `light_method` falls back to `fixed`
+    assert ecosystem_config.light_method is gv.LightMethod.fixed
+    ecosystem_config.general._sun_times = sun_times
+    assert ecosystem_config.light_method is new_method
+
+
+def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
     with pytest.raises(UndefinedParameter):
-        specific_config.get_climate_parameters("temperature")
+        ecosystem_config.get_climate_parameter("temperature")
+    with pytest.raises(ValueError):
+        ecosystem_config.set_climate_parameter("temperature", {"wrong": "value"})
+
     parameters = {"day": 25, "night": 20, "hysteresis": 1}
-    specific_config.set_climate_parameters("temperature", parameters)
-    assert specific_config.get_climate_parameters("temperature") == parameters
+    ecosystem_config.set_climate_parameter("temperature", parameters)
+    assert ecosystem_config.get_climate_parameter("temperature") == \
+           gv.ClimateConfig(parameter="temperature", **parameters)
 
-
-def test_specific_time_parameters(specific_config: "SpecificConfig"):
+    ecosystem_config.delete_climate_parameter("temperature")
     with pytest.raises(UndefinedParameter):
-        specific_config.time_parameters
-    with pytest.raises(ValueError):
-        specific_config.time_parameters = {"wrong": "dict"}
-    specific_config.time_parameters = {"day": "6h00", "night": "22h00"}
-    assert specific_config.time_parameters["day"] == time(6, 0)
-    with pytest.raises(UndefinedParameter):
-        specific_config.sun_times
+        ecosystem_config.delete_climate_parameter("temperature")
 
 
-def test_specific_hardware(specific_config: "SpecificConfig"):
-    hardware_info = {
-        "name": "test",
-        "address": "GPIO_10",
-        "model": "DHT22",
-        "type": "sensor",
-        "level": "environment",
-        "measure": ["temperature"],
-        "plant": "testPlant",
-    }
-    specific_config.create_new_hardware(**hardware_info)
+def test_ecosystem_time_parameters(ecosystem_config: EcosystemConfig):
+    assert ecosystem_config.time_parameters == gv.DayConfig()
+
     with pytest.raises(ValueError):
-        specific_config.create_new_hardware(**hardware_info)
-        hardware_info["model"] = "DoesNotExist"
-        specific_config.create_new_hardware(**hardware_info)
-    specific_config.__dict = TESTING_ECOSYSTEM_CFG[ECOSYSTEM_UID]
+        ecosystem_config.time_parameters = {"wrong": "value"}
+
+    ecosystem_config.time_parameters = {"day": "4h21", "night": "22h00"}
+    assert ecosystem_config.time_parameters.day == time(4, 21)
