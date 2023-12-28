@@ -54,6 +54,10 @@ sun_times = {
     "twilight_end": time(20, 45),
 }
 
+lighting_start = time(8,00)
+lighting_stop = time(20, 00)
+
+
 ecosystem_info = {
     ecosystem_uid: {
         "name": ecosystem_name,
@@ -75,8 +79,8 @@ ecosystem_info = {
                 "intensity": 0.0,
             },
             "sky": {
-                "day": time(8,00),
-                "night": time(20, 00),
+                "day": lighting_start,
+                "night": lighting_stop,
                 "lighting": gv.LightMethod.fixed,
             },
             "climate": {},
