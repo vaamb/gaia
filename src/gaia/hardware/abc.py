@@ -211,8 +211,8 @@ class Hardware(metaclass=_MetaHardware):
             subroutine: "SubroutineTemplate" | None,
             uid: str,
             address: str,
-            level: HardwareLevelNames,
-            type: HardwareTypeNames,
+            level: HardwareLevel | HardwareLevelNames,
+            type: HardwareType | HardwareTypeNames,
             model: str,
             name: str | None = None,
             measures: list | None = None,
@@ -249,20 +249,12 @@ class Hardware(metaclass=_MetaHardware):
         )
 
     @classmethod
-    def get_actives_by_type(cls, type: HardwareType | str) -> dict[str, Self]:
-        type = safe_enum_from_name(HardwareType, type)
-        return {
-            uid: hardware for uid, hardware in _MetaHardware.instances.items()
-            if hardware.type is type
-        }
+    def get_mounted(cls) -> dict[str, Self]:
+        return _MetaHardware.instances
 
     @classmethod
-    def get_actives_by_level(cls, level: HardwareLevel) -> dict[str, Self]:
-        level = safe_enum_from_name(HardwareLevel, level)
-        return {
-            uid: hardware for uid, hardware in _MetaHardware.instances.items()
-            if hardware.level is level
-        }
+    def get_mounted_by_uid(cls, uid: str) -> Self | None:
+        return _MetaHardware.instances.get(uid)
 
     @classmethod
     def from_hardware_config(
@@ -284,8 +276,14 @@ class Hardware(metaclass=_MetaHardware):
         )
 
     @property
-    def subroutine(self) -> "SubroutineTemplate":
+    def subroutine(self) -> "SubroutineTemplate" | None:
         return self._subroutine
+
+    @property
+    def ecosystem_uid(self) -> str | None:
+        if self._subroutine is None:
+            return None
+        return self._subroutine.ecosystem.uid
 
     @property
     def uid(self) -> str:

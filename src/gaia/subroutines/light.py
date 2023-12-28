@@ -3,18 +3,19 @@ from __future__ import annotations
 from datetime import datetime, time
 from statistics import mean
 from threading import Event, Thread
+import typing
 
 from simple_pid import PID
 
-from gaia_validators import (
-    ActuatorModePayload, HardwareConfig, HardwareType, LightingHours,
-    LightMethod)
+import gaia_validators as gv
 
-from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
-from gaia.actuator_handler import ActuatorHandler
 from gaia.subroutines.template import SubroutineTemplate
+
+
+if typing.TYPE_CHECKING:
+    from gaia.actuator_handler import ActuatorHandler
 
 
 Kp = 0.05
@@ -46,8 +47,6 @@ class Light(SubroutineTemplate):
         self.hardware: dict[str, "Switch"]
         self._light_status_thread: Thread | None = None
         self._light_intensity_thread: Thread | None = None
-        self.actuator: ActuatorHandler = ActuatorHandler(
-            self, HardwareType.light, self.expected_status)
         self._dimmers: set[str] = set()
         self._pid = PID(Kp, Ki, Kd)
         self._stop_event = Event()
@@ -56,12 +55,12 @@ class Light(SubroutineTemplate):
     @staticmethod
     def expected_status(
             *,
-            method: LightMethod,
-            lighting_hours: LightingHours,
+            method: gv.LightMethod,
+            lighting_hours: gv.LightingHours,
             _now: time | None = None,
     ) -> bool:
         now: time = _now or datetime.now().astimezone().time()
-        if method == LightMethod.elongate:
+        if method == gv.LightMethod.elongate:
             # If time between lightning hours
             if (
                 lighting_hours.morning_start <= now <= lighting_hours.morning_end
@@ -78,6 +77,11 @@ class Light(SubroutineTemplate):
                 check_time=now
             )
 
+    @property
+
+    def actuator_handler(self) -> ActuatorHandler:
+        return self.ecosystem.actuator_handlers.get_handler(gv.HardwareType.light)
+
     def _light_status_loop(self) -> None:
         cfg = self.ecosystem.engine.config.app_config
         self.logger.info(
@@ -88,31 +92,27 @@ class Light(SubroutineTemplate):
 
     def _light_status_routine(self) -> None:
         # If lighting == True, lights should be on
-        lighting = self.actuator.compute_expected_status(
+        lighting = self.actuator_handler.compute_expected_status(
             method=self.ecosystem.light_method,
             lighting_hours=self.lighting_hours,
         )
         if lighting:
             # Reset pid so there is no internal value overshoot
-            if not self.actuator.last_status:
+            if not self.actuator_handler.last_status:
                 self._pid.reset()
-            self.actuator.set_status(True)
-            for light in self.hardware.values():
-                light.turn_on()
+            self.actuator_handler.set_status(True)
         # If lighting == False, lights should be off
         else:
-            self.actuator.set_status(False)
-            for light in self.hardware.values():
-                light.turn_off()
+            self.actuator_handler.set_status(False)
 
     # TODO: add a second loop for light level, only used if light is on and dimmable
     def _light_intensity_loop(self) -> None:
         if self.ecosystem.get_subroutine_status("sensors"):
             while not self._stop_event.is_set():
                 light_sensors: list[LightSensor] = [
-                    sensor for sensor in
-                    Hardware.get_actives_by_type(HardwareType.sensor)
-                    if isinstance(sensor, LightSensor)
+                    hardware for hardware in Hardware.get_mounted().values()
+                    if hardware.ecosystem_uid == self.ecosystem.uid
+                    and isinstance(hardware, LightSensor)
                 ]
                 light_level: list[float] = []
                 for light_sensor in light_sensors:
@@ -151,7 +151,7 @@ class Light(SubroutineTemplate):
         #     target=self._light_intensity_loop,
         #     name=f"{self._uid}-light-intensity")
         # self.light_intensity_thread.start()
-        self.actuator.active = True
+        self.actuator_handler.activate()
 
     def _stop(self) -> None:
         self.logger.info("Stopping light loop")
@@ -160,7 +160,7 @@ class Light(SubroutineTemplate):
         self.light_status_thread = None
         # self.light_intensity_thread.join()
         # self.light_intensity_thread = None
-        self.actuator.active = False
+        self.actuator_handler.deactivate()
         self.hardware = {}
 
     """API calls"""
@@ -186,7 +186,7 @@ class Light(SubroutineTemplate):
     def light_intensity_thread(self, thread: Thread | None) -> None:
         self._light_intensity_thread = thread
 
-    def add_hardware(self, hardware_config: HardwareConfig) -> Hardware:
+    def add_hardware(self, hardware_config: gv.HardwareConfig) -> Hardware:
         hardware = super().add_hardware(hardware_config)
         if isinstance(hardware, Dimmer):
             self._dimmers.add(hardware.uid)
@@ -200,16 +200,16 @@ class Light(SubroutineTemplate):
         return set(self.config.get_IO_group_uids("light"))
 
     @property
-    def lighting_hours(self) -> LightingHours:
+    def lighting_hours(self) -> gv.LightingHours:
         return self.ecosystem.lighting_hours
 
     def turn_light(
             self,
-            turn_to: ActuatorModePayload = ActuatorModePayload.automatic,
+            turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
         if self._started:
-            self.actuator.turn_to(turn_to, countdown)
+            self.actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
                 f"Light subroutine is not started in ecosystem {self.ecosystem}")

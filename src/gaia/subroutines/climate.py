@@ -12,13 +12,12 @@ import gaia_validators as gv
 
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, Hardware, Switch
 from gaia.shared_resources import get_scheduler
-from gaia.actuator_handler import ActuatorHandler
 from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia.actuator_handler import ActuatorHandler
     from gaia.subroutines.sensors import Sensors
 
 
@@ -48,13 +47,6 @@ actuator_couples: ActuatorCouples = {
     "temperature": ActuatorCouple("heater", "cooler"),
     "humidity": ActuatorCouple("humidifier", "dehumidifier"),
 }
-
-
-class ClimateActuators(TypedDict):
-    heater: ActuatorHandler
-    cooler: ActuatorHandler
-    humidifier: ActuatorHandler
-    dehumidifier: ActuatorHandler
 
 
 class ClimateTarget(TypedDict):
@@ -102,7 +94,6 @@ class Climate(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self._sensor_miss: int = 0
-        self.actuators: ClimateActuators = self._setup_actuators()
         self._parameters: ClimateParameters = climate_parameters_template()
         self._Kp = 5.0  # TODO: expose via config
         self._Ki = 0.5
@@ -178,16 +169,6 @@ class Climate(SubroutineTemplate):
     def Kd(self) -> float:
         return self._Kd
 
-    def _setup_actuators(self) -> ClimateActuators:
-        return {
-            actuator_name: ActuatorHandler(
-                self,
-                gv.safe_enum_from_name(gv.HardwareType, actuator_name),
-                self.expected_status
-            )
-            for actuator_name in ["heater", "cooler", "humidifier", "dehumidifier"]
-        }
-
     def _setup_pids(self) -> ClimatePIDs:
         return {
             climate_parameter: PID(
@@ -211,8 +192,6 @@ class Climate(SubroutineTemplate):
 
     def _compute_parameters(self) -> ClimateParameters:
         parameters = climate_parameters_template()
-        for actuator_handler in self.actuators.values():
-            actuator_handler.active = False
 
         # Make sure the sensor subroutine is running
         if not self.ecosystem.get_subroutine_status("sensors"):
@@ -269,7 +248,8 @@ class Climate(SubroutineTemplate):
             for direction in regulator_couple:
                 direction: ClimateActuatorNames
                 if self.config.get_IO_group_uids(direction):
-                    self.actuators[direction].active = True
+                    actuator_handler = self.get_actuator_handler(direction)
+                    actuator_handler.activate()
                     any_regulator = True
             if not any_regulator:
                 parameters[climate_param]["regulated"] = False
@@ -320,27 +300,6 @@ class Climate(SubroutineTemplate):
             self._check_misses()
             return
 
-        def activate(
-                actuator_handler: ActuatorHandler,
-                pid_output: float | None
-        ) -> None:
-            actuator_handler.set_status(True)
-            actuator_list = cast(
-                list[Switch],
-                Hardware.get_actives_by_type(actuator_handler.type.value).values())
-            for actuator in actuator_list:
-                actuator.turn_on()
-                if isinstance(actuator, Dimmer) and pid_output is not None:
-                    actuator.set_pwm_level(pid_output)
-
-        def deactivate(actuator_handler: ActuatorHandler) -> None:
-            actuator_handler.set_status(False)
-            actuator_list = cast(
-                list[Switch],
-                Hardware.get_actives_by_type(actuator_handler.type.value).values())
-            for actuator in actuator_list:
-                actuator.turn_off()
-
         sensors_average = {
             data.measure: data.value for data in sensors_data.average
         }
@@ -367,16 +326,17 @@ class Climate(SubroutineTemplate):
             for couple_direction in CoupleDirection:
                 actuator_name: ClimateActuatorNames = getattr(
                     actuator_couple, couple_direction.name)
-                actuator_handler: ActuatorHandler = self.actuators[actuator_name]
-                actuator_handler.active = True
+                actuator_handler = self.get_actuator_handler(actuator_name)
                 expected_status = actuator_handler.compute_expected_status(
                     current_value=current_value, target_value=target_value,
                     hysteresis=hysteresis, pid_output=pid_output,
                     couple_direction=couple_direction)
                 if expected_status:
-                    activate(actuator_handler, pid_output)
+                    actuator_handler.turn_on()
+                    if pid_output is not None:
+                        actuator_handler.set_level(pid_output)
                 else:
-                    deactivate(actuator_handler)
+                    actuator_handler.turn_off()
 
     def _check_misses(self) -> None:
         if self._sensor_miss >= MISSES_BEFORE_STOP:
@@ -408,10 +368,17 @@ class Climate(SubroutineTemplate):
             for couple_direction in CoupleDirection:
                 actuator_name: ClimateActuatorNames = getattr(
                     actuator_couple, couple_direction.name)
-                actuator_handler: ActuatorHandler = self.actuators[actuator_name]
-                actuator_handler.active = False
+                actuator_handler = self.get_actuator_handler(actuator_name)
+                actuator_handler.deactivate()
 
     """API calls"""
+    def get_actuator_handler(
+            self,
+            actuator_type: gv.HardwareType | ClimateActuatorNames
+    ) -> ActuatorHandler:
+        verified_actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
+        return self.ecosystem.actuator_handlers.get_handler(verified_actuator_type)
+
     def get_hardware_needed_uid(self) -> set[str]:
         self.update_climate_parameters()
         hardware_needed: set[str] = set()
@@ -457,7 +424,9 @@ class Climate(SubroutineTemplate):
             raise TypeError(
                 "'climate_actuator' should be a valid climate actuator")
         if self._started:
-            self.actuators[climate_actuator.value].turn_to(turn_to, countdown)
+            actuator_handler: ActuatorHandler = \
+                self.ecosystem.actuator_handlers.get_handler(climate_actuator)
+            actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
                 f"Climate subroutine is not started in ecosystem {self.ecosystem}")

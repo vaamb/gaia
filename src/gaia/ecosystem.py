@@ -8,6 +8,7 @@ import weakref
 
 import gaia_validators as gv
 
+from gaia.actuator_handler import ActuatorHandlers
 from gaia.config import EcosystemConfig
 from gaia.exceptions import NonValidSubroutine, UndefinedParameter
 from gaia.subroutines import (
@@ -25,14 +26,6 @@ def _to_dt(_time: time) -> datetime:
     # Transforms time to today's datetime. Needed to use timedelta
     _date = date.today()
     return datetime.combine(_date, _time)
-
-
-def _generate_actuators_state_dict() -> gv.ActuatorsDataDict:
-    return {
-        actuator: gv.ActuatorState().model_dump()
-        for actuator in [
-            "light", "cooler", "heater", "humidifier", "dehumidifier"]
-    }
 
 
 class Ecosystem:
@@ -66,7 +59,7 @@ class Ecosystem:
             evening_end=self.config.time_parameters.night,
         )
         self.lighting_hours_lock = Lock()
-        self.actuators_state: gv.ActuatorsDataDict = _generate_actuators_state_dict()
+        self.actuator_handlers: ActuatorHandlers = ActuatorHandlers(self)
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine_name in subroutine_names:
             self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
@@ -236,8 +229,7 @@ class Ecosystem:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
         # Need to start sensors and lights before other subroutines
-        subroutines_ordered: set[SubroutineNames] = set(subroutine_names)
-        subroutines_needed = subroutines_ordered.intersection(
+        subroutines_needed = set(subroutine_names).intersection(
             self._config.get_subroutines_enabled()
         )
         if not subroutines_needed:
@@ -253,7 +245,9 @@ class Ecosystem:
             self.subroutines[subroutine].refresh_hardware()
         # Finally, start the new subroutines
         to_start = subroutines_needed - self.subroutines_started
-        for subroutine in to_start:
+        for subroutine in subroutine_names:
+            if subroutine not in to_start:
+                continue
             self.logger.debug(f"Starting the subroutine '{subroutine}'")
             self.start_subroutine(subroutine)
 
@@ -293,7 +287,7 @@ class Ecosystem:
     # Actuator
     @property
     def actuator_data(self) -> gv.ActuatorsDataDict:
-        return self.actuators_state
+        return self.actuator_handlers.as_dict()
 
     def turn_actuator(
             self,
