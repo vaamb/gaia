@@ -7,8 +7,8 @@ from gaia.exceptions import HardwareNotFound
 from gaia.hardware.actuators.GPIO import gpioSwitch
 
 from ..data import hardware_info, hardware_uid
-from ..dummy_subroutine import Dummy
 from ..utils import get_logs_content
+from subroutines.dummy_subroutine import Dummy
 
 
 def test_states(dummy_subroutine: Dummy, engine_config: EngineConfig):

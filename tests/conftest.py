@@ -1,4 +1,3 @@
-from enum import IntFlag
 import os
 import shutil
 import tempfile
@@ -16,7 +15,7 @@ from gaia.subroutines import (
 from gaia.utils import yaml
 
 from .data import ecosystem_info, ecosystem_name
-from .dummy_subroutine import Dummy
+from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content
 
 
