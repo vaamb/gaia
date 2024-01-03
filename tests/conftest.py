@@ -7,6 +7,7 @@ import pytest
 
 import gaia_validators as gv
 
+from gaia.actuator_handler import ActuatorHandler
 from gaia.config import EcosystemConfig, EngineConfig, GaiaConfig, set_config
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
@@ -176,3 +177,10 @@ def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
 
     if dummy_subroutine.started:
         dummy_subroutine.stop()
+
+
+@pytest.fixture(scope="function")
+def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
+    light_handler: ActuatorHandler = ecosystem.get_actuator_handler("light")
+
+    yield light_handler
