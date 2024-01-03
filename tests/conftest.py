@@ -128,6 +128,8 @@ def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
 
     yield climate_subroutine
 
+    climate_subroutine.ecosystem.stop_subroutine("sensors")
+
 
 @pytest.fixture(scope="function")
 def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
