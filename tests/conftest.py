@@ -131,18 +131,19 @@ def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
     climate_subroutine: Climate = ecosystem.subroutines["climate"]
 
     # Sensors subroutine is required ...
-    climate_subroutine.ecosystem.enable_subroutine("sensors")
-    climate_subroutine.ecosystem.start_subroutine("sensors")
+    ecosystem.enable_subroutine("sensors")
+    ecosystem.start_subroutine("sensors")
 
     # ... as well as a climate parameter
-    climate_subroutine.ecosystem.config.set_climate_parameter(
+    ecosystem.config.set_climate_parameter(
         "temperature",
         {"day": 25, "night": 20, "hysteresis": 2}
     )
 
     yield climate_subroutine
 
-    climate_subroutine.ecosystem.stop_subroutine("sensors")
+    if ecosystem.get_subroutine_status("sensors"):
+        ecosystem.stop_subroutine("sensors")
     if climate_subroutine.started:
         climate_subroutine.stop()
 
