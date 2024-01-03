@@ -334,7 +334,7 @@ class Engine(metaclass=SingletonMeta):
     def ecosystems_started(self) -> set[str]:
         return set([
             ecosystem.uid for ecosystem in self.ecosystems.values()
-            if ecosystem.status
+            if ecosystem.started
         ])
 
     @property
@@ -518,7 +518,7 @@ class Engine(metaclass=SingletonMeta):
                 pass
         for ecosystem in need_refresh:
             try:
-                if self.ecosystems[ecosystem].status:
+                if self.ecosystems[ecosystem].started:
                     self.ecosystems[ecosystem].refresh_lighting_hours()
             except KeyError:
                 self.logger.error(
