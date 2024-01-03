@@ -90,3 +90,6 @@ def test_turn_light(light_subroutine: Light):
     light_subroutine.turn_light(gv.ActuatorModePayload.on)
     light_subroutine.turn_light(gv.ActuatorModePayload.off)
     light_subroutine.turn_light(gv.ActuatorModePayload.automatic)
+
+    with pytest.raises(ValueError):
+        light_subroutine.turn_light("WrongMode")
