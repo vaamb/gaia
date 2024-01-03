@@ -39,7 +39,7 @@ class SubroutineTemplate(ABC):
         self.logger.debug("Initialization successfully")
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.name}, status={self.status})"
+        return f"{self.__class__.__name__}({self.name}, status={self.started})"
 
     def _get_executor(self) -> ThreadPoolExecutor:
         try:
@@ -78,7 +78,7 @@ class SubroutineTemplate(ABC):
         return self._ecosystem.config
 
     @property
-    def status(self) -> bool:
+    def started(self) -> bool:
         return self._started
 
     @property
@@ -173,7 +173,7 @@ class SubroutineTemplate(ABC):
             self.remove_hardware(hardware_uid)
 
     def start(self) -> None:
-        if self.status:
+        if self.started:
             raise RuntimeError("The subroutine is already running.")
         if not self.enabled:
             raise RuntimeError("The subroutine is not enabled.")
@@ -194,7 +194,7 @@ class SubroutineTemplate(ABC):
             raise e
 
     def stop(self) -> None:
-        if not self.status:
+        if not self.started:
             raise RuntimeError("The subroutine is not running.")
         self.logger.debug(f"Stopping the subroutine.")
         try:
