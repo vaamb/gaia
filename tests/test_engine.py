@@ -109,46 +109,53 @@ def test_engine_background_tasks(engine: Engine):
 def test_engine_states(engine: Engine):
     engine.plugins_needed = False
 
-    assert not engine.set_up
+    assert not engine.started
     assert not engine.running
-    assert not engine.cleaned_up
+    assert not engine.paused
+    assert not engine.stopping
+    assert not engine.stopped
 
-    engine.startup()
+    engine.start()
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
         assert "Starting Gaia ..." in logs
-    assert engine.set_up
+    assert engine.started
     assert engine.running
-    assert not engine.cleaned_up
+    assert not engine.paused
+    assert not engine.stopping
+    assert not engine.stopped
     with pytest.raises(RuntimeError):
         engine.resume()
-    with pytest.raises(RuntimeError):
-        engine.shutdown()
 
-    engine.stop()
+    engine.pause()
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
-        assert "Stopping Gaia ..." in logs
-    assert engine.set_up
+        assert "Pausing Gaia ..." in logs
+    assert engine.started
     assert not engine.running
-    assert not engine.cleaned_up
+    assert engine.paused
+    assert not engine.stopping
+    assert not engine.stopped
     with pytest.raises(RuntimeError):
-        engine.stop()
+        engine.pause()
 
     engine.resume()
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
         assert "Resuming Gaia ..." in logs
-    assert engine.set_up
+    assert engine.started
     assert engine.running
-    assert not engine.cleaned_up
+    assert not engine.paused
+    assert not engine.stopping
+    assert not engine.stopped
     with pytest.raises(RuntimeError):
         engine.resume()
 
-    engine.stop()  # Enables shutdown
-    engine.shutdown()
+    engine.stop()
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
         assert "Shutting down Gaia ..." in logs
-    assert not engine.set_up
+    assert not engine.started
     assert not engine.running
-    assert engine.cleaned_up
+    assert not engine.paused
+    assert not engine.stopping
+    assert engine.stopped
     with pytest.raises(RuntimeError):
         engine.resume()
 

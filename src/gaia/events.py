@@ -218,7 +218,7 @@ class Events(EventHandler):
             self.register()
 
     def on_disconnect(self, *args) -> None:  # noqa
-        if self.engine.cleaning_up:
+        if self.engine.stopping:
             self.logger.info("Engine requested to disconnect from the broker.")
         elif self.registered:
             self.logger.warning("Dispatcher disconnected from the broker")
