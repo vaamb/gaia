@@ -56,8 +56,8 @@ class Engine(metaclass=SingletonMeta):
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._running_event = Event()
-        self._cleaning_up_event = Event()
-        self._cleaned_up: bool = False
+        self._stop_event = Event()
+        self._shut_down: bool = False
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
@@ -263,7 +263,7 @@ class Engine(metaclass=SingletonMeta):
                 get_virtual_ecosystem(ecosystem_uid, start=True)
 
     def _loop(self) -> None:
-        while not self._cleaning_up_event.is_set():
+        while not self._stop_event.is_set():
             with self.config.new_config:
                 self.config.new_config.wait()
             if self.running:
@@ -271,7 +271,7 @@ class Engine(metaclass=SingletonMeta):
                 if self.use_message_broker:
                     self.event_handler.send_full_config()
                     self.event_handler.send_light_data()
-            if not self._cleaning_up_event.is_set():
+            if not self._stop_event.is_set():
                 sleep(0.1)  # Allow to do other stuff if too much config changes
 
     """
@@ -282,38 +282,45 @@ class Engine(metaclass=SingletonMeta):
         return self._uid
 
     @property
-    def set_up(self) -> bool:
-        """Indicate if the Engine background tasks have started.
+    def started(self) -> bool:
+        """Indicate if the Engine has been started."""
+        return self._thread is not None
+
+    @property
+    def running(self) -> bool:
+        """Indicate if the Engine is running and managing the Ecosystems.
+
+        An Engine can be started but not running, if the Ecosystem background
+        tasks have been paused.
 
         The Engine background tasks are:
             - The loop managing the ecosystems.
             - The EngineConfig config files watchdog.
             - The plugins (the database and event broker if enabled)
         """
-        return self._thread is not None
-
-    @property
-    def running(self) -> bool:
-        """Indicate if the Engine is managing the Ecosystems.
-
-        An Engine can be set up but not running, if the Ecosystem management has
-        been paused.
-        """
         return (
             self._running_event.is_set()
-            and not self._cleaning_up_event.is_set()
+            and not self._stop_event.is_set()
         )
 
     @property
-    def cleaning_up(self) -> bool:
-        """Indicate if the Engine is cleaning its background tasks."""
-        return self._cleaning_up_event.is_set()
+    def paused(self) -> bool:
+        """Indicate if the Engine has paused its background tasks."""
+        return (
+            self.started
+            and not self._running_event.is_set()
+        )
 
     @property
-    def cleaned_up(self) -> bool:
+    def stopping(self) -> bool:
+        """Indicate if the Engine is stopping its background tasks."""
+        return self._stop_event.is_set() and not self.stopped
+
+    @property
+    def stopped(self) -> bool:
         """Indicate if the Engine background tasks have been stopped and cleared.
         """
-        return self._cleaned_up
+        return self._shut_down
 
     @property
     def ecosystems(self) -> dict[str, Ecosystem]:
@@ -528,17 +535,19 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Engine start and stop
     # ---------------------------------------------------------------------------
-    def startup(self) -> None:
+    def start(self) -> None:
         """Start the Engine
 
         When started, the Engine will automatically manage the Ecosystems based
         on the 'ecosystem.cfg' file and refresh the Ecosystems when changes are
         made in the file.
         """
+        if self.started:
+            raise RuntimeError("Engine can only be started once.")
         if self.running:  # pragma: no cover
-            raise RuntimeError("Engine can only be started once")
-        if self.cleaned_up:
-            raise RuntimeError("Cannot restart a shut down engine")
+            raise RuntimeError("Engine can only be started once.")
+        if self.stopped:
+            raise RuntimeError("Cannot restart a shut down engine.")
         self.logger.info("Starting Gaia ...")
         if self.plugins_needed and not self.plugins_initialized:
             raise RuntimeError(
@@ -572,20 +581,16 @@ class Engine(metaclass=SingletonMeta):
         else:
             raise RuntimeError("Gaia needs to be started in order to wait")
 
-    def stop(self) -> None:
+    def pause(self) -> None:
         if not self.running:
-            raise RuntimeError("Cannot shutdown a non-started engine")
-        self.logger.info("Stopping Gaia ...")
-        # Set the events
+            raise RuntimeError("Cannot pause a non-started engine")
+        self.logger.info("Pausing Gaia ...")
+        # Set the events so the loop continues but doesn't update anything
         self._running_event.clear()
 
-    def _handle_stop_signal(self) -> None:
-        self.logger.info("Received a 'stop' signal")
-        self.stop()
-
     def _resume(self) -> None:
-        if self.cleaned_up:
-            raise RuntimeError("Cannot restart a shut down engine")
+        if self.stopped:
+            raise RuntimeError("Cannot resume a stopped engine.")
         # Set the events
         self._running_event.set()
         # Send a config signal so the loop unlocks and refreshed the ecosystems
@@ -598,17 +603,22 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Resuming Gaia ...")
         self._resume()
 
-    def shutdown(self) -> None:
+    def _handle_stop_signal(self) -> None:
+        self.logger.info("Received a 'stop' signal")
+        self.stop()
+
+    def stop(self) -> None:
         """Shutdown the Engine"""
+        if not self.started:
+            raise RuntimeError("Cannot stop a non-started engine.")
+        if self.stopped:
+            raise RuntimeError("Cannot stop an already stopped engine.")
         if self.running:
-            raise RuntimeError(
-                "Cannot shutdown a running engine. Use the 'stop()' method "
-                "before attempting to shutdown the engine."
-            )
+            self.pause()
         self.logger.info("Shutting down Gaia ...")
         # Stop the loop
         # Set the cleaning up event
-        self._cleaning_up_event.set()
+        self._stop_event.set()
         # Send a config signal so the loops unlocks ... and stops
         with self.config.new_config:
             self.config.new_config.notify_all()
@@ -625,7 +635,7 @@ class Engine(metaclass=SingletonMeta):
             self.stop_plugins()
         self.stop_background_tasks()
         self.config.stop_watchdog()
-        self._cleaned_up = True
+        self._shut_down = True
         self.logger.info("Gaia has shut down")
 
     def add_signal_handler(self) -> None:
@@ -637,6 +647,6 @@ class Engine(metaclass=SingletonMeta):
 
     def run(self) -> None:
         self.add_signal_handler()
-        self.startup()
+        self.start()
         self.wait()
-        self.shutdown()
+        self.stop()
