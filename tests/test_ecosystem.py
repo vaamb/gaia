@@ -16,24 +16,24 @@ def test_properties(
 ):
     assert ecosystem.uid == ecosystem_uid
     assert ecosystem.name == ecosystem_name
-    assert ecosystem.status is False
+    assert ecosystem.started is False
     assert ecosystem.config.__dict__ is ecosystem_config.__dict__
     assert ecosystem.engine.__dict__ is engine.__dict__
     assert ecosystem.subroutines_started == set()
 
 
 def test_ecosystem_states(ecosystem: "Ecosystem"):
-    assert not ecosystem.status
+    assert not ecosystem.started
 
     ecosystem.start()
-    assert ecosystem.status
+    assert ecosystem.started
     with get_logs_content(ecosystem.engine.config.logs_dir / "base.log") as logs:
         assert f"Ecosystem successfully started" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         ecosystem.start()
 
     ecosystem.stop()
-    assert not ecosystem.status
+    assert not ecosystem.started
     with get_logs_content(ecosystem.engine.config.logs_dir / "base.log") as logs:
         assert f"Ecosystem successfully stopped" in logs
     with pytest.raises(RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
