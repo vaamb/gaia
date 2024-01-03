@@ -15,7 +15,7 @@ from gaia.subroutines import (
     Climate, Light, Sensors, subroutine_dict, subroutine_names)
 from gaia.utils import yaml
 
-from .data import ecosystem_info, ecosystem_name
+from .data import ecosystem_info, ecosystem_name, light_info, light_uid
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content
 
@@ -181,6 +181,10 @@ def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
 
 @pytest.fixture(scope="function")
 def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
+    hardware_config = gv.HardwareConfig(uid=light_uid, **light_info)
+    light_subroutine = ecosystem.subroutines["light"]
+    light_subroutine.add_hardware(hardware_config)
+
     light_handler: ActuatorHandler = ecosystem.get_actuator_handler("light")
 
     yield light_handler
