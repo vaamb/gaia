@@ -66,7 +66,7 @@ class ClimateParameters(TypedDict):
 
 def _climate_param_template() -> ClimateParameter:
     return {
-        "regulated": True,
+        "regulated": False,
         "day": None,
         "night": None,
         "hysteresis": None
@@ -131,18 +131,17 @@ class Climate(SubroutineTemplate):
             current_value: float | None,
             target_value: float,
             hysteresis: float | None,
-            pid_output: float | None,
             couple_direction: CoupleDirection,
     ) -> bool:
         # Fallback if automatic and missing value
-        if not all((current_value, target_value, hysteresis)):
+        if not all((current_value, target_value)):
             return False
-        if abs(target_value - current_value) < hysteresis:
-            return False
-        if pid_output is not None and abs(pid_output) < PID_THRESHOLD:
+        if hysteresis is None:
+            hysteresis = 0.0
+        if abs(target_value - current_value) <= hysteresis:
             return False
         else:
-            if target_value < current_value:
+            if current_value < target_value:
                 # We need to increase the value
                 if couple_direction is CoupleDirection.increase:
                     return True
@@ -181,7 +180,7 @@ class Climate(SubroutineTemplate):
         return [
             parameter for parameter in self._parameters
             if self._parameters[parameter]["regulated"]
-        ]
+        ] if self.started else []
 
     def _any_regulated(
             self,
@@ -192,6 +191,11 @@ class Climate(SubroutineTemplate):
 
     def _compute_parameters(self) -> ClimateParameters:
         parameters = climate_parameters_template()
+
+        # Set regulated to True by default
+        for climate_param in parameters.keys():
+            climate_param = cast(ClimateParameterNames, climate_param)
+            parameters[climate_param]["regulated"] = True
 
         # Make sure the sensor subroutine is running
         if not self.ecosystem.get_subroutine_status("sensors"):
@@ -327,8 +331,7 @@ class Climate(SubroutineTemplate):
                 actuator_handler = self.get_actuator_handler(actuator_name)
                 expected_status = actuator_handler.compute_expected_status(
                     current_value=current_value, target_value=target_value,
-                    hysteresis=hysteresis, pid_output=pid_output,
-                    couple_direction=couple_direction)
+                    hysteresis=hysteresis, couple_direction=couple_direction)
                 if expected_status:
                     actuator_handler.turn_on()
                     if pid_output is not None:
