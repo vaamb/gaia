@@ -11,12 +11,12 @@ from sqlalchemy_wrapper import SQLAlchemyWrapper
 from gaia import Engine
 from gaia.database.models import SensorBuffer, SensorRecord
 
-from .data import ecosystem_uid, hardware_uid
+from .data import ecosystem_uid, sensor_uid
 
 
 def generate_sensor_data(timestamp: datetime | None = None) -> dict:
     return {
-        "sensor_uid": hardware_uid,
+        "sensor_uid": sensor_uid,
         "ecosystem_uid": ecosystem_uid,
         "measure": "temperature",
         "timestamp": timestamp or datetime.now().astimezone(timezone.utc),

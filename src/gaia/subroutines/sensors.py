@@ -73,8 +73,7 @@ class Sensors(SubroutineTemplate):
         self.thread.join()
         self.thread = None
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
-            climate_subroutine.stop()
+            self.ecosystem.stop_subroutine("climate")
         self.hardware = {}
 
     """API calls"""
@@ -109,6 +108,10 @@ class Sensors(SubroutineTemplate):
         """
         Loops through all the sensors and stores the value in self._data
         """
+        if not self.started:
+            raise RuntimeError(
+                "Sensors subroutine has to be started to update the sensors data"
+            )
         cache: SensorsDataDict = {}
         to_average: dict[str, list[float]] = {}
         cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)

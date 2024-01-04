@@ -4,11 +4,15 @@ import gaia_validators as gv
 
 from gaia import Ecosystem, EngineConfig
 from gaia.exceptions import HardwareNotFound
-from gaia.hardware.actuators.GPIO import gpioSwitch
+from gaia.hardware.sensors.virtual import virtualDHT22
 
-from ..data import hardware_info, hardware_uid
-from ..dummy_subroutine import Dummy
+from ..data import sensor_info, sensor_uid
 from ..utils import get_logs_content
+from subroutines.dummy_subroutine import Dummy
+
+
+hardware_info = sensor_info
+hardware_uid = sensor_uid
 
 
 def test_states(dummy_subroutine: Dummy, engine_config: EngineConfig):
@@ -61,7 +65,7 @@ def test_hardware(dummy_subroutine: Dummy, engine_config: EngineConfig):
     with pytest.raises(RuntimeError, match=r"No 'hardware_choices' available."):
         dummy_subroutine.add_hardware(hardware_config)
 
-    dummy_subroutine.hardware_choices = {gpioSwitch.__name__: gpioSwitch}
+    dummy_subroutine.hardware_choices = {virtualDHT22.__name__: virtualDHT22}
 
     dummy_subroutine.add_hardware(hardware_config)
     with get_logs_content(engine_config.logs_dir / "base.log") as logs:

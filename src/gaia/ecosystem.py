@@ -8,7 +8,7 @@ import weakref
 
 import gaia_validators as gv
 
-from gaia.actuator_handler import ActuatorHandlers
+from gaia.actuator_handler import ActuatorHandler, ActuatorHandlers
 from gaia.config import EcosystemConfig
 from gaia.exceptions import NonValidSubroutine, UndefinedParameter
 from gaia.subroutines import (
@@ -348,6 +348,12 @@ class Ecosystem:
                         f"Encountered an error while sending actuator data. "
                         f"ERROR msg: `{e.__class__.__name__} :{e}`"
                     )
+
+    def get_actuator_handler(
+            self,
+            actuator_type: gv.HardwareType | gv.HardwareTypeNames
+    ) -> ActuatorHandler:
+        return self.actuator_handlers.get_handler(actuator_type)
 
     # Sensors
     @property

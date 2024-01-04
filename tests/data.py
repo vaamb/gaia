@@ -10,21 +10,11 @@ hardware_address = "GPIO_10"
 i2c_address = "I2C_default"
 gpio_address = "GPIO_4:BOARD_12"
 
-light_uid = "cpgCZFJGGYlIXlLL"
-light_info = {
-    "name": "VirtualLight",
-    "address": hardware_address,
-    "model": "gpioSwitch",
-    "type": "light",
-    "level": "environment",
-    "measures": [],
-    "plants": [],
-}
 
 sensor_uid = "tKstp8EYJx27eQuK"
 sensor_info = {
     "name": "VirtualSensor",
-    "address": "GPIO_7",
+    "address": hardware_address,
     "model": "virtualDHT22",
     "type": "sensor",
     "level": "environment",
@@ -32,19 +22,33 @@ sensor_info = {
     "plants": [],
 }
 
+
+light_uid = "cpgCZFJGGYlIXlLL"
+light_info = {
+    "name": "VirtualLight",
+    "address": "GPIO_7:GPIO_12",
+    "model": "gpioDimmable",
+    "type": "light",
+    "level": "environment",
+    "measures": [],
+    "plants": [],
+}
+
+
 heater_uid = "A0oZpCJ50D0ajfJs"
 heater_info = {
     "name": "VirtualHeater",
-    "address": "GPIO_37",
-    "model": "gpioSwitch",
+    "address": "GPIO_37:GPIO_10",
+    "model": "gpioDimmable",
     "type": "heater",
     "level": "environment",
     "measures": [],
     "plants": [],
 }
 
-hardware_uid = light_uid
-hardware_info = light_info
+
+hardware_uid = sensor_uid
+hardware_info = sensor_info
 
 
 sun_times = {

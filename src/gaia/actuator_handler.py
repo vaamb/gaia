@@ -60,7 +60,7 @@ class ActuatorHandler:
 
     def as_dict(self) -> gv.ActuatorStateDict:
         return {
-            "active": self._active,
+            "active": self.active,
             "status": self._status,
             "level": self._level,
             "mode": self._mode,
@@ -174,6 +174,8 @@ class ActuatorHandler:
             turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
+        turn_to: gv.ActuatorModePayload = gv.safe_enum_from_name(
+            gv.ActuatorModePayload, turn_to)
         additional_message = ""
         if turn_to == gv.ActuatorModePayload.automatic:
             self._set_mode_no_update(gv.ActuatorMode.automatic)
@@ -256,7 +258,8 @@ class ActuatorHandlers:
                     Climate.expected_status
                 )
 
-    def get_handler(self, actuator_type: gv.HardwareType):
+    def get_handler(self, actuator_type: gv.HardwareType | gv.HardwareTypeNames):
+        actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
         if actuator_type == gv.HardwareType.sensor:
             raise ValueError(f"Actuator type {actuator_type} is not valid.")
         return self._handlers[actuator_type]

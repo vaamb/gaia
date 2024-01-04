@@ -360,6 +360,7 @@ class gpioHardware(Hardware):
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
+        self._pin: "Pin" | None = None
 
     @staticmethod
     def _get_pin(address) -> "Pin":
@@ -377,7 +378,9 @@ class gpioHardware(Hardware):
 
     @property
     def pin(self) -> "Pin":
-        return self._get_pin(self._address_book.primary.main)
+        if self._pin is None:
+            self._pin = self._get_pin(self._address_book.primary.main)
+        return self._pin
 
 
 class Switch(Hardware):
@@ -417,6 +420,8 @@ class gpioDimmer(gpioHardware, Dimmer):
                 "gpioDimmable address must be of type"
                 "'addressType1_addressNum1:GPIO_pinNumber'"
             )
+        self._pwm_pin: "Pin" | None = None
+        self._dimmer : "pwmio.PWMOut" | None = None
 
     def _get_dimmer(self) -> "pwmio.PWMOut":
         if is_raspi():
@@ -429,19 +434,23 @@ class gpioDimmer(gpioHardware, Dimmer):
                 )
         else:
             from gaia.hardware._compatibility import pwmio
-        return pwmio.PWMOut(self.PWMPin, frequency=100, duty_cycle=0)
+        return pwmio.PWMOut(self.pwm_pin, frequency=100, duty_cycle=0)
 
     def set_pwm_level(self, duty_cycle_in_percent: float | int) -> None:
         duty_cycle_in_16_bit = duty_cycle_in_percent / 100 * (2**16 - 1)
         self.dimmer.duty_cycle = duty_cycle_in_16_bit
 
     @property
-    def PWMPin(self) -> "Pin":
-        return self._get_pin(self._address_book.secondary.main)
+    def pwm_pin(self) -> "Pin":
+        if not self._pwm_pin:
+            self._pwm_pin = self._get_pin(self._address_book.secondary.main)
+        return self._pwm_pin
 
     @property
     def dimmer(self) -> "pwmio.PWMOut":
-        return self._get_dimmer()
+        if not self._dimmer:
+            self._dimmer = self._get_dimmer()
+        return self._dimmer
 
 
 class i2cHardware(Hardware):
