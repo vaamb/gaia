@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gaia_validators import SensorRecord
+import gaia_validators as gv
 
 from gaia.hardware.abc import BaseSensor
 from gaia.utils import (
@@ -13,11 +13,11 @@ class TempHumSensor(BaseSensor):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         raw_humidity, raw_temperature = self._get_raw_data()
         data = []
         if "humidity" in self.measures:
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="humidity",
                 value=raw_humidity
@@ -26,7 +26,7 @@ class TempHumSensor(BaseSensor):
         if "temperature" in self.measures:
             temperature = temperature_converter(
                 raw_temperature, "celsius", get_unit("temperature", "celsius"))
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="temperature",
                 value=temperature
@@ -36,14 +36,14 @@ class TempHumSensor(BaseSensor):
             raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
             dew_point = temperature_converter(
                 raw_dew_point, "celsius", get_unit("temperature", "celsius"))
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="dew_point",
                 value=dew_point
             ))
 
         if "absolute_humidity" in self.measures:
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="absolute_humidity",
                 value=get_absolute_humidity(raw_temperature, raw_humidity)

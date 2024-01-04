@@ -4,8 +4,7 @@ from datetime import datetime
 import io
 import typing as t
 
-from gaia_validators import (
-    ActuatorMode, ActuatorModePayload, Empty, HealthRecord)
+import gaia_validators as gv
 
 from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
@@ -24,7 +23,7 @@ class Health(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = camera_models
         self.hardware: dict[str, Camera]
-        self._plants_health: HealthRecord | Empty = Empty()
+        self._plants_health: gv.HealthRecord | gv.Empty = gv.Empty()
         self._imageIO = io.BytesIO()
         self._finish__init__()
 
@@ -51,7 +50,7 @@ class Health(SubroutineTemplate):
             green = random.randrange(12000, 1500000, 1000)
             necrosis = random.uniform(5, 55)
             health_index = random.uniform(70, 97)
-            self._plants_health = HealthRecord(
+            self._plants_health = gv.HealthRecord(
                 timestamp=datetime.now().astimezone().replace(microsecond=0),
                 green=green,
                 necrosis=round(necrosis, 2),
@@ -70,15 +69,15 @@ class Health(SubroutineTemplate):
             light_subroutine: "Light" = self.ecosystem.subroutines["light"]
             light_mode = light_subroutine.actuator_handler.mode
             light_status = light_subroutine.actuator_handler.status
-            light_subroutine.turn_light(ActuatorModePayload.on)
+            light_subroutine.turn_light(gv.ActuatorModePayload.on)
             self.take_picture()
-            if light_mode is ActuatorMode.automatic:
-                light_subroutine.turn_light(ActuatorModePayload.automatic)
+            if light_mode is gv.ActuatorMode.automatic:
+                light_subroutine.turn_light(gv.ActuatorModePayload.automatic)
             else:
                 if light_status:
-                    light_subroutine.turn_light(ActuatorModePayload.on)
+                    light_subroutine.turn_light(gv.ActuatorModePayload.on)
                 else:
-                    light_subroutine.turn_light(ActuatorModePayload.off)
+                    light_subroutine.turn_light(gv.ActuatorModePayload.off)
         else:
             self.take_picture()
         self.analyse_picture()
@@ -115,5 +114,5 @@ class Health(SubroutineTemplate):
         pass
 
     @property
-    def plants_health(self) -> HealthRecord | Empty:
+    def plants_health(self) -> gv.HealthRecord | gv.Empty:
         return self._plants_health

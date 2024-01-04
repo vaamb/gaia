@@ -6,8 +6,7 @@ from threading import Event, Lock, Thread
 from time import monotonic
 import typing as t
 
-from gaia_validators import (
-    Empty, HardwareConfig, MeasureAverage, SensorsData, SensorsDataDict)
+import gaia_validators as gv
 
 from gaia.hardware import sensor_models
 from gaia.hardware.abc import BaseSensor
@@ -27,7 +26,7 @@ class Sensors(SubroutineTemplate):
         self._stop_event = Event()
         self._loop_timeout: float = float(
             self.ecosystem.engine.config.app_config.SENSORS_TIMEOUT)
-        self._sensors_data: SensorsData | Empty = Empty()
+        self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         self._data_lock = Lock()
         self._finish__init__()
 
@@ -88,7 +87,7 @@ class Sensors(SubroutineTemplate):
     def thread(self, thread: Thread | None) -> None:
         self._thread = thread
 
-    def add_hardware(self, hardware_config: HardwareConfig) -> BaseSensor:
+    def add_hardware(self, hardware_config: gv.HardwareConfig) -> BaseSensor:
         model = hardware_config.model
         if self.ecosystem.engine.config.app_config.VIRTUALIZATION:
             if not model.startswith("virtual"):
@@ -112,7 +111,7 @@ class Sensors(SubroutineTemplate):
             raise RuntimeError(
                 "Sensors subroutine has to be started to update the sensors data"
             )
-        cache: SensorsDataDict = {}
+        cache: gv.SensorsDataDict = {}
         to_average: dict[str, list[float]] = {}
         cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
         cache["records"] = []
@@ -132,7 +131,7 @@ class Sensors(SubroutineTemplate):
             except KeyError:
                 to_average[record.measure] = [record.value]
         cache["average"] = [
-            MeasureAverage(
+            gv.MeasureAverage(
                 measure=measure,
                 value=round(mean(value), 2),
                 timestamp=None
@@ -140,16 +139,16 @@ class Sensors(SubroutineTemplate):
             for measure, value in to_average.items()
         ]
         if len(cache["records"]) > 0:
-            self.sensors_data = SensorsData(**cache)
+            self.sensors_data = gv.SensorsData(**cache)
         else:
-            self.sensors_data = Empty()
+            self.sensors_data = gv.Empty()
 
     @property
-    def sensors_data(self) -> SensorsData | Empty:
+    def sensors_data(self) -> gv.SensorsData | gv.Empty:
         with self._data_lock:
             return self._sensors_data
 
     @sensors_data.setter
-    def sensors_data(self, data: SensorsData | Empty) -> None:
+    def sensors_data(self, data: gv.SensorsData | gv.Empty) -> None:
         with self._data_lock:
             self._sensors_data = data

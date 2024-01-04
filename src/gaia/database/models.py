@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Mapped, mapped_column, Session
 
-from gaia_validators import BufferedSensorsDataPayload, BufferedSensorRecord
+import gaia_validators as gv
 from sqlalchemy_wrapper import SQLAlchemyWrapper
 
 from gaia.utils import json
@@ -64,7 +64,7 @@ class SensorBuffer(BaseSensorRecord):
             cls,
             session: Session,
             per_page: int = 50
-    ) -> Generator[BufferedSensorsDataPayload]:
+    ) -> Generator[gv.BufferedSensorsDataPayload]:
         page: int = 0
         try:
             while True:
@@ -79,11 +79,11 @@ class SensorBuffer(BaseSensorRecord):
                 if not buffered_data:
                     break
                 uuid = uuid4()
-                rv: list[BufferedSensorRecord] = []
+                rv: list[gv.BufferedSensorRecord] = []
                 for data in buffered_data:
                     data.exchange_uuid = uuid
                     rv.append(
-                        BufferedSensorRecord(
+                        gv.BufferedSensorRecord(
                             ecosystem_uid=data.ecosystem_uid,
                             sensor_uid=data.sensor_uid,
                             measure=data.measure,
@@ -92,7 +92,7 @@ class SensorBuffer(BaseSensorRecord):
                         )
                     )
 
-                yield BufferedSensorsDataPayload(
+                yield gv.BufferedSensorsDataPayload(
                     data=rv,
                     uuid=uuid,
                 )
