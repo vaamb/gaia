@@ -12,9 +12,7 @@ from typing import Any, Literal, Self, Type
 import weakref
 from weakref import WeakValueDictionary
 
-from gaia_validators import (
-    safe_enum_from_name, HardwareConfig, HardwareLevel, HardwareLevelNames,
-    HardwareType, HardwareTypeNames, SensorRecord)
+import gaia_validators as gv
 
 from gaia.dependencies.camera import check_dependencies, Image
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models

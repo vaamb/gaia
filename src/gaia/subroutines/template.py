@@ -7,7 +7,7 @@ import typing as t
 from typing import Type
 import weakref
 
-from gaia_validators import HardwareConfig
+import gaia_validators as gv
 
 from gaia.exceptions import HardwareNotFound
 from gaia.hardware.abc import BaseSensor, Camera, Dimmer, Hardware, Switch
@@ -117,7 +117,7 @@ class SubroutineTemplate(ABC):
 
     def add_hardware(
             self,
-            hardware_config: HardwareConfig,
+            hardware_config: gv.HardwareConfig,
     ) -> BaseSensor | Camera | Dimmer | Hardware | Switch | None:
         if not self.hardware_choices:
             raise RuntimeError("No 'hardware_choices' available.")

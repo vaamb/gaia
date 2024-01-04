@@ -4,7 +4,7 @@ from typing import Callable
 
 from sqlalchemy.orm import scoped_session, Session
 
-from gaia_validators import SensorsData
+import gaia_validators as gv
 
 from gaia.database.models import SensorBuffer, SensorRecord
 
@@ -23,7 +23,7 @@ def log_sensors_data(
         for ecosystem_uid, ecosystem in engine.ecosystems.items():
             sensors_data = ecosystem.sensors_data
             database_management = ecosystem.config.get_management("database")
-            if isinstance(sensors_data, SensorsData) and database_management:
+            if isinstance(sensors_data, gv.SensorsData) and database_management:
                 timestamp: datetime = sensors_data.timestamp
                 timestamp = timestamp.astimezone(timezone.utc)
                 if timestamp.minute % sensors_logging_period == 0:

@@ -4,7 +4,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia_validators import SensorRecord
+import gaia_validators as gv
 
 from gaia.hardware.abc import (
     BaseSensor, hardware_logger, i2cSensor, LightSensor, PlantLevelHardware)
@@ -101,26 +101,26 @@ class ENS160(i2cSensor):
         self.device.temperature_compensation = temperature
         self.device.humidity_compensation = humidity
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         # TODO: access temperature and humidity data to compensate
         data = []
         AQI, eCO2, TVOC = self._get_raw_data()
         if "AQI" in self.measures:
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="AQI",
                 value=AQI
             ))
 
         if "eCO2" in self.measures:
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="eCO2",
                 value=eCO2
             ))
 
         if "TVOC" in self.measures:
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="TVOC",
                 value=TVOC
@@ -158,10 +158,10 @@ class VEML7700(i2cSensor, LightSensor):
             )
             return None
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
                 value=self.get_lux()
@@ -199,10 +199,10 @@ class VCNL4040(i2cSensor, LightSensor):
             )
             return None
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         data = []
         if "lux" in self.measures or "light" in self.measures:
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
                 value=self.get_lux()
@@ -229,7 +229,7 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self._address_book.primary.main)
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -263,14 +263,14 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                 break
         return moisture, temperature
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         try:
             moisture, raw_temperature = self._get_raw_data()
         except RuntimeError:
             moisture = raw_temperature = None
         data = []
         if "moisture" in self.measures:
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="moisture",
                 value=moisture
@@ -279,7 +279,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         if "temperature" in self.measures:
             temperature = temperature_converter(
                 raw_temperature, "celsius", get_unit("temperature", "celsius"))
-            data.append(SensorRecord(
+            data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="temperature",
                 value=temperature
