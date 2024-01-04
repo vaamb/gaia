@@ -3,7 +3,11 @@ import pytest
 from gaia.config import EcosystemConfig
 from gaia.exceptions import HardwareNotFound
 
-from .data import hardware_address, hardware_info, hardware_uid
+from .data import hardware_address, sensor_info, sensor_uid
+
+
+hardware_info = sensor_info
+hardware_uid = sensor_uid
 
 
 def test_hardware_creation_fail_address(ecosystem_config: EcosystemConfig):
@@ -46,6 +50,7 @@ def test_hardware_creation_fail_level(ecosystem_config: EcosystemConfig):
 def test_hardware_creation_success(ecosystem_config: EcosystemConfig):
     valid_hardware_info = {
         **hardware_info,
+        "model": "gpioSwitch",
         "address": "GPIO_11",  # Use a free address
     }
     ecosystem_config.create_new_hardware(**valid_hardware_info)
@@ -78,7 +83,10 @@ def test_hardware_update_fail_level(ecosystem_config: EcosystemConfig):
 
 
 def test_hardware_update_success(ecosystem_config: EcosystemConfig):
-    ecosystem_config.update_hardware(hardware_uid, {"address": "GPIO_11"})
+    ecosystem_config.update_hardware(
+        hardware_uid,
+        {"model": "gpioSwitch", "address": "GPIO_11"}
+    )
 
 
 def test_hardware_delete_fail_not_found(ecosystem_config: EcosystemConfig):

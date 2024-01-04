@@ -30,11 +30,9 @@ def test_add_hardware(sensors_subroutine: Sensors, engine_config: EngineConfig):
         assert "not in the list of the hardware available." in logs
 
 
-
-
 def test_update_sensors_data(sensors_subroutine: Sensors):
     # Rely on the correct implementation of virtualDHT22
-    with pytest.raises(RuntimeError, match="Sensors subroutine must be started"):
+    with pytest.raises(RuntimeError, match="Sensors subroutine has to be started"):
         sensors_subroutine.update_sensors_data()
 
     sensors_subroutine.enable()

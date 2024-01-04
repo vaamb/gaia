@@ -5,7 +5,7 @@ from sqlalchemy_wrapper import SQLAlchemyWrapper
 
 from gaia import EcosystemConfig, Engine, EngineConfig
 
-from .data import ecosystem_uid, hardware_info, sun_times
+from .data import ecosystem_uid, sun_times
 from .utils import get_logs_content
 
 
