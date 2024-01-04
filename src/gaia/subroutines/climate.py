@@ -306,6 +306,7 @@ class Climate(SubroutineTemplate):
             data.measure: data.value for data in sensors_data.average
         }
         for parameter in self.regulated_parameters:
+            # TODO: migrate `_compute_target` inside `expected_status`
             target_value, hysteresis = self._compute_target(
                 self._parameters[parameter], self.lighting_hours,
                 self.ecosystem.config.chaos_factor)
