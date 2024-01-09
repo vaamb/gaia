@@ -19,8 +19,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class SubroutineTemplate(ABC):
-    _executors: dict[str, ThreadPoolExecutor] = {}
-
     def __init__(self, ecosystem: "Ecosystem") -> None:
         """Base class to manage an ecosystem subroutine
         """
@@ -33,22 +31,12 @@ class SubroutineTemplate(ABC):
         self.hardware: dict[str, Hardware] = {}
         self._hardware_choices: dict[str, Type[Hardware]] = {}
         self._started: bool = False
-        self._executor: ThreadPoolExecutor | None = None
 
     def _finish__init__(self) -> None:
         self.logger.debug("Initialization successfully")
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.name}, status={self.started})"
-
-    def _get_executor(self) -> ThreadPoolExecutor:
-        try:
-            return self._executors["self.ecosystem.uid"]
-        except KeyError:
-            executor = ThreadPoolExecutor(
-                thread_name_prefix=f"{self.ecosystem.uid}-subroutine_executor")
-            self._executors["self.ecosystem.uid"] = executor
-            return executor
 
     @abstractmethod
     def _compute_if_manageable(self) -> bool:
@@ -107,13 +95,7 @@ class SubroutineTemplate(ABC):
 
     @property
     def executor(self) -> ThreadPoolExecutor:
-        if self._executor is None:
-            self._executor = self._get_executor()
-        return self._executor
-
-    @executor.setter
-    def executor(self, value: ThreadPoolExecutor | None) -> None:
-        self._executor = value
+        return self.ecosystem.executor
 
     def add_hardware(
             self,
@@ -199,8 +181,6 @@ class SubroutineTemplate(ABC):
         self.logger.debug(f"Stopping the subroutine.")
         try:
             self._stop()
-            self.executor.shutdown(wait=False, cancel_futures=True)
-            self.executor = None
             for hardware_uid in [*self.hardware.keys()]:
                 self.remove_hardware(hardware_uid)
             self.hardware = {}
