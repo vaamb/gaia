@@ -174,7 +174,9 @@ class Events(EventHandler):
         self._stop_event.clear()
         self.thread = Thread(
             target=self.ping_loop,
-            name="events_ping")
+            name="events_ping",
+            daemon=True,
+        )
         self.thread.start()
 
     def stop_background_tasks(self) -> None:

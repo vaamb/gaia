@@ -145,11 +145,15 @@ class Light(SubroutineTemplate):
         self._stop_event.clear()
         self.light_status_thread = Thread(
             target=self._light_status_loop,
-            name=f"{self.ecosystem.uid}-light-status")
+            name=f"{self.ecosystem.uid}-light-status",
+            daemon=True,
+        )
         self.light_status_thread.start()
         # self.light_intensity_thread = Thread(
         #     target=self._light_intensity_loop,
-        #     name=f"{self._uid}-light-intensity")
+        #     name=f"{self._uid}-light-intensity",
+        #     daemon=True,
+        # )
         # self.light_intensity_thread.start()
         self.actuator_handler.activate()
 

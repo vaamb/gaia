@@ -62,7 +62,9 @@ class Sensors(SubroutineTemplate):
         self._stop_event.clear()
         self.thread = Thread(
             target=self._sensors_loop,
-            name=f"{self.ecosystem.uid}-sensors")
+            name=f"{self.ecosystem.uid}-sensors",
+            daemon=True,
+        )
         self.thread.start()
         self.logger.debug(f"Sensors loop successfully started")
 
