@@ -77,8 +77,7 @@ def test_engine_database(engine: Engine):
     engine.stop_database()
 
 
-# TODO: fix, it never stops running
-def _test_engine_plugins(engine: Engine):
+def test_engine_plugins(engine: Engine):
     assert engine.plugins_needed == False
 
     with pytest.raises(RuntimeError):
