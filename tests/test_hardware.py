@@ -55,6 +55,7 @@ def test_hardware_creation_success(ecosystem_config: EcosystemConfig):
     }
     ecosystem_config.create_new_hardware(**valid_hardware_info)
 
+
 def test_hardware_update_fail_not_found(ecosystem_config: EcosystemConfig):
     with pytest.raises(HardwareNotFound):
         ecosystem_config.update_hardware("invalid_uid", {"address": "GPIO_7"})
