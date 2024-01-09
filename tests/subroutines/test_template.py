@@ -8,7 +8,7 @@ from gaia.hardware.sensors.virtual import virtualDHT22
 
 from ..data import sensor_info, sensor_uid
 from ..utils import get_logs_content
-from subroutines.dummy_subroutine import Dummy
+from .dummy_subroutine import Dummy
 
 
 hardware_info = sensor_info
