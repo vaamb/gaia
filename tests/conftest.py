@@ -62,21 +62,43 @@ def patch() -> None:
 
 
 @pytest.fixture(scope="session")
-def testing_cfg(patch) -> YieldFixture[GaiaConfig]:
+def temp_dir(patch) -> YieldFixture[str]:
     temp_dir = tempfile.mkdtemp(prefix="gaia-")
-    GaiaConfig.LOG_TO_STDOUT = False
-    GaiaConfig.TESTING = True
-    GaiaConfig.DIR = temp_dir
-    set_config(GaiaConfig)
     with open(os.path.join(temp_dir, "ecosystems.cfg"), "w") as file:
         yaml.dump(ecosystem_info, file)
-    yield GaiaConfig
+
+    yield temp_dir
+
     shutil.rmtree(temp_dir)
 
 
+@pytest.fixture(scope="session")
+def testing_cfg(temp_dir) -> YieldFixture[Type[GaiaConfig]]:
+    GaiaConfig.LOG_TO_STDOUT = False
+    GaiaConfig.TESTING = True
+    GaiaConfig.VIRTUALIZATION = True
+    GaiaConfig.DIR = temp_dir
+    set_config(GaiaConfig)
+
+    yield GaiaConfig
+
+
 @pytest.fixture(scope="function")
-def engine_config(testing_cfg: Type[GaiaConfig]) -> YieldFixture[EngineConfig]:
-    engine_config = EngineConfig(gaia_config=testing_cfg())
+def default_testing_cfg(testing_cfg) -> YieldFixture[Type[GaiaConfig]]:
+    use_database = testing_cfg.USE_DATABASE
+    communicate_with_ouranos = testing_cfg.COMMUNICATE_WITH_OURANOS
+    aggregator_communication_url = testing_cfg.AGGREGATOR_COMMUNICATION_URL
+
+    yield testing_cfg
+
+    testing_cfg.USE_DATABASE = use_database
+    testing_cfg.COMMUNICATE_WITH_OURANOS = communicate_with_ouranos
+    testing_cfg.AGGREGATOR_COMMUNICATION_URL = aggregator_communication_url
+
+
+@pytest.fixture(scope="function")
+def engine_config(default_testing_cfg: Type[GaiaConfig]) -> YieldFixture[EngineConfig]:
+    engine_config = EngineConfig(gaia_config=default_testing_cfg())
     engine_config.initialize_configs()
     for files in engine_config.cache_dir.iterdir():
         files.unlink()

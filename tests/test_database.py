@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Type
 
 import pytest
 from sqlalchemy import select
@@ -8,7 +9,8 @@ from sqlalchemy import select
 import gaia_validators as gv
 from sqlalchemy_wrapper import SQLAlchemyWrapper
 
-from gaia import Engine
+from gaia.database import db as gaia_db
+from gaia.config import GaiaConfig
 from gaia.database.models import SensorBuffer, SensorRecord
 
 from .data import ecosystem_uid, sensor_uid
@@ -24,13 +26,18 @@ def generate_sensor_data(timestamp: datetime | None = None) -> dict:
     }
 
 
-@pytest.fixture(scope="function")
-def db(engine: Engine) -> SQLAlchemyWrapper:
-    engine.config.app_config.USE_DATABASE = True
-    engine.init_database()
-    engine.start_database()
-    yield engine.db
-    engine.stop_database()
+@pytest.fixture(scope="session")
+def db(testing_cfg: Type[GaiaConfig]) -> SQLAlchemyWrapper:
+    cfg = testing_cfg()
+    dict_cfg = {
+        key: getattr(cfg, key)
+        for key in dir(cfg)
+        if key.isupper()
+    }
+    gaia_db.init(dict_cfg)
+    gaia_db.create_all()
+
+    yield gaia_db
 
 
 def test_record(db: SQLAlchemyWrapper):
