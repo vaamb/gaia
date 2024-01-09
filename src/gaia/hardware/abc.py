@@ -13,6 +13,7 @@ import weakref
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
+from gaia_validators import safe_enum_from_name
 
 from gaia.dependencies.camera import check_dependencies, Image
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
@@ -209,8 +210,8 @@ class Hardware(metaclass=_MetaHardware):
             subroutine: "SubroutineTemplate" | None,
             uid: str,
             address: str,
-            level: HardwareLevel | HardwareLevelNames,
-            type: HardwareType | HardwareTypeNames,
+            level: gv.HardwareLevel | gv.HardwareLevelNames,
+            type: gv.HardwareType | gv.HardwareTypeNames,
             model: str,
             name: str | None = None,
             measures: list | None = None,
@@ -223,8 +224,8 @@ class Hardware(metaclass=_MetaHardware):
         else:
             self._subroutine = weakref.proxy(subroutine)
         self._uid: str = uid
-        self._level: HardwareLevel = safe_enum_from_name(HardwareLevel, level)
-        self._type: HardwareType = safe_enum_from_name(HardwareType, type)
+        self._level: gv.HardwareLevel = safe_enum_from_name(gv.HardwareLevel, level)
+        self._type: gv.HardwareType = safe_enum_from_name(gv.HardwareType, type)
         self._model: str = model
         self._name: str = name or uid
         address_list: list = address.split(":")
@@ -257,7 +258,7 @@ class Hardware(metaclass=_MetaHardware):
     @classmethod
     def from_hardware_config(
             cls,
-            hardware_config: HardwareConfig,
+            hardware_config: gv.HardwareConfig,
             subroutine: "SubroutineTemplate" | None
     ) -> Self:
         return cls(
@@ -312,11 +313,11 @@ class Hardware(metaclass=_MetaHardware):
         return self._model
 
     @property
-    def level(self) -> HardwareLevel:
+    def level(self) -> gv.HardwareLevel:
         return self._level
 
     @property
-    def type(self) -> HardwareType:
+    def type(self) -> gv.HardwareType:
         return self._type
 
     @property
@@ -476,7 +477,7 @@ class i2cHardware(Hardware):
 
 class PlantLevelHardware(Hardware):
     def __init__(self, *args, **kwargs) -> None:
-        kwargs["level"] = HardwareLevel.plants
+        kwargs["level"] = gv.HardwareLevel.plants
         super().__init__(*args, **kwargs)
         if not self.plants:  # pragma: no cover
             hardware_logger.warning(
@@ -487,7 +488,7 @@ class PlantLevelHardware(Hardware):
 
 class BaseSensor(Hardware):
     def __init__(self, *args, **kwargs) -> None:
-        kwargs["type"] = HardwareType.sensor
+        kwargs["type"] = gv.HardwareType.sensor
         super().__init__(*args, **kwargs)
         self.device: Any = self._get_device()
 
@@ -496,7 +497,7 @@ class BaseSensor(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -508,14 +509,14 @@ class LightSensor(BaseSensor):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class gpioSensor(BaseSensor, gpioHardware):
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -529,7 +530,7 @@ class i2cSensor(BaseSensor, i2cHardware):
                 kwargs["address"] = f"I2C_{hex(default_address)}"
         super().__init__(*args, **kwargs)
 
-    def get_data(self) -> list[SensorRecord]:
+    def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
