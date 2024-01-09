@@ -568,6 +568,7 @@ class Engine(metaclass=SingletonMeta):
         self.thread = Thread(
             target=self._loop,
             name="engine",
+            daemon=True,
         )
         self.thread.start()
         self._resume()
