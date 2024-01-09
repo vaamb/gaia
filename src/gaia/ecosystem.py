@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time
 import logging
 from threading import Lock
@@ -48,6 +49,7 @@ class Ecosystem:
         self._engine: "Engine" = weakref.proxy(engine)
         self._config: EcosystemConfig = \
             self.engine.config.get_ecosystem_config(ecosystem_id)
+        self._executor: ThreadPoolExecutor | None = None
         self._uid: str = self.config.uid
         self._name: str = self.config.name
         self.logger: logging.Logger = logging.getLogger(
@@ -97,6 +99,17 @@ class Ecosystem:
     @property
     def event_handler(self) -> "Events":
         return self._engine.event_handler
+
+    @property
+    def executor(self) -> ThreadPoolExecutor:
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(
+                thread_name_prefix=f"{self.uid}-executor")
+        return self._executor
+
+    @executor.setter
+    def executor(self, value: ThreadPoolExecutor | None) -> None:
+        self._executor = value
 
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
@@ -282,6 +295,9 @@ class Ecosystem:
         else:
             self.logger.error("Failed to stop the ecosystem")
             raise Exception(f"Failed to stop ecosystem {self.name}")
+        if self._executor is not None:
+            self.executor.shutdown()
+            self.executor = None
         self._started = False
 
     # Actuator
