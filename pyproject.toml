@@ -39,7 +39,8 @@ dispatcher = [
     "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git",
 ]
 test = [
-    "pytest~=7.1.2"
+    "pytest~=7.1.2",
+    "pytest-timeout~=2.2.0",
 ]
 
 [project.urls]
