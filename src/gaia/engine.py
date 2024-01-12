@@ -88,7 +88,10 @@ class Engine(metaclass=SingletonMeta):
             broker_type = broker_url[:broker_url.index("://")]
         except ValueError:
             raise ValueError(f"'{broker_url}' is not a valid broker URL")
-        if broker_type not in {"amqp", "redis"}:
+        brokers_available = ["amqp", "redis"]
+        if self.config.app_config.TESTING:
+            brokers_available.append("memory")
+        if broker_type not in brokers_available:
             raise ValueError(f"{broker_type} is not supported")
         self.logger.info("Initialising the event dispatcher")
         if broker_url == "amqp://":
