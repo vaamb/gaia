@@ -79,6 +79,7 @@ def testing_cfg(temp_dir) -> YieldFixture[Type[GaiaConfig]]:
     GaiaConfig.VIRTUALIZATION = True
     GaiaConfig.DIR = temp_dir
     GaiaConfig.AGGREGATOR_COMMUNICATION_URL = "memory:///"
+    GaiaConfig.CONFIG_WATCHER_PERIOD = 100
     set_config(GaiaConfig)
 
     yield GaiaConfig
