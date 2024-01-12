@@ -71,13 +71,17 @@ class Engine(metaclass=SingletonMeta):
     def init_message_broker(self) -> None:
         if not self.config.app_config.COMMUNICATE_WITH_OURANOS:
             raise RuntimeError(
-                "Cannot initialize the event dispatcher if the parameter "
+                "Cannot initialize the message broker if the parameter "
                 "'COMMUNICATE_WITH_OURANOS' is set to 'False'."
+            )
+        if self.use_db:
+            raise RuntimeError(
+                "The message broker has already been initialized."
             )
         broker_url = self.config.app_config.AGGREGATOR_COMMUNICATION_URL
         if not broker_url:
             raise RuntimeError(
-                "Cannot initialize the event dispatcher if the parameter "
+                "Cannot initialize the message broker if the parameter "
                 "'AGGREGATOR_COMMUNICATION_URL' is not set."
             )
         try:
@@ -156,6 +160,10 @@ class Engine(metaclass=SingletonMeta):
             raise RuntimeError(
                 "Cannot initialize the database if the parameter 'USE_DATABASE' "
                 "is set to 'False'."
+            )
+        if self.use_db:
+            raise RuntimeError(
+                "The database has already been initialized."
             )
         self.logger.info("Initialising the database.")
         from gaia.database import db
