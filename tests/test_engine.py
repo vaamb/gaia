@@ -18,9 +18,10 @@ def test_engine_dict(engine: Engine, engine_config: EngineConfig):
 
 
 def test_engine_message_broker(engine: Engine):
-    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
-
+    assert engine.config.app_config.COMMUNICATE_WITH_OURANOS is False
     assert engine.use_message_broker is False
+    assert engine.plugins_needed is False
+
     with pytest.raises(RuntimeError, match="COMMUNICATE_WITH_OURANOS"):
         engine.init_message_broker()
     with pytest.raises(AttributeError):
@@ -29,6 +30,7 @@ def test_engine_message_broker(engine: Engine):
         assert isinstance(engine.event_handler, EventHandler)
 
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+    assert engine.plugins_needed is True
 
     url = engine.config.app_config.AGGREGATOR_COMMUNICATION_URL
 
@@ -53,11 +55,14 @@ def test_engine_message_broker(engine: Engine):
     assert isinstance(engine.message_broker, KombuDispatcher)
     assert isinstance(engine.event_handler, EventHandler)
 
-    # Message broker start and stop are handled by KombuDispatcher
+    engine.start_message_broker()
+    engine.stop_message_broker()
 
 
 def test_engine_database(engine: Engine):
-    engine.config.app_config.USE_DATABASE = False
+    assert engine.config.app_config.USE_DATABASE is False
+    assert engine.use_db is False
+    assert engine.plugins_needed is False
 
     with pytest.raises(RuntimeError, match="USE_DATABASE"):
         engine.init_database()
@@ -66,6 +71,7 @@ def test_engine_database(engine: Engine):
         assert isinstance(engine.db, SQLAlchemyWrapper)
 
     engine.config.app_config.USE_DATABASE = True
+    assert engine.plugins_needed is True
 
     engine.init_database()
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
@@ -78,21 +84,23 @@ def test_engine_database(engine: Engine):
 
 
 def test_engine_plugins(engine: Engine):
-    assert engine.plugins_needed == False
+    assert engine.config.app_config.COMMUNICATE_WITH_OURANOS is False
+    assert engine.config.app_config.USE_DATABASE is False
+    assert engine.plugins_needed is False
 
     with pytest.raises(RuntimeError):
         engine.init_plugins()
     with pytest.raises(RuntimeError):
         engine.start_plugins()
 
-    engine.plugins_needed = True
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
     engine.config.app_config.USE_DATABASE = True
+    assert engine.plugins_needed is True
 
     engine.init_plugins()
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
         assert "Initialising the plugins" in logs
-    assert engine.plugins_initialized == True
+    assert engine.plugins_initialized is True
     engine.start_plugins()
     engine.stop_plugins()
 
@@ -107,8 +115,6 @@ def test_engine_background_tasks(engine: Engine):
 
 
 def test_engine_states(engine: Engine):
-    engine.plugins_needed = False
-
     assert not engine.started
     assert not engine.running
     assert not engine.paused

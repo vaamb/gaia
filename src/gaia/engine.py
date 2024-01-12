@@ -49,10 +49,6 @@ class Engine(metaclass=SingletonMeta):
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
         self._db: "SQLAlchemyWrapper" | None = None
-        self.plugins_needed = (
-            self.config.app_config.USE_DATABASE
-            or self.config.app_config.COMMUNICATE_WITH_OURANOS
-        )
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._running_event = Event()
@@ -62,19 +58,30 @@ class Engine(metaclass=SingletonMeta):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
 
+    @property
+    def plugins_needed(self) -> bool:
+        return (
+            self.config.app_config.USE_DATABASE
+            or self.config.app_config.COMMUNICATE_WITH_OURANOS
+        )
+
     # ---------------------------------------------------------------------------
     #   Events dispatcher
     # ---------------------------------------------------------------------------
     def init_message_broker(self) -> None:
         if not self.config.app_config.COMMUNICATE_WITH_OURANOS:
             raise RuntimeError(
-                "Cannot initialize the event dispatcher if the parameter "
+                "Cannot initialize the message broker if the parameter "
                 "'COMMUNICATE_WITH_OURANOS' is set to 'False'."
+            )
+        if self.use_db:
+            raise RuntimeError(
+                "The message broker has already been initialized."
             )
         broker_url = self.config.app_config.AGGREGATOR_COMMUNICATION_URL
         if not broker_url:
             raise RuntimeError(
-                "Cannot initialize the event dispatcher if the parameter "
+                "Cannot initialize the message broker if the parameter "
                 "'AGGREGATOR_COMMUNICATION_URL' is not set."
             )
         try:
@@ -153,6 +160,10 @@ class Engine(metaclass=SingletonMeta):
             raise RuntimeError(
                 "Cannot initialize the database if the parameter 'USE_DATABASE' "
                 "is set to 'False'."
+            )
+        if self.use_db:
+            raise RuntimeError(
+                "The database has already been initialized."
             )
         self.logger.info("Initialising the database.")
         from gaia.database import db
