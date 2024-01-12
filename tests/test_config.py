@@ -47,7 +47,7 @@ def test_config_files_watchdog(engine_config: EngineConfig):
     engine_config.create_ecosystem("Already fading away")
     with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
         yaml.dump(engine_config.ecosystems_config, cfg)
-    sleep(0.5)  # Allow to check at least once if files changed
+    sleep(0.15)  # Allow to check at least once if files changed
     with get_logs_content(engine_config.logs_dir / "base.log") as logs:
         assert "Updating ecosystems configuration" in logs
 
@@ -55,7 +55,7 @@ def test_config_files_watchdog(engine_config: EngineConfig):
     engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
     with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
         yaml.dump(engine_config.private_config, cfg)
-    sleep(0.5)  # Allow to check at least once if files changed
+    sleep(0.15)  # Allow to check at least once if files changed
     with get_logs_content(engine_config.logs_dir / "base.log") as logs:
         assert "Updating private configuration" in logs
 
@@ -108,6 +108,7 @@ def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
     assert engine_config.sun_times is None
 
 
+# TODO: add a cache to be sure data is not downloaded again
 def test_refresh_suntimes_success(
         engine_config: EngineConfig,
         ecosystem_config: EcosystemConfig,

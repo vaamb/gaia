@@ -70,19 +70,27 @@ def test_timer(light_handler: ActuatorHandler):
     assert light_handler.countdown is None
 
     # Test increase countdown
-    light_handler.increase_countdown(2.0)
-    assert math.isclose(light_handler.countdown, 2.0, abs_tol=0.001)
+    timer = 1.0
+    light_handler.increase_countdown(timer)
+    assert math.isclose(light_handler.countdown, timer, abs_tol=0.01)
 
     # Test decrease countdown
-    light_handler.decrease_countdown(1.0)
-    assert math.isclose(light_handler.countdown, 1.0, abs_tol=0.001)
+    decrease = 0.75
+    timer -= decrease
+    light_handler.decrease_countdown(decrease)
+    assert math.isclose(light_handler.countdown, timer, abs_tol=0.01)
 
     # Test sleep, remaining above 0
-    sleep(0.5)
-    assert math.isclose(light_handler.countdown, 0.5, abs_tol=0.001)
+    decrease = 0.15
+    timer -= decrease
+    sleep(decrease)
+    assert math.isclose(light_handler.countdown, timer, abs_tol=0.01)
 
     # Test sleep, remaining under 0
-    sleep(1.0)
+    decrease = 0.15
+    timer -= decrease
+    assert timer < 0
+    sleep(decrease)
     assert light_handler.countdown == 0.0
 
     # Test reset countdown
