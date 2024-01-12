@@ -49,10 +49,6 @@ class Engine(metaclass=SingletonMeta):
         self._message_broker: "KombuDispatcher" | None = None
         self._event_handler: "Events" | None = None
         self._db: "SQLAlchemyWrapper" | None = None
-        self.plugins_needed = (
-            self.config.app_config.USE_DATABASE
-            or self.config.app_config.COMMUNICATE_WITH_OURANOS
-        )
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._running_event = Event()
@@ -61,6 +57,13 @@ class Engine(metaclass=SingletonMeta):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
+
+    @property
+    def plugins_needed(self) -> bool:
+        return (
+            self.config.app_config.USE_DATABASE
+            or self.config.app_config.COMMUNICATE_WITH_OURANOS
+        )
 
     # ---------------------------------------------------------------------------
     #   Events dispatcher
