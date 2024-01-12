@@ -90,6 +90,7 @@ def test_download_sun_times_no_coordinates(engine_config: EngineConfig):
         assert "You need to define your home city coordinates" in logs
 
 
+@pytest.mark.timeout(5)
 def test_download_sun_times_success(engine_config: EngineConfig):
     if not is_connected():
         pytest.skip("Not connected")

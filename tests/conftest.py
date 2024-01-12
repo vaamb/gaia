@@ -78,13 +78,14 @@ def testing_cfg(temp_dir) -> YieldFixture[Type[GaiaConfig]]:
     GaiaConfig.TESTING = True
     GaiaConfig.VIRTUALIZATION = True
     GaiaConfig.DIR = temp_dir
+    GaiaConfig.AGGREGATOR_COMMUNICATION_URL = "memory:///"
     GaiaConfig.CONFIG_WATCHER_PERIOD = 100
     set_config(GaiaConfig)
 
     yield GaiaConfig
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function", autouse=True)
 def default_testing_cfg(testing_cfg) -> YieldFixture[Type[GaiaConfig]]:
     use_database = testing_cfg.USE_DATABASE
     communicate_with_ouranos = testing_cfg.COMMUNICATE_WITH_OURANOS
@@ -97,7 +98,7 @@ def default_testing_cfg(testing_cfg) -> YieldFixture[Type[GaiaConfig]]:
     testing_cfg.AGGREGATOR_COMMUNICATION_URL = aggregator_communication_url
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function", autouse=True)
 def engine_config(default_testing_cfg: Type[GaiaConfig]) -> YieldFixture[EngineConfig]:
     engine_config = EngineConfig(gaia_config=default_testing_cfg())
     engine_config.initialize_configs()
@@ -114,7 +115,7 @@ def engine_config(default_testing_cfg: Type[GaiaConfig]) -> YieldFixture[EngineC
     SingletonMeta.detach_instance("EngineConfig")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function", autouse=True)
 def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     engine = Engine(engine_config=engine_config)
     with get_logs_content(engine_config.logs_dir/"base.log"):

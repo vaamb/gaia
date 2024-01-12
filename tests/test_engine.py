@@ -17,6 +17,7 @@ def test_engine_dict(engine: Engine, engine_config: EngineConfig):
     assert engine.config.__dict__ == engine_config.__dict__
 
 
+@pytest.mark.timeout(10)
 def test_engine_message_broker(engine: Engine):
     assert engine.config.app_config.COMMUNICATE_WITH_OURANOS is False
     assert engine.use_message_broker is False
@@ -83,6 +84,7 @@ def test_engine_database(engine: Engine):
     engine.stop_database()
 
 
+@pytest.mark.timeout(10)
 def test_engine_plugins(engine: Engine):
     assert engine.config.app_config.COMMUNICATE_WITH_OURANOS is False
     assert engine.config.app_config.USE_DATABASE is False
@@ -101,6 +103,7 @@ def test_engine_plugins(engine: Engine):
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
         assert "Initialising the plugins" in logs
     assert engine.plugins_initialized is True
+
     engine.start_plugins()
     engine.stop_plugins()
 
