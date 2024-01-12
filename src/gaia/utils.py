@@ -354,10 +354,16 @@ def generate_secret_key_from_password(
 
 
 class SingletonMeta(type):
-    _instances: dict[type, type] = WeakValueDictionary()
+    _instances: dict[str, type] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
+        try:
+            return cls._instances[cls.__name__]
+        except KeyError:
             instance = super().__call__(*args, **kwargs)
-            cls._instances[cls] = instance
-        return cls._instances[cls]
+            cls._instances[cls.__name__] = instance
+            return instance
+
+    @classmethod
+    def detach_instance(cls, cls_name: str):
+        del cls._instances[cls_name]

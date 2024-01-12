@@ -13,7 +13,7 @@ from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.subroutines import (
     Climate, Light, Sensors, subroutine_dict, subroutine_names)
-from gaia.utils import yaml
+from gaia.utils import SingletonMeta, yaml
 
 from .data import ecosystem_info, ecosystem_name, light_info, light_uid
 from .subroutines.dummy_subroutine import Dummy
@@ -110,6 +110,7 @@ def engine_config(default_testing_cfg: Type[GaiaConfig]) -> YieldFixture[EngineC
     if engine_config.started:
         engine_config.stop_watchdog()
     del engine_config
+    SingletonMeta.detach_instance("EngineConfig")
 
 
 @pytest.fixture(scope="function")
@@ -123,6 +124,7 @@ def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     if engine.started:
         engine.stop()
     del engine
+    SingletonMeta.detach_instance("Engine")
 
 
 @pytest.fixture(scope="function")
