@@ -101,6 +101,7 @@ def test_engine_plugins(engine: Engine):
     with get_logs_content(engine.config.logs_dir / "base.log") as logs:
         assert "Initialising the plugins" in logs
     assert engine.plugins_initialized is True
+
     engine.start_plugins()
     engine.stop_plugins()
 
