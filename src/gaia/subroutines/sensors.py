@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from statistics import mean
 from threading import Event, Lock, Thread
-from time import monotonic
+from time import monotonic, sleep
 import typing as t
 
 import gaia_validators as gv
@@ -31,21 +31,29 @@ class Sensors(SubroutineTemplate):
         self._finish__init__()
 
     def _sensors_loop(self) -> None:
+        sleep(0.01)  # Allow to finish the routine startup
         while not self._stop_event.is_set():
             start_time = monotonic()
             self.logger.debug("Starting sensors data update routine ...")
-            self.update_sensors_data()
+            try:
+                self.update_sensors_data()
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while updating sensors data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
             loop_time = monotonic() - start_time
             sleep_time = self._loop_timeout - loop_time
             if sleep_time < 0:  # pragma: no cover
                 self.logger.warning(
                     f"Sensors data loop took {loop_time}. This either indicates "
-                    f"an error occurred or the need to adapt SENSOR_TIMEOUT"
+                    f"errors while data retrieval or the need to adapt "
+                    f"'SENSOR_TIMEOUT'."
                 )
                 sleep_time = 2
             self.logger.debug(
-                f"Sensors data update finished in {loop_time:.1f}" +
-                f"s. Next sensors data update in {sleep_time:.1f}s"
+                f"Sensors data update finished in {loop_time:.1f} s." +
+                f"Next sensors data update in {sleep_time:.1f}.s"
             )
             self._stop_event.wait(sleep_time)
 
