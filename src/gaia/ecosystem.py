@@ -15,7 +15,6 @@ from gaia.exceptions import NonValidSubroutine, UndefinedParameter
 from gaia.subroutines import (
     Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
-from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -457,14 +456,8 @@ class Ecosystem:
     health_data = plants_health
 
     # Climate
-    def climate_parameters_regulated(self) -> set[str]:
+    def climate_parameters_regulated(self) -> set[gv.ClimateParameter]:
         if self.get_subroutine_status("climate"):
             climate_subroutine: Climate = self.subroutines["climate"]
-            return climate_subroutine.regulated
+            return set(climate_subroutine.regulated_parameters)
         return set()
-
-    def climate_targets(self) -> dict[ClimateParameterNames, ClimateTarget]:
-        if self.get_subroutine_status("climate"):
-            climate_subroutine: Climate = self.subroutines["climate"]
-            return climate_subroutine.targets
-        return {}

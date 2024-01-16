@@ -11,7 +11,6 @@ import weakref
 import gaia_validators as gv
 
 from gaia.hardware.abc import Dimmer, Hardware, Switch
-from gaia.subroutines import Climate, Light
 
 
 if t.TYPE_CHECKING:
@@ -23,8 +22,18 @@ class ActuatorCouple:
     increase: gv.HardwareType | None
     decrease: gv.HardwareType | None
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterable[gv.HardwareType | None]:
         return iter((self.increase, self.decrease))
+
+    def __getitem__(self, key: str) -> gv.HardwareType | None:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(f"{key}")
+
+    @staticmethod
+    def directions() -> tuple[str, str]:
+        return "increase", "decrease"
 
 
 actuator_couples: dict[gv.ClimateParameter: ActuatorCouple] = {
@@ -208,7 +217,6 @@ class ActuatorHandler:
             self,
             handlers_hub: ActuatorHandlers,
             actuator_type: gv.HardwareType,
-            expected_status_function: typing.Callable[..., bool] = always_off
     ) -> None:
         self.handlers_hub: ActuatorHandlers = handlers_hub
         self.ecosystem = self.handlers_hub.ecosystem
@@ -223,8 +231,6 @@ class ActuatorHandler:
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         self._timer_on: bool = False
         self._time_limit: float = 0.0
-        self._expected_status_function: typing.Callable[..., bool] = \
-            expected_status_function
         self._last_status: bool = self.status
         self._last_mode: gv.ActuatorMode = self.mode
         self._actuators: list[Hardware] | None = None
@@ -271,6 +277,7 @@ class ActuatorHandler:
     def set_mode(self, value: gv.ActuatorMode) -> None:
         self._set_mode_no_update(value)
         if self._mode != self._last_mode:
+            # TODO: reset associated PID ?
             self.logger.info(
                 f"{self.type.name.capitalize()} has been set to "
                 f"'{self.mode.name}' mode")
@@ -407,13 +414,17 @@ class ActuatorHandler:
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
                 )
 
-    def compute_expected_status(self, **kwargs) -> bool:
+    def compute_expected_status(self, expected_level: float | None) -> bool:
         countdown = self.countdown
         if countdown is not None and countdown <= 0.1:
             self.set_mode(gv.ActuatorMode.automatic)
             self.reset_countdown()
         if self.mode == gv.ActuatorMode.automatic:
-            return self._expected_status_function(**kwargs)
+            if expected_level is None:
+                # TODO: log, this should not happen
+                return False
+            else:
+                return expected_level > 0.0
         else:
             if self.status:
                 return True
@@ -444,19 +455,13 @@ class ActuatorHandlers:
                 continue
             elif hardware_type == gv.HardwareType.light:
                 self._actuator_handlers[hardware_type] = ActuatorHandler(
-                    self,
-                    hardware_type,
-                    Light.expected_status
-                )
-            elif hardware_type in (
+                    self, hardware_type)
+            elif hardware_type in (  # TODO: use flags
                     gv.HardwareType.heater, gv.HardwareType.cooler,
                     gv.HardwareType.humidifier, gv.HardwareType.dehumidifier,
             ):
                 self._actuator_handlers[hardware_type] = ActuatorHandler(
-                    self,
-                    hardware_type,
-                    Climate.expected_status
-                )
+                    self, hardware_type)
 
     def get_pid(
             self,
