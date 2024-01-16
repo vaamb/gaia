@@ -84,8 +84,8 @@ class ActuatorHandler:
         self._set_mode_no_update(value)
         if self._mode != self._last_mode:
             self.logger.info(
-                f"{self.type.value.capitalize()} has been set to "
-                f"'{self.mode.value}' mode")
+                f"{self.type.name.capitalize()} has been set to "
+                f"'{self.mode.name}' mode")
             self.send_actuators_state()
             self._last_mode = self._mode
 
@@ -105,7 +105,7 @@ class ActuatorHandler:
         self._set_status_no_update(value)
         if self._status != self._last_status:
             self.logger.info(
-                f"{self.type.value.capitalize()} has been turned "
+                f"{self.type.name.capitalize()} has been turned "
                 f"{'on' if self.status else 'off'}")
             self.send_actuators_state()
             self._last_status = self._status
@@ -190,12 +190,12 @@ class ActuatorHandler:
                 self.increase_countdown(countdown)
                 additional_message = f" for {countdown} seconds"
         self.logger.info(
-            f"{self.type.value} has been manually turned to '{turn_to.value}'"
+            f"{self.type.name} has been manually turned to '{turn_to.name}'"
             f"{additional_message}")
         if self._status != self._last_status or self._mode != self._last_mode:
             self.logger.info(
-                f"{self.type.value.capitalize()} has been turned "
-                f"{'on' if self.status else 'off'} with '{self.mode.value}' mode")
+                f"{self.type.name.capitalize()} has been turned "
+                f"{'on' if self.status else 'off'} with '{self.mode.name}' mode")
             self.send_actuators_state()
         self._last_mode = self.mode
         self._last_status = self.status
