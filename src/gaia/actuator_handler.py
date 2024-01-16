@@ -22,7 +22,7 @@ def always_off(**kwargs) -> bool:
 
 class ActuatorHandler:
     __slots__ = (
-        "_active", "_expected_status_function", "_level", "_last_mode",
+        "_active", "_actuators", "_expected_status_function", "_level", "_last_mode",
         "_last_status", "_mode", "_status", "_time_limit", "_timer_on",
         "ecosystem", "logger", "type"
     )
@@ -49,14 +49,20 @@ class ActuatorHandler:
             expected_status_function
         self._last_status: bool = self.status
         self._last_mode: gv.ActuatorMode = self.mode
+        self._actuators: list[Hardware] | None = None
 
-    # TODO: maybe cache
-    def get_actuators_handled(self) -> list[Switch | Dimmer]:
-        return [
-            hardware for hardware in Hardware.get_mounted().values()
-            if hardware.ecosystem_uid == self.ecosystem.uid
-            and hardware.type == self.type
-        ]
+    def get_linked_actuators(self) -> list[Switch | Dimmer]:
+        if self._actuators is None:
+            self._actuators = [
+                hardware for hardware in Hardware.get_mounted().values()
+                if hardware.ecosystem_uid == self.ecosystem.uid
+                and hardware.type == self.type
+            ]
+        return self._actuators
+
+    # TODO: use when update hardware
+    def reset_cached_actuators(self) -> None:
+        self._actuators = None
 
     def as_dict(self) -> gv.ActuatorStateDict:
         return {
@@ -118,7 +124,7 @@ class ActuatorHandler:
 
     def _set_status_no_update(self, value: bool) -> None:
         self._status = value
-        for actuator in self.get_actuators_handled():
+        for actuator in self.get_linked_actuators():
             if isinstance(actuator, Switch):
                 if value:
                     actuator.turn_on()
@@ -135,7 +141,7 @@ class ActuatorHandler:
 
     def set_level(self, pwm_level: float) -> None:
         self._level = pwm_level
-        for actuator in self.get_actuators_handled():
+        for actuator in self.get_linked_actuators():
             if isinstance(actuator, Dimmer):
                 actuator.set_pwm_level(pwm_level)
 
