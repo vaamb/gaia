@@ -215,10 +215,10 @@ class ActuatorHandler:
 
     def __init__(
             self,
-            handlers_hub: ActuatorHandlers,
+            handlers_hub: ActuatorHub,
             actuator_type: gv.HardwareType,
     ) -> None:
-        self.handlers_hub: ActuatorHandlers = handlers_hub
+        self.handlers_hub: ActuatorHub = handlers_hub
         self.ecosystem = self.handlers_hub.ecosystem
         assert actuator_type != gv.HardwareType.sensor
         self.type = actuator_type
@@ -434,7 +434,7 @@ class ActuatorHandler:
             return False
 
 
-class ActuatorHandlers:
+class ActuatorHub:
     def __init__(self, ecosystem: "Ecosystem") -> None:
         self.ecosystem: Ecosystem = weakref.proxy(ecosystem)
         self._pids: dict[gv.ClimateParameter, HystericalPID] = {}

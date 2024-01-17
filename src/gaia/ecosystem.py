@@ -9,7 +9,7 @@ import weakref
 
 import gaia_validators as gv
 
-from gaia.actuator_handler import ActuatorHandler, ActuatorHandlers
+from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
 from gaia.exceptions import NonValidSubroutine, UndefinedParameter
 from gaia.subroutines import (
@@ -60,7 +60,7 @@ class Ecosystem:
             evening_end=self.config.time_parameters.night,
         )
         self.lighting_hours_lock = Lock()
-        self.actuator_handlers: ActuatorHandlers = ActuatorHandlers(self)
+        self.actuator_hub: ActuatorHub = ActuatorHub(self)
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine_name in subroutine_names:
             self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
@@ -297,7 +297,7 @@ class Ecosystem:
     # Actuator
     @property
     def actuator_data(self) -> gv.ActuatorsDataDict:
-        return self.actuator_handlers.as_dict()
+        return self.actuator_hub.as_dict()
 
     def turn_actuator(
             self,
@@ -363,7 +363,7 @@ class Ecosystem:
             self,
             actuator_type: gv.HardwareType | gv.HardwareTypeNames
     ) -> ActuatorHandler:
-        return self.actuator_handlers.get_handler(actuator_type)
+        return self.actuator_hub.get_handler(actuator_type)
 
     # Sensors
     @property

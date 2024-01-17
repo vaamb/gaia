@@ -130,10 +130,10 @@ class Light(SubroutineTemplate):
 
     @property
     def actuator_handler(self) -> ActuatorHandler:
-        return self.ecosystem.actuator_handlers.get_handler(gv.HardwareType.light)
+        return self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
 
     def get_pid(self) -> HystericalPID:
-        return self.ecosystem.actuator_handlers.get_pid(gv.ClimateParameter.light)
+        return self.ecosystem.actuator_hub.get_pid(gv.ClimateParameter.light)
 
     @property
     def light_method(self) -> gv.LightMethod:

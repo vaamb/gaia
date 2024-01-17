@@ -232,14 +232,14 @@ class Climate(SubroutineTemplate):
     ) -> ActuatorHandler:
         climate_actuator = gv.safe_enum_from_name(gv.HardwareType, climate_actuator)
         # TODO: assert actuator type is a climatic one
-        return self.ecosystem.actuator_handlers.get_handler(climate_actuator)
+        return self.ecosystem.actuator_hub.get_handler(climate_actuator)
 
     def get_pid(
             self,
             climate_parameter: gv.ClimateParameter | gv.ClimateParameterNames
     ) -> HystericalPID:
         climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
-        return self.ecosystem.actuator_handlers.get_pid(climate_parameter)
+        return self.ecosystem.actuator_hub.get_pid(climate_parameter)
 
     @property
     def lighting_hours(self) -> gv.LightData:
@@ -289,7 +289,7 @@ class Climate(SubroutineTemplate):
                 "'climate_actuator' should be a valid climate actuator")
         if self._started:
             actuator_handler: ActuatorHandler = \
-                self.ecosystem.actuator_handlers.get_handler(climate_actuator)
+                self.ecosystem.actuator_hub.get_handler(climate_actuator)
             actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
