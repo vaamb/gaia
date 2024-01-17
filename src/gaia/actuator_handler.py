@@ -67,8 +67,8 @@ class PIDParameters(typing.NamedTuple):
 
 
 pid_values: dict[gv.ClimateParameter: PIDParameters] = {
-    gv.ClimateParameter.temperature: PIDParameters(5.0, 0.5, 1.0),
-    gv.ClimateParameter.humidity: PIDParameters(5.0, 0.5, 1.0),
+    gv.ClimateParameter.temperature: PIDParameters(2.0, 0.5, 1.0),
+    gv.ClimateParameter.humidity: PIDParameters(2.0, 0.5, 1.0),
     gv.ClimateParameter.light: PIDParameters(0.5, 0.005, 0.01),
     gv.ClimateParameter.wind: PIDParameters(1.0, 0.0, 0.0),
 }
@@ -91,7 +91,8 @@ class HystericalPID:
             Kd: float = 0.0,
             minimum_output: float | None = None,
             maximum_output: float | None = None,
-            integration_period: int = 10
+            integration_period: int = 10,
+            used_regularly: bool = True,
     ) -> None:
         self.target: float = target
         self.hysteresis: float | None = hysteresis
@@ -104,6 +105,7 @@ class HystericalPID:
         self._last_error: float = 0.0
         self._integrator: list[float] = []
         self._integration_period: int = integration_period
+        self._used_regularly: bool = used_regularly
         self._last_input: float | None = None
         self._last_output: float = 0.0
 
@@ -171,10 +173,10 @@ class HystericalPID:
                 return None
 
     def _pid_internal(self, current_value: float, sampling_time: float) -> float:
-        if self._last_sampling_time is None:
+        if self._last_sampling_time is None or self._used_regularly:
             delta_time = 1
         else:
-            delta_time = self._last_sampling_time - sampling_time
+            delta_time = sampling_time - self._last_sampling_time
 
         error = self.target - current_value
         delta_error = error - self._last_error
