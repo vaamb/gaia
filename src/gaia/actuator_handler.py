@@ -347,6 +347,12 @@ class ActuatorHandler:
         self._timer_on = False
         self._time_limit = 0.0
 
+    def check_countdown(self) -> None:
+        countdown = self.countdown
+        if countdown is not None and countdown <= 0.1:
+            self.set_mode(gv.ActuatorMode.automatic)
+            self.reset_countdown()
+
     def increase_countdown(self, delta_time: float) -> None:
         if self._time_limit:
             self.logger.info(f"Increasing timer by {delta_time} seconds")
@@ -415,10 +421,7 @@ class ActuatorHandler:
                 )
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
-        countdown = self.countdown
-        if countdown is not None and countdown <= 0.1:
-            self.set_mode(gv.ActuatorMode.automatic)
-            self.reset_countdown()
+        self.check_countdown()
         if self.mode == gv.ActuatorMode.automatic:
             if expected_level is None:
                 # TODO: log, this should not happen
