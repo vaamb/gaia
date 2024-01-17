@@ -15,6 +15,7 @@ from gaia.subroutines.template import SubroutineTemplate
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.climate import Climate
+    from gaia.subroutines.light import Light
 
 
 class Sensors(SubroutineTemplate):
@@ -86,6 +87,42 @@ class Sensors(SubroutineTemplate):
         self.hardware = {}
 
     """API calls"""
+    def add_hardware(self, hardware_config: gv.HardwareConfig) -> BaseSensor:
+        model = hardware_config.model
+        if self.ecosystem.engine.config.app_config.VIRTUALIZATION:
+            if not model.startswith("virtual"):
+                hardware_config.model = f"virtual{model}"
+        hardware = super().add_hardware(hardware_config)
+        if self.ecosystem.get_subroutine_status("light"):
+            light_subroutine: Light = self.ecosystem.subroutines["light"]
+            light_subroutine.reset_light_sensors()
+        return hardware
+
+    def remove_hardware(self, hardware_uid: str) -> None:
+        super().remove_hardware(hardware_uid)
+        if self.ecosystem.get_subroutine_status("light"):
+            light_subroutine: Light = self.ecosystem.subroutines["light"]
+            light_subroutine.reset_light_sensors()
+
+    def get_hardware_needed_uid(self) -> set[str]:
+        return set(self.config.get_IO_group_uids("sensor"))
+
+    def refresh_hardware(self) -> None:
+        super().refresh_hardware()
+        if self.ecosystem.get_subroutine_status("climate"):
+            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
+            climate_subroutine.refresh_hardware()
+
+    @property
+    def sensors_data(self) -> gv.SensorsData | gv.Empty:
+        with self._data_lock:
+            return self._sensors_data
+
+    @sensors_data.setter
+    def sensors_data(self, data: gv.SensorsData | gv.Empty) -> None:
+        with self._data_lock:
+            self._sensors_data = data
+
     @property
     def thread(self) -> Thread:
         if self._thread is None:
@@ -96,22 +133,6 @@ class Sensors(SubroutineTemplate):
     @thread.setter
     def thread(self, thread: Thread | None) -> None:
         self._thread = thread
-
-    def add_hardware(self, hardware_config: gv.HardwareConfig) -> BaseSensor:
-        model = hardware_config.model
-        if self.ecosystem.engine.config.app_config.VIRTUALIZATION:
-            if not model.startswith("virtual"):
-                hardware_config.model = f"virtual{model}"
-        return super().add_hardware(hardware_config)
-
-    def get_hardware_needed_uid(self) -> set[str]:
-        return set(self.config.get_IO_group_uids("sensor"))
-
-    def refresh_hardware(self) -> None:
-        super().refresh_hardware()
-        if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
-            climate_subroutine.refresh_hardware()
 
     def update_sensors_data(self) -> None:
         """
@@ -152,13 +173,3 @@ class Sensors(SubroutineTemplate):
             self.sensors_data = gv.SensorsData(**cache)
         else:
             self.sensors_data = gv.Empty()
-
-    @property
-    def sensors_data(self) -> gv.SensorsData | gv.Empty:
-        with self._data_lock:
-            return self._sensors_data
-
-    @sensors_data.setter
-    def sensors_data(self, data: gv.SensorsData | gv.Empty) -> None:
-        with self._data_lock:
-            self._sensors_data = data
