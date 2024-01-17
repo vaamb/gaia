@@ -142,11 +142,6 @@ class Ecosystem:
         with self.lighting_hours_lock:
             return self._lighting_hours
 
-    @lighting_hours.setter
-    def lighting_hours(self, value: gv.LightingHours) -> None:
-        with self.lighting_hours_lock:
-            self._lighting_hours = value
-
     @property
     def light_info(self) -> gv.LightData:
         return gv.LightData(
@@ -385,10 +380,11 @@ class Ecosystem:
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
         if self.config.light_method == gv.LightMethod.fixed:
-            self.lighting_hours = gv.LightingHours(
-                morning_start=time_parameters.day,
-                evening_end=time_parameters.night,
-            )
+            with self.lighting_hours_lock:
+                self._lighting_hours = gv.LightingHours(
+                    morning_start=time_parameters.day,
+                    evening_end=time_parameters.night,
+                )
 
         elif self.config.light_method == gv.LightMethod.mimic:
             if self.config.sun_times is None:
@@ -399,10 +395,11 @@ class Ecosystem:
                 self.config.set_light_method(gv.LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
             else:
-                self.lighting_hours = gv.LightingHours(
-                    morning_start=self.config.sun_times.sunrise,
-                    evening_end=self.config.sun_times.sunset,
-                )
+                with self.lighting_hours_lock:
+                    self._lighting_hours = gv.LightingHours(
+                        morning_start=self.config.sun_times.sunrise,
+                        evening_end=self.config.sun_times.sunset,
+                    )
 
         elif self.config.light_method == gv.LightMethod.elongate:
             if (
@@ -421,12 +418,13 @@ class Ecosystem:
                 sunset = _to_dt(self.config.sun_times.sunset)
                 twilight_begin = _to_dt(self.config.sun_times.twilight_begin)
                 offset = sunrise - twilight_begin
-                self.lighting_hours = gv.LightingHours(
-                    morning_start=time_parameters.day,
-                    morning_end=(sunrise + offset).time(),
-                    evening_start=(sunset - offset).time(),
-                    evening_end=time_parameters.night,
-                )
+                with self.lighting_hours_lock:
+                    self._lighting_hours = gv.LightingHours(
+                        morning_start=time_parameters.day,
+                        morning_end=(sunrise + offset).time(),
+                        evening_start=(sunset - offset).time(),
+                        evening_end=time_parameters.night,
+                    )
 
         if (
                 send
