@@ -21,17 +21,17 @@ if get_config().VIRTUALIZATION:
         return measure * random.gauss(1, 0.01)
 
     def get_humidity(ecosystem_uid: str, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
+        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid)
         virtual_ecosystem.measure()
         return round(_add_noise(virtual_ecosystem.humidity), 2)
 
     def get_light(ecosystem_uid: str, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
+        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid)
         virtual_ecosystem.measure()
         return round(_add_noise(virtual_ecosystem.lux))
 
     def get_moisture(ecosystem_uid: str, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
+        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid)
         virtual_ecosystem.measure()
         moisture_at_42_deg = (virtual_ecosystem.humidity * 0.2) + 6
         slope = (moisture_at_42_deg - 100) / (42 - 5)
@@ -43,7 +43,7 @@ if get_config().VIRTUALIZATION:
         return moisture
 
     def get_temperature(ecosystem_uid: str, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid, start=True)
+        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid)
         virtual_ecosystem.measure()
         return round(_add_noise(virtual_ecosystem.temperature), 2)
 

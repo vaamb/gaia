@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from json.decoder import JSONDecodeError
 import logging
 import logging.config
 import signal
@@ -15,7 +14,8 @@ from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import get_scheduler, start_scheduler
 from gaia.utils import SingletonMeta
-from gaia.virtual import get_virtual_ecosystem
+from gaia.virtual import (
+    get_virtual_ecosystem, init_virtual_ecosystem, init_virtual_world)
 
 
 if t.TYPE_CHECKING:
@@ -273,8 +273,7 @@ class Engine(metaclass=SingletonMeta):
 
     def _init_virtualization(self) -> None:
         if self.config.app_config.VIRTUALIZATION:
-            for ecosystem_uid in self.config.ecosystems_uid:
-                get_virtual_ecosystem(ecosystem_uid, start=True)
+            init_virtual_world(self, print_measures=self.config.app_config.DEVELOPMENT)
 
     def _loop(self) -> None:
         while not self._stop_event.is_set():
@@ -375,6 +374,11 @@ class Engine(metaclass=SingletonMeta):
         """
         ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid not in self.ecosystems:
+            if (
+                    self.config.app_config.VIRTUALIZATION
+                    and get_virtual_ecosystem(ecosystem_uid) is None
+            ):
+                init_virtual_ecosystem(ecosystem_uid, start=True)
             ecosystem = Ecosystem(ecosystem_uid, self)
             self.ecosystems[ecosystem_uid] = ecosystem
             self.logger.debug(

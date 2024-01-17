@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
-from time import monotonic
 import math
+from time import monotonic
+import typing
 
-from gaia.utils import temperature_converter, SingletonMeta
+import gaia_validators as gv
+
+from gaia.utils import (
+    get_absolute_humidity, get_relative_humidity, SingletonMeta,
+    temperature_converter)
+
+
+if typing.TYPE_CHECKING:
+    from engine import Ecosystem, Engine
 
 
 SUNRISE = time(7, 0)
@@ -15,17 +24,20 @@ SUNSET = time(19, 0)
 class VirtualWorld(metaclass=SingletonMeta):
     def __init__(
             self,
+            engine: Engine,
             equinox_sun_times: tuple = (SUNRISE, SUNSET),
             yearly_amp_sun_times: timedelta = timedelta(hours=2),
             # Actually half amp
-            avg_temperature: float = 20.0,  # 12.5
+            avg_temperature: float = 12.5,  # 12.5
             daily_amp_temperature: float = 4.0,  # 4.0
             yearly_amp_temperature: float = 0.0,  # 7.5
-            avg_humidity: float = 50.0,  # 50.0
+            avg_humidity: float = 40.0,  # 50.0
             amp_humidity: float = 10.0,  # 10.0
             avg_midday_light: int = 75000,
             yearly_amp_light: int = 25000,
+            print_measures: bool = False,
     ) -> None:
+        self._engine = engine
         self._sunrise = equinox_sun_times[0]
         self._sunset = equinox_sun_times[1]
         self._yearly_amp_sun_times = yearly_amp_sun_times
@@ -48,6 +60,7 @@ class VirtualWorld(metaclass=SingletonMeta):
         self._temperature = avg_temperature
         self._humidity = avg_humidity
         self._light = avg_midday_light
+        self.print_measures = print_measures
         self._dt = None
         self._last_update = None
 
@@ -110,7 +123,17 @@ class VirtualWorld(metaclass=SingletonMeta):
             )
             self._humidity = round(humidity, 2)
 
+            if self.print_measures:
+                print(
+                    f"Virtual Word: temperature: {self.temperature} - "
+                    f"humidity: {self.humidity} - light: {self.light}"
+                )
+
         return self.temperature, self.humidity, self.light
+
+    @property
+    def engine(self) -> Engine:
+        return self._engine
 
     @property
     def temperature(self) -> float:
@@ -138,7 +161,7 @@ class VirtualWorld(metaclass=SingletonMeta):
 
 
 class VirtualEcosystem:
-    time_between_measures = 15
+    time_between_measures = 5
 
     AIR_HEAT_CAPACITY = 1  # kj/kg/K
     AIR_DENSITY = 1.225  # kg/m3
@@ -147,39 +170,43 @@ class VirtualEcosystem:
 
     def __init__(
             self,
-            uid: str,
             virtual_world: VirtualWorld,
+            uid: str,
             dimension: tuple[float, float, float] = (0.5, 0.5, 1.0),
             water_volume: float = 5,  # in liter
-            max_heater_output: int = 25,  # max heater output in watt
+            max_heater_output: int = 50,  # max heater output in watt
+            max_humidifier_output: float = 0.1,  # max humidifier output in g/water per second
             max_light_output: int = 30000,  # max light output in lux
             start: bool = False,
     ) -> None:
         assert len(dimension) == 3
-        self.virtual_world: VirtualWorld = virtual_world
+        self._virtual_world: VirtualWorld = virtual_world
         self._uid: str = uid
         self._volume = dimension[0] * dimension[1] * dimension[2]
         # Assumes only loss through walls
         self._exchange_surface: float = (
                 2 * dimension[2] * (dimension[0] + dimension[1])
-        )
-        self._heat_loss_coef: float = self._exchange_surface * self.INSULATION_U_VAL  # in W/K
+        )  # in W/K
         self._water_volume: float = water_volume
 
-        self._temperature: float | None = None
-        self._humidity: float | None = None
         self._lux: int | None = None
 
         self._max_heater_output: int = max_heater_output
+        self._max_humidifier_output: float = max_humidifier_output
         self._max_light_output: int = max_light_output
 
-        self._heat_quantity: float | None = None
-        self._hybrid_capacity: float | None = None
-        self._air_water_capacity_ratio: tuple[None, None] | tuple[float, float] = None, None
+        self._heat_quantity: float | None = None       # Total heat in the enclosure, in joules
+        self._hybrid_capacity: float | None = None     # A mix between air and water heat capacity * volume, in j/K
+        self._humidity_quantity: float | None = None   # Total humidity in the enclosure, in grams
 
         # Virtual hardware status
-        self._heater: bool = False
-        self._light: bool = False
+        self._actuators: dict[gv.HardwareType: bool] = {
+            gv.HardwareType.light: False,
+            gv.HardwareType.heater: False,
+            gv.HardwareType.cooler: False,
+            gv.HardwareType.humidifier: False,
+            gv.HardwareType.dehumidifier: False,
+        }
 
         self._start_time: float | None = None
         self._last_update: float | None = None
@@ -187,98 +214,58 @@ class VirtualEcosystem:
         if start:
             self.start()
 
-    def measure(self) -> None:
-        if not self._start_time:
-            raise RuntimeError("The virtualEcosystem needs to be started "
-                               "before computing measures")
-        now = monotonic()
-        if (
-                not self._last_update
-                or (now - self._last_update) > self.time_between_measures
-        ):
-            if self._last_update is None:
-                d_sec = 0.1
-            else:
-                d_sec = (now - self._last_update)
-            out_temp, out_hum, out_light = self.virtual_world()
-
-            # New heat quantity
-            d_temp = self.temperature - out_temp
-            heat_quantity = self._heat_quantity
-            heat_quantity -= self._heat_loss_coef * d_sec * d_temp
-            if self._heater:
-                heat_quantity += (self._max_heater_output * d_sec)
-            self._heat_quantity = heat_quantity
-
-            # Temperature calculation
-            self._temperature = self._heat_quantity / self._hybrid_capacity
-
-            # Humidity calculation
-            self._humidity = out_hum
-
-            # Light calculation
-            self._lux = out_light
-            if self._light:
-                self._lux += self._max_light_output
-            self._last_update = now
-
-    def reset(self) -> None:
-        air_mass = self._volume * self.AIR_DENSITY
-        air_capacity = air_mass * self.AIR_HEAT_CAPACITY * 1000
-
-        water_mass = self._water_volume
-        water_capacity = water_mass * self.WATER_HEAT_CAPACITY * 1000
-
-        self._hybrid_capacity = air_capacity + water_capacity
-
-        self._air_water_capacity_ratio = (
-            round(air_capacity / self._hybrid_capacity, 2),
-            round(water_capacity / self._hybrid_capacity, 2)
-        )
-
-        out_temp, out_hum, out_light = self.virtual_world()
-        k_temperature = temperature_converter(out_temp, "c", "k")
-
-        self._heat_quantity = self._hybrid_capacity * k_temperature
-
-        self._temperature = k_temperature
-        self._humidity = out_hum
-        self._lux = out_light
-
-        self._start_time = None
-        self._last_update = None
-
-    def start(self) -> None:
-        self.reset()
-        self._start_time = datetime.now()
+    @property
+    def virtual_world(self) -> VirtualWorld:
+        return self._virtual_world
 
     @property
     def uid(self) -> str:
         return self._uid
 
-    @uid.setter
-    def uid(self, value: str):
-        raise AttributeError("uid cannot be set")
+    @property
+    def ecosystem(self) -> Ecosystem:
+        return self.virtual_world.engine.get_ecosystem(self.uid)
+
+    @property
+    def volume(self) -> float:
+        return self._volume
+
+    @property
+    def exchange_surface(self) -> float:
+        return self._exchange_surface
+
+    @property
+    def heat_loss_coef(self) -> float:
+        return self.exchange_surface * self.INSULATION_U_VAL
 
     @property
     def temperature(self) -> float:
-        if self._temperature is None:
+        if self.status is None:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
             )
-        return temperature_converter(self._temperature, "k", "c")
+        k_temperature = self._heat_quantity / self._hybrid_capacity
+        return temperature_converter(k_temperature, "k", "c")
+
+    @property
+    def absolute_humidity(self) -> float:
+        if self.status is None:
+            raise RuntimeError(
+                "VirtualWorld must be started to get environmental values"
+            )
+        return self._humidity_quantity / self.volume
 
     @property
     def humidity(self) -> float:
-        if self._humidity is None:
+        if self.status is None:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
             )
-        return self._humidity
+        return get_relative_humidity(self.temperature, self.absolute_humidity)
 
     @property
     def lux(self) -> int:
-        if self._light is None:
+        if self.get_actuator_status(gv.HardwareType.light) is None:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
             )
@@ -292,16 +279,135 @@ class VirtualEcosystem:
     def status(self) -> bool:
         return self._start_time is not None
 
+    def get_actuator_status(self, actuator_type: gv.HardwareType) -> bool:
+        return self.ecosystem.actuator_hub.get_handler(actuator_type).status
+
+    def get_actuator_level(self, actuator_type: gv.HardwareType) -> float | None:
+        return self.ecosystem.actuator_hub.get_handler(actuator_type).level
+
+    def measure(self) -> None:
+        if not self._start_time:
+            raise RuntimeError("The virtualEcosystem needs to be started "
+                               "before computing measures")
+        now = monotonic()
+        if (
+            self._last_update is not None
+            and (now - self._last_update) < self.time_between_measures
+        ):
+            return
+
+        if self._last_update is None:
+            d_sec = 0.1
+        else:
+            d_sec = (now - self._last_update)
+        out_temp, out_hum, out_light = self.virtual_world()
+
+        # New heat quantity
+        d_temp = self.temperature - out_temp
+        heat_quantity = self._heat_quantity
+        heat_loss = self.heat_loss_coef * d_sec * d_temp
+        heat_quantity -= heat_loss
+        if self.get_actuator_status(gv.HardwareType.heater):
+            level = self.get_actuator_level(gv.HardwareType.heater)
+            if level is None:
+                level = 100
+            heater_output = (self._max_heater_output * d_sec * level / 100)
+            heat_quantity += heater_output
+        if self.get_actuator_status(gv.HardwareType.cooler):
+            level = self.get_actuator_level(gv.HardwareType.cooler)
+            if level is None:
+                level = 100
+            cooler_output = (self._max_heater_output * 0.60 * d_sec * level / 100)
+            heat_quantity -= cooler_output
+        self._heat_quantity = heat_quantity
+
+        # Humidity calculation
+        d_hum = self.absolute_humidity - get_absolute_humidity(out_temp, out_hum)
+        humidity_quantity = self._humidity_quantity
+        humidity_loss = d_hum * d_sec / 10000  # Pretty much a random factor
+        humidity_quantity -= humidity_loss
+        if self.get_actuator_status(gv.HardwareType.humidifier):
+            level = self.get_actuator_level(gv.HardwareType.humidifier)
+            if level is None:
+                level = 100
+            humidifier_output = (self._max_humidifier_output * d_sec * level / 100)
+            humidity_quantity += humidifier_output
+        if self.get_actuator_status(gv.HardwareType.dehumidifier):
+            level = self.get_actuator_level(gv.HardwareType.dehumidifier)
+            if level is None:
+                level = 100
+            dehumidifier_output = (self._max_humidifier_output * 0.50 * d_sec * level / 100)
+            humidity_quantity -= dehumidifier_output
+        self._humidity_quantity = humidity_quantity
+
+        # Light calculation
+        self._lux = out_light
+        if self.get_actuator_status(gv.HardwareType.light):
+            self._lux += self._max_light_output
+        self._last_update = now
+        if self.virtual_world.print_measures:
+            print(
+                f"Virtual ecosystem {self.uid}: temperature: {self.temperature} - "
+                  f"humidity: {self.humidity} - light: {self.lux}"
+            )
+
+    def reset(self) -> None:
+        air_mass = self.volume * self.AIR_DENSITY
+        air_heat_capacity = air_mass * self.AIR_HEAT_CAPACITY * 1000  # in j/K
+
+        water_mass = self._water_volume
+        water_heat_capacity = water_mass * self.WATER_HEAT_CAPACITY * 1000  # in j/K
+
+        self._hybrid_capacity = air_heat_capacity + water_heat_capacity
+
+        out_temp, out_hum, out_light = self.virtual_world()
+        k_temperature = temperature_converter(out_temp, "c", "k")
+
+        self._heat_quantity = self._hybrid_capacity * k_temperature
+        out_abs_hum = get_absolute_humidity(out_temp, out_hum)
+        self._humidity_quantity = out_abs_hum * self.volume
+
+        self._lux = out_light
+
+        self._start_time = None
+        self._last_update = None
+
+    def start(self) -> None:
+        self.reset()
+        self._start_time = datetime.now()
+
+
+_virtual_world: VirtualWorld | None = None
+
+
+def init_virtual_world(engine: Engine, **kwargs) -> None:
+    global _virtual_world
+    _virtual_world = VirtualWorld(engine, **kwargs)
+
+
+def get_virtual_world() -> VirtualWorld:
+    global _virtual_world
+    if _virtual_world is None:
+        raise RuntimeError("'VirtualWorld' has not been initialized.")
+    return _virtual_world
+
 
 _virtual_ecosystems: dict[str, VirtualEcosystem] = {}
 
 
-def get_virtual_ecosystem(ecosystem: str, start: bool = False) -> VirtualEcosystem:
-    from gaia.config import get_ecosystem_IDs
-    ecosystem_uid = get_ecosystem_IDs(ecosystem).uid
-    try:
-        return _virtual_ecosystems[ecosystem_uid]
-    except KeyError:
-        _virtual_ecosystems[ecosystem_uid] = \
-            VirtualEcosystem(ecosystem_uid, VirtualWorld(), start=start)
-        return _virtual_ecosystems[ecosystem_uid]
+def init_virtual_ecosystem(ecosystem_id: str, start: bool = False) -> None:
+    global _virtual_world
+    if not _virtual_world:
+        raise RuntimeError(
+            "'VirtualWorld' needs to be initialized with 'init_virtual_world' "
+            "before initializing 'VirtualEcosystem'."
+        )
+    virtual_world = get_virtual_world()
+    ecosystem_uid = virtual_world.engine.config.get_IDs(ecosystem_id).uid
+    _virtual_ecosystems[ecosystem_uid] = \
+        VirtualEcosystem(virtual_world, ecosystem_uid, start=start)
+
+
+def get_virtual_ecosystem(ecosystem_id: str) -> VirtualEcosystem | None:
+    global _virtual_ecosystems
+    return _virtual_ecosystems.get(ecosystem_id)
