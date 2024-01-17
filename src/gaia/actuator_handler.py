@@ -448,7 +448,7 @@ class ActuatorHub:
             pid_parameters = pid_values[climate_parameter]
             self._pids[climate_parameter] = HystericalPID(
                 Kp=pid_parameters.Kp, Ki=pid_parameters.Ki, Kd=pid_parameters.Kd,
-                minimum_output=100.0, maximum_output=100.0,
+                minimum_output=-100.0, maximum_output=100.0,
             )
 
     def _populate_actuators(self) -> None:
