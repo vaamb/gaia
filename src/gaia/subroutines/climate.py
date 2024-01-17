@@ -31,34 +31,6 @@ class Climate(SubroutineTemplate):
         }
         self._finish__init__()
 
-    def compute_target(
-            self,
-            climate_parameter: gv.ClimateParameter,
-            _now: time | None = None
-    ) -> tuple[float, float | None]:
-        parameter = self.config.get_climate_parameter(climate_parameter.name)
-        now: time = _now or datetime.now().astimezone().time()
-        if self.lighting_hours.morning_start < now <= self.lighting_hours.evening_end:
-            target = parameter.day * self.ecosystem.config.chaos_factor
-        else:
-            target = parameter.night * self.ecosystem.config.chaos_factor
-        hysteresis = parameter.hysteresis * self.ecosystem.config.chaos_factor
-        if hysteresis == 0.0:
-            hysteresis = None
-        return target, hysteresis
-
-    @property
-    def lighting_hours(self) -> gv.LightData:
-        return self.ecosystem.light_info
-
-    @property
-    def regulated_parameters(self) -> list[gv.ClimateParameter]:
-        return [
-            climate_param for climate_param, regulated
-            in self._regulated_parameters.items()
-            if regulated
-        ] if self.started else []
-
     @staticmethod
     def _any_regulated(
             parameters_dict: dict[gv.ClimateParameter: bool]
@@ -130,17 +102,6 @@ class Climate(SubroutineTemplate):
             self.logger.debug("No climatic actuator detected.")
             return regulated_parameters
         return regulated_parameters
-
-    def _compute_if_manageable(self) -> bool:
-        self.update_regulated_parameters()
-        if not self._any_regulated(self._regulated_parameters):
-            self.logger.warning(
-                "No parameters that could be regulated were found. "
-                "Disabling Climate subroutine."
-            )
-            return False
-        else:
-            return True
 
     def _climate_routine(self) -> None:
         if not self.ecosystem.get_subroutine_status("sensors"):
@@ -214,6 +175,17 @@ class Climate(SubroutineTemplate):
             )
             self.stop()
 
+    def _compute_if_manageable(self) -> bool:
+        self.update_regulated_parameters()
+        if not self._any_regulated(self._regulated_parameters):
+            self.logger.warning(
+                "No parameters that could be regulated were found. "
+                "Disabling Climate subroutine."
+            )
+            return False
+        else:
+            return True
+
     def _start(self) -> None:
         # self.update_regulated_parameters()  # Done in _compute_if_manageable
         self.logger.info(
@@ -244,6 +216,16 @@ class Climate(SubroutineTemplate):
                 actuator_handler.deactivate()
 
     """API calls"""
+    def get_hardware_needed_uid(self) -> set[str]:
+        self.update_regulated_parameters()
+        hardware_needed: set[str] = set()
+        for climate_parameter in self._regulated_parameters:
+            couple = actuator_couples[climate_parameter]
+            for IO_type in couple:
+                extra = set(self.config.get_IO_group_uids(IO_type))
+                hardware_needed = hardware_needed | extra
+        return hardware_needed
+
     def get_actuator_handler(
             self,
             climate_actuator: gv.HardwareType | gv.HardwareTypeNames
@@ -259,18 +241,36 @@ class Climate(SubroutineTemplate):
         climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
         return self.ecosystem.actuator_handlers.get_pid(climate_parameter)
 
-    def get_hardware_needed_uid(self) -> set[str]:
-        self.update_regulated_parameters()
-        hardware_needed: set[str] = set()
-        for climate_parameter in self._regulated_parameters:
-            couple = actuator_couples[climate_parameter]
-            for IO_type in couple:
-                extra = set(self.config.get_IO_group_uids(IO_type))
-                hardware_needed = hardware_needed | extra
-        return hardware_needed
+    @property
+    def lighting_hours(self) -> gv.LightData:
+        return self.ecosystem.light_info
+
+    @property
+    def regulated_parameters(self) -> list[gv.ClimateParameter]:
+        return [
+            climate_param for climate_param, regulated
+            in self._regulated_parameters.items()
+            if regulated
+        ] if self.started else []
 
     def update_regulated_parameters(self) -> None:
         self._regulated_parameters = self._compute_regulated_parameters()
+
+    def compute_target(
+            self,
+            climate_parameter: gv.ClimateParameter,
+            _now: time | None = None
+    ) -> tuple[float, float | None]:
+        parameter = self.config.get_climate_parameter(climate_parameter.name)
+        now: time = _now or datetime.now().astimezone().time()
+        if self.lighting_hours.morning_start < now <= self.lighting_hours.evening_end:
+            target = parameter.day * self.ecosystem.config.chaos_factor
+        else:
+            target = parameter.night * self.ecosystem.config.chaos_factor
+        hysteresis = parameter.hysteresis * self.ecosystem.config.chaos_factor
+        if hysteresis == 0.0:
+            hysteresis = None
+        return target, hysteresis
 
     def turn_climate_actuator(
             self,
