@@ -9,13 +9,12 @@ import weakref
 
 import gaia_validators as gv
 
-from gaia.actuator_handler import ActuatorHandler, ActuatorHandlers
+from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
 from gaia.exceptions import NonValidSubroutine, UndefinedParameter
 from gaia.subroutines import (
     Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
-from gaia.subroutines.climate import ClimateParameterNames, ClimateTarget
 
 
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -61,7 +60,7 @@ class Ecosystem:
             evening_end=self.config.time_parameters.night,
         )
         self.lighting_hours_lock = Lock()
-        self.actuator_handlers: ActuatorHandlers = ActuatorHandlers(self)
+        self.actuator_hub: ActuatorHub = ActuatorHub(self)
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine_name in subroutine_names:
             self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
@@ -142,11 +141,6 @@ class Ecosystem:
     def lighting_hours(self) -> gv.LightingHours:
         with self.lighting_hours_lock:
             return self._lighting_hours
-
-    @lighting_hours.setter
-    def lighting_hours(self, value: gv.LightingHours) -> None:
-        with self.lighting_hours_lock:
-            self._lighting_hours = value
 
     @property
     def light_info(self) -> gv.LightData:
@@ -303,7 +297,7 @@ class Ecosystem:
     # Actuator
     @property
     def actuator_data(self) -> gv.ActuatorsDataDict:
-        return self.actuator_handlers.as_dict()
+        return self.actuator_hub.as_dict()
 
     def turn_actuator(
             self,
@@ -369,7 +363,7 @@ class Ecosystem:
             self,
             actuator_type: gv.HardwareType | gv.HardwareTypeNames
     ) -> ActuatorHandler:
-        return self.actuator_handlers.get_handler(actuator_type)
+        return self.actuator_hub.get_handler(actuator_type)
 
     # Sensors
     @property
@@ -386,10 +380,11 @@ class Ecosystem:
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
         if self.config.light_method == gv.LightMethod.fixed:
-            self.lighting_hours = gv.LightingHours(
-                morning_start=time_parameters.day,
-                evening_end=time_parameters.night,
-            )
+            with self.lighting_hours_lock:
+                self._lighting_hours = gv.LightingHours(
+                    morning_start=time_parameters.day,
+                    evening_end=time_parameters.night,
+                )
 
         elif self.config.light_method == gv.LightMethod.mimic:
             if self.config.sun_times is None:
@@ -400,10 +395,11 @@ class Ecosystem:
                 self.config.set_light_method(gv.LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
             else:
-                self.lighting_hours = gv.LightingHours(
-                    morning_start=self.config.sun_times.sunrise,
-                    evening_end=self.config.sun_times.sunset,
-                )
+                with self.lighting_hours_lock:
+                    self._lighting_hours = gv.LightingHours(
+                        morning_start=self.config.sun_times.sunrise,
+                        evening_end=self.config.sun_times.sunset,
+                    )
 
         elif self.config.light_method == gv.LightMethod.elongate:
             if (
@@ -422,12 +418,13 @@ class Ecosystem:
                 sunset = _to_dt(self.config.sun_times.sunset)
                 twilight_begin = _to_dt(self.config.sun_times.twilight_begin)
                 offset = sunrise - twilight_begin
-                self.lighting_hours = gv.LightingHours(
-                    morning_start=time_parameters.day,
-                    morning_end=(sunrise + offset).time(),
-                    evening_start=(sunset - offset).time(),
-                    evening_end=time_parameters.night,
-                )
+                with self.lighting_hours_lock:
+                    self._lighting_hours = gv.LightingHours(
+                        morning_start=time_parameters.day,
+                        morning_end=(sunrise + offset).time(),
+                        evening_start=(sunset - offset).time(),
+                        evening_end=time_parameters.night,
+                    )
 
         if (
                 send
@@ -457,14 +454,8 @@ class Ecosystem:
     health_data = plants_health
 
     # Climate
-    def climate_parameters_regulated(self) -> set[str]:
+    def climate_parameters_regulated(self) -> set[gv.ClimateParameter]:
         if self.get_subroutine_status("climate"):
             climate_subroutine: Climate = self.subroutines["climate"]
-            return climate_subroutine.regulated
+            return set(climate_subroutine.regulated_parameters)
         return set()
-
-    def climate_targets(self) -> dict[ClimateParameterNames, ClimateTarget]:
-        if self.get_subroutine_status("climate"):
-            climate_subroutine: Climate = self.subroutines["climate"]
-            return climate_subroutine.targets
-        return {}

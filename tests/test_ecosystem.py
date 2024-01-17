@@ -114,3 +114,6 @@ def test_sensors_calls(ecosystem: "Ecosystem"):
 
 def test_health_calls(ecosystem: "Ecosystem"):
     assert ecosystem.plants_health == gv.Empty()
+
+
+# TODO: add a test for setting light method

@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-import enum
+from datetime import datetime, time
 import typing as t
-from typing import cast, Literal, TypedDict
-
-from simple_pid import PID
 
 import gaia_validators as gv
 
+from gaia.actuator_handler import ActuatorCouple, actuator_couples, HystericalPID
 from gaia.exceptions import UndefinedParameter
-from gaia.hardware import actuator_models
+from gaia.hardware import actuator_models, Hardware
 from gaia.shared_resources import get_scheduler
 from gaia.subroutines.template import SubroutineTemplate
 
@@ -21,72 +17,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.sensors import Sensors
 
 
-ClimateParameterNames = Literal["temperature", "humidity"]
-ClimateActuatorNames = Literal["heater", "cooler", "humidifier", "dehumidifier"]
-
-class CoupleDirection(enum.Enum):
-    increase = enum.auto()
-    decrease = enum.auto()
-
-
-@dataclass(frozen=True)
-class ActuatorCouple:
-    increase: str
-    decrease: str
-
-    def __iter__(self):
-        return iter((self.increase, self.decrease))
-
-
-class ActuatorCouples(TypedDict):
-    temperature: ActuatorCouple
-    humidity: ActuatorCouple
-
-
-actuator_couples: ActuatorCouples = {
-    "temperature": ActuatorCouple("heater", "cooler"),
-    "humidity": ActuatorCouple("humidifier", "dehumidifier"),
-}
-
-
-class ClimateTarget(TypedDict):
-    day: float | None
-    night: float | None
-    hysteresis: float | None
-
-
-class ClimateParameter(ClimateTarget):
-    regulated: bool
-
-
-class ClimateParameters(TypedDict):
-    temperature: ClimateParameter
-    humidity: ClimateParameter
-
-
-def _climate_param_template() -> ClimateParameter:
-    return {
-        "regulated": False,
-        "day": None,
-        "night": None,
-        "hysteresis": None
-    }
-
-
-def climate_parameters_template() -> ClimateParameters:
-    return {
-        "temperature": _climate_param_template(),
-        "humidity": _climate_param_template(),
-    }
-
-
-class ClimatePIDs(TypedDict):
-    temperature: PID
-    humidity: PID
-
-
 MISSES_BEFORE_STOP = 5
-PID_THRESHOLD = 5
 
 
 class Climate(SubroutineTemplate):
@@ -94,183 +25,83 @@ class Climate(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self._sensor_miss: int = 0
-        self._parameters: ClimateParameters = climate_parameters_template()
-        self._Kp = 5.0  # TODO: expose via config
-        self._Ki = 0.5
-        self._Kd = 1.0
-        self._pids: ClimatePIDs = self._setup_pids()
+        self._regulated_parameters: dict[gv.ClimateParameter: bool] = {
+            gv.ClimateParameter.temperature: False,
+            gv.ClimateParameter.humidity: False,
+        }
         self._finish__init__()
 
     @staticmethod
-    def _compute_target(
-            target_values: ClimateParameter,
-            lighting_hours: gv.LightingHours,
-            chaos_factor: float = 1.0,
-    ) -> tuple[float, float] | tuple[None, None]:
-        now = datetime.now().astimezone().time()
-        tod: Literal["day", "night"]
-        if lighting_hours.morning_start < now <= lighting_hours.evening_end:
-            tod = "day"
-        else:
-            tod = "night"
-        base_target = target_values[tod]
-        # Should not happen
-        if base_target is None:
-            return None, None
-        base_target = cast(float, base_target)
-        target = base_target * chaos_factor
-        hysteresis = target_values["hysteresis"]
-        # Should not happen
-        if hysteresis is None:
-            hysteresis = 0.0
-        return target, hysteresis
-
-    @staticmethod
-    def expected_status(
-            *,
-            current_value: float | None,
-            target_value: float,
-            hysteresis: float | None,
-            couple_direction: CoupleDirection,
-    ) -> bool:
-        # Fallback if automatic and missing value
-        if not all((current_value, target_value)):
-            return False
-        if hysteresis is None:
-            hysteresis = 0.0
-        if abs(target_value - current_value) <= hysteresis:
-            return False
-        else:
-            if current_value < target_value:
-                # We need to increase the value
-                if couple_direction is CoupleDirection.increase:
-                    return True
-                return False
-            else:
-                # We need to decrease the value
-                if couple_direction is CoupleDirection.increase:
-                    return False
-                return True
-
-    @property
-    def lighting_hours(self) -> gv.LightData:
-        return self.ecosystem.light_info
-
-    @property
-    def Kp(self) -> float:
-        return self._Kp
-
-    @property
-    def Ki(self) -> float:
-        return self._Ki
-
-    @property
-    def Kd(self) -> float:
-        return self._Kd
-
-    def _setup_pids(self) -> ClimatePIDs:
-        return {
-            climate_parameter: PID(
-                self.Kp, self.Ki, self.Kd, output_limits=(-100, 100))
-            for climate_parameter in ["temperature", "humidity"]
-        }
-
-    @property
-    def regulated_parameters(self) -> list[ClimateParameterNames]:
-        return [
-            parameter for parameter in self._parameters
-            if self._parameters[parameter]["regulated"]
-        ] if self.started else []
-
     def _any_regulated(
-            self,
-            parameters: ClimateParameters | None = None
+            parameters_dict: dict[gv.ClimateParameter: bool]
     ) -> bool:
-        parameters = parameters or self._parameters
-        return any([parameter["regulated"] for parameter in parameters.values()])
+        return any([regulated for regulated in parameters_dict.values()])
 
-    def _compute_parameters(self) -> ClimateParameters:
-        parameters = climate_parameters_template()
-
-        # Set regulated to True by default
-        for climate_param in parameters.keys():
-            climate_param = cast(ClimateParameterNames, climate_param)
-            parameters[climate_param]["regulated"] = True
+    def _compute_regulated_parameters(self) -> dict[gv.ClimateParameter: bool]:
+        regulated_parameters: dict[gv.ClimateParameter: bool] = {
+            gv.ClimateParameter.temperature: True,
+            gv.ClimateParameter.humidity: True,
+        }
 
         # Make sure the sensor subroutine is running
         if not self.ecosystem.get_subroutine_status("sensors"):
-            self.logger.debug("No climate parameter found.")
-            for climate_param in parameters.keys():
-                climate_param = cast(ClimateParameterNames, climate_param)
-                parameters[climate_param]["regulated"] = False
-            return parameters
-
-        # Check if target values in config
-        for climate_param in parameters.keys():
-            climate_param = cast(ClimateParameterNames, climate_param)
-            try:
-                param_cfg = self.config.get_climate_parameter(climate_param)
-            except UndefinedParameter:
-                parameters[climate_param]["regulated"] = False
-            else:
-                parameters[climate_param]["day"] = param_cfg.day
-                parameters[climate_param]["night"] = param_cfg.night
-                parameters[climate_param]["hysteresis"] = param_cfg.hysteresis
-        if not self._any_regulated(parameters):
-            self.logger.debug("No climate parameter found.")
-            return parameters
-
-        # Check if sensors taking regulated params are available
-        measures: set[str] = set()
-        if self.config.get_management("sensors"):
-            for hardware_uid in self.config.get_IO_group_uids("sensor"):
-                hardware = self.config.get_hardware_config(hardware_uid)
-                measures.update(hardware.measures)
-        else:
             self.logger.warning(
                 "Climate subroutine requires a running sensors subroutine in "
                 "order to work"
             )
-        for climate_param, value in parameters.items():
-            climate_param = cast(ClimateParameterNames, climate_param)
-            if not value["regulated"]:
+            for climate_param in regulated_parameters.keys():
+                regulated_parameters[climate_param] = False
+            return regulated_parameters
+
+        # Check if target values in config
+        for climate_param in regulated_parameters:
+            try:
+                self.config.get_climate_parameter(climate_param.name)
+            except UndefinedParameter:
+                regulated_parameters[climate_param] = False
+        if not self._any_regulated(regulated_parameters):
+            self.logger.debug("No climate parameter found.")
+            return regulated_parameters
+
+        # Get sensors mounted and the measures they're taking
+        sensors  = [
+            hardware for hardware in Hardware.get_mounted().values()
+            if hardware.ecosystem_uid == self.ecosystem.uid
+            and hardware.type == gv.HardwareType.sensor
+        ]
+        measures: set[str] = set()
+        for sensor in sensors:
+            measures.update(sensor.measures)
+
+        # Check if sensors taking regulated params are available
+        for climate_param, regulated in regulated_parameters.items():
+            if not regulated:
                 continue
-            if climate_param not in measures:
-                parameters[climate_param]["regulated"] = False
-        if not self._any_regulated(parameters):
+            if climate_param.name not in measures:
+                regulated_parameters[climate_param] = False
+        if not self._any_regulated(regulated_parameters):
             self.logger.debug(
                 "No sensor measuring regulated parameters detected.")
-            return parameters
+            return regulated_parameters
 
         # Check if regulators available
-        for climate_param, value in parameters.items():
-            climate_param = cast(ClimateParameterNames, climate_param)
-            if not value:
+        for climate_param, regulated in regulated_parameters.items():
+            if not regulated:
                 continue
             regulator_couple: ActuatorCouple = actuator_couples[climate_param]
             any_regulator = False
-            for direction in regulator_couple:
-                direction: ClimateActuatorNames
-                if self.config.get_IO_group_uids(direction):
+            for regulator in regulator_couple:
+                if regulator is None:
+                    continue
+                if self.config.get_IO_group_uids(regulator.name):
                     any_regulator = True
+                    break
             if not any_regulator:
-                parameters[climate_param]["regulated"] = False
-        if not self._any_regulated(parameters):
-            self.logger.debug(
-                "No climatic actuator detected.")
-            return parameters
-        return parameters
-
-    def _compute_if_manageable(self) -> bool:
-        self._parameters = self._compute_parameters()
-        if not self._any_regulated(self._parameters):
-            self.logger.warning(
-                "No parameters that could be regulated were found. "
-                "Disabling Climate subroutine."
-            )
-            return False
-        else:
-            return True
+                regulated_parameters[climate_param] = False
+        if not self._any_regulated(regulated_parameters):
+            self.logger.debug("No climatic actuator detected.")
+            return regulated_parameters
+        return regulated_parameters
 
     def _climate_routine(self) -> None:
         if not self.ecosystem.get_subroutine_status("sensors"):
@@ -290,7 +121,7 @@ class Climate(SubroutineTemplate):
                 self._check_misses()
                 return
 
-        sensors_subroutine: "Sensors" = self.ecosystem.subroutines["sensors"]
+        sensors_subroutine: Sensors = self.ecosystem.subroutines["sensors"]
         sensors_data = sensors_subroutine.sensors_data
         if isinstance(sensors_data, gv.Empty):
             self.logger.debug(
@@ -302,43 +133,39 @@ class Climate(SubroutineTemplate):
             self._check_misses()
             return
 
-        sensors_average = {
+        sensors_average: dict[str, float] = {
             data.measure: data.value for data in sensors_data.average
         }
         for parameter in self.regulated_parameters:
-            # TODO: migrate `_compute_target` inside `expected_status`
-            target_value, hysteresis = self._compute_target(
-                self._parameters[parameter], self.lighting_hours,
-                self.ecosystem.config.chaos_factor)
-            if target_value is None:
-                raise RuntimeError(
-                    f"Error while computing the target for parameter '{parameter}'"
-                )
+            # Minimal change between run, should be ok to change pid target
+            pid: HystericalPID = self.get_pid(parameter)
+            target, hysteresis = self.compute_target(parameter)
+            pid.target = target
+            pid.hysteresis = hysteresis
 
-            actuator_couple: ActuatorCouple = actuator_couples[parameter]
-            # Minimal change between run, should be ok to change the setpoint
-            self._pids[parameter].setpoint = target_value
             # Current value is None if there is no sensor reading for it
             current_value: float | None = sensors_average.get(parameter, None)
-            if current_value:
-                pid_output = self._pids[parameter](current_value)
+            if current_value is None:
+                pid_output = 0.0  # TODO: log and add a miss ?
             else:
-                pid_output = None
-                self._pids[parameter].reset()
+                pid_output = pid.update_pid(current_value)
 
-            for couple_direction in CoupleDirection:
-                actuator_name: ClimateActuatorNames = getattr(
-                    actuator_couple, couple_direction.name)
-                actuator_handler = self.get_actuator_handler(actuator_name)
+            actuator_couple: ActuatorCouple = actuator_couples[parameter]
+            for couple_direction in actuator_couple.directions():
+                actuator_type = actuator_couple[couple_direction]
+                actuator_handler = self.get_actuator_handler(actuator_type)
+                if couple_direction == "increase":
+                    corrected_output = pid_output
+                else:
+                    corrected_output = -pid_output
                 expected_status = actuator_handler.compute_expected_status(
-                    current_value=current_value, target_value=target_value,
-                    hysteresis=hysteresis, couple_direction=couple_direction)
+                    corrected_output)
                 if expected_status:
                     actuator_handler.turn_on()
-                    if pid_output is not None:
-                        actuator_handler.set_level(pid_output)
+                    actuator_handler.set_level(corrected_output)
                 else:
                     actuator_handler.turn_off()
+                    actuator_handler.set_level(0.0)
 
     def _check_misses(self) -> None:
         if self._sensor_miss >= MISSES_BEFORE_STOP:
@@ -348,12 +175,24 @@ class Climate(SubroutineTemplate):
             )
             self.stop()
 
+    def _compute_if_manageable(self) -> bool:
+        self.update_regulated_parameters()
+        if not self._any_regulated(self._regulated_parameters):
+            self.logger.warning(
+                "No parameters that could be regulated were found. "
+                "Disabling Climate subroutine."
+            )
+            return False
+        else:
+            return True
+
     def _start(self) -> None:
-        self._parameters = self._compute_parameters()
+        # self.update_regulated_parameters()  # Done in _compute_if_manageable
         self.logger.info(
             f"Starting climate routine. It will run every minute"
         )
-        for pid in self._pids.values():
+        for climate_parameter in self._regulated_parameters:
+            pid = self.get_pid(climate_parameter)
             pid.reset()
         scheduler = get_scheduler()
         scheduler.add_job(
@@ -363,10 +202,8 @@ class Climate(SubroutineTemplate):
         )
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
-            for couple_direction in CoupleDirection:
-                actuator_name: ClimateActuatorNames = getattr(
-                    actuator_couple, couple_direction.name)
-                actuator_handler = self.get_actuator_handler(actuator_name)
+            for actuator_type in actuator_couple:
+                actuator_handler = self.get_actuator_handler(actuator_type)
                 actuator_handler.activate()
 
     def _stop(self) -> None:
@@ -374,49 +211,66 @@ class Climate(SubroutineTemplate):
         scheduler.remove_job(job_id=f"{self.ecosystem.name}-climate")
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
-            for couple_direction in CoupleDirection:
-                actuator_name: ClimateActuatorNames = getattr(
-                    actuator_couple, couple_direction.name)
-                actuator_handler = self.get_actuator_handler(actuator_name)
+            for actuator_type in actuator_couple:
+                actuator_handler = self.get_actuator_handler(actuator_type)
                 actuator_handler.deactivate()
 
     """API calls"""
-    def get_actuator_handler(
-            self,
-            actuator_type: gv.HardwareType | ClimateActuatorNames
-    ) -> ActuatorHandler:
-        verified_actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
-        return self.ecosystem.actuator_handlers.get_handler(verified_actuator_type)
-
     def get_hardware_needed_uid(self) -> set[str]:
-        self.update_climate_parameters()
+        self.update_regulated_parameters()
         hardware_needed: set[str] = set()
-        for couple in actuator_couples.values():
+        for climate_parameter in self._regulated_parameters:
+            couple = actuator_couples[climate_parameter]
             for IO_type in couple:
                 extra = set(self.config.get_IO_group_uids(IO_type))
                 hardware_needed = hardware_needed | extra
         return hardware_needed
 
-    def update_climate_parameters(self) -> None:
-        self._parameters = self._compute_parameters()
+    def get_actuator_handler(
+            self,
+            climate_actuator: gv.HardwareType | gv.HardwareTypeNames
+    ) -> ActuatorHandler:
+        climate_actuator = gv.safe_enum_from_name(gv.HardwareType, climate_actuator)
+        # TODO: assert actuator type is a climatic one
+        return self.ecosystem.actuator_hub.get_handler(climate_actuator)
+
+    def get_pid(
+            self,
+            climate_parameter: gv.ClimateParameter | gv.ClimateParameterNames
+    ) -> HystericalPID:
+        climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
+        return self.ecosystem.actuator_hub.get_pid(climate_parameter)
 
     @property
-    def regulated(self) -> set[ClimateParameterNames]:
-        return {
-            climate_parameter for climate_parameter, value
-            in self._parameters.items()
-            if value["regulated"]
-        }
+    def lighting_hours(self) -> gv.LightData:
+        return self.ecosystem.light_info
 
     @property
-    def targets(self) -> dict[ClimateParameterNames, ClimateTarget]:
-        return {
-            parameter: {
-                "day": value["day"],
-                "night": value["night"],
-                "hysteresis": value["hysteresis"],
-            } for parameter, value in self._parameters.items()
-        }
+    def regulated_parameters(self) -> list[gv.ClimateParameter]:
+        return [
+            climate_param for climate_param, regulated
+            in self._regulated_parameters.items()
+            if regulated
+        ] if self.started else []
+
+    def update_regulated_parameters(self) -> None:
+        self._regulated_parameters = self._compute_regulated_parameters()
+
+    def compute_target(
+            self,
+            climate_parameter: gv.ClimateParameter,
+            _now: time | None = None
+    ) -> tuple[float, float | None]:
+        parameter = self.config.get_climate_parameter(climate_parameter.name)
+        now: time = _now or datetime.now().astimezone().time()
+        if self.lighting_hours.morning_start < now <= self.lighting_hours.evening_end:
+            target = parameter.day * self.ecosystem.config.chaos_factor
+        else:
+            target = parameter.night * self.ecosystem.config.chaos_factor
+        hysteresis = parameter.hysteresis * self.ecosystem.config.chaos_factor
+        if hysteresis == 0.0:
+            hysteresis = None
+        return target, hysteresis
 
     def turn_climate_actuator(
             self,
@@ -426,6 +280,7 @@ class Climate(SubroutineTemplate):
     ) -> None:
         climate_actuator: gv.HardwareType = gv.safe_enum_from_name(
             gv.HardwareType, climate_actuator)
+        # TODO: assert actuator type is a climatic one
         if climate_actuator not in [
             gv.HardwareType.heater, gv.HardwareType.cooler,
             gv.HardwareType.humidifier, gv.HardwareType.dehumidifier
@@ -434,7 +289,7 @@ class Climate(SubroutineTemplate):
                 "'climate_actuator' should be a valid climate actuator")
         if self._started:
             actuator_handler: ActuatorHandler = \
-                self.ecosystem.actuator_handlers.get_handler(climate_actuator)
+                self.ecosystem.actuator_hub.get_handler(climate_actuator)
             actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(

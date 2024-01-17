@@ -4,7 +4,7 @@ import gaia_validators as gv
 
 from gaia import EngineConfig
 from gaia.subroutines.sensors import Sensors
-from gaia.subroutines.climate import Climate, CoupleDirection
+from gaia.subroutines.climate import Climate
 
 from ..data import heater_info, heater_uid, sensor_info, sensor_uid
 from ..utils import get_logs_content
@@ -35,81 +35,9 @@ def test_manageable(climate_subroutine: Climate):
     assert not climate_subroutine.manageable
 
 
-def test_expected_status(climate_subroutine: Climate):
-    expected_status = climate_subroutine.expected_status
-    target_value = 42.0
-    hysteresis = 2.5
-
-    current_value = target_value - 2 * hysteresis  # Under target
-    couple_direction = CoupleDirection.increase
-
-    # Test below target, actuator is increasing
-    assert expected_status(
-        current_value=current_value, target_value=target_value,
-        hysteresis=hysteresis, couple_direction=couple_direction
-    )
-
-    # Test below target, actuator is decreasing
-    assert not expected_status(
-        current_value=current_value, target_value=target_value,
-        hysteresis=hysteresis, couple_direction=CoupleDirection.decrease
-    )
-
-    # Test below target, in hysteresis range
-    assert not expected_status(
-        current_value=target_value-2.0, target_value=target_value,
-        hysteresis=hysteresis, couple_direction=couple_direction
-    )
-
-    current_value = target_value + 2 * hysteresis  # Above target
-    couple_direction = CoupleDirection.decrease
-
-    # Test above target, actuator is decreasing
-    assert expected_status(
-        current_value=current_value, target_value=target_value,
-        hysteresis=hysteresis, couple_direction=couple_direction
-    )
-
-    # Test above target, actuator is increasing
-    assert not expected_status(
-        current_value=current_value, target_value=target_value,
-        hysteresis=hysteresis, couple_direction=CoupleDirection.increase
-    )
-
-    # Test above target, in hysteresis range
-    assert not expected_status(
-        current_value=target_value+2.0, target_value=target_value,
-        hysteresis=hysteresis, couple_direction=couple_direction
-    )
-
-    # Test current_value == target_value
-    assert not expected_status(
-        current_value=target_value, target_value=target_value,
-        hysteresis=hysteresis, couple_direction=couple_direction
-    )
-
-    # Test current_value is None
-    assert not expected_status(
-        current_value=None, target_value=target_value,
-        hysteresis=hysteresis, couple_direction=couple_direction
-    )
-
-    # Test target_value is None
-    assert not expected_status(
-        current_value=current_value, target_value=None,
-        hysteresis=hysteresis, couple_direction=couple_direction
-    )
-
-    # Test hysteresis is None
-    assert expected_status(
-        current_value=current_value, target_value=target_value,
-        hysteresis=None, couple_direction=couple_direction
-    )
-
-    assert not expected_status(
-        current_value=target_value, target_value=target_value,
-        hysteresis=None, couple_direction=couple_direction
-    )
+def test_target(climate_subroutine: Climate):
+    # TODO
+    pass
 
 
 def test_hardware_needed(climate_subroutine: Climate):
@@ -163,7 +91,7 @@ def test_regulated_parameters(climate_subroutine: Climate):
 
     # Computing manageable updates the regulated parameters but when not started
     #  it should still return an empty list
-    climate_subroutine.manageable
+    assert climate_subroutine.manageable
     parameters = climate_subroutine.regulated_parameters
     assert parameters == []
 
