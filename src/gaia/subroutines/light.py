@@ -48,6 +48,8 @@ class Light(SubroutineTemplate):
         self._any_dimmable_light: bool | None = None
         self._thread: Thread | None = None
         self._stop_event = Event()
+        self._light_method: gv.LightMethod | None = None  # For tests only
+        self._lighting_hours: gv.LightingHours | None = None  # For test only
         self._finish__init__()
 
     def _light_loop(self) -> None:
@@ -83,7 +85,7 @@ class Light(SubroutineTemplate):
     def _compute_if_manageable(self) -> bool:
         if all((
                 self.config.get_IO_group_uids("light"),
-                self.ecosystem.light_method,
+                self.light_method,
                 bool(self.lighting_hours.morning_start)
         )):
             return True
@@ -134,8 +136,28 @@ class Light(SubroutineTemplate):
         return self.ecosystem.actuator_handlers.get_pid(gv.ClimateParameter.light)
 
     @property
+    def light_method(self) -> gv.LightMethod:
+        if self._light_method is None:
+            return self.ecosystem.light_method
+        return self._light_method
+
+    @light_method.setter
+    def light_method(self, light_method: gv.LightMethod) -> None:
+        if not self.ecosystem.engine.config.app_config.TESTING:
+            raise AttributeError("'light_method' can only be set when 'TESTING' is True")
+        self._light_method = light_method
+
+    @property
     def lighting_hours(self) -> gv.LightingHours:
-        return self.ecosystem.lighting_hours
+        if self._lighting_hours is None:
+            return self.ecosystem.lighting_hours
+        return self._lighting_hours
+
+    @lighting_hours.setter
+    def lighting_hours(self, lighting_hours: gv.LightingHours) -> None:
+        if not self.ecosystem.engine.config.app_config.TESTING:
+            raise AttributeError("'lighting_hours' can only be set when 'TESTING' is True")
+        self._lighting_hours = lighting_hours
 
     @property
     def light_sensors(self) -> list[LightSensor]:
@@ -186,7 +208,7 @@ class Light(SubroutineTemplate):
 
     def compute_status(self, _now: time | None = None) -> bool:
         now: time = _now or datetime.now().astimezone().time()
-        if self.ecosystem.light_method == gv.LightMethod.elongate:
+        if self.light_method == gv.LightMethod.elongate:
             # If time between lightning hours
             if (
                 self.lighting_hours.morning_start <= now <= self.lighting_hours.morning_end

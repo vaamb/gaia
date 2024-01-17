@@ -21,8 +21,6 @@ def test_manageable(light_subroutine: Light):
 
 
 def test_expected_status(light_subroutine: Light):
-    expected_status = light_subroutine.expected_status
-
     lighting_hours = gv.LightingHours(
         morning_start=time(8),
         morning_end=time(10),
@@ -31,36 +29,40 @@ def test_expected_status(light_subroutine: Light):
     )
 
     now = time(6)
-    assert not expected_status(
-        method=gv.LightMethod.elongate, lighting_hours=lighting_hours, _now=now)
-    assert not expected_status(
-        method=gv.LightMethod.fixed, lighting_hours=lighting_hours, _now=now)
-    assert not expected_status(
-        method=gv.LightMethod.mimic, lighting_hours=lighting_hours, _now=now)
+    light_subroutine.lighting_hours = lighting_hours
+    light_subroutine.light_method = gv.LightMethod.elongate
+    assert not light_subroutine.compute_status(now)
+    light_subroutine.light_method = gv.LightMethod.fixed
+    assert not light_subroutine.compute_status(now)
+    light_subroutine.light_method = gv.LightMethod.mimic
+    assert not light_subroutine.compute_status(now)
 
     now = time(9)
-    assert expected_status(
-        method=gv.LightMethod.elongate, lighting_hours=lighting_hours, _now=now)
-    assert expected_status(
-        method=gv.LightMethod.fixed, lighting_hours=lighting_hours, _now=now)
-    assert expected_status(
-        method=gv.LightMethod.mimic, lighting_hours=lighting_hours, _now=now)
+    light_subroutine.lighting_hours = lighting_hours
+    light_subroutine.light_method = gv.LightMethod.elongate
+    assert light_subroutine.compute_status(now)
+    light_subroutine.light_method = gv.LightMethod.fixed
+    assert light_subroutine.compute_status(now)
+    light_subroutine.light_method = gv.LightMethod.mimic
+    assert light_subroutine.compute_status(now)
 
     now = time(11)
-    assert not expected_status(
-        method=gv.LightMethod.elongate, lighting_hours=lighting_hours, _now=now)
-    assert expected_status(
-        method=gv.LightMethod.fixed, lighting_hours=lighting_hours, _now=now)
-    assert expected_status(
-        method=gv.LightMethod.mimic, lighting_hours=lighting_hours, _now=now)
+    light_subroutine.lighting_hours = lighting_hours
+    light_subroutine.light_method = gv.LightMethod.elongate
+    assert not light_subroutine.compute_status(now)
+    light_subroutine.light_method = gv.LightMethod.fixed
+    assert light_subroutine.compute_status(now)
+    light_subroutine.light_method = gv.LightMethod.mimic
+    assert light_subroutine.compute_status(now)
 
     now = time(21)
-    assert not expected_status(
-        method=gv.LightMethod.elongate, lighting_hours=lighting_hours, _now=now)
-    assert not expected_status(
-        method=gv.LightMethod.fixed, lighting_hours=lighting_hours, _now=now)
-    assert not expected_status(
-        method=gv.LightMethod.mimic, lighting_hours=lighting_hours, _now=now)
+    light_subroutine.lighting_hours = lighting_hours
+    light_subroutine.light_method = gv.LightMethod.elongate
+    assert not light_subroutine.compute_status(now)
+    light_subroutine.light_method = gv.LightMethod.fixed
+    assert not light_subroutine.compute_status(now)
+    light_subroutine.light_method = gv.LightMethod.mimic
+    assert not light_subroutine.compute_status(now)
 
 
 def test_hardware_needed(light_subroutine: Light):
