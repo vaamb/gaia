@@ -155,9 +155,15 @@ class Climate(SubroutineTemplate):
                 actuator_type = actuator_couple[couple_direction]
                 actuator_handler = self.get_actuator_handler(actuator_type)
                 if couple_direction == "increase":
-                    corrected_output = pid_output
+                    if pid_output > 0.0:
+                        corrected_output = pid_output
+                    else:
+                        corrected_output = 0.0
                 else:
-                    corrected_output = -pid_output
+                    if pid_output < 0.0:
+                        corrected_output = -pid_output
+                    else:
+                        corrected_output = 0.0
                 expected_status = actuator_handler.compute_expected_status(
                     corrected_output)
                 if expected_status:
@@ -194,6 +200,7 @@ class Climate(SubroutineTemplate):
         for climate_parameter in self._regulated_parameters:
             pid = self.get_pid(climate_parameter)
             pid.reset()
+        self._climate_routine()
         scheduler = get_scheduler()
         scheduler.add_job(
             self._climate_routine,
