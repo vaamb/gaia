@@ -27,7 +27,7 @@ class VirtualWorld(metaclass=SingletonMeta):
     def __init__(
             self,
             engine: Engine,
-            equinox_sun_times: tuple = (SUNRISE, SUNSET),
+            equinox_sun_times: tuple[time, time] = (SUNRISE, SUNSET),
             yearly_amp_sun_times: timedelta = timedelta(hours=2),
             # Actually half amp
             avg_temperature: float = 12.5,  # 12.5
@@ -35,15 +35,15 @@ class VirtualWorld(metaclass=SingletonMeta):
             yearly_amp_temperature: float = 0.0,  # 7.5
             avg_humidity: float = 40.0,  # 50.0
             amp_humidity: float = 10.0,  # 10.0
-            avg_midday_light: int = 75000,
-            yearly_amp_light: int = 25000,
+            avg_midday_light: float = 75000.0,
+            yearly_amp_light: float = 25000.0,
             **kwargs
     ) -> None:
         self.logger: logging.Logger = logging.getLogger("virtual.world")
-        self._engine = engine
-        self._sunrise = equinox_sun_times[0]
-        self._sunset = equinox_sun_times[1]
-        self._yearly_amp_sun_times = yearly_amp_sun_times
+        self._engine: Engine = engine
+        self._sunrise: time = equinox_sun_times[0]
+        self._sunset: time = equinox_sun_times[1]
+        self._yearly_amp_sun_times: timedelta = yearly_amp_sun_times
 
         self._params = {
             "temperature": {
@@ -60,18 +60,18 @@ class VirtualWorld(metaclass=SingletonMeta):
                 "yearly_amp": yearly_amp_light,
             },
         }
-        self._temperature = avg_temperature
-        self._humidity = avg_humidity
-        self._light = avg_midday_light
+        self._temperature: float = avg_temperature
+        self._humidity: float = avg_humidity
+        self._light: float = avg_midday_light
         self.lock: Lock = Lock()
-        self._dt = None
-        self._last_update = None
+        self._dt: datetime | None = None
+        self._last_update: float | None = None
 
     def get_measures(self, time_now: datetime | None = None) -> tuple[float, float, int]:
         mono_clock = monotonic()
         if (
             not self._last_update
-            or mono_clock - self._last_update > 10
+            or mono_clock - self._last_update > 60.0
         ):
             self._compute_changes(time_now)
             self._last_update = mono_clock
@@ -156,7 +156,7 @@ class VirtualWorld(metaclass=SingletonMeta):
         return self._humidity
 
     @property
-    def light(self) -> int:
+    def light(self) -> float:
         if self._light is None:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
