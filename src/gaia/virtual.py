@@ -206,7 +206,7 @@ class VirtualEcosystem:
         self._humidity_quantity: float | None = None   # Total humidity in the enclosure, in grams
 
         # Virtual hardware status
-        self._actuators: dict[gv.HardwareType: bool] = {
+        self._actuators: dict[gv.HardwareType.actuator: bool] = {
             gv.HardwareType.light: False,
             gv.HardwareType.heater: False,
             gv.HardwareType.cooler: False,
@@ -287,10 +287,10 @@ class VirtualEcosystem:
     def status(self) -> bool:
         return self._start_time is not None
 
-    def get_actuator_status(self, actuator_type: gv.HardwareType) -> bool:
+    def get_actuator_status(self, actuator_type: gv.HardwareType.actuator) -> bool:
         return self.ecosystem.actuator_hub.get_handler(actuator_type).status
 
-    def get_actuator_level(self, actuator_type: gv.HardwareType) -> float | None:
+    def get_actuator_level(self, actuator_type: gv.HardwareType.actuator) -> float | None:
         return self.ecosystem.actuator_hub.get_handler(actuator_type).level
 
     def measure(self, now: float | None = None) -> None:
@@ -317,7 +317,7 @@ class VirtualEcosystem:
             d_sec = (now - self._last_update)
         out_temp, out_hum, out_light = self.virtual_world.get_measures()
 
-        def get_corrected_level(actuator_type: gv.HardwareType) -> float:
+        def get_corrected_level(actuator_type: gv.HardwareType.actuator) -> float:
             l = self.get_actuator_level(actuator_type)
             if l is None:
                 l = 100.0

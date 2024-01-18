@@ -1035,12 +1035,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_IO_group_uids(
             self,
-            IO_type: str,
-            level: tuple = ("environment", "plants")
+            IO_type: gv.HardwareType,
+            level: tuple[gv.HardwareLevel] = (
+                    gv.HardwareLevel.environment, gv.HardwareLevel.plants)
     ) -> list[str]:
         return [uid for uid in self.IO_dict
-                if self.IO_dict[uid]["type"].lower() == IO_type
-                and self.IO_dict[uid]["level"].lower() in level]
+                if self.IO_dict[uid]["type"] == IO_type
+                and self.IO_dict[uid]["level"] in level]
 
     def _create_new_IO_uid(self) -> str:
         length = 16

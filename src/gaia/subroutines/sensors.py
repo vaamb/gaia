@@ -62,7 +62,7 @@ class Sensors(SubroutineTemplate):
             self._stop_event.wait(sleep_time)
 
     def _compute_if_manageable(self) -> bool:
-        if self.config.get_IO_group_uids("sensor"):
+        if self.config.get_IO_group_uids(gv.HardwareType.sensor):
             return True
         else:
             self.logger.warning("No sensor detected.")
@@ -106,7 +106,7 @@ class Sensors(SubroutineTemplate):
             light_subroutine.reset_light_sensors()
 
     def get_hardware_needed_uid(self) -> set[str]:
-        return set(self.config.get_IO_group_uids("sensor"))
+        return set(self.config.get_IO_group_uids(gv.HardwareType.sensor))
 
     def refresh_hardware(self) -> None:
         super().refresh_hardware()

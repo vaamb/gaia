@@ -19,13 +19,13 @@ if t.TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class ActuatorCouple:
-    increase: gv.HardwareType | None
-    decrease: gv.HardwareType | None
+    increase: gv.HardwareType.actuator | None
+    decrease: gv.HardwareType.actuator | None
 
     def __iter__(self) -> typing.Iterable[gv.HardwareType | None]:
         return iter((self.increase, self.decrease))
 
-    def __getitem__(self, key: str) -> gv.HardwareType | None:
+    def __getitem__(self, key: str) -> gv.HardwareType.actuator | None:
         try:
             return getattr(self, key)
         except AttributeError:
@@ -48,7 +48,7 @@ actuator_couples: dict[gv.ClimateParameter: ActuatorCouple] = {
 }
 
 
-def generate_hardware_to_parameter_dict() -> dict[gv.HardwareType, gv.ClimateParameter]:
+def generate_hardware_to_parameter_dict() -> dict[gv.HardwareType.actuator, gv.ClimateParameter]:
     rv = {}
     for climate_parameter, actuator_couple in actuator_couples.items():
         for direction in actuator_couple:
@@ -218,11 +218,11 @@ class ActuatorHandler:
     def __init__(
             self,
             handlers_hub: ActuatorHub,
-            actuator_type: gv.HardwareType,
+            actuator_type: gv.HardwareType.actuator,
     ) -> None:
+        assert actuator_type in gv.HardwareType.actuator
         self.handlers_hub: ActuatorHub = handlers_hub
         self.ecosystem = self.handlers_hub.ecosystem
-        assert actuator_type != gv.HardwareType.sensor
         self.type = actuator_type
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
@@ -441,7 +441,7 @@ class ActuatorHub:
         self.ecosystem: Ecosystem = weakref.proxy(ecosystem)
         self._pids: dict[gv.ClimateParameter, HystericalPID] = {}
         self._populate_pids()
-        self._actuator_handlers: dict[gv.HardwareType, ActuatorHandler] = {}
+        self._actuator_handlers: dict[gv.HardwareType.actuator, ActuatorHandler] = {}
         self._populate_actuators()
 
     def _populate_pids(self) -> None:
@@ -454,17 +454,12 @@ class ActuatorHub:
             )
 
     def _populate_actuators(self) -> None:
-        for hardware_type in gv.HardwareType:
+        for hardware_type in gv.HardwareType.actuator:
             hardware_type: gv.HardwareType
-            if hardware_type == gv.HardwareType.sensor:
-                continue
-            elif hardware_type == gv.HardwareType.light:
+            if hardware_type == gv.HardwareType.light:
                 self._actuator_handlers[hardware_type] = ActuatorHandler(
                     self, hardware_type)
-            elif hardware_type in (  # TODO: use flags
-                    gv.HardwareType.heater, gv.HardwareType.cooler,
-                    gv.HardwareType.humidifier, gv.HardwareType.dehumidifier,
-            ):
+            elif hardware_type in gv.HardwareType.climate_actuator:
                 self._actuator_handlers[hardware_type] = ActuatorHandler(
                     self, hardware_type)
 
@@ -480,8 +475,7 @@ class ActuatorHub:
             actuator_type: gv.HardwareType | gv.HardwareTypeNames
     ) -> ActuatorHandler:
         actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
-        if actuator_type == gv.HardwareType.sensor:
-            raise ValueError(f"Actuator type {actuator_type} is not valid.")
+        assert actuator_type in gv.HardwareType.actuator
         return self._actuator_handlers[actuator_type]
 
     def as_dict(self) -> gv.ActuatorsDataDict:

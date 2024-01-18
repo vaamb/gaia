@@ -100,7 +100,7 @@ class Climate(SubroutineTemplate):
             for regulator in regulator_couple:
                 if regulator is None:
                     continue
-                if self.config.get_IO_group_uids(regulator.name):
+                if self.config.get_IO_group_uids(regulator):
                     any_regulator = True
                     break
             if not any_regulator:
@@ -264,10 +264,10 @@ class Climate(SubroutineTemplate):
 
     def get_actuator_handler(
             self,
-            climate_actuator: gv.HardwareType | gv.HardwareTypeNames
+            climate_actuator: gv.HardwareType.climate_actuator | gv.HardwareTypeNames
     ) -> ActuatorHandler:
         climate_actuator = gv.safe_enum_from_name(gv.HardwareType, climate_actuator)
-        # TODO: assert actuator type is a climatic one
+        assert climate_actuator in gv.HardwareType.climate_actuator
         return self.ecosystem.actuator_hub.get_handler(climate_actuator)
 
     def get_pid(
@@ -321,19 +321,13 @@ class Climate(SubroutineTemplate):
 
     def turn_climate_actuator(
             self,
-            climate_actuator: gv.HardwareType | str,
+            climate_actuator: gv.HardwareType.climate_actuator | str,
             turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
         climate_actuator: gv.HardwareType = gv.safe_enum_from_name(
             gv.HardwareType, climate_actuator)
-        # TODO: assert actuator type is a climatic one
-        if climate_actuator not in [
-            gv.HardwareType.heater, gv.HardwareType.cooler,
-            gv.HardwareType.humidifier, gv.HardwareType.dehumidifier
-        ]:
-            raise TypeError(
-                "'climate_actuator' should be a valid climate actuator")
+        assert climate_actuator in gv.HardwareType.climate_actuator
         if self._started:
             actuator_handler: ActuatorHandler = \
                 self.ecosystem.actuator_hub.get_handler(climate_actuator)

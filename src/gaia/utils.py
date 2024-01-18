@@ -25,7 +25,7 @@ def _repr_time(self: SafeRepresenter, data: time) -> ScalarNode:
 
 
 def _repr_enum(self: SafeRepresenter, data: Enum) -> ScalarNode:
-    return self.represent_scalar('tag:yaml.org,2002:str', data.value)
+    return self.represent_scalar('tag:yaml.org,2002:str', data.name)
 
 
 ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
