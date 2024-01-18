@@ -273,7 +273,9 @@ class Engine(metaclass=SingletonMeta):
 
     def _init_virtualization(self) -> None:
         if self.config.app_config.VIRTUALIZATION:
-            init_virtual_world(self)
+            virtual_cfg = self.config.app_config.VIRTUALIZATION_PARAMETERS
+            virtual_world_cfg: dict = virtual_cfg["world"]
+            init_virtual_world(self, **virtual_world_cfg)
 
     def _loop(self) -> None:
         while not self._stop_event.is_set():
@@ -378,7 +380,9 @@ class Engine(metaclass=SingletonMeta):
                     self.config.app_config.VIRTUALIZATION
                     and get_virtual_ecosystem(ecosystem_uid) is None
             ):
-                init_virtual_ecosystem(ecosystem_uid, start=True)
+                virtual_cfg = self.config.app_config.VIRTUALIZATION_PARAMETERS
+                virtual_eco_cfg: dict = virtual_cfg["ecosystems"].get(ecosystem_uid, {})
+                init_virtual_ecosystem(ecosystem_uid, start=True, **virtual_eco_cfg)
             ecosystem = Ecosystem(ecosystem_uid, self)
             self.ecosystems[ecosystem_uid] = ecosystem
             self.logger.debug(
