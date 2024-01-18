@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 import logging
 import math
+from threading import Lock
 from time import monotonic
 import typing
 
@@ -61,74 +62,77 @@ class VirtualWorld(metaclass=SingletonMeta):
         self._temperature = avg_temperature
         self._humidity = avg_humidity
         self._light = avg_midday_light
+        self.lock: Lock = Lock()
         self._dt = None
         self._last_update = None
 
-    def __call__(self, time_now: datetime | None = None) -> tuple[float, float, int]:
+    def get_measures(self, time_now: datetime | None = None) -> tuple[float, float, int]:
         mono_clock = monotonic()
         if (
             not self._last_update
             or mono_clock - self._last_update > 10
         ):
+            self._compute_changes(time_now)
             self._last_update = mono_clock
-            if time_now:
-                now = time_now
-            else:
-                now = datetime.now().astimezone()
-            self._dt = now
-            yday = now.timetuple().tm_yday
-            day_since_spring = (yday - 80) % 365
-            season_factor = math.sin((day_since_spring / 365) * 2 * math.pi)
-
-            base_temperature = (
-                self._params["temperature"]["avg"] +
-                self._params["temperature"]["yearly_amp"] * season_factor
-            )
-            base_light = (
-                self._params["light"]["max"] +
-                self._params["light"]["yearly_amp"] * season_factor
-            )
-
-            sunrise = datetime.combine(now.date(), self._sunrise).astimezone()
-            sunrise = sunrise - (self._yearly_amp_sun_times * season_factor)
-            sunset = datetime.combine(now.date(), self._sunset).astimezone()
-            sunset = sunset + (self._yearly_amp_sun_times * season_factor)
-            daytime = (sunset - sunrise).seconds
-            nighttime = 24 * 3600 - daytime
-
-            if sunrise <= now <= sunset:
-                seconds_since_sunrise = (now - sunrise).seconds
-                day_factor = math.sin((seconds_since_sunrise / daytime) * math.pi)
-                light = base_light * day_factor
-                self._light = int(light)
-
-            else:
-                # If after midnight
-                if now < sunset:
-                    sunset = sunset - timedelta(days=1)
-                seconds_since_sunset = (now - sunset).seconds
-                day_factor = - math.sin((seconds_since_sunset / nighttime) * math.pi)
-                light = 0
-                self._light = int(light)
-
-            temperature = (
-                base_temperature +
-                self._params["temperature"]["yearly_amp"] * season_factor +
-                self._params["temperature"]["daily_amp"] * day_factor
-            )
-            self._temperature = round(temperature, 2)
-            humidity = (
-                self._params["humidity"]["avg"] -
-                self._params["humidity"]["amp"] * day_factor
-            )
-            self._humidity = round(humidity, 2)
-
-            self.logger.info(
-                f"Temperature: {self.temperature:2.2f} - humidity: {self.humidity:3.2f} - "
-                f"light: {self.light:.1f}"
-            )
-
         return self.temperature, self.humidity, self.light
+
+    def _compute_changes(self, time_now: datetime | None = None) -> None:
+        if time_now:
+            now = time_now
+        else:
+            now = datetime.now().astimezone()
+        self._dt = now
+        yday = now.timetuple().tm_yday
+        day_since_spring = (yday - 80) % 365
+        season_factor = math.sin((day_since_spring / 365) * 2 * math.pi)
+
+        base_temperature = (
+            self._params["temperature"]["avg"] +
+            self._params["temperature"]["yearly_amp"] * season_factor
+        )
+        base_light = (
+            self._params["light"]["max"] +
+            self._params["light"]["yearly_amp"] * season_factor
+        )
+
+        sunrise = datetime.combine(now.date(), self._sunrise).astimezone()
+        sunrise = sunrise - (self._yearly_amp_sun_times * season_factor)
+        sunset = datetime.combine(now.date(), self._sunset).astimezone()
+        sunset = sunset + (self._yearly_amp_sun_times * season_factor)
+        daytime = (sunset - sunrise).seconds
+        nighttime = 24 * 3600 - daytime
+
+        if sunrise <= now <= sunset:
+            seconds_since_sunrise = (now - sunrise).seconds
+            day_factor = math.sin((seconds_since_sunrise / daytime) * math.pi)
+            light = base_light * day_factor
+            self._light = int(light)
+
+        else:
+            # If after midnight
+            if now < sunset:
+                sunset = sunset - timedelta(days=1)
+            seconds_since_sunset = (now - sunset).seconds
+            day_factor = - math.sin((seconds_since_sunset / nighttime) * math.pi)
+            light = 0
+            self._light = int(light)
+
+        temperature = (
+            base_temperature +
+            self._params["temperature"]["yearly_amp"] * season_factor +
+            self._params["temperature"]["daily_amp"] * day_factor
+        )
+        self._temperature = round(temperature, 2)
+        humidity = (
+            self._params["humidity"]["avg"] -
+            self._params["humidity"]["amp"] * day_factor
+        )
+        self._humidity = round(humidity, 2)
+
+        self.logger.info(
+            f"Temperature: {self.temperature:2.2f} - humidity: {self.humidity:3.2f} - "
+            f"light: {self.light:.1f}"
+        )
 
     @property
     def engine(self) -> Engine:
@@ -287,22 +291,29 @@ class VirtualEcosystem:
     def get_actuator_level(self, actuator_type: gv.HardwareType) -> float | None:
         return self.ecosystem.actuator_hub.get_handler(actuator_type).level
 
-    def measure(self) -> None:
+    def measure(self, now: float | None = None) -> None:
         if not self._start_time:
             raise RuntimeError("The virtualEcosystem needs to be started "
                                "before computing measures")
-        now = monotonic()
-        if (
-            self._last_update is not None
-            and (now - self._last_update) < self.time_between_measures
-        ):
-            return
+        now = monotonic() or now
+        with self.virtual_world.lock:
+            if (
+                self._last_update is None
+                or (now - self._last_update) > self.time_between_measures
+            ):
+                self._measure(now)
+                self._last_update = now
+
+    def _measure(self, now: float) -> None:
+        if not self._start_time:
+            raise RuntimeError("The virtualEcosystem needs to be started "
+                               "before computing measures")
 
         if self._last_update is None:
             d_sec = 0.1
         else:
             d_sec = (now - self._last_update)
-        out_temp, out_hum, out_light = self.virtual_world()
+        out_temp, out_hum, out_light = self.virtual_world.get_measures()
 
         def get_corrected_level(actuator_type: gv.HardwareType) -> float:
             l = self.get_actuator_level(actuator_type)
@@ -359,7 +370,7 @@ class VirtualEcosystem:
 
         self._hybrid_capacity = air_heat_capacity + water_heat_capacity
 
-        out_temp, out_hum, out_light = self.virtual_world()
+        out_temp, out_hum, out_light = self.virtual_world.get_measures()
         k_temperature = temperature_converter(out_temp, "c", "k")
 
         self._heat_quantity = self._hybrid_capacity * k_temperature
