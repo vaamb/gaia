@@ -302,21 +302,23 @@ class VirtualEcosystem:
             d_sec = (now - self._last_update)
         out_temp, out_hum, out_light = self.virtual_world()
 
+        def get_corrected_level(actuator_type: gv.HardwareTyp) -> float:
+            l = self.get_actuator_level(gv.HardwareType.heater)
+            if l is None:
+                l = 100.0
+            return l
+
         # New heat quantity
         d_temp = self.temperature - out_temp
         heat_quantity = self._heat_quantity
         heat_loss = self.heat_loss_coef * d_sec * d_temp
         heat_quantity -= heat_loss
         if self.get_actuator_status(gv.HardwareType.heater):
-            level = self.get_actuator_level(gv.HardwareType.heater)
-            if level is None:
-                level = 100
+            level = get_corrected_level(gv.HardwareType.heater)
             heater_output = (self._max_heater_output * d_sec * level / 100)
             heat_quantity += heater_output
         if self.get_actuator_status(gv.HardwareType.cooler):
-            level = self.get_actuator_level(gv.HardwareType.cooler)
-            if level is None:
-                level = 100
+            level = get_corrected_level(gv.HardwareType.cooler)
             cooler_output = (self._max_heater_output * 0.60 * d_sec * level / 100)
             heat_quantity -= cooler_output
         self._heat_quantity = heat_quantity
@@ -327,15 +329,11 @@ class VirtualEcosystem:
         humidity_loss = d_hum * d_sec / 10000  # Pretty much a random factor
         humidity_quantity -= humidity_loss
         if self.get_actuator_status(gv.HardwareType.humidifier):
-            level = self.get_actuator_level(gv.HardwareType.humidifier)
-            if level is None:
-                level = 100
+            level = get_corrected_level(gv.HardwareType.humidifier)
             humidifier_output = (self._max_humidifier_output * d_sec * level / 100)
             humidity_quantity += humidifier_output
         if self.get_actuator_status(gv.HardwareType.dehumidifier):
-            level = self.get_actuator_level(gv.HardwareType.dehumidifier)
-            if level is None:
-                level = 100
+            level = get_corrected_level(gv.HardwareType.dehumidifier)
             dehumidifier_output = (self._max_humidifier_output * 0.50 * d_sec * level / 100)
             humidity_quantity -= dehumidifier_output
         self._humidity_quantity = humidity_quantity
