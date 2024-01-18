@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
+import logging
 import math
 from time import monotonic
 import typing
@@ -35,8 +36,8 @@ class VirtualWorld(metaclass=SingletonMeta):
             amp_humidity: float = 10.0,  # 10.0
             avg_midday_light: int = 75000,
             yearly_amp_light: int = 25000,
-            print_measures: bool = False,
     ) -> None:
+        self.logger: logging.Logger = logging.getLogger("virtual.world")
         self._engine = engine
         self._sunrise = equinox_sun_times[0]
         self._sunset = equinox_sun_times[1]
@@ -60,7 +61,6 @@ class VirtualWorld(metaclass=SingletonMeta):
         self._temperature = avg_temperature
         self._humidity = avg_humidity
         self._light = avg_midday_light
-        self.print_measures = print_measures
         self._dt = None
         self._last_update = None
 
@@ -123,11 +123,10 @@ class VirtualWorld(metaclass=SingletonMeta):
             )
             self._humidity = round(humidity, 2)
 
-            if self.print_measures:
-                print(
-                    f"Virtual Word: temperature: {self.temperature} - "
-                    f"humidity: {self.humidity} - light: {self.light}"
-                )
+            self.logger.info(
+                f"Temperature: {self.temperature:2.2f} - humidity: {self.humidity:3.2f} - "
+                f"light: {self.light:.1f}"
+            )
 
         return self.temperature, self.humidity, self.light
 
@@ -180,6 +179,7 @@ class VirtualEcosystem:
             start: bool = False,
     ) -> None:
         assert len(dimension) == 3
+        self.logger: logging.Logger = logging.getLogger(f"virtual.ecosystem.{uid}")
         self._virtual_world: VirtualWorld = virtual_world
         self._uid: str = uid
         self._volume = dimension[0] * dimension[1] * dimension[2]
@@ -189,7 +189,7 @@ class VirtualEcosystem:
         )  # in W/K
         self._water_volume: float = water_volume
 
-        self._lux: int | None = None
+        self._light: int | None = None
 
         self._max_heater_output: float = max_heater_output
         self._max_humidifier_output: float = max_humidifier_output
@@ -264,12 +264,14 @@ class VirtualEcosystem:
         return get_relative_humidity(self.temperature, self.absolute_humidity)
 
     @property
-    def lux(self) -> int:
+    def light(self) -> int:
         if self.get_actuator_status(gv.HardwareType.light) is None:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
             )
-        return self._lux
+        return self._light
+
+    lux = light
 
     @property
     def uptime(self) -> float:
@@ -302,8 +304,8 @@ class VirtualEcosystem:
             d_sec = (now - self._last_update)
         out_temp, out_hum, out_light = self.virtual_world()
 
-        def get_corrected_level(actuator_type: gv.HardwareTyp) -> float:
-            l = self.get_actuator_level(gv.HardwareType.heater)
+        def get_corrected_level(actuator_type: gv.HardwareType) -> float:
+            l = self.get_actuator_level(actuator_type)
             if l is None:
                 l = 100.0
             return l
@@ -339,15 +341,14 @@ class VirtualEcosystem:
         self._humidity_quantity = humidity_quantity
 
         # Light calculation
-        self._lux = out_light
+        self._light = out_light
         if self.get_actuator_status(gv.HardwareType.light):
-            self._lux += self._max_light_output
+            self._light += self._max_light_output
         self._last_update = now
-        if self.virtual_world.print_measures:
-            print(
-                f"Virtual ecosystem {self.uid}: temperature: {self.temperature} - "
-                  f"humidity: {self.humidity} - light: {self.lux}"
-            )
+        self.logger.info(
+            f"Temperature: {self.temperature:2.2f} - humidity: {self.humidity:3.2f} - "
+            f"light: {self.light:.1f}"
+        )
 
     def reset(self) -> None:
         air_mass = self.volume * self.AIR_DENSITY
@@ -365,7 +366,7 @@ class VirtualEcosystem:
         out_abs_hum = get_absolute_humidity(out_temp, out_hum)
         self._humidity_quantity = out_abs_hum * self.volume
 
-        self._lux = out_light
+        self._light = out_light
 
         self._start_time = None
         self._last_update = None

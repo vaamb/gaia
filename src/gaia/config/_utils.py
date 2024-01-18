@@ -153,4 +153,9 @@ def configure_logging(config_class: GaiaConfig):
             },
         },
     }
+    if config_class.DEVELOPMENT and config_class.VIRTUALIZATION:
+        logging_config["loggers"]["virtual"] = {
+            "handlers": handlers,
+            "level": base_level,
+        }
     logging.config.dictConfig(logging_config)

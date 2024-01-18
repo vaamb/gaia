@@ -273,7 +273,7 @@ class Engine(metaclass=SingletonMeta):
 
     def _init_virtualization(self) -> None:
         if self.config.app_config.VIRTUALIZATION:
-            init_virtual_world(self, print_measures=self.config.app_config.DEVELOPMENT)
+            init_virtual_world(self)
 
     def _loop(self) -> None:
         while not self._stop_event.is_set():
