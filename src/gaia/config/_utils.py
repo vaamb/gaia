@@ -132,25 +132,33 @@ def configure_logging(config_class: GaiaConfig):
 
         "loggers": {
             "": {
+                "handlers": "",
+                "level": base_level,
+            },
+            "gaia": {
                 "handlers": handlers,
-                "level": base_level
+                "level": base_level,
             },
             "apscheduler": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if debug else 'WARNING'}"
+                "level": f"{'DEBUG' if debug else 'WARNING'}",
             },
             "engineio": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if debug else 'INFO'}"
+                "level": f"{'DEBUG' if debug else 'INFO'}",
             },
             "dispatcher": {
                 "handlers": handlers,
-                "level": f"{'DEBUG' if debug else 'WARNING'}"
+                "level": f"{'DEBUG' if debug else 'WARNING'}",
             },
             "urllib3": {
                 "handlers": handlers,
-                "level": "WARNING"
+                "level": "WARNING",
             },
+            "virtual" : {
+                "handlers": ["streamHandler"] if config_class.DEVELOPMENT and log_to_stdout else "",
+                "level": "INFO",
+            }
         },
     }
     logging.config.dictConfig(logging_config)

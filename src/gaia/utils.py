@@ -204,18 +204,18 @@ def get_dew_point(
 
 def get_absolute_humidity(
         temp: float | None,
-        hum: float | None,
+        rel_hum: float | None,
         precision_digit: int = 2
 ) -> float | None:
     """
     Calculates the absolute humidity. The formula used is given below
-    :param temp: temperature in degree celsius
-    :param hum: relative humidity in percent
+    :param temp: temperature in Celsius degrees
+    :param rel_hum: relative humidity in percent
     :param precision_digit: level of precision to keep in the result
 
     :return float, absolute humidity in gram per cubic meter
     """
-    if temp is None or hum is None:
+    if temp is None or rel_hum is None:
         return None
     # The formula is based on ideal gas law (PV = nRT) where n = m/M and V = 1m**3
     # As we need m, we transform it to m = PVM/RT
@@ -225,11 +225,35 @@ def get_absolute_humidity(
     # p = psat * (hum/100)
     # Molar weight of water
     # Mwater = 18.02
-    # Gas constant (here we want the result in grams, not kg so we divide it by 1000)
+    # Gas constant (here we want the result in grams, not kg, so we divide it by 1000)
     # R = 0.08314 
     # result = (p*Mwater)/(R*(Temp+273.15))
     # Or simplified:
-    x = 6.112 * (e ** ((17.67 * temp) / (temp + 243.5)) * hum * 2.1674) / (273.15 + temp)
+    psat = 6.112 * e ** ((17.67 * temp) / (temp + 243.5))
+    other_consts: float =  18.02 / 100 / 0.08314
+    x = (psat * rel_hum * other_consts) / (273.15 + temp)
+    return float(round(x, precision_digit))
+
+
+def get_relative_humidity(
+        temp: float | None,
+        abs_hum: float | None,
+        precision_digit: int = 2
+) -> float | None:
+    """
+    Calculates the absolute humidity. The formula used is given below
+    :param temp: temperature in Celsius degrees
+    :param abs_hum: absolute humidity in gram per cubic meter
+    :param precision_digit: level of precision to keep in the result
+
+    :return float, relative humidity in percent
+    """
+    if temp is None or abs_hum is None:
+        return None
+    # Cf `get_absolute_humidity()` for the formula
+    psat = 6.112 * e ** ((17.67 * temp) / (temp + 243.5))
+    other_consts: float =  18.02 / 100 / 0.08314
+    x = (abs_hum * (273.15 + temp)) / (other_consts * psat)
     return float(round(x, precision_digit))
 
 

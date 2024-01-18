@@ -5,6 +5,7 @@ import uuid
 class BaseConfig:
     DEBUG = False
     TESTING = False
+    DEVELOPMENT = False
 
     DIR = os.environ.get("GAIA_DIR") or os.getcwd()
 
