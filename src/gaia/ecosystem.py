@@ -301,7 +301,7 @@ class Ecosystem:
 
     def turn_actuator(
             self,
-            actuator: gv.HardwareType | str,
+            actuator: gv.HardwareType.actuator | gv.HardwareTypeNames,
             mode: gv.ActuatorModePayload | str = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
@@ -315,6 +315,7 @@ class Ecosystem:
         """
         validated_actuator: gv.HardwareType = \
             gv.safe_enum_from_name(gv.HardwareType, actuator)
+        assert validated_actuator in gv.HardwareType.actuator
         validated_mode: gv.ActuatorModePayload = \
             gv.safe_enum_from_name(gv.ActuatorModePayload, mode)
         try:
@@ -325,10 +326,7 @@ class Ecosystem:
                         turn_to=validated_mode, countdown=countdown)
                 else:
                     raise ValueError("Light subroutine is not running")
-            elif validated_actuator in [
-                gv.HardwareType.heater, gv.HardwareType.cooler,
-                gv.HardwareType.humidifier, gv.HardwareType.dehumidifier
-            ]:
+            elif validated_actuator in gv.HardwareType.climate_actuator:
                 if self.get_subroutine_status("climate"):
                     climate_subroutine: Climate = self.subroutines["climate"]
                     climate_subroutine.turn_climate_actuator(
@@ -361,7 +359,7 @@ class Ecosystem:
 
     def get_actuator_handler(
             self,
-            actuator_type: gv.HardwareType | gv.HardwareTypeNames
+            actuator_type: gv.HardwareType.actuator | gv.HardwareTypeNames
     ) -> ActuatorHandler:
         return self.actuator_hub.get_handler(actuator_type)
 

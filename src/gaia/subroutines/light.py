@@ -91,7 +91,7 @@ class Light(SubroutineTemplate):
     """Functions to switch the light on/off either manually or automatically"""
     def _compute_if_manageable(self) -> bool:
         if all((
-                self.config.get_IO_group_uids("light"),
+                self.config.get_IO_group_uids(gv.HardwareType.light),
                 self.light_method,
                 bool(self.lighting_hours.morning_start)
         )):
@@ -133,7 +133,7 @@ class Light(SubroutineTemplate):
         self.reset_any_dimmable_light()
 
     def get_hardware_needed_uid(self) -> set[str]:
-        return set(self.config.get_IO_group_uids("light"))
+        return set(self.config.get_IO_group_uids(gv.HardwareType.light))
 
     @property
     def actuator_handler(self) -> ActuatorHandler:

@@ -83,7 +83,7 @@ class Health(SubroutineTemplate):
         self.analyse_picture()
 
     def _compute_if_manageable(self) -> bool:
-        cameras_uid = self.config.get_IO_group_uids("camera")
+        cameras_uid = self.config.get_IO_group_uids(gv.HardwareType.camera)
         if cameras_uid:
             for camera_uid in cameras_uid:
                 camera_dict = self.config.get_hardware_config(camera_uid)
