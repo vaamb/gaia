@@ -173,10 +173,10 @@ class VirtualEcosystem:
             virtual_world: VirtualWorld,
             uid: str,
             dimension: tuple[float, float, float] = (0.5, 0.5, 1.0),
-            water_volume: float = 5,  # in liter
-            max_heater_output: int = 50,  # max heater output in watt
-            max_humidifier_output: float = 0.1,  # max humidifier output in g/water per second
-            max_light_output: int = 30000,  # max light output in lux
+            water_volume: float = 5.0,  # in liter
+            max_heater_output: float = 75.0,  # max heater output in watt
+            max_humidifier_output: float = 0.03,  # max humidifier output in g/water per second
+            max_light_output: float = 30000.0,  # max light output in lux
             start: bool = False,
     ) -> None:
         assert len(dimension) == 3
@@ -191,9 +191,9 @@ class VirtualEcosystem:
 
         self._lux: int | None = None
 
-        self._max_heater_output: int = max_heater_output
+        self._max_heater_output: float = max_heater_output
         self._max_humidifier_output: float = max_humidifier_output
-        self._max_light_output: int = max_light_output
+        self._max_light_output: float = max_light_output
 
         self._heat_quantity: float | None = None       # Total heat in the enclosure, in joules
         self._hybrid_capacity: float | None = None     # A mix between air and water heat capacity * volume, in j/K
