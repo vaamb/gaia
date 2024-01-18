@@ -379,24 +379,36 @@ class EngineConfig(metaclass=SingletonMeta):
         self._config_files_modif = config_files_mtime
         return changed
 
-    def _watchdog_loop(self) -> None:
+    def _watchdog_routine(self) -> None:
         # Fill config files modification dict
+        with self.config_files_lock():
+            changed_configs = self._get_changed_config_files()
+            if changed_configs:
+                for config_type in changed_configs:
+                    self.logger.info(
+                        f"Change in '{config_type.value}' detected. Updating "
+                        f"{config_type.name} configuration.")
+                    self._load_config(cfg_type=config_type)
+                    if config_type is ConfigType.ecosystems:
+                        self.refresh_sun_times()
+                with self.new_config:
+                    self.new_config.notify_all()
+                if self.engine_set_up and self.engine.use_message_broker:
+                    self.engine.event_handler.send_full_config()
+
+    def _watchdog_loop(self) -> None:
         sleep_period = get_gaia_config().CONFIG_WATCHER_PERIOD / 1000
+        self.logger.info(
+            f"Starting the configuration file watchdog loop. It will run every "
+            f"{sleep_period:.3f} s.")
         while not self._stop_event.is_set():
-            with self.config_files_lock():
-                changed_configs = self._get_changed_config_files()
-                if changed_configs:
-                    for config_type in changed_configs:
-                        self.logger.info(
-                            f"Change in '{config_type.value}' detected. Updating "
-                            f"{config_type.name} configuration.")
-                        self._load_config(cfg_type=config_type)
-                        if config_type is ConfigType.ecosystems:
-                            self.refresh_sun_times()
-                    with self.new_config:
-                        self.new_config.notify_all()
-                    if self.engine_set_up and self.engine.use_message_broker:
-                        self.engine.event_handler.send_full_config()
+            try:
+                self._watchdog_routine()
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while running the watchdog routine. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
             self._stop_event.wait(sleep_period)
 
     def start_watchdog(self) -> None:

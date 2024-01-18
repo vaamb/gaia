@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, time
+from threading import Event, Thread
+from time import monotonic
 import typing as t
 
 import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorCouple, actuator_couples, HystericalPID
 from gaia.exceptions import UndefinedParameter
-from gaia.hardware import actuator_models, Hardware
-from gaia.shared_resources import get_scheduler
+from gaia.hardware import actuator_models
+from gaia.hardware.abc import Dimmer, Hardware, Switch
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -24,6 +26,11 @@ class Climate(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
+        self.hardware: dict[str, Dimmer | Switch]
+        self._thread: Thread | None = None
+        self._stop_event = Event()
+        self._loop_period: float = float(
+            self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._sensor_miss: int = 0
         self._regulated_parameters: dict[gv.ClimateParameter: bool] = {
             gv.ClimateParameter.temperature: False,
@@ -64,7 +71,7 @@ class Climate(SubroutineTemplate):
             return regulated_parameters
 
         # Get sensors mounted and the measures they're taking
-        sensors  = [
+        sensors = [
             hardware for hardware in Hardware.get_mounted().values()
             if hardware.ecosystem_uid == self.ecosystem.uid
             and hardware.type == gv.HardwareType.sensor
@@ -181,6 +188,29 @@ class Climate(SubroutineTemplate):
             )
             self.stop()
 
+    def _climate_loop(self) -> None:
+        self.logger.info(
+            f"Starting the climate loop. It will run every "
+            f"{self._loop_period:.1f} s.")
+        while not self._stop_event.is_set():
+            start_time = monotonic()
+            try:
+                self._climate_routine()
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while running the climate routine. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
+            loop_time = monotonic() - start_time
+            sleep_time = self._loop_period - loop_time
+            if sleep_time < 0:  # pragma: no cover
+                self.logger.warning(
+                    f"Climate routine took {loop_time:.1f}. You should consider "
+                    f"increasing 'CLIMATE_LOOP_PERIOD'."
+                )
+                sleep_time = 2
+            self._stop_event.wait(sleep_time)
+
     def _compute_if_manageable(self) -> bool:
         self.update_regulated_parameters()
         if not self._any_regulated(self._regulated_parameters):
@@ -194,19 +224,17 @@ class Climate(SubroutineTemplate):
 
     def _start(self) -> None:
         # self.update_regulated_parameters()  # Done in _compute_if_manageable
-        self.logger.info(
-            f"Starting climate routine. It will run every minute"
-        )
+        self._stop_event.clear()
         for climate_parameter in self._regulated_parameters:
             pid = self.get_pid(climate_parameter)
             pid.reset()
-        self._climate_routine()
-        scheduler = get_scheduler()
-        scheduler.add_job(
-            self._climate_routine,
-            trigger="cron", minute="*", misfire_grace_time=10,
-            id=f"{self.ecosystem.name}-climate"
+        self.thread = Thread(
+            target=self._climate_loop,
+            name=f"{self.ecosystem.uid}-climate-loop",
+            daemon=True,
         )
+        self.thread.start()
+        self._climate_routine()
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
@@ -214,8 +242,9 @@ class Climate(SubroutineTemplate):
                 actuator_handler.activate()
 
     def _stop(self) -> None:
-        scheduler = get_scheduler()
-        scheduler.remove_job(job_id=f"{self.ecosystem.name}-climate")
+        self._stop_event.set()
+        self.thread.join()
+        self.thread = None
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
@@ -259,6 +288,17 @@ class Climate(SubroutineTemplate):
             in self._regulated_parameters.items()
             if regulated
         ] if self.started else []
+
+    @property
+    def thread(self) -> Thread:
+        if self._thread is None:
+            raise AttributeError("Light status thread has not been set up")
+        else:
+            return self._thread
+
+    @thread.setter
+    def thread(self, thread: Thread | None) -> None:
+        self._thread = thread
 
     def update_regulated_parameters(self) -> None:
         self._regulated_parameters = self._compute_regulated_parameters()

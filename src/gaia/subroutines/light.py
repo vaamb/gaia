@@ -44,21 +44,29 @@ class Light(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self.hardware: dict[str, "Switch"]
-        self._light_sensors: list[LightSensor] | None = None
-        self._any_dimmable_light: bool | None = None
         self._thread: Thread | None = None
         self._stop_event = Event()
+        self._loop_period: float = float(
+            self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
+        self._light_sensors: list[LightSensor] | None = None
+        self._any_dimmable_light: bool | None = None
         self._light_method: gv.LightMethod | None = None  # For tests only
         self._lighting_hours: gv.LightingHours | None = None  # For test only
         self._finish__init__()
 
     def _light_loop(self) -> None:
-        cfg = self.ecosystem.engine.config.app_config
         self.logger.info(
-            f"Starting light loop at a frequency of {1/cfg.LIGHT_LOOP_PERIOD} Hz")
+            f"Starting the light loop. It will run every "
+            f"{self._loop_period:.2f} s.")
         while not self._stop_event.is_set():
-            self._light_routine()
-            self._stop_event.wait(cfg.LIGHT_LOOP_PERIOD)
+            try:
+                self._light_routine()
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while running the light routine. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
+            self._stop_event.wait(self._loop_period)
 
     def _light_routine(self) -> None:
         pid: HystericalPID = self.get_pid()
@@ -74,7 +82,6 @@ class Light(SubroutineTemplate):
         expected_status = self.actuator_handler.compute_expected_status(pid_output)
 
         if expected_status:
-            # TODO: reset pid so there is no internal value overshoot
             self.actuator_handler.turn_on()
             self.actuator_handler.set_level(pid_output)
         else:
@@ -102,7 +109,7 @@ class Light(SubroutineTemplate):
         pid.reset()
         self.thread = Thread(
             target=self._light_loop,
-            name=f"{self.ecosystem.uid}-light-status",
+            name=f"{self.ecosystem.uid}-light-loop",
             daemon=True,
         )
         self.thread.start()
