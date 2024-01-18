@@ -14,6 +14,8 @@ import ruamel.yaml
 from ruamel.yaml import SafeRepresenter, ScalarNode
 
 
+remote_address = "1.1.1.1"
+
 yaml = ruamel.yaml.YAML()
 
 
@@ -327,13 +329,11 @@ def get_unit(measure: str, default: str) -> str:
 
 
 def is_connected() -> bool:
-    from gaia.config import get_config
-    host = get_config().TEST_CONNECTION_IP
     _is_connected = False
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.settimeout(2)
     try:
-        s.connect((host, 80))
+        s.connect((remote_address, 80))
         _is_connected = True
     finally:
         s.close()
