@@ -37,6 +37,7 @@ class VirtualWorld(metaclass=SingletonMeta):
             amp_humidity: float = 10.0,  # 10.0
             avg_midday_light: int = 75000,
             yearly_amp_light: int = 25000,
+            **kwargs
     ) -> None:
         self.logger: logging.Logger = logging.getLogger("virtual.world")
         self._engine = engine
@@ -181,6 +182,7 @@ class VirtualEcosystem:
             max_humidifier_output: float = 0.03,  # max humidifier output in g/water per second
             max_light_output: float = 30000.0,  # max light output in lux
             start: bool = False,
+            **kwargs
     ) -> None:
         assert len(dimension) == 3
         self.logger: logging.Logger = logging.getLogger(f"virtual.ecosystem.{uid}")
@@ -405,7 +407,7 @@ def get_virtual_world() -> VirtualWorld:
 _virtual_ecosystems: dict[str, VirtualEcosystem] = {}
 
 
-def init_virtual_ecosystem(ecosystem_id: str, start: bool = False) -> None:
+def init_virtual_ecosystem(ecosystem_id: str, start: bool = False, **kwargs) -> None:
     global _virtual_world
     if not _virtual_world:
         raise RuntimeError(
@@ -415,7 +417,7 @@ def init_virtual_ecosystem(ecosystem_id: str, start: bool = False) -> None:
     virtual_world = get_virtual_world()
     ecosystem_uid = virtual_world.engine.config.get_IDs(ecosystem_id).uid
     _virtual_ecosystems[ecosystem_uid] = \
-        VirtualEcosystem(virtual_world, ecosystem_uid, start=start)
+        VirtualEcosystem(virtual_world, ecosystem_uid, start=start, **kwargs)
 
 
 def get_virtual_ecosystem(ecosystem_id: str) -> VirtualEcosystem | None:

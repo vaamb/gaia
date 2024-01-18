@@ -23,6 +23,7 @@ class BaseConfig:
 
     ENGINE_UID = os.environ.get("GAIA_UID") or hex(uuid.getnode())[2:]
     VIRTUALIZATION = os.environ.get("GAIA_VIRTUALIZATION", False)
+    VIRTUALIZATION_PARAMETERS = {"world": {},"ecosystems": {}}
 
     USE_DATABASE = False
 
