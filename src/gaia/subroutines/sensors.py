@@ -26,12 +26,15 @@ class Sensors(SubroutineTemplate):
         self._thread: Thread | None = None
         self._stop_event = Event()
         self._loop_timeout: float = float(
-            self.ecosystem.engine.config.app_config.SENSORS_TIMEOUT)
+            self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         self._data_lock = Lock()
         self._finish__init__()
 
     def _sensors_loop(self) -> None:
+        self.logger.info(
+            f"Starting the sensors loop. It will run every "
+            f"{self._loop_timeout:.1f} s.")
         sleep(0.01)  # Allow to finish the routine startup
         while not self._stop_event.is_set():
             start_time = monotonic()
@@ -47,14 +50,14 @@ class Sensors(SubroutineTemplate):
             sleep_time = self._loop_timeout - loop_time
             if sleep_time < 0:  # pragma: no cover
                 self.logger.warning(
-                    f"Sensors data loop took {loop_time}. This either indicates "
-                    f"errors while data retrieval or the need to adapt "
-                    f"'SENSOR_TIMEOUT'."
+                    f"Sensors data loop took {loop_time:.1f}. This either "
+                    f"indicates errors while data retrieval or the need to "
+                    f"adapt 'SENSOR_LOOP_PERIOD'."
                 )
                 sleep_time = 2
             self.logger.debug(
                 f"Sensors data update finished in {loop_time:.1f} s." +
-                f"Next sensors data update in {sleep_time:.1f}.s"
+                f"Next sensors data update in {sleep_time:.1f} s."
             )
             self._stop_event.wait(sleep_time)
 
@@ -66,12 +69,10 @@ class Sensors(SubroutineTemplate):
             return False
 
     def _start(self) -> None:
-        self.logger.info(
-            f"Starting sensors loop. It will run every {self._loop_timeout} s")
         self._stop_event.clear()
         self.thread = Thread(
             target=self._sensors_loop,
-            name=f"{self.ecosystem.uid}-sensors",
+            name=f"{self.ecosystem.uid}-sensors-loop",
             daemon=True,
         )
         self.thread.start()
