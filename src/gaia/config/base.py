@@ -46,5 +46,3 @@ class BaseConfig:
     LIGHT_LOOP_PERIOD = 0.5  # in s
     SENSORS_LOOP_PERIOD = 5.0  # in s
     SENSORS_LOGGING_PERIOD = 10
-
-    TEST_CONNECTION_IP = "1.1.1.1"
