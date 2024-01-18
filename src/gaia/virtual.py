@@ -71,7 +71,7 @@ class VirtualWorld(metaclass=SingletonMeta):
         mono_clock = monotonic()
         if (
             not self._last_update
-            or mono_clock - self._last_update > 10
+            or mono_clock - self._last_update > 60.0
         ):
             self._compute_changes(time_now)
             self._last_update = mono_clock
