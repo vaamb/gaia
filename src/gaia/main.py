@@ -27,7 +27,8 @@ def main(
     from gaia import Engine
 
     gaia_engine = Engine()
-    gaia_engine.init_plugins()
+    if gaia_engine.plugins_needed:
+        gaia_engine.init_plugins()
     gaia_engine.run()
 
 
