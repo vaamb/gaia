@@ -6,65 +6,19 @@ from typing import Any
 
 from gaia.config import get_config
 from gaia.hardware.utils import hardware_logger
+from gaia.virtual import VirtualEcosystem
 
 
 hardware_logger.warning(
     "The platform used is not a Raspberry Pi, using compatibility modules")
 
 
-if get_config().VIRTUALIZATION:
-    from gaia.virtual import get_virtual_ecosystem
-
-    hardware_logger.info("Using ecosystem virtualization")
-
-    def _add_noise(measure: float) -> float:
-        return measure * random.gauss(1, 0.01)
-
-    def get_humidity(ecosystem_uid: str, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid)
-        virtual_ecosystem.measure()
-        return round(_add_noise(virtual_ecosystem.humidity), 2)
-
-    def get_light(ecosystem_uid: str, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid)
-        virtual_ecosystem.measure()
-        return round(_add_noise(virtual_ecosystem.lux))
-
-    def get_moisture(ecosystem_uid: str, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid)
-        virtual_ecosystem.measure()
-        moisture_at_42_deg = (virtual_ecosystem.humidity * 0.2) + 6
-        slope = (moisture_at_42_deg - 100) / (42 - 5)
-        intercept = 100 - (slope * 5)
-        moisture = (slope * virtual_ecosystem.temperature) + intercept
-        moisture = round(_add_noise(moisture), 2)
-        if moisture > 98.3:
-            moisture = 98.3
-        return moisture
-
-    def get_temperature(ecosystem_uid: str, *args, **kwargs) -> float:
-        virtual_ecosystem = get_virtual_ecosystem(ecosystem_uid)
-        virtual_ecosystem.measure()
-        return round(_add_noise(virtual_ecosystem.temperature), 2)
-
-else:
-    _BASE_TEMPERATURE = 25
-    _BASE_HUMIDITY = 60
-
-    def get_humidity(ecosystem_uid: str, *args, **kwargs) -> float:
-        return random.gauss(_BASE_HUMIDITY, 5)
+_BASE_TEMPERATURE = 25
+_BASE_HUMIDITY = 60
 
 
-    def get_light(ecosystem_uid: str, *args, **kwargs) -> float:
-        return random.randrange(start=1000, stop=100000, step=10)
-
-
-    def get_moisture(ecosystem_uid: str, *args, **kwargs) -> float:
-        return random.gauss(_BASE_HUMIDITY/2, 5)
-
-
-    def get_temperature(ecosystem_uid: str, *args, **kwargs) -> float:
-        return random.gauss(_BASE_TEMPERATURE, 2.5)
+def add_noise(measure: float) -> float:
+    return measure * random.gauss(1, 0.01)
 
 
 def random_sleep(
@@ -119,28 +73,54 @@ class Pin:
 # ---------------------------------------------------------------------------
 #   Hardware modules from Adafruit
 # ---------------------------------------------------------------------------
-class CompatibilityHardware:
-    def __init__(self, *args, **kwargs) -> None:
-        self.ecosystem_uid = kwargs.get("ecosystem_uid", "")
+class CompatibilityDevice:
+    def __init__(
+            self,
+            *args,
+            virtual_ecosystem: VirtualEcosystem | None = None,
+            **kwargs
+    ) -> None:
+        self.virtual_ecosystem: VirtualEcosystem | None = virtual_ecosystem
 
 
-class LightCompatibility(CompatibilityHardware):
+class LightCompatibility(CompatibilityDevice):
     @property
     def lux(self) -> float:
-        random_sleep(0.02, 0.01)
-        return get_light(self.ecosystem_uid)
+        if self.virtual_ecosystem is not None:
+            self.virtual_ecosystem.measure()
+            return round(add_noise(self.virtual_ecosystem.light))
+        return random.randrange(start=1000, stop=100000, step=10)
 
 
-class TemperatureCompatibility(CompatibilityHardware):
+class TemperatureCompatibility(CompatibilityDevice):
     @property
     def temperature(self) -> float:
-        return get_temperature(self.ecosystem_uid)
+        if self.virtual_ecosystem is not None:
+            self.virtual_ecosystem.measure()
+            return round(add_noise(self.virtual_ecosystem.light), 2)
+        return random.gauss(_BASE_TEMPERATURE, 2.5)
 
 
-class HumidityCompatibility(CompatibilityHardware):
+class HumidityCompatibility(CompatibilityDevice):
     @property
     def humidity(self) -> float:
-        return get_humidity(self.ecosystem_uid)
+        if self.virtual_ecosystem is not None:
+            self.virtual_ecosystem.measure()
+            return round(add_noise(self.virtual_ecosystem.humidity), 2)
+        return random.gauss(_BASE_HUMIDITY, 5)
+
+
+class MoistureCompatibility(TemperatureCompatibility, HumidityCompatibility):
+    @property
+    def moisture(self) -> float:
+        moisture_at_42_deg = (self.humidity * 0.2) + 6
+        slope = (moisture_at_42_deg - 100) / (42 - 5)
+        intercept = 100 - (slope * 5)
+        moisture = (slope * self.temperature) + intercept
+        moisture = round(add_noise(moisture), 2)
+        if moisture > 98.3:
+            moisture = 98.3
+        return moisture
 
 
 class DHTBase(TemperatureCompatibility, HumidityCompatibility):
@@ -156,17 +136,17 @@ class DHT22(DHTBase):
     pass
 
 
-class AHTx0(CompatibilityHardware):
+class AHTx0(TemperatureCompatibility, HumidityCompatibility):
     def _readdata(self) -> None:
         pass
 
     @property
     def _temp(self) -> float:
-        return get_temperature(self.ecosystem_uid)
+        return self.temperature
 
     @property
     def _humidity(self) -> float:
-        return get_humidity(self.ecosystem_uid)
+        return self.humidity
 
 
 class VEML7700(LightCompatibility):
@@ -177,14 +157,14 @@ class VCNL4040(LightCompatibility):
     pass
 
 
-class Seesaw(CompatibilityHardware):
+class Seesaw(MoistureCompatibility):
     def moisture_read(self) -> float:
         random_sleep(0.02, 0.01)
-        return get_moisture(self.ecosystem_uid)
+        return self.moisture
 
     def get_temp(self) -> float:
         random_sleep(0.02, 0.01)
-        return get_temperature(self.ecosystem_uid)
+        return self.temperature
 
 
 class PiCamera:

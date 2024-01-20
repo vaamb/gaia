@@ -67,7 +67,7 @@ class VirtualWorld(metaclass=SingletonMeta):
         self._dt: datetime | None = None
         self._last_update: float | None = None
 
-    def get_measures(self, time_now: datetime | None = None) -> tuple[float, float, int]:
+    def get_measures(self, time_now: datetime | None = None) -> tuple[float, float, float]:
         mono_clock = monotonic()
         if (
             not self._last_update
@@ -195,7 +195,7 @@ class VirtualEcosystem:
         )  # in W/K
         self._water_volume: float = water_volume
 
-        self._light: int | None = None
+        self._light: float | None = None
 
         self._max_heater_output: float = max_heater_output
         self._max_humidifier_output: float = max_humidifier_output
@@ -270,7 +270,7 @@ class VirtualEcosystem:
         return get_relative_humidity(self.temperature, self.absolute_humidity)
 
     @property
-    def light(self) -> int:
+    def light(self) -> float:
         if self.get_actuator_status(gv.HardwareType.light) is None:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"

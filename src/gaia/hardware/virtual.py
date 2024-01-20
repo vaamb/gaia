@@ -1,5 +1,4 @@
 from gaia.hardware.abc import Hardware
-from gaia.virtual import get_virtual_ecosystem
 
 
 class virtualHardware(Hardware):
@@ -9,5 +8,4 @@ class virtualHardware(Hardware):
             self.subroutine is not None
             and self.subroutine.ecosystem.engine.config.app_config.VIRTUALIZATION
         ):
-            # Check if the virtual ecosystem exists
-            get_virtual_ecosystem(self.subroutine.ecosystem.uid)
+            assert self.subroutine.ecosystem.virtualized
