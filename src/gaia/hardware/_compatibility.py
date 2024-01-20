@@ -22,7 +22,7 @@ def add_noise(measure: float) -> float:
 
 
 def random_sleep(
-        avg_duration: float = 0.55,
+        avg_duration: float = 0.25,
         std_deviation: float = 0.075
 ) -> None:
     if not get_config().TESTING:
@@ -125,7 +125,7 @@ class MoistureCompatibility(TemperatureCompatibility, HumidityCompatibility):
 
 class DHTBase(TemperatureCompatibility, HumidityCompatibility):
     def measure(self) -> None:
-        random_sleep()
+        random_sleep(avg_duration=0.55)
 
 
 class DHT11(DHTBase):
@@ -159,11 +159,11 @@ class VCNL4040(LightCompatibility):
 
 class Seesaw(MoistureCompatibility):
     def moisture_read(self) -> float:
-        random_sleep(0.02, 0.01)
+        random_sleep(0.02, 0.005)
         return self.moisture
 
     def get_temp(self) -> float:
-        random_sleep(0.02, 0.01)
+        random_sleep(0.02, 0.005)
         return self.temperature
 
 
@@ -183,7 +183,7 @@ class PiCamera:
     def configure(self, camera_config) -> Any:
         pass
 
-    def start_preview(self, preview: "Preview") -> None:
+    def start_preview(self, preview: Preview) -> None:
         pass
 
     def start(self) -> None:
