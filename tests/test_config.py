@@ -14,6 +14,10 @@ from .data import ecosystem_info, ecosystem_name, sun_times
 from .utils import get_logs_content
 
 
+def is_not_connected(*args):
+    return not is_connected()
+
+
 # ---------------------------------------------------------------------------
 #   Test EngineConfig
 # ---------------------------------------------------------------------------
@@ -47,7 +51,7 @@ def test_config_files_watchdog(engine_config: EngineConfig):
     engine_config.create_ecosystem("Already fading away")
     with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
         yaml.dump(engine_config.ecosystems_config, cfg)
-    sleep(0.15)  # Allow to check at least once if files changed
+    sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
     with get_logs_content(engine_config.logs_dir / "base.log") as logs:
         assert "Updating ecosystems configuration" in logs
 
@@ -55,7 +59,7 @@ def test_config_files_watchdog(engine_config: EngineConfig):
     engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
     with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
         yaml.dump(engine_config.private_config, cfg)
-    sleep(0.15)  # Allow to check at least once if files changed
+    sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
     with get_logs_content(engine_config.logs_dir / "base.log") as logs:
         assert "Updating private configuration" in logs
 
@@ -90,7 +94,7 @@ def test_download_sun_times_no_coordinates(engine_config: EngineConfig):
         assert "You need to define your home city coordinates" in logs
 
 
-@pytest.mark.skipif(not is_connected())
+@pytest.mark.skipif(is_not_connected)
 @pytest.mark.timeout(5)
 def test_download_sun_times_success(engine_config: EngineConfig):
     engine_config.home_coordinates = (0, 0)
@@ -109,7 +113,7 @@ def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
 
 
 # TODO: add a cache to be sure data is not downloaded again
-@pytest.mark.skipif(not is_connected())
+@pytest.mark.skipif(is_not_connected)
 def test_refresh_suntimes_success(
         engine_config: EngineConfig,
         ecosystem_config: EcosystemConfig,

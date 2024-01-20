@@ -12,7 +12,7 @@ import random
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
-from typing import cast, Literal, TypedDict
+from typing import cast, Literal, Type, TypedDict
 import weakref
 from weakref import WeakValueDictionary
 
@@ -23,8 +23,8 @@ from requests import ConnectionError, Session
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
 
-from gaia.config._utils import (
-    configure_logging, GaiaConfig, get_config as get_gaia_config)
+from gaia.config import (
+    BaseConfig, configure_logging, GaiaConfig, GaiaConfigHelper)
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import Hardware, hardware_models
@@ -182,10 +182,16 @@ class EngineConfig(metaclass=SingletonMeta):
     To interact with a specific ecosystem configuration, the EcosystemConfig
     class should be used.
     """
-    def __init__(self, gaia_config: GaiaConfig | None = None) -> None:
+    def __init__(self, gaia_config: Type[BaseConfig] | None = None) -> None:
         self.logger = logging.getLogger("gaia.engine.config")
         self.logger.debug("Initializing EngineConfig")
-        self._app_config = gaia_config or get_gaia_config()
+        if gaia_config is not None:
+            if GaiaConfigHelper.config_is_set():
+                raise ValueError(
+                    "Parameter 'gaia_config' should only be given if "
+                    "'GaiaConfigHelper.set_config' has not been used before.")
+            GaiaConfigHelper.set_config(gaia_config)
+        self._app_config = GaiaConfigHelper.get_config()
         configure_logging(self.app_config)
         self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
@@ -328,6 +334,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._dump_config(ConfigType.private)
 
     def initialize_configs(self) -> None:
+        # This steps needs to remain separate and explicits as it loads files
         with self.config_files_lock():
             for cfg_type in ConfigType:
                 try:
@@ -397,7 +404,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     self.engine.event_handler.send_full_config()
 
     def _watchdog_loop(self) -> None:
-        sleep_period = get_gaia_config().CONFIG_WATCHER_PERIOD / 1000
+        sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
         self.logger.info(
             f"Starting the configuration file watchdog loop. It will run every "
             f"{sleep_period:.3f} s.")
@@ -481,7 +488,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @ecosystems_config.setter
     def ecosystems_config(self, value: dict):
-        if get_gaia_config().TESTING:
+        if self.app_config.TESTING:
             self._ecosystems_config = value
         else:
             raise AttributeError("can't set attribute 'ecosystems_config'")
@@ -492,7 +499,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @private_config.setter
     def private_config(self, value: dict):
-        if get_gaia_config().TESTING:
+        if self.app_config.TESTING:
             self._private_config = value
         else:
             raise AttributeError("can't set attribute 'private_config'")
