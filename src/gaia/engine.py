@@ -14,8 +14,7 @@ from gaia.ecosystem import Ecosystem
 from gaia.exceptions import UndefinedParameter
 from gaia.shared_resources import get_scheduler, start_scheduler
 from gaia.utils import SingletonMeta
-from gaia.virtual import (
-    get_virtual_ecosystem, init_virtual_ecosystem, init_virtual_world)
+from gaia.virtual import VirtualWorld
 
 
 if t.TYPE_CHECKING:
@@ -43,12 +42,18 @@ class Engine(metaclass=SingletonMeta):
         self._config: EngineConfig = engine_config or EngineConfig()
         self.config.engine = self
         self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
-        self.logger.info("Initializing Gaia")
+        self.logger.info("Initializing Gaia.")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = self.config.app_config.ENGINE_UID
-        self._message_broker: "KombuDispatcher" | None = None
-        self._event_handler: "Events" | None = None
-        self._db: "SQLAlchemyWrapper" | None = None
+        self._virtual_world: VirtualWorld | None = None
+        if self.config.app_config.VIRTUALIZATION:
+            self.logger.info("Using ecosystem virtualization.")
+            virtual_cfg = self.config.app_config.VIRTUALIZATION_PARAMETERS
+            virtual_world_cfg: dict = virtual_cfg.get("world", {})
+            self._virtual_world = VirtualWorld(self, **virtual_world_cfg)
+        self._message_broker: KombuDispatcher | None = None
+        self._event_handler: Events | None = None
+        self._db: SQLAlchemyWrapper | None = None
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._running_event = Event()
@@ -64,6 +69,13 @@ class Engine(metaclass=SingletonMeta):
             self.config.app_config.USE_DATABASE
             or self.config.app_config.COMMUNICATE_WITH_OURANOS
         )
+
+    @property
+    def virtual_world(self) -> VirtualWorld:
+        if self._virtual_world is None:
+            raise AttributeError(
+                "'VIRTUALIZATION' needs to be set in GaiaConfig to use virtualization.")
+        return self._virtual_world
 
     # ---------------------------------------------------------------------------
     #   Events dispatcher
@@ -271,12 +283,6 @@ class Engine(metaclass=SingletonMeta):
         scheduler.remove_all_jobs()  # To be 100% sure
         scheduler.shutdown()
 
-    def _init_virtualization(self) -> None:
-        if self.config.app_config.VIRTUALIZATION:
-            virtual_cfg = self.config.app_config.VIRTUALIZATION_PARAMETERS
-            virtual_world_cfg: dict = virtual_cfg.get("world", {})
-            init_virtual_world(self, **virtual_world_cfg)
-
     def _loop(self) -> None:
         while not self._stop_event.is_set():
             with self.config.new_config:
@@ -376,13 +382,6 @@ class Engine(metaclass=SingletonMeta):
         """
         ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid not in self.ecosystems:
-            if (
-                    self.config.app_config.VIRTUALIZATION
-                    and get_virtual_ecosystem(ecosystem_uid) is None
-            ):
-                virtual_cfg = self.config.app_config.VIRTUALIZATION_PARAMETERS
-                virtual_eco_cfg: dict = virtual_cfg.get("ecosystems", {}).get(ecosystem_uid, {})
-                init_virtual_ecosystem(ecosystem_uid, start=True, **virtual_eco_cfg)
             ecosystem = Ecosystem(ecosystem_uid, self)
             self.ecosystems[ecosystem_uid] = ecosystem
             self.logger.debug(
@@ -578,7 +577,6 @@ class Engine(metaclass=SingletonMeta):
             )
         # Load the ecosystem configs into memory and start the watchdog
         self.config.initialize_configs()
-        self._init_virtualization()
         self.config.start_watchdog()
         # Get the info required just before starting the ecosystems
         self.refresh_sun_times()

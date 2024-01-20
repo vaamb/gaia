@@ -15,6 +15,7 @@ from gaia.exceptions import NonValidSubroutine, UndefinedParameter
 from gaia.subroutines import (
     Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
+from gaia.virtual import VirtualEcosystem
 
 
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -54,6 +55,12 @@ class Ecosystem:
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{self._name.replace(' ', '_')}")
         self.logger.info("Initializing the ecosystem")
+        self._virtual_self: VirtualEcosystem | None = None
+        if self.engine.config.app_config.VIRTUALIZATION:
+            virtual_cfg = self.engine.config.app_config.VIRTUALIZATION_PARAMETERS
+            virtual_eco_cfg: dict = virtual_cfg.get("ecosystems", {}).get(self.uid, {})
+            self._virtual_self = VirtualEcosystem(
+                self.engine.virtual_world, self.uid, **virtual_eco_cfg)
         self._alarms: list = []
         self._lighting_hours = gv.LightingHours(
             morning_start=self.config.time_parameters.day,
@@ -178,6 +185,17 @@ class Ecosystem:
             for key, value in hardware_dict.items()
         ]
 
+    @property
+    def virtual_self(self) -> VirtualEcosystem:
+        if self._virtual_self is None:
+            raise AttributeError(
+                "'VIRTUALIZATION' needs to be set in GaiaConfig to use virtualization.")
+        return self._virtual_self
+
+    @property
+    def virtualized(self) -> bool:
+        return self._virtual_self is not None
+
     def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
 
@@ -268,6 +286,8 @@ class Ecosystem:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
         self.refresh_lighting_hours()
         self.logger.info("Starting the ecosystem")
+        if self.virtualized:
+            self.virtual_self.start()
         self.refresh_subroutines()
         if self.engine.use_message_broker and self.event_handler.registered:
             self.event_handler.send_ecosystems_info(self.uid)
