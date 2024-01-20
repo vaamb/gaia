@@ -387,39 +387,3 @@ class VirtualEcosystem:
     def start(self) -> None:
         self.reset()
         self._start_time = datetime.now()
-
-
-_virtual_world: VirtualWorld | None = None
-
-
-def init_virtual_world(engine: Engine, **kwargs) -> None:
-    global _virtual_world
-    _virtual_world = VirtualWorld(engine, **kwargs)
-
-
-def get_virtual_world() -> VirtualWorld:
-    global _virtual_world
-    if _virtual_world is None:
-        raise RuntimeError("'VirtualWorld' has not been initialized.")
-    return _virtual_world
-
-
-_virtual_ecosystems: dict[str, VirtualEcosystem] = {}
-
-
-def init_virtual_ecosystem(ecosystem_id: str, start: bool = False, **kwargs) -> None:
-    global _virtual_world
-    if not _virtual_world:
-        raise RuntimeError(
-            "'VirtualWorld' needs to be initialized with 'init_virtual_world' "
-            "before initializing 'VirtualEcosystem'."
-        )
-    virtual_world = get_virtual_world()
-    ecosystem_uid = virtual_world.engine.config.get_IDs(ecosystem_id).uid
-    _virtual_ecosystems[ecosystem_uid] = \
-        VirtualEcosystem(virtual_world, ecosystem_uid, start=start, **kwargs)
-
-
-def get_virtual_ecosystem(ecosystem_id: str) -> VirtualEcosystem | None:
-    global _virtual_ecosystems
-    return _virtual_ecosystems.get(ecosystem_id)
