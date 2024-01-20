@@ -6,7 +6,6 @@ from gaia.hardware.virtual import virtualHardware
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, VCNL4040, VEML7700)
-from gaia.virtual import get_virtual_ecosystem
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -38,25 +37,25 @@ class virtualDHT22(virtualDHT):
 class virtualAHT20(AHT20, virtualSensor):
     def _get_device(self) -> "AHTx0":
         from gaia.hardware._compatibility import AHTx0
-        return AHTx0(ecosystem_uid=self.subroutine.ecosystem.uid)
+        return AHTx0(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
 class virtualVCNL4040(VCNL4040, virtualSensor):
     def _get_device(self) -> "_VCNL4040":
         from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
-        return _VCNL4040(ecosystem_uid=self.subroutine.ecosystem.uid)
+        return _VCNL4040(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
     def _get_device(self) -> "_VEML7700":
         from gaia.hardware._compatibility import VEML7700 as _VEML7700
-        return _VEML7700(ecosystem_uid=self.subroutine.ecosystem.uid)
+        return _VEML7700(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
 class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
     def _get_device(self) -> "Seesaw":
         from gaia.hardware._compatibility import Seesaw
-        return Seesaw(ecosystem_uid=self.subroutine.ecosystem.uid)
+        return Seesaw(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
 virtual_sensor_models:  dict[str, Type[virtualSensor]]= {

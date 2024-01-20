@@ -67,7 +67,7 @@ class VirtualWorld(metaclass=SingletonMeta):
         self._dt: datetime | None = None
         self._last_update: float | None = None
 
-    def get_measures(self, time_now: datetime | None = None) -> tuple[float, float, int]:
+    def get_measures(self, time_now: datetime | None = None) -> tuple[float, float, float]:
         mono_clock = monotonic()
         if (
             not self._last_update
@@ -195,7 +195,7 @@ class VirtualEcosystem:
         )  # in W/K
         self._water_volume: float = water_volume
 
-        self._light: int | None = None
+        self._light: float | None = None
 
         self._max_heater_output: float = max_heater_output
         self._max_humidifier_output: float = max_humidifier_output
@@ -270,7 +270,7 @@ class VirtualEcosystem:
         return get_relative_humidity(self.temperature, self.absolute_humidity)
 
     @property
-    def light(self) -> int:
+    def light(self) -> float:
         if self.get_actuator_status(gv.HardwareType.light) is None:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
@@ -387,39 +387,3 @@ class VirtualEcosystem:
     def start(self) -> None:
         self.reset()
         self._start_time = datetime.now()
-
-
-_virtual_world: VirtualWorld | None = None
-
-
-def init_virtual_world(engine: Engine, **kwargs) -> None:
-    global _virtual_world
-    _virtual_world = VirtualWorld(engine, **kwargs)
-
-
-def get_virtual_world() -> VirtualWorld:
-    global _virtual_world
-    if _virtual_world is None:
-        raise RuntimeError("'VirtualWorld' has not been initialized.")
-    return _virtual_world
-
-
-_virtual_ecosystems: dict[str, VirtualEcosystem] = {}
-
-
-def init_virtual_ecosystem(ecosystem_id: str, start: bool = False, **kwargs) -> None:
-    global _virtual_world
-    if not _virtual_world:
-        raise RuntimeError(
-            "'VirtualWorld' needs to be initialized with 'init_virtual_world' "
-            "before initializing 'VirtualEcosystem'."
-        )
-    virtual_world = get_virtual_world()
-    ecosystem_uid = virtual_world.engine.config.get_IDs(ecosystem_id).uid
-    _virtual_ecosystems[ecosystem_uid] = \
-        VirtualEcosystem(virtual_world, ecosystem_uid, start=start, **kwargs)
-
-
-def get_virtual_ecosystem(ecosystem_id: str) -> VirtualEcosystem | None:
-    global _virtual_ecosystems
-    return _virtual_ecosystems.get(ecosystem_id)
