@@ -17,50 +17,73 @@ class AppInfo:
 
 
 class GaiaConfig(AppInfo, BaseConfig):
-    pass
+    def __init__(self) -> None:
+        raise ValueError("'GaiaConfig' should only be used for type hint purposes.")
 
 
-_config: Type[GaiaConfig] | None = None
-_lookup_dir = os.environ.get("GAIA_DIR") or os.getcwd()
+class GaiaConfigHelper:
+    _config: GaiaConfig | None = None
 
+    @classmethod
+    def _find_app_config_cls(cls) -> Type[BaseConfig]:
+        logger = logging.getLogger("gaia.config_helper")
+        lookup_dir = os.environ.get("GAIA_DIR")
+        if lookup_dir is not None:
+            logger.info("Trying to get GaiaConfig from 'GAIA_DIR'.")
+        else:
+            logger.info("Trying to get GaiaConfig from current directory.")
+            lookup_dir = os.getcwd()
 
-def _get_config() -> Type[GaiaConfig]:
-    sys.path.insert(0, str(_lookup_dir))
-    try:
-        from config import Config
-    except ImportError:
+        sys.path.insert(0, str(lookup_dir))
+        try:
+            from config import Config
+        except ImportError:
+            return BaseConfig
+        else:
+            if not issubclass(Config, BaseConfig):
+                raise ValueError(
+                    "Your custom config should be a subclass of "
+                    "'gaia.config.BaseConfig'."
+                )
+            return Config
 
-        class GaiaConfig(AppInfo, BaseConfig):
-            pass
-    else:
-        if not issubclass(Config, BaseConfig):
+    @classmethod
+    def config_is_set(cls) -> None:
+        return cls._config is not None
+
+    @classmethod
+    def get_config(cls) -> GaiaConfig:
+        if not cls.config_is_set():
+            config: Type[BaseConfig] = cls._find_app_config_cls()
+            cls.set_config(config)
+        return cls._config
+
+    @classmethod
+    def set_config(cls, config_cls: Type[BaseConfig]) -> GaiaConfig:
+        if cls._config is not None:
+            raise RuntimeError("Config has already been set.")
+        if not issubclass(config_cls, BaseConfig):
             raise ValueError(
                 "Your custom config should be a subclass of "
-                "'gaia.config.BaseConfig'"
+                "'gaia.config.BaseConfig'."
             )
 
-        class GaiaConfig(AppInfo, Config):
+        class Config(AppInfo, config_cls):
             pass
-    return GaiaConfig
+
+        cls._config = Config()
+        return cls._config
+
+    @classmethod
+    def reset_config(cls) -> None:
+        if not cls.config_is_set():
+            raise ValueError("Cannot reset a non-set config.")
+        if not cls._config.TESTING:
+            raise ValueError("Only testing config can be reset.")
+        cls._config = None
 
 
-def get_config() -> GaiaConfig:
-    global _config
-    if _config is None:
-        config = _get_config()
-        _config = config()
-    return _config
-
-
-def set_config(config: Type[GaiaConfig]) -> None:
-    global _config
-    if _config is not None:
-        raise RuntimeError(
-            "'set_config' cannot be called once 'get_config' has been called")
-    _config = config
-
-
-def configure_logging(config_class: GaiaConfig):
+def configure_logging(config_class: GaiaConfig) -> None:
     testing = config_class.TESTING
     debug = config_class.DEBUG or testing
     log_to_stdout = config_class.LOG_TO_STDOUT

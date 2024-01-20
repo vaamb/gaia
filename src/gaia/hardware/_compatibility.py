@@ -4,7 +4,7 @@ import random
 import time
 from typing import Any
 
-from gaia.config import get_config
+from gaia.config import GaiaConfigHelper
 from gaia.hardware.utils import hardware_logger
 from gaia.virtual import VirtualEcosystem
 
@@ -25,7 +25,7 @@ def random_sleep(
         avg_duration: float = 0.25,
         std_deviation: float = 0.075
 ) -> None:
-    if not get_config().TESTING:
+    if not GaiaConfigHelper.get_config().TESTING:
         time.sleep(abs(random.gauss(avg_duration, std_deviation)))
 
 

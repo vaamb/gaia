@@ -8,7 +8,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler
-from gaia.config import EcosystemConfig, EngineConfig, GaiaConfig, set_config
+from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHelper
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.subroutines import (
@@ -73,34 +73,30 @@ def temp_dir(patch) -> YieldFixture[str]:
 
 
 @pytest.fixture(scope="session")
-def testing_cfg(temp_dir) -> YieldFixture[Type[GaiaConfig]]:
-    GaiaConfig.LOG_TO_STDOUT = False
-    GaiaConfig.TESTING = True
-    GaiaConfig.VIRTUALIZATION = True
-    GaiaConfig.DIR = temp_dir
-    GaiaConfig.AGGREGATOR_COMMUNICATION_URL = "memory:///"
-    GaiaConfig.CONFIG_WATCHER_PERIOD = 100
-    set_config(GaiaConfig)
+def testing_cfg(temp_dir) -> YieldFixture[Type[BaseConfig]]:
+    class Config(BaseConfig):
+        LOG_TO_STDOUT = False
+        TESTING = True
+        VIRTUALIZATION = True
+        DIR = temp_dir
+        AGGREGATOR_COMMUNICATION_URL = "memory:///"
+        CONFIG_WATCHER_PERIOD = 100
 
-    yield GaiaConfig
-
-
-@pytest.fixture(scope="function", autouse=True)
-def default_testing_cfg(testing_cfg) -> YieldFixture[Type[GaiaConfig]]:
-    use_database = testing_cfg.USE_DATABASE
-    communicate_with_ouranos = testing_cfg.COMMUNICATE_WITH_OURANOS
-    aggregator_communication_url = testing_cfg.AGGREGATOR_COMMUNICATION_URL
-
-    yield testing_cfg
-
-    testing_cfg.USE_DATABASE = use_database
-    testing_cfg.COMMUNICATE_WITH_OURANOS = communicate_with_ouranos
-    testing_cfg.AGGREGATOR_COMMUNICATION_URL = aggregator_communication_url
+    yield Config
 
 
 @pytest.fixture(scope="function", autouse=True)
-def engine_config(default_testing_cfg: Type[GaiaConfig]) -> YieldFixture[EngineConfig]:
-    engine_config = EngineConfig(gaia_config=default_testing_cfg())
+def default_testing_cfg(testing_cfg: Type[BaseConfig]) -> YieldFixture[None]:
+    GaiaConfigHelper.set_config(testing_cfg)
+
+    yield None
+
+    GaiaConfigHelper.reset_config()
+
+
+@pytest.fixture(scope="function", autouse=True)
+def engine_config(default_testing_cfg: Type[None]) -> YieldFixture[EngineConfig]:
+    engine_config = EngineConfig()
     engine_config.initialize_configs()
     for files in engine_config.cache_dir.iterdir():
         files.unlink()
