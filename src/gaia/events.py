@@ -62,8 +62,6 @@ class Events(EventHandler):
         self._thread: Thread | None = None
         self._stop_event = Event()
         self._sensor_buffer_cls: "SensorBuffer" | None = None
-        if self.use_db:
-            self.load_sensor_buffer_cls()
         self.logger = logging.getLogger(f"gaia.engine.events_handler")
 
     @property
@@ -91,18 +89,13 @@ class Events(EventHandler):
     @property
     def sensor_buffer_cls(self) -> "SensorBuffer":
         if self._sensor_buffer_cls is None:
-            raise AttributeError(
-                "'SensorBuffer' is not a valid attribute when the database is "
-                "not used")
-        return self._sensor_buffer_cls
-
-    def load_sensor_buffer_cls(self) -> None:
-        if self.use_db:
+            if not self.use_db:
+                raise AttributeError(
+                    "'SensorBuffer' is not a valid attribute when the database is "
+                    "not used")
             from gaia.database.models import SensorBuffer
             self._sensor_buffer_cls = SensorBuffer
-        else:
-            raise ValueError(
-                "Cannot load 'SensorBuffer' when the database is not used")
+        return self._sensor_buffer_cls
 
     def validate_payload(
             self,
