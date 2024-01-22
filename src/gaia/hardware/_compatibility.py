@@ -97,7 +97,7 @@ class TemperatureCompatibility(CompatibilityDevice):
     def temperature(self) -> float:
         if self.virtual_ecosystem is not None:
             self.virtual_ecosystem.measure()
-            return round(add_noise(self.virtual_ecosystem.light), 2)
+            return round(add_noise(self.virtual_ecosystem.temperature), 2)
         return random.gauss(_BASE_TEMPERATURE, 2.5)
 
 
