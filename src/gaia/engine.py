@@ -86,7 +86,7 @@ class Engine(metaclass=SingletonMeta):
                 "Cannot initialize the message broker if the parameter "
                 "'COMMUNICATE_WITH_OURANOS' is set to 'False'."
             )
-        if self.use_db:
+        if self.use_message_broker:
             raise RuntimeError(
                 "The message broker has already been initialized."
             )
@@ -234,13 +234,14 @@ class Engine(metaclass=SingletonMeta):
                 "event dispatcher is used."
             )
         self.logger.info("Initialising the plugins.")
+        # Database
+        if self.config.app_config.USE_DATABASE:
+            self.init_database()
         if (
             self.config.app_config.COMMUNICATE_WITH_OURANOS
             and self.config.app_config.AGGREGATOR_COMMUNICATION_URL
         ):
             self.init_message_broker()
-        if self.config.app_config.USE_DATABASE:
-            self.init_database()
         self.plugins_initialized = True
 
     def start_plugins(self) -> None:
