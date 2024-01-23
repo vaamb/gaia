@@ -125,14 +125,18 @@ class Events(EventHandler):
             return True
         return False
 
-    def emit_event_if_connected(self, event_name: EventNames) -> None:
+    def emit_event_if_connected(
+            self,
+            event_name: EventNames,
+            ttl: int | None = None
+    ) -> None:
         if not self.is_connected():
             self.logger.info(
                 f"Events handler not currently connected. Scheduled emission "
                 f"of event '{event_name}' aborted")
             return
         try:
-            self.emit_event(event_name)
+            self.emit_event(event_name, ttl=ttl)
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while tying to emit event `{event_name}`. "
@@ -140,9 +144,10 @@ class Events(EventHandler):
 
     def _schedule_jobs(self) -> None:
         scheduler = get_scheduler()
+        sensor_offset: str = str(int(self.engine.config.app_config.SENSORS_LOOP_PERIOD + 1))
         scheduler.add_job(
-            self.emit_event_if_connected, kwargs={"event_name": "sensors_data"},
-            id="send_sensors_data", trigger="cron", minute="*",
+            self.emit_event_if_connected, kwargs={"event_name": "sensors_data", "ttl": 15},
+            id="send_sensors_data", trigger="cron", minute="*", second=sensor_offset,
             misfire_grace_time=10
         )
         scheduler.add_job(
@@ -239,7 +244,6 @@ class Events(EventHandler):
             self.send_buffered_data()
         self.registered = True
 
-
     def filter_uids(
             self,
             ecosystem_uids: str | list[str] | None = None
@@ -279,13 +283,14 @@ class Events(EventHandler):
     def emit_event(
             self,
             event_name: EventNames,
-            ecosystem_uids: str | list[str] | None = None
+            ecosystem_uids: str | list[str] | None = None,
+            ttl: int | None = None,
     ) -> bool:
         self.logger.debug(f"Sending event {event_name} requested")
         payload = self.get_event_payload(event_name, ecosystem_uids)
         if payload:
             self.logger.debug(f"Payload for event {event_name} sent")
-            return self.emit(event_name, data=payload)
+            return self.emit(event_name, data=payload, ttl=ttl)
         else:
             self.logger.debug(f"No payload for event {event_name}")
             return False
