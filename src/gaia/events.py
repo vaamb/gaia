@@ -199,7 +199,7 @@ class Events(EventHandler):
             engine_uid=self.engine.config.app_config.ENGINE_UID,
             address=local_ip_address(),
         ).model_dump()
-        self.emit("register_engine", data=data, ttl=2)
+        self.emit("register_engine", data=data, ttl=15)
 
     def send_ecosystems_info(
             self,
@@ -213,36 +213,45 @@ class Events(EventHandler):
         self.send_health_data(uids)
 
     def on_connect(self, environment) -> None:  # noqa
-        self.logger.info("Connection to message broker successful")
-        if not self.registered:
+        self.logger.info("Connection to message broker successful.")
+        if self.registered:
+            self.logger.info("Already registered.")
+        else:
+            self.logger.info("Will try to register the engine to Ouranos.")
             self.register()
 
     def on_disconnect(self, *args) -> None:  # noqa
         if self.engine.stopping:
             self.logger.info("Engine requested to disconnect from the broker.")
         elif self.registered:
-            self.logger.warning("Dispatcher disconnected from the broker")
+            self.logger.warning("Dispatcher disconnected from the broker.")
         else:
-            self.logger.error("Failed to register engine")
+            self.logger.error("Failed to register engine.")
         if self.background_tasks_running:
             self.stop_background_tasks()
 
     def on_register(self) -> None:
         self.registered = False
-        self.logger.info("Received registration request from Ouranos")
-        sleep(1)
+        self.logger.info("Received registration request from Ouranos.")
+        sleep(0.25)
         self.register()
         if not self.background_tasks_running:
             self.start_background_tasks()
 
-    def on_registration_ack(self) -> None:
+    def on_registration_ack(self, host_uid: str) -> None:
+        if self._dispatcher.host_uid != host_uid:
+            self.logger.warning(
+                "Received a registration acknowledgment for another dispatcher.")
+            return
         self.logger.info(
-            "Engine registration successful, sending initial ecosystems info")
+            "Engine registration successful, sending initial ecosystems info.")
         self.send_ecosystems_info()
-        self.logger.info("Initial ecosystems info sent")
+        self.logger.info("Initial ecosystems info sent.")
         if self.use_db:
             self.send_buffered_data()
         self.registered = True
+        sleep(0.75)
+        self.emit("initialized", ttl=15)
 
     def filter_uids(
             self,
