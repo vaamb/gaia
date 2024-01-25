@@ -63,6 +63,7 @@ class Events(EventHandler):
         self._stop_event = Event()
         self._sensor_buffer_cls: "SensorBuffer" | None = None
         self._last_heartbeat: float = monotonic()
+        self._jobs_scheduled: bool = False
         self.logger = logging.getLogger(f"gaia.engine.events_handler")
 
     @property
@@ -170,7 +171,6 @@ class Events(EventHandler):
         scheduler.remove_job(job_id="send_health_data")
 
     def start_background_tasks(self) -> None:
-        self._schedule_jobs()
         self._stop_event.clear()
         self.thread = Thread(
             target=self.ping_loop,
@@ -227,6 +227,9 @@ class Events(EventHandler):
         else:
             self.logger.info("Will try to register the engine to Ouranos.")
             self.register()
+        if not self._jobs_scheduled:
+            self._schedule_jobs()
+            self._jobs_scheduled = True
 
     def on_disconnect(self, *args) -> None:  # noqa
         if self.engine.stopping:
@@ -237,6 +240,9 @@ class Events(EventHandler):
             self.logger.error("Failed to register engine.")
         if self.background_tasks_running:
             self.stop_background_tasks()
+        if self._jobs_scheduled:
+            self._unschedule_jobs()
+            self._jobs_scheduled = False
 
     def on_register(self) -> None:
         self.registered = False
