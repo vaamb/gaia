@@ -284,15 +284,16 @@ class Engine(metaclass=SingletonMeta):
         scheduler.remove_all_jobs()  # To be 100% sure
         scheduler.shutdown()
 
+    def _send_ecosystem_info(self) -> None:
+        if self.use_message_broker and self.event_handler.registered:
+            self.event_handler.send_ecosystems_info()
+
     def _loop(self) -> None:
         while not self._stop_event.is_set():
             with self.config.new_config:
                 self.config.new_config.wait()
             if self.running:
-                self.refresh_ecosystems()
-                if self.use_message_broker:
-                    self.event_handler.send_full_config()
-                    self.event_handler.send_light_data()
+                self.refresh_ecosystems(send_info=True)
             if not self._stop_event.is_set():
                 sleep(0.1)  # Allow to do other stuff if too much config changes
 
@@ -374,12 +375,12 @@ class Engine(metaclass=SingletonMeta):
     #   Ecosystem managements
     # ---------------------------------------------------------------------------
     def init_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
-        """Initialize an Ecosystem
+        """Initialize an Ecosystem.
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                             'ecosystems.cfg'
+                             'ecosystems.cfg'.
         :param start: Whether to immediately start the ecosystem after its
-                      creation or not
+                      creation or not.
         """
         ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid not in self.ecosystems:
@@ -395,11 +396,13 @@ class Engine(metaclass=SingletonMeta):
             f"Ecosystem {ecosystem_id} already exists"
         )
 
-    def start_ecosystem(self, ecosystem_id: str) -> None:
-        """Start an Ecosystem
+    def start_ecosystem(self, ecosystem_id: str, send_info: bool = False) -> None:
+        """Start an Ecosystem.
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                             'ecosystems.cfg'
+                             'ecosystems.cfg'.
+        :param send_info: If `True`, will try to send the ecosystem info to
+                          Ouranos if possible.
         """
         ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
@@ -409,6 +412,8 @@ class Engine(metaclass=SingletonMeta):
                     f"Starting ecosystem {ecosystem_id}"
                 )
                 ecosystem.start()
+                if send_info:
+                    self._send_ecosystem_info()
             else:
                 raise RuntimeError(
                     f"Ecosystem {ecosystem_id} is already running"
@@ -418,14 +423,21 @@ class Engine(metaclass=SingletonMeta):
                 f"Need to initialise Ecosystem {ecosystem_id} first"
             )
 
-    def stop_ecosystem(self, ecosystem_id: str, dismount: bool = False) -> None:
-        """Stop an Ecosystem
+    def stop_ecosystem(
+            self,
+            ecosystem_id: str,
+            dismount: bool = False,
+            send_info: bool = False,
+    ) -> None:
+        """Stop an Ecosystem.
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                             'ecosystems.cfg'
+                             'ecosystems.cfg'.
         :param dismount: Whether to remove the Ecosystem from the memory or not.
                          If dismounted, the Ecosystem will need to be recreated
                          before being able to restart.
+        :param send_info: If `True`, will try to send the ecosystem info to
+                  Ouranos if possible.
         """
         ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
@@ -434,6 +446,8 @@ class Engine(metaclass=SingletonMeta):
                 ecosystem.stop()
                 if dismount:
                     self.dismount_ecosystem(ecosystem_uid)
+                if send_info:
+                    self._send_ecosystem_info()
                 self.logger.info(
                     f"Ecosystem {ecosystem_id} has been stopped"
                 )
@@ -448,11 +462,13 @@ class Engine(metaclass=SingletonMeta):
                 f"initialised"
             )
 
-    def dismount_ecosystem(self, ecosystem_id: str) -> None:
-        """Remove the Ecosystem from Engine's memory
+    def dismount_ecosystem(self, ecosystem_id: str, send_info: bool = False) -> None:
+        """Remove the Ecosystem from Engine's memory.
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                             'ecosystems.cfg'
+                             'ecosystems.cfg'.
+        :param send_info: If `True`, will try to send the ecosystem info to
+                  Ouranos if possible.
         """
         ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
@@ -462,6 +478,8 @@ class Engine(metaclass=SingletonMeta):
                 )
             else:
                 del self.ecosystems[ecosystem_uid]
+                if send_info:
+                    self._send_ecosystem_info()
                 self.logger.info(
                     f"Ecosystem {ecosystem_id} has been dismounted"
                 )
@@ -484,8 +502,12 @@ class Engine(metaclass=SingletonMeta):
             ecosystem = self.init_ecosystem(ecosystem_uid)
         return ecosystem
 
-    def refresh_ecosystems(self):
-        """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file"""
+    def refresh_ecosystems(self, send_info: bool = False):
+        """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file.
+
+        :param send_info: If `True`, will try to send the ecosystem info to
+          Ouranos if possible.
+        """
         expected_started = set(self.config.get_ecosystems_expected_to_run())
         to_delete = set(self.ecosystems.keys())
         for ecosystem_uid in self.config.ecosystems_uid:
@@ -515,6 +537,8 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem_uid in to_delete:
             self.stop_ecosystem(ecosystem_uid)
             self.dismount_ecosystem(ecosystem_uid)
+        if send_info:
+            self._send_ecosystem_info()
 
     def refresh_sun_times(self) -> None:
         """Download sunrise and sunset times if needed by an Ecosystem"""
