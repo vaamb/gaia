@@ -242,8 +242,6 @@ class Events(EventHandler):
         self.logger.info("Received registration request from Ouranos.")
         sleep(0.25)
         self.register()
-        if not self.background_tasks_running:
-            self.start_background_tasks()
 
     def on_registration_ack(self, host_uid: str) -> None:
         if self._dispatcher.host_uid != host_uid:
@@ -258,6 +256,8 @@ class Events(EventHandler):
             self.send_buffered_data()
         self.registered = True
         sleep(0.75)
+        if not self.background_tasks_running:
+            self.start_background_tasks()
         self.emit("initialized", ttl=15)
 
     def filter_uids(
