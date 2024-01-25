@@ -213,11 +213,12 @@ class Events(EventHandler):
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
         uids = self.filter_uids(ecosystem_uids)
-        self.send_full_config(uids)
-        # self.send_sensors_data(uids)
-        self.send_actuator_data(uids)
-        self.send_light_data(uids)
-        self.send_health_data(uids)
+        self.emit_event("base_info", uids)
+        self.emit_event("management", uids)
+        self.emit_event("environmental_parameters", uids)
+        self.emit_event("hardware", uids)
+        self.emit_event("actuator_data", uids)
+        self.emit_event("light_data", uids)
 
     def on_connect(self, environment) -> None:  # noqa
         self.logger.info("Connection to message broker successful.")
@@ -319,14 +320,6 @@ class Events(EventHandler):
         else:
             self.logger.debug(f"No payload for event {event_name}")
             return False
-
-    def send_full_config(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        for cfg in ("base_info", "management", "environmental_parameters", "hardware"):
-            cfg = cast(EventNames, cfg)
-            self.emit_event(cfg, ecosystem_uids)
 
     def send_sensors_data(
             self,
