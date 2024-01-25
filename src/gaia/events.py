@@ -263,11 +263,11 @@ class Events(EventHandler):
 
     def on_initialized_ack(self, missing_data: list | None = None) -> None:
         if missing_data is None:
-            self.logger.info("Initial ecosystems info received.")
+            self.logger.info("Ouranos successfully received ecosystems info.")
         else:
             self.logger.warning(
-                f"Initial ecosystems info not received. Non-received info: "
-                f"{missing_data}")
+                f"Ouranos did not receive all the initial ecosystems info. "
+                f"Non-received info: {missing_data}")
             # TODO: resend ?
 
     def filter_uids(
