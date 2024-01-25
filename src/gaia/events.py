@@ -260,6 +260,15 @@ class Events(EventHandler):
             self.start_background_tasks()
         self.emit("initialized", ttl=15)
 
+    def on_initialized_ack(self, missing_data: list | None = None) -> None:
+        if missing_data is None:
+            self.logger.info("Initial ecosystems info received.")
+        else:
+            self.logger.warning(
+                f"Initial ecosystems info not received. Non-received info: "
+                f"{missing_data}")
+            # TODO: resend ?
+
     def filter_uids(
             self,
             ecosystem_uids: str | list[str] | None = None
