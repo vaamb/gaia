@@ -290,9 +290,8 @@ class Engine(metaclass=SingletonMeta):
                 self.config.new_config.wait()
             if self.running:
                 self.refresh_ecosystems()
-                if self.use_message_broker:
-                    self.event_handler.send_full_config()
-                    self.event_handler.send_light_data()
+                if self.use_message_broker and self.event_handler.registered:
+                    self.event_handler.send_ecosystems_info()
             if not self._stop_event.is_set():
                 sleep(0.1)  # Allow to do other stuff if too much config changes
 
