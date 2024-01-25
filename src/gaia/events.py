@@ -7,7 +7,7 @@ check_dependencies("dispatcher")
 import inspect
 import logging
 from threading import Event, Thread
-from time import sleep
+from time import monotonic, sleep
 import typing as t
 from typing import Callable, cast, Literal, Type
 import weakref
@@ -62,6 +62,7 @@ class Events(EventHandler):
         self._thread: Thread | None = None
         self._stop_event = Event()
         self._sensor_buffer_cls: "SensorBuffer" | None = None
+        self._last_heartbeat: float = monotonic()
         self.logger = logging.getLogger(f"gaia.engine.events_handler")
 
     @property
@@ -121,9 +122,10 @@ class Events(EventHandler):
             raise
 
     def is_connected(self) -> bool:
-        if self._dispatcher.connected:
-            return True
-        return False
+        return (
+            self._dispatcher.connected
+            and monotonic() - self._last_heartbeat < 30.0
+        )
 
     def emit_event_if_connected(
             self,
@@ -186,13 +188,18 @@ class Events(EventHandler):
     def ping_loop(self) -> None:
         sleep(0.1)  # Sleep to allow the end of dispatcher initialization if it directly connects
         while not self._stop_event.is_set():
-            if self.is_connected():
+            if self._dispatcher.connected:
                 self.ping()
             sleep(15)
 
     def ping(self) -> None:
         ecosystems = [ecosystem.uid for ecosystem in self.ecosystems.values()]
+        self.logger.debug("Sending 'ping'.")
         self.emit("ping", data=ecosystems, ttl=20)
+
+    def on_pong(self) -> None:
+        self.logger.debug("Received 'pong'.")
+        self._last_heartbeat = monotonic()
 
     def register(self) -> None:
         data = gv.EnginePayload(
