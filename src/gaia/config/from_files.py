@@ -401,7 +401,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 with self.new_config:
                     self.new_config.notify_all()
                 if self.engine_set_up and self.engine.use_message_broker:
-                    self.engine.event_handler.send_full_config()
+                    self.engine.event_handler.send_ecosystems_info()
 
     def _watchdog_loop(self) -> None:
         sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
