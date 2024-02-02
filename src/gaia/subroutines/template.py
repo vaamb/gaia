@@ -95,7 +95,7 @@ class SubroutineTemplate(ABC):
 
     @property
     def executor(self) -> ThreadPoolExecutor:
-        return self.ecosystem.executor
+        return self.ecosystem.engine.executor
 
     def add_hardware(
             self,
