@@ -9,7 +9,6 @@ import gaia_validators as gv
 from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
-from gaia.shared_resources import get_scheduler
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -29,8 +28,7 @@ class Health(SubroutineTemplate):
 
     def _start_scheduler(self) -> None:
         h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
-        scheduler = get_scheduler()
-        scheduler.add_job(
+        self.ecosystem.engine.scheduler.add_job(
             self.health_routine,
             trigger="cron", hour=h, minute=m, misfire_grace_time=15 * 60,
             id=f"{self.ecosystem.name}-health"
@@ -38,8 +36,7 @@ class Health(SubroutineTemplate):
 
     def _stop_scheduler(self) -> None:
         self.logger.info("Closing the tasks scheduler")
-        scheduler = get_scheduler()
-        scheduler.remove_job(f"{self.ecosystem.name}-health")
+        self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.name}-health")
         self.logger.info("The tasks scheduler was closed properly")
 
     def analyse_picture(self) -> None:

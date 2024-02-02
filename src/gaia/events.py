@@ -19,7 +19,6 @@ import gaia_validators as gv
 
 from gaia.config import EcosystemConfig
 from gaia.config.from_files import ConfigType
-from gaia.shared_resources import get_scheduler
 from gaia.utils import humanize_list, local_ip_address
 
 
@@ -146,29 +145,27 @@ class Events(EventHandler):
                 f"ERROR msg: `{e.__class__.__name__} :{e}`")
 
     def _schedule_jobs(self) -> None:
-        scheduler = get_scheduler()
         sensor_offset: str = str(int(self.engine.config.app_config.SENSORS_LOOP_PERIOD + 1))
-        scheduler.add_job(
+        self.engine.scheduler.add_job(
             self.emit_event_if_connected, kwargs={"event_name": "sensors_data", "ttl": 15},
             id="send_sensors_data", trigger="cron", minute="*", second=sensor_offset,
             misfire_grace_time=10
         )
-        scheduler.add_job(
+        self.engine.scheduler.add_job(
             self.emit_event_if_connected, kwargs={"event_name": "light_data"},
             id="send_light_data", trigger="cron", hour="1",
             misfire_grace_time=10*60
         )
-        scheduler.add_job(
+        self.engine.scheduler.add_job(
             self.emit_event_if_connected, kwargs={"event_name": "health_data"},
             id="send_health_data", trigger="cron", hour="1",
             misfire_grace_time=10*60
         )
 
     def _unschedule_jobs(self) -> None:
-        scheduler = get_scheduler()
-        scheduler.remove_job(job_id="send_sensors_data")
-        scheduler.remove_job(job_id="send_light_data")
-        scheduler.remove_job(job_id="send_health_data")
+        self.engine.scheduler.remove_job(job_id="send_sensors_data")
+        self.engine.scheduler.remove_job(job_id="send_light_data")
+        self.engine.scheduler.remove_job(job_id="send_health_data")
 
     def start_background_tasks(self) -> None:
         self._stop_event.clear()
