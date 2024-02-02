@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from statistics import mean
-from threading import Event, Lock, Thread
-from time import monotonic, sleep
+from threading import Lock
+from time import monotonic
 import typing as t
 
 import gaia_validators as gv
@@ -23,43 +23,32 @@ class Sensors(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = sensor_models
         self.hardware: dict[str, BaseSensor]
-        self._thread: Thread | None = None
-        self._stop_event = Event()
         self._loop_timeout: float = float(
             self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         self._data_lock = Lock()
         self._finish__init__()
 
-    def _sensors_loop(self) -> None:
-        self.logger.info(
-            f"Starting the sensors loop. It will run every "
-            f"{self._loop_timeout:.1f} s.")
-        sleep(0.01)  # Allow to finish the routine startup
-        while not self._stop_event.is_set():
-            start_time = monotonic()
-            self.logger.debug("Starting sensors data update routine ...")
-            try:
-                self.update_sensors_data()
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while updating sensors data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
-                )
-            loop_time = monotonic() - start_time
-            sleep_time = self._loop_timeout - loop_time
-            if sleep_time < 0:  # pragma: no cover
-                self.logger.warning(
-                    f"Sensors data loop took {loop_time:.1f}. This either "
-                    f"indicates errors while data retrieval or the need to "
-                    f"adapt 'SENSOR_LOOP_PERIOD'."
-                )
-                sleep_time = 2
-            self.logger.debug(
-                f"Sensors data update finished in {loop_time:.1f} s." +
-                f"Next sensors data update in {sleep_time:.1f} s."
+    def _sensors_routine(self) -> None:
+        start_time = monotonic()
+        self.logger.debug("Starting sensors data update routine ...")
+        try:
+            self.update_sensors_data()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while updating sensors data. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`."
             )
-            self._stop_event.wait(sleep_time)
+        loop_time = monotonic() - start_time
+        if loop_time > self._loop_timeout:  # pragma: no cover
+            self.logger.warning(
+                f"Sensors data loop took {loop_time:.1f}. This either "
+                f"indicates errors while data retrieval or the need to "
+                f"adapt 'SENSOR_LOOP_PERIOD'."
+            )
+        self.logger.debug(
+            f"Sensors data update finished in {loop_time:.1f} s."
+        )
 
     def _compute_if_manageable(self) -> bool:
         if self.config.get_IO_group_uids(gv.HardwareType.sensor):
@@ -69,22 +58,22 @@ class Sensors(SubroutineTemplate):
             return False
 
     def _start(self) -> None:
-        self._stop_event.clear()
-        self.thread = Thread(
-            target=self._sensors_loop,
-            name=f"{self.ecosystem.uid}-sensors-loop",
-            daemon=True,
+        self.logger.info(
+            f"Starting the sensors loop. It will run every "
+            f"{self._loop_timeout:.1f} s.")
+        self.ecosystem.engine.scheduler.add_job(
+            func=self._sensors_routine,
+            id=f"{self.ecosystem.uid}-sensors_routine",
+            trigger="interval", seconds=self._loop_timeout,
         )
-        self.thread.start()
         self.logger.debug(f"Sensors loop successfully started")
 
     def _stop(self) -> None:
         self.logger.info(f"Stopping sensors loop")
-        self._stop_event.set()
-        self.thread.join()
-        self.thread = None
         if self.ecosystem.get_subroutine_status("climate"):
             self.ecosystem.stop_subroutine("climate")
+        self.ecosystem.engine.scheduler.remove_job(
+            f"{self.ecosystem.uid}-sensors_routine")
         self.hardware = {}
 
     """API calls"""
@@ -123,17 +112,6 @@ class Sensors(SubroutineTemplate):
     def sensors_data(self, data: gv.SensorsData | gv.Empty) -> None:
         with self._data_lock:
             self._sensors_data = data
-
-    @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise AttributeError("Sensors thread has not been set up")
-        else:
-            return self._thread
-
-    @thread.setter
-    def thread(self, thread: Thread | None) -> None:
-        self._thread = thread
 
     def update_sensors_data(self) -> None:
         """
