@@ -36,7 +36,7 @@ class SubroutineTemplate(ABC):
         self.logger.debug("Initialization successfully")
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.name}, status={self.started})"
+        return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
 
     @abstractmethod
     def _compute_if_manageable(self) -> bool:
