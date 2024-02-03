@@ -64,7 +64,7 @@ class Sensors(SubroutineTemplate):
         self.ecosystem.engine.scheduler.add_job(
             func=self._sensors_routine,
             id=f"{self.ecosystem.uid}-sensors_routine",
-            trigger="interval", seconds=self._loop_timeout,
+            trigger="interval", seconds=self._loop_timeout, jitter=self._loop_timeout/10,
         )
         self.logger.debug(f"Sensors loop successfully started")
 

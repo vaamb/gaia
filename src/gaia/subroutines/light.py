@@ -99,7 +99,7 @@ class Light(SubroutineTemplate):
         self.ecosystem.engine.scheduler.add_job(
             func=self._safe_light_routine,
             id=f"{self.ecosystem.uid}-light_routine",
-            trigger="interval", seconds=self._loop_period,
+            trigger="interval", seconds=self._loop_period, jitter=self._loop_period/20,
         )
         self.actuator_handler.activate()
 
