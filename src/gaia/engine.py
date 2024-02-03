@@ -58,7 +58,7 @@ class Engine(metaclass=SingletonMeta):
         self._uid: str = self.config.app_config.ENGINE_UID
         self._virtual_world: VirtualWorld | None = None
         self._executor: ThreadPoolExecutor = ThreadPoolExecutor(
-                thread_name_prefix=f"engine-executor", max_workers=10)
+                thread_name_prefix=f"Engine_ThreadPoolExecutor", max_workers=10)
         self._scheduler: BackgroundScheduler = BackgroundScheduler(
             executors={"default": APSchedulerExecutor(self._executor)})
         if self.config.app_config.VIRTUALIZATION:
@@ -633,7 +633,7 @@ class Engine(metaclass=SingletonMeta):
         # Start the engine thread
         self.thread = Thread(
             target=self._loop,
-            name="engine-loop",
+            name="Engine_LoopThread",
             daemon=True,
         )
         self.thread.start()

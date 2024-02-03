@@ -432,7 +432,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self.logger.info("Starting the configuration files watchdog")
         self.thread = Thread(
             target=self._watchdog_loop,
-            name="config_watchdog",
+            name="Config_WatchdogLoopThread",
             daemon=True,
         )
         self.thread.start()
