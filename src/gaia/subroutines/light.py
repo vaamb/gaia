@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, time
 from statistics import mean
-from threading import Event, Thread
 import typing
 
 import gaia_validators as gv
@@ -39,8 +38,6 @@ class Light(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self.hardware: dict[str, "Switch"]
-        self._thread: Thread | None = None
-        self._stop_event = Event()
         self._loop_period: float = float(
             self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
         self._light_sensors: list[LightSensor] | None = None
@@ -49,19 +46,14 @@ class Light(SubroutineTemplate):
         self._lighting_hours: gv.LightingHours | None = None  # For test only
         self._finish__init__()
 
-    def _light_loop(self) -> None:
-        self.logger.info(
-            f"Starting the light loop. It will run every "
-            f"{self._loop_period:.2f} s.")
-        while not self._stop_event.is_set():
-            try:
-                self._light_routine()
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while running the light routine. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
-                )
-            self._stop_event.wait(self._loop_period)
+    def _safe_light_routine(self) -> None:
+        try:
+            self._light_routine()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while running the light routine. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+            )
 
     def _light_routine(self) -> None:
         pid: HystericalPID = self.get_pid()
@@ -99,22 +91,21 @@ class Light(SubroutineTemplate):
             return False
 
     def _start(self) -> None:
-        self._stop_event.clear()
         pid = self.get_pid()
         pid.reset()
-        self.thread = Thread(
-            target=self._light_loop,
-            name=f"{self.ecosystem.uid}-light-loop",
-            daemon=True,
+        self.logger.info(
+            f"Starting the light loop. It will run every "
+            f"{self._loop_period:.2f} s.")
+        self.ecosystem.engine.scheduler.add_job(
+            func=self._safe_light_routine,
+            id=f"{self.ecosystem.uid}-light_routine",
+            trigger="interval", seconds=self._loop_period,
         )
-        self.thread.start()
         self.actuator_handler.activate()
 
     def _stop(self) -> None:
         self.logger.info("Stopping light loop")
-        self._stop_event.set()
-        self.thread.join()
-        self.thread = None
+        self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.uid}-light_routine")
         self.actuator_handler.deactivate()
 
     """API calls"""
@@ -186,17 +177,6 @@ class Light(SubroutineTemplate):
 
     def reset_any_dimmable_light(self) -> None:
         self._any_dimmable_light = None
-
-    @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise AttributeError("Light status thread has not been set up")
-        else:
-            return self._thread
-
-    @thread.setter
-    def thread(self, thread: Thread | None) -> None:
-        self._thread = thread
 
     def get_ambient_light_level(self) -> float | None:
         # If there isn't any light sensors we cannot get the info
