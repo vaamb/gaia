@@ -5,6 +5,8 @@ from threading import Event, Thread
 from time import monotonic
 import typing as t
 
+from apscheduler.triggers.interval import IntervalTrigger
+
 import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorCouple, actuator_couples, HystericalPID
@@ -226,7 +228,7 @@ class Climate(SubroutineTemplate):
         self.ecosystem.engine.scheduler.add_job(
             func=self._climate_routine,
             id=f"{self.ecosystem.uid}-climate_routine",
-            trigger="interval", seconds=self._loop_period, jitter=self._loop_period/10,
+            trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
         )
         self._update_climate_actuators()
         for parameter in self.regulated_parameters:

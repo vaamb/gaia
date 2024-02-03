@@ -6,6 +6,8 @@ from threading import Lock
 from time import monotonic
 import typing as t
 
+from apscheduler.triggers.interval import IntervalTrigger
+
 import gaia_validators as gv
 
 from gaia.hardware import sensor_models
@@ -64,7 +66,7 @@ class Sensors(SubroutineTemplate):
         self.ecosystem.engine.scheduler.add_job(
             func=self._sensors_routine,
             id=f"{self.ecosystem.uid}-sensors_routine",
-            trigger="interval", seconds=self._loop_timeout, jitter=self._loop_timeout/10,
+            trigger=IntervalTrigger(seconds=self._loop_timeout, jitter=self._loop_timeout/10),
         )
         self.logger.debug(f"Sensors loop successfully started")
 

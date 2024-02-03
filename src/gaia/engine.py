@@ -10,6 +10,7 @@ import typing as t
 
 from apscheduler.executors.pool import BasePoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
 
@@ -217,11 +218,13 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Starting the database.")
         from gaia.database import routines
         if self.config.app_config.SENSORS_LOGGING_PERIOD:
+            job_kwargs = {"scoped_session_": self.db.scoped_session, "engine": self}
             self.scheduler.add_job(
-                routines.log_sensors_data,
-                kwargs={"scoped_session_": self.db.scoped_session, "engine": self},
-                trigger="cron", minute="*", misfire_grace_time=10,
-                id="log_sensors_data")
+                func=routines.log_sensors_data, kwargs=job_kwargs,
+                id="log_sensors_data",
+                trigger=CronTrigger(minute="*", second="2", jitter=1.5),
+                misfire_grace_time=10,
+            )
 
     def stop_database(self) -> None:
         self.logger.info("Stopping the database.")

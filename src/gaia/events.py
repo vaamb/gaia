@@ -11,6 +11,8 @@ import typing as t
 from typing import Callable, cast, Literal, Type
 import weakref
 
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from pydantic import ValidationError
 
 from dispatcher import EventHandler
@@ -131,25 +133,25 @@ class Events(EventHandler):
         self.engine.scheduler.add_job(
             func=self.ping,
             id="events-ping",
-            trigger="interval", seconds=15,
+            trigger=IntervalTrigger(seconds=15),
         )
         sensor_offset: str = str(int(self.engine.config.app_config.SENSORS_LOOP_PERIOD + 1))
         self.engine.scheduler.add_job(
-            self.emit_event_if_connected, kwargs={"event_name": "sensors_data", "ttl": 15},
+            func=self.emit_event_if_connected, kwargs={"event_name": "sensors_data", "ttl": 15},
             id="events-send_sensors_data",
-            trigger="cron", minute="*", second=sensor_offset,
+            trigger=CronTrigger(minute="*", second=sensor_offset),
             misfire_grace_time=10,
         )
         self.engine.scheduler.add_job(
-            self.emit_event_if_connected, kwargs={"event_name": "light_data"},
+            func=self.emit_event_if_connected, kwargs={"event_name": "light_data"},
             id="events-send_light_data",
-            trigger="cron", hour="1",
+            trigger=CronTrigger(hour="1", jitter=5.0),
             misfire_grace_time=10*60,
         )
         self.engine.scheduler.add_job(
-            self.emit_event_if_connected, kwargs={"event_name": "health_data"},
+            func=self.emit_event_if_connected, kwargs={"event_name": "health_data"},
             id="events-send_health_data",
-            trigger="cron", hour="1",
+            trigger=CronTrigger(hour="1", jitter=5.0),
             misfire_grace_time=10*60,
         )
 
