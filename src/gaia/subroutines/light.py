@@ -17,11 +17,6 @@ if typing.TYPE_CHECKING:
     from gaia.actuator_handler import ActuatorHandler
 
 
-Kp = 0.05
-Ki = 0.005
-Kd = 0.01
-
-
 # TODO: improve
 def _is_time_between(
         begin_time: time,
@@ -204,6 +199,10 @@ class Light(SubroutineTemplate):
         self._thread = thread
 
     def get_ambient_light_level(self) -> float | None:
+        # If there isn't any light sensors we cannot get the info
+        # If there isn't any dimmable light, the info cannot be properly used
+        if not self.light_sensors or not self.any_dimmable_light:
+            return None
         light_level: list[float] = []
         for light_sensor in self.light_sensors:
             light = light_sensor.get_lux()
