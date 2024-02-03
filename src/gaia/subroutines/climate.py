@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, time
-from threading import Event, Thread
 from time import monotonic
 import typing as t
 
@@ -29,8 +28,6 @@ class Climate(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self.hardware: dict[str, Dimmer | Switch]
-        self._thread: Thread | None = None
-        self._stop_event = Event()
         self._loop_period: float = float(
             self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._sensor_miss: int = 0
@@ -283,17 +280,6 @@ class Climate(SubroutineTemplate):
             in self._regulated_parameters.items()
             if regulated
         ] if self.started else []
-
-    @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise AttributeError("Light status thread has not been set up")
-        else:
-            return self._thread
-
-    @thread.setter
-    def thread(self, thread: Thread | None) -> None:
-        self._thread = thread
 
     def update_regulated_parameters(self) -> None:
         self._regulated_parameters = self._compute_regulated_parameters()
