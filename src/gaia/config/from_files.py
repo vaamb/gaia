@@ -944,9 +944,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             else:
                 chaos_probability = 0
             if chaos_probability == 1:
-                now = datetime.now(timezone.utc)
-                beginning = now
-                end = now + timedelta(days=self.chaos_parameters.duration)
+                today = datetime.now(timezone.utc).replace(
+                    hour=1, minute=0, second=0, microsecond=0)
+                beginning = today
+                end = today + timedelta(days=self.chaos_parameters.duration)
         chaos_memory["time_window"]["beginning"] = beginning
         chaos_memory["time_window"]["end"] = end
         chaos_memory["last_update"] = date.today()
