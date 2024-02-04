@@ -105,11 +105,11 @@ def test_download_sun_times_success(engine_config: EngineConfig):
 
 def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
     engine_config.home_coordinates = (0, 0)
-    assert engine_config.sun_times is None
+    assert engine_config.home_sun_times is None
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "No need to refresh sun times" in logs
-    assert engine_config.sun_times is None
+    assert engine_config.home_sun_times is None
 
 
 # TODO: add a cache to be sure data is not downloaded again
@@ -120,15 +120,15 @@ def test_refresh_suntimes_success(
 ):
     engine_config.home_coordinates = (0, 0)
     ecosystem_config.sky["lighting"] = gv.LightMethod.elongate
-    assert engine_config.sun_times is None
+    assert engine_config.home_sun_times is None
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "successfully updated" in logs
-    assert engine_config.sun_times is not None
+    assert engine_config.home_sun_times is not None
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Sun times already up to date" in logs
-    assert engine_config.sun_times is not None
+    assert engine_config.home_sun_times is not None
 
 
 def test_status(engine_config: EngineConfig, ecosystem_config: EcosystemConfig):
