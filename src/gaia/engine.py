@@ -290,12 +290,18 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     def start_background_tasks(self) -> None:
         self.logger.debug("Starting the background tasks.")
-        self.scheduler.add_job(self.refresh_sun_times, "cron",
-                          hour="1", misfire_grace_time=15 * 60,
-                          id="refresh_sun_times")
-        self.scheduler.add_job(self.update_chaos_time_window, "cron",
-                          hour="0", minute="5", misfire_grace_time=15 * 60,
-                          id="refresh_chaos")
+        self.scheduler.add_job(
+            func=self.refresh_sun_times,
+            id="refresh_sun_times",
+            trigger=CronTrigger(hour="1"),
+            misfire_grace_time=15 * 60,
+        )
+        self.scheduler.add_job(
+            func=self.update_chaos_time_window,
+            id="refresh_chaos",
+            trigger=CronTrigger(hour="0", minute="5"),
+            misfire_grace_time=15 * 60,
+        )
         self.scheduler.start()
 
     def stop_background_tasks(self) -> None:
