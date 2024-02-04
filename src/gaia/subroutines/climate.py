@@ -291,11 +291,12 @@ class Climate(SubroutineTemplate):
     ) -> tuple[float, float | None]:
         parameter = self.config.get_climate_parameter(climate_parameter.name)
         now: time = _now or datetime.now().astimezone().time()
+        chaos_factor = self.config.get_chaos_factor()
         if self.lighting_hours.morning_start < now <= self.lighting_hours.evening_end:
-            target = parameter.day * self.ecosystem.config.chaos_factor
+            target = parameter.day * chaos_factor
         else:
-            target = parameter.night * self.ecosystem.config.chaos_factor
-        hysteresis = parameter.hysteresis * self.ecosystem.config.chaos_factor
+            target = parameter.night * chaos_factor
+        hysteresis = parameter.hysteresis * chaos_factor
         if hysteresis == 0.0:
             hysteresis = None
         return target, hysteresis

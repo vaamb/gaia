@@ -953,13 +953,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         chaos_memory["last_update"] = date.today()
         self.general.save(CacheType.chaos)
 
-    @property
-    def chaos_factor(self) -> float:
+    def get_chaos_factor(self, now: datetime | None = None) -> float:
         beginning = self.chaos_time_window["beginning"]
         end = self.chaos_time_window["end"]
         if beginning is None or end is None:
             return 1.0
-        now = datetime.now(timezone.utc)
+        now = now or datetime.now(timezone.utc)
         chaos_duration = (end - beginning).total_seconds() // 60
         chaos_start_to_now = (now - beginning).total_seconds() // 60
         chaos_fraction = chaos_start_to_now / chaos_duration
