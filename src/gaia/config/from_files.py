@@ -918,24 +918,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def chaos_time_window(self) -> ChaosTimeWindow:
+        chaos_memory = self.general.get_chaos_memory(self.uid)
+        if chaos_memory["last_update"] < date.today():
+            self._update_chaos_time_window()
         return self.general.get_chaos_memory(self.uid)["time_window"]
 
-    @chaos_time_window.setter
-    def chaos_time_window(self, value: ChaosTimeWindow) -> None:
-        chaos_memory = self.general.get_chaos_memory(self.uid)
-        chaos_memory["time_window"] = value
-        chaos_memory["last_update"] = date.today()
-
     def update_chaos_time_window(self) -> None:
-        self.logger.info("Updating chaos time window")
+        self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             self._update_chaos_time_window()
         else:
-            self.logger.debug("Chaos time window is already up to date")
+            self.logger.debug("Chaos time window is already up to date.")
 
     def _update_chaos_time_window(self) -> None:
-        beginning = self.chaos_time_window["beginning"]
-        end = self.chaos_time_window["end"]
+        chaos_memory = self.general.get_chaos_memory(self.uid)
+        beginning = chaos_memory["time_window"]["beginning"]
+        end = chaos_memory["time_window"]["end"]
         if beginning and end:
             if not (beginning <= date.today() <= end):  # End of chaos period
                 beginning = None
@@ -946,23 +944,21 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             else:
                 chaos_probability = 0
             if chaos_probability == 1:
-                now = datetime.now(timezone.utc)
-                beginning = now
-                end = now + timedelta(days=self.chaos_parameters.duration)
-        self.chaos_time_window = {
-            "beginning": beginning,
-            "end": end
-        }
+                today = datetime.now(timezone.utc).replace(
+                    hour=14, minute=0, second=0, microsecond=0)
+                beginning = today
+                end = today + timedelta(days=self.chaos_parameters.duration)
+        chaos_memory["time_window"]["beginning"] = beginning
+        chaos_memory["time_window"]["end"] = end
+        chaos_memory["last_update"] = date.today()
+        self.general.save(CacheType.chaos)
 
-    @property
-    def chaos_factor(self) -> float:
-        if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
-            self._update_chaos_time_window()
+    def get_chaos_factor(self, now: datetime | None = None) -> float:
         beginning = self.chaos_time_window["beginning"]
         end = self.chaos_time_window["end"]
         if beginning is None or end is None:
             return 1.0
-        now = datetime.now(timezone.utc)
+        now = now or datetime.now(timezone.utc)
         chaos_duration = (end - beginning).total_seconds() // 60
         chaos_start_to_now = (now - beginning).total_seconds() // 60
         chaos_fraction = chaos_start_to_now / chaos_duration

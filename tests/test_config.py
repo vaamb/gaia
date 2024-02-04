@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import date, datetime, time, timedelta, timezone
 from time import sleep
 
 import pytest
@@ -201,14 +201,41 @@ def test_ecosystem_config_managed_subroutines(ecosystem_config: EcosystemConfig)
 
 
 def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
+    today = datetime.now(timezone.utc).replace(
+        hour=14, minute=0, second=0, microsecond=0)
+
     assert ecosystem_config.chaos_parameters == gv.ChaosConfig()
 
     with pytest.raises(ValueError):
         ecosystem_config.chaos_parameters = {"wrong": "value"}
 
-    parameters = {"frequency": 10, "duration": 2, "intensity": 1.2}
+    max_intensity = 1.2
+    duration = 2
+    parameters = {"frequency": 1, "duration": duration, "intensity": max_intensity}
     ecosystem_config.chaos_parameters = parameters
     assert ecosystem_config.chaos_parameters == gv.ChaosConfig(**parameters)
+
+    # By default, the newly created cfg has empty chaos time window
+    chaos_time_window = ecosystem_config.chaos_time_window
+    assert chaos_time_window["beginning"] is None
+    assert chaos_time_window["end"] is None
+    assert ecosystem_config.get_chaos_factor() == 1.0
+
+    # Update the time window. It will automatically update as the frequency is 1
+    chaos_memory = ecosystem_config.general.get_chaos_memory(ecosystem_config.uid)
+    chaos_memory["last_update"] = date(2000, 1, 1)  # Allow to update
+    ecosystem_config.update_chaos_time_window()
+    chaos_time_window = ecosystem_config.chaos_time_window
+    assert chaos_time_window["beginning"] == today
+    assert chaos_time_window["end"] == today + timedelta(days=duration)
+
+    ecosystem_config.update_chaos_time_window()
+    with get_logs_content(ecosystem_config.general.logs_dir / "base.log") as logs:
+        assert "Chaos time window is already up to date." in logs
+
+    chaos_factor = ecosystem_config.get_chaos_factor(today + timedelta(days=1))
+    # chaos_factor should be at its maximum
+    assert chaos_factor == max_intensity
 
 
 def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
