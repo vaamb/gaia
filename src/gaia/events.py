@@ -154,12 +154,14 @@ class Events(EventHandler):
             trigger=CronTrigger(hour="1", jitter=5.0),
             misfire_grace_time=10 * 60,
         )
+        self._jobs_scheduled = True
 
     def _unschedule_jobs(self) -> None:
         self.engine.scheduler.remove_job(job_id="events-ping")
         self.engine.scheduler.remove_job(job_id="events-send_sensors_data")
         self.engine.scheduler.remove_job(job_id="events-send_light_data")
         self.engine.scheduler.remove_job(job_id="events-send_health_data")
+        self._jobs_scheduled = False
 
     def ping(self) -> None:
         if self._dispatcher.connected:
@@ -201,13 +203,13 @@ class Events(EventHandler):
     def on_disconnect(self, *args) -> None:  # noqa
         if self.engine.stopping:
             self.logger.info("Engine requested to disconnect from the broker.")
+            return # The Engine takes care to shut down the scheduler and the jobs running
         elif self.registered:
             self.logger.warning("Dispatcher disconnected from the broker.")
         else:
             self.logger.error("Failed to register engine.")
         if self._jobs_scheduled:
             self._unschedule_jobs()
-            self._jobs_scheduled = False
 
     def on_register(self) -> None:
         self.registered = False
@@ -230,7 +232,6 @@ class Events(EventHandler):
         sleep(0.75)
         if not self._jobs_scheduled:
             self._schedule_jobs()
-            self._jobs_scheduled = True
         self.emit("initialized", ttl=15)
 
     def on_initialized_ack(self, missing_data: list | None = None) -> None:

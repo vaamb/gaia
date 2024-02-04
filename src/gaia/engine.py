@@ -688,6 +688,9 @@ class Engine(metaclass=SingletonMeta):
             raise RuntimeError("Cannot stop a non-started engine.")
         if self.stopped:
             raise RuntimeError("Cannot stop an already stopped engine.")
+        self._stop_event.set()
+
+    def shutdown(self) -> None:
         if self.running:
             self.pause()
         self.logger.info("Shutting down Gaia ...")
@@ -725,4 +728,4 @@ class Engine(metaclass=SingletonMeta):
         self.add_signal_handler()
         self.start()
         self.wait()
-        self.stop()
+        self.shutdown()
