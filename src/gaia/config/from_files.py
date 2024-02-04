@@ -956,10 +956,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return self.environment["sky"]
 
     @property
+    def _light_method(self) -> gv.LightMethod:
+        return safe_enum_from_name(gv.LightMethod, self.sky["lighting"])
+
+    @property
     def light_method(self) -> gv.LightMethod:
         if self.sun_times is None:
             return gv.LightMethod.fixed
-        return safe_enum_from_name(gv.LightMethod, self.sky["lighting"])
+        return self._light_method
 
     def set_light_method(self, method: gv.LightMethod) -> None:
         try:
@@ -1294,7 +1298,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def sun_times(self) -> gv.SunTimesDict | None:
-        if self.light_method == gv.LightMethod.mimic:
+        if self._light_method == gv.LightMethod.mimic:
             target = self.light_target
             sun_times = self.general.get_sun_times(target)
             if sun_times is not None:
