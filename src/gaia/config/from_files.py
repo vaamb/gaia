@@ -954,8 +954,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def chaos_factor(self) -> float:
-        if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
-            self._update_chaos_time_window()
         beginning = self.chaos_time_window["beginning"]
         end = self.chaos_time_window["end"]
         if beginning is None or end is None:
