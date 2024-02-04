@@ -6,12 +6,13 @@ check_dependencies("dispatcher")
 
 import inspect
 import logging
-from threading import Event, Thread
 from time import monotonic, sleep
 import typing as t
 from typing import Callable, cast, Literal, Type
 import weakref
 
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from pydantic import ValidationError
 
 from dispatcher import EventHandler
@@ -19,7 +20,6 @@ import gaia_validators as gv
 
 from gaia.config import EcosystemConfig
 from gaia.config.from_files import ConfigType
-from gaia.shared_resources import get_scheduler
 from gaia.utils import humanize_list, local_ip_address
 
 
@@ -59,8 +59,6 @@ class Events(EventHandler):
         self.engine: "Engine" = weakref.proxy(engine)
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
-        self._thread: Thread | None = None
-        self._stop_event = Event()
         self._sensor_buffer_cls: "SensorBuffer" | None = None
         self._last_heartbeat: float = monotonic()
         self._jobs_scheduled: bool = False
@@ -73,20 +71,6 @@ class Events(EventHandler):
     @property
     def db(self) -> "SQLAlchemyWrapper":
         return self.engine.db
-
-    @property
-    def thread(self) -> Thread:
-        if self._thread is None:
-            raise AttributeError("Events thread has not been set up")
-        return self._thread
-
-    @thread.setter
-    def thread(self, thread: Thread | None) -> None:
-        self._thread = thread
-
-    @property
-    def background_tasks_running(self) -> bool:
-        return self._thread is not None
 
     @property
     def sensor_buffer_cls(self) -> "SensorBuffer":
@@ -146,56 +130,42 @@ class Events(EventHandler):
                 f"ERROR msg: `{e.__class__.__name__} :{e}`")
 
     def _schedule_jobs(self) -> None:
-        scheduler = get_scheduler()
+        self.engine.scheduler.add_job(
+            func=self.ping,
+            id="events-ping",
+            trigger=IntervalTrigger(seconds=15),
+        )
         sensor_offset: str = str(int(self.engine.config.app_config.SENSORS_LOOP_PERIOD + 1))
-        scheduler.add_job(
-            self.emit_event_if_connected, kwargs={"event_name": "sensors_data", "ttl": 15},
-            id="send_sensors_data", trigger="cron", minute="*", second=sensor_offset,
-            misfire_grace_time=10
+        self.engine.scheduler.add_job(
+            func=self.emit_event_if_connected, kwargs={"event_name": "sensors_data", "ttl": 15},
+            id="events-send_sensors_data",
+            trigger=CronTrigger(minute="*", second=sensor_offset),
+            misfire_grace_time=10,
         )
-        scheduler.add_job(
-            self.emit_event_if_connected, kwargs={"event_name": "light_data"},
-            id="send_light_data", trigger="cron", hour="1",
-            misfire_grace_time=10*60
+        self.engine.scheduler.add_job(
+            func=self.emit_event_if_connected, kwargs={"event_name": "light_data"},
+            id="events-send_light_data",
+            trigger=CronTrigger(hour="1", jitter=5.0),
+            misfire_grace_time=10 * 60,
         )
-        scheduler.add_job(
-            self.emit_event_if_connected, kwargs={"event_name": "health_data"},
-            id="send_health_data", trigger="cron", hour="1",
-            misfire_grace_time=10*60
+        self.engine.scheduler.add_job(
+            func=self.emit_event_if_connected, kwargs={"event_name": "health_data"},
+            id="events-send_health_data",
+            trigger=CronTrigger(hour="1", jitter=5.0),
+            misfire_grace_time=10 * 60,
         )
 
     def _unschedule_jobs(self) -> None:
-        scheduler = get_scheduler()
-        scheduler.remove_job(job_id="send_sensors_data")
-        scheduler.remove_job(job_id="send_light_data")
-        scheduler.remove_job(job_id="send_health_data")
-
-    def start_background_tasks(self) -> None:
-        self._stop_event.clear()
-        self.thread = Thread(
-            target=self.ping_loop,
-            name="events_ping",
-            daemon=True,
-        )
-        self.thread.start()
-
-    def stop_background_tasks(self) -> None:
-        self._unschedule_jobs()
-        self._stop_event.set()
-        self.thread.join()
-        self.thread = None
-
-    def ping_loop(self) -> None:
-        sleep(0.1)  # Sleep to allow the end of dispatcher initialization if it directly connects
-        while not self._stop_event.is_set():
-            if self._dispatcher.connected:
-                self.ping()
-            sleep(15)
+        self.engine.scheduler.remove_job(job_id="events-ping")
+        self.engine.scheduler.remove_job(job_id="events-send_sensors_data")
+        self.engine.scheduler.remove_job(job_id="events-send_light_data")
+        self.engine.scheduler.remove_job(job_id="events-send_health_data")
 
     def ping(self) -> None:
-        ecosystems = [ecosystem.uid for ecosystem in self.ecosystems.values()]
-        self.logger.debug("Sending 'ping'.")
-        self.emit("ping", data=ecosystems, ttl=20)
+        if self._dispatcher.connected:
+            ecosystems = [ecosystem.uid for ecosystem in self.ecosystems.values()]
+            self.logger.debug("Sending 'ping'.")
+            self.emit("ping", data=ecosystems, ttl=20)
 
     def on_pong(self) -> None:
         self.logger.debug("Received 'pong'.")
@@ -227,9 +197,6 @@ class Events(EventHandler):
         else:
             self.logger.info("Will try to register the engine to Ouranos.")
             self.register()
-        if not self._jobs_scheduled:
-            self._schedule_jobs()
-            self._jobs_scheduled = True
 
     def on_disconnect(self, *args) -> None:  # noqa
         if self.engine.stopping:
@@ -238,8 +205,6 @@ class Events(EventHandler):
             self.logger.warning("Dispatcher disconnected from the broker.")
         else:
             self.logger.error("Failed to register engine.")
-        if self.background_tasks_running:
-            self.stop_background_tasks()
         if self._jobs_scheduled:
             self._unschedule_jobs()
             self._jobs_scheduled = False
@@ -263,8 +228,9 @@ class Events(EventHandler):
             self.send_buffered_data()
         self.registered = True
         sleep(0.75)
-        if not self.background_tasks_running:
-            self.start_background_tasks()
+        if not self._jobs_scheduled:
+            self._schedule_jobs()
+            self._jobs_scheduled = True
         self.emit("initialized", ttl=15)
 
     def on_initialized_ack(self, missing_data: list | None = None) -> None:

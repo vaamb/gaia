@@ -10,7 +10,7 @@ license = {file = "LICENSE"}
 dynamic = ["version"]
 dependencies = [
     "adafruit-blinka~=8.20.0",
-    "apscheduler~=3.7.0",
+    "apscheduler~=3.10.0",
     "click~=8.1.7",
     "cryptography~=40.0.1",
     "gevent~=23.9.1",

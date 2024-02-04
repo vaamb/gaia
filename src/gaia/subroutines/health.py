@@ -4,12 +4,12 @@ from datetime import datetime
 import io
 import typing as t
 
+from apscheduler.triggers.cron import CronTrigger
 import gaia_validators as gv
 
 from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
-from gaia.shared_resources import get_scheduler
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -29,17 +29,16 @@ class Health(SubroutineTemplate):
 
     def _start_scheduler(self) -> None:
         h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
-        scheduler = get_scheduler()
-        scheduler.add_job(
-            self.health_routine,
-            trigger="cron", hour=h, minute=m, misfire_grace_time=15 * 60,
-            id=f"{self.ecosystem.name}-health"
+        self.ecosystem.engine.scheduler.add_job(
+            func=self._health_routine,
+            id=f"{self.ecosystem.uid}-health_routine",
+            trigger=CronTrigger(hour=h, minute=m, jitter=5.0),
+            misfire_grace_time=15 * 60,
         )
 
     def _stop_scheduler(self) -> None:
         self.logger.info("Closing the tasks scheduler")
-        scheduler = get_scheduler()
-        scheduler.remove_job(f"{self.ecosystem.name}-health")
+        self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.uid}-health_routine")
         self.logger.info("The tasks scheduler was closed properly")
 
     def analyse_picture(self) -> None:
@@ -62,7 +61,7 @@ class Health(SubroutineTemplate):
             # TODO: change Exception
             raise Exception
 
-    def health_routine(self) -> None:
+    def _health_routine(self) -> None:
         # If webcam: turn it off and restart after
         light_running = self.ecosystem.get_subroutine_status("light")
         if light_running:
