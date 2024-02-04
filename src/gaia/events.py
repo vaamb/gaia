@@ -146,13 +146,13 @@ class Events(EventHandler):
             func=self.emit_event_if_connected, kwargs={"event_name": "light_data"},
             id="events-send_light_data",
             trigger=CronTrigger(hour="1", jitter=5.0),
-            misfire_grace_time=10*60,
+            misfire_grace_time=10 * 60,
         )
         self.engine.scheduler.add_job(
             func=self.emit_event_if_connected, kwargs={"event_name": "health_data"},
             id="events-send_health_data",
             trigger=CronTrigger(hour="1", jitter=5.0),
-            misfire_grace_time=10*60,
+            misfire_grace_time=10 * 60,
         )
 
     def _unschedule_jobs(self) -> None:
