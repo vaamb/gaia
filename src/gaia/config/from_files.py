@@ -918,24 +918,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def chaos_time_window(self) -> ChaosTimeWindow:
+        chaos_memory = self.general.get_chaos_memory(self.uid)
+        if chaos_memory["last_update"] < date.today():
+            self._update_chaos_time_window()
         return self.general.get_chaos_memory(self.uid)["time_window"]
 
-    @chaos_time_window.setter
-    def chaos_time_window(self, value: ChaosTimeWindow) -> None:
-        chaos_memory = self.general.get_chaos_memory(self.uid)
-        chaos_memory["time_window"] = value
-        chaos_memory["last_update"] = date.today()
-
     def update_chaos_time_window(self) -> None:
-        self.logger.info("Updating chaos time window")
+        self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             self._update_chaos_time_window()
         else:
-            self.logger.debug("Chaos time window is already up to date")
+            self.logger.debug("Chaos time window is already up to date.")
 
     def _update_chaos_time_window(self) -> None:
-        beginning = self.chaos_time_window["beginning"]
-        end = self.chaos_time_window["end"]
+        chaos_memory = self.general.get_chaos_memory(self.uid)
+        beginning = chaos_memory["time_window"]["beginning"]
+        end = chaos_memory["time_window"]["end"]
         if beginning and end:
             if not (beginning <= date.today() <= end):  # End of chaos period
                 beginning = None
@@ -949,10 +947,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 now = datetime.now(timezone.utc)
                 beginning = now
                 end = now + timedelta(days=self.chaos_parameters.duration)
-        self.chaos_time_window = {
-            "beginning": beginning,
-            "end": end
-        }
+        chaos_memory["time_window"]["beginning"] = beginning
+        chaos_memory["time_window"]["end"] = end
+        chaos_memory["last_update"] = date.today()
+        self.general.save(CacheType.chaos)
 
     @property
     def chaos_factor(self) -> float:
