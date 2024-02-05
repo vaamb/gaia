@@ -44,6 +44,7 @@ def format_pydantic_error(error: pydantic.ValidationError) -> str:
         for e in errors
     ])
 
+
 class ConfigType(Enum):
     ecosystems = "ecosystems.cfg"
     private = "private.cfg"
