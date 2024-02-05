@@ -164,12 +164,12 @@ def configure_logging(config_class: GaiaConfig) -> None:
 
     if config_class.DEBUG or config_class.TESTING:
         debug_fmt = "%(asctime)s %(levelname)-7.7s: [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s"
-        logging_config["formatters"]["base_format"]["format"] = debug_fmt
+        logging_config["formatters"]["base_formatter"]["format"] = debug_fmt
         logging_config["handlers"]["stream_handler"]["level"] = 'DEBUG'
+        logging_config["handlers"]["file_handler"]["level"] = 'DEBUG'
         logging_config["loggers"]["gaia"]["level"] = 'DEBUG'
         logging_config["loggers"]["virtual"]["level"] = 'DEBUG'
         logging_config["loggers"]["dispatcher"]["level"] = 'DEBUG'
-        logging_config["loggers"]["gaia"]["level"] = 'DEBUG'
         logging_config["loggers"]["apscheduler"]["level"] = 'DEBUG'
 
     if config_class.LOG_TO_STDOUT:

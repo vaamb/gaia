@@ -27,14 +27,14 @@ def test_ecosystem_states(ecosystem: "Ecosystem"):
 
     ecosystem.start()
     assert ecosystem.started
-    with get_logs_content(ecosystem.engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(ecosystem.engine.config.logs_dir / "gaia.log") as logs:
         assert f"Ecosystem successfully started" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         ecosystem.start()
 
     ecosystem.stop()
     assert not ecosystem.started
-    with get_logs_content(ecosystem.engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(ecosystem.engine.config.logs_dir / "gaia.log") as logs:
         assert f"Ecosystem successfully stopped" in logs
     with pytest.raises(RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
         ecosystem.stop()

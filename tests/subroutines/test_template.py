@@ -26,24 +26,24 @@ def test_states(dummy_subroutine: Dummy, engine_config: EngineConfig):
 
     dummy_subroutine.enable()
     assert dummy_subroutine.enabled
-    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Enabling the subroutine." in logs
     with pytest.raises(RuntimeError, match=r"The subroutine is not manageable."):
         dummy_subroutine.start()
 
     dummy_subroutine.manageable_state = True
     dummy_subroutine.start()
-    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Starting the subroutine." in logs
     with pytest.raises(RuntimeError, match=r"The subroutine is already running."):
         dummy_subroutine.start()
 
     dummy_subroutine.stop()
-    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Stopping the subroutine." in logs
 
     dummy_subroutine.disable()
-    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Disabling the subroutine." in logs
     assert not dummy_subroutine.enabled
 
@@ -68,11 +68,11 @@ def test_hardware(dummy_subroutine: Dummy, engine_config: EngineConfig):
     dummy_subroutine.hardware_choices = {virtualDHT22.__name__: virtualDHT22}
 
     dummy_subroutine.add_hardware(hardware_config)
-    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert f"Hardware {hardware_config.name} has been set up." in logs
 
     dummy_subroutine.remove_hardware(hardware_uid)
-    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert f"Hardware {hardware_config.name} has been dismounted." in logs
 
     with pytest.raises(HardwareNotFound, match=f"Hardware '{hardware_uid}' not found."):
