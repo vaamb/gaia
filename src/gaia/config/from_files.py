@@ -748,7 +748,7 @@ class EngineConfig(metaclass=SingletonMeta):
         if any_outdated or any_success:
             self.save(CacheType.sun_times)
 
-    def download_sun_times(self, place: str) -> gv.SunTimesDict | None:
+    def download_sun_times(self, place: str = "home") -> gv.SunTimesDict | None:
         self.logger.info("Trying to download sun times")
         try:
             coordinates = self.get_place(place).coordinates
