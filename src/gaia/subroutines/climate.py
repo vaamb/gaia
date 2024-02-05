@@ -214,10 +214,10 @@ class Climate(SubroutineTemplate):
         for climate_parameter in self._regulated_parameters:
             pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
             pid.reset()
-        self.ecosystem.engine.scheduler.add_job(
-            func=self._climate_routine,
+        self.ecosystem.engine.scheduler.add_schedule(
+            func_or_task_id=self._climate_routine,
             id=f"{self.ecosystem.uid}-climate_routine",
-            trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
+            trigger=IntervalTrigger(seconds=self._loop_period),
         )
         self._update_climate_actuators()
         for parameter in self.regulated_parameters:

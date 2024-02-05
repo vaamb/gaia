@@ -29,10 +29,10 @@ class Health(SubroutineTemplate):
 
     def _start_scheduler(self) -> None:
         h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
-        self.ecosystem.engine.scheduler.add_job(
-            func=self._health_routine,
+        self.ecosystem.engine.scheduler.add_schedule(
+            func_or_task_id=self._health_routine,
             id=f"{self.ecosystem.uid}-health_routine",
-            trigger=CronTrigger(hour=h, minute=m, jitter=5.0),
+            trigger=CronTrigger(hour=h, minute=m),
             misfire_grace_time=15 * 60,
         )
 

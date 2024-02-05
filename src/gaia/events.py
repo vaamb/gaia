@@ -172,26 +172,26 @@ class Events(EventHandler):
         self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
     def _schedule_jobs(self) -> None:
-        self.engine.scheduler.add_job(
-            func=self.ping,
+        self.engine.scheduler.add_schedule(
+            func_or_task_id=self.ping,
             id="events-ping",
             trigger=IntervalTrigger(seconds=15),
         )
         sensor_offset: str = str(int(self.engine.config.app_config.SENSORS_LOOP_PERIOD + 1))
-        self.engine.scheduler.add_job(
-            func=self.emit_event_if_connected, kwargs={"payload_name": "sensors_data", "ttl": 15},
+        self.engine.scheduler.add_schedule(
+            func_or_task_id=self.emit_event_if_connected, kwargs={"payload_name": "sensors_data", "ttl": 15},
             id="events-send_sensors_data",
             trigger=CronTrigger(minute="*", second=sensor_offset),
             misfire_grace_time=10,
         )
-        self.engine.scheduler.add_job(
-            func=self.emit_event_if_connected, kwargs={"payload_name": "light_data"},
+        self.engine.scheduler.add_schedule(
+            func_or_task_id=self.emit_event_if_connected, kwargs={"payload_name": "light_data"},
             id="events-send_light_data",
             trigger=CronTrigger(hour="1", jitter=5.0),
             misfire_grace_time=10 * 60,
         )
-        self.engine.scheduler.add_job(
-            func=self.emit_event_if_connected, kwargs={"payload_name": "health_data"},
+        self.engine.scheduler.add_schedule(
+            func_or_task_id=self.emit_event_if_connected, kwargs={"payload_name": "health_data"},
             id="events-send_health_data",
             trigger=CronTrigger(hour="1", jitter=5.0),
             misfire_grace_time=10 * 60,
