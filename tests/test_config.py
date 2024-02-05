@@ -91,7 +91,7 @@ def test_download_sun_times_no_coordinates(engine_config: EngineConfig):
     sun_times = engine_config.download_sun_times()
     assert sun_times is None
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "You need to define your home city coordinates" in logs
+        assert "You need to define 'home' coordinates" in logs
 
 
 @pytest.mark.skipif(is_not_connected)
@@ -240,12 +240,21 @@ def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
 
 def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
     assert ecosystem_config.light_method is gv.LightMethod.fixed
-
     new_method = gv.LightMethod.elongate
+
+    with pytest.raises(ValueError):
+        ecosystem_config.set_light_method(new_method)
+
+    ecosystem_config.general.home_coordinates = (0, 0)
     ecosystem_config.set_light_method(new_method)
+
+    # Should not happen
+    ecosystem_config.general._sun_times = {}
     # Sun times is none so `light_method` falls back to `fixed`
     assert ecosystem_config.light_method is gv.LightMethod.fixed
-    ecosystem_config.general._sun_times = sun_times
+    ecosystem_config.general._sun_times = {
+        "home": {"last_update": date.today(), "data": sun_times}
+    }
     assert ecosystem_config.light_method is new_method
 
 

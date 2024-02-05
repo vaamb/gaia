@@ -729,6 +729,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.debug("No need to refresh sun times.")
             if any_outdated:
                 self.save(CacheType.sun_times)
+            return
 
         any_failed = False
         any_success = False

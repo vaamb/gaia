@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from dispatcher import EventHandler, KombuDispatcher
@@ -205,7 +207,9 @@ def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig
 def test_refresh_sun_times(engine: Engine):
     # Simply dispatches work to `EngineConfig` and `Ecosystem`, methods are
     #  tested there
-    engine.config._sun_times = sun_times
+    engine.config._sun_times = {
+        "home": {"last_update": date.today(), "data": sun_times}
+    }
     engine.refresh_sun_times()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Refreshing ecosystems sun times" in logs
