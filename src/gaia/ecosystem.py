@@ -399,8 +399,8 @@ class Ecosystem:
             else:
                 with self.lighting_hours_lock:
                     self._lighting_hours = gv.LightingHours(
-                        morning_start=self.config.sun_times.sunrise,
-                        evening_end=self.config.sun_times.sunset,
+                        morning_start=self.config.sun_times["sunrise"],
+                        evening_end=self.config.sun_times["sunset"],
                     )
 
         elif self.config.light_method == gv.LightMethod.elongate:
@@ -416,9 +416,9 @@ class Ecosystem:
                 self.config.set_light_method(gv.LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
             else:
-                sunrise = _to_dt(self.config.sun_times.sunrise)
-                sunset = _to_dt(self.config.sun_times.sunset)
-                twilight_begin = _to_dt(self.config.sun_times.twilight_begin)
+                sunrise: datetime = _to_dt(self.config.sun_times["sunrise"])
+                sunset: datetime = _to_dt(self.config.sun_times["sunset"])
+                twilight_begin: datetime = _to_dt(self.config.sun_times["twilight_begin"])
                 offset = sunrise - twilight_begin
                 with self.lighting_hours_lock:
                     self._lighting_hours = gv.LightingHours(

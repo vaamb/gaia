@@ -91,7 +91,7 @@ def test_download_sun_times_no_coordinates(engine_config: EngineConfig):
     sun_times = engine_config.download_sun_times()
     assert sun_times is None
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "You need to define your home city coordinates" in logs
+        assert "You need to define 'home' coordinates" in logs
 
 
 @pytest.mark.skipif(is_not_connected)
@@ -105,11 +105,11 @@ def test_download_sun_times_success(engine_config: EngineConfig):
 
 def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
     engine_config.home_coordinates = (0, 0)
-    assert engine_config.sun_times is None
+    assert engine_config.home_sun_times is None
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "No need to refresh sun times" in logs
-    assert engine_config.sun_times is None
+    assert engine_config.home_sun_times is None
 
 
 # TODO: add a cache to be sure data is not downloaded again
@@ -120,15 +120,15 @@ def test_refresh_suntimes_success(
 ):
     engine_config.home_coordinates = (0, 0)
     ecosystem_config.sky["lighting"] = gv.LightMethod.elongate
-    assert engine_config.sun_times is None
+    assert engine_config.home_sun_times is None
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "successfully updated" in logs
-    assert engine_config.sun_times is not None
+    assert engine_config.home_sun_times is not None
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Sun times already up to date" in logs
-    assert engine_config.sun_times is not None
+    assert engine_config.home_sun_times is not None
 
 
 def test_status(engine_config: EngineConfig, ecosystem_config: EcosystemConfig):
@@ -240,12 +240,21 @@ def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
 
 def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
     assert ecosystem_config.light_method is gv.LightMethod.fixed
-
     new_method = gv.LightMethod.elongate
+
+    with pytest.raises(ValueError):
+        ecosystem_config.set_light_method(new_method)
+
+    ecosystem_config.general.home_coordinates = (0, 0)
     ecosystem_config.set_light_method(new_method)
+
+    # Should not happen
+    ecosystem_config.general._sun_times = {}
     # Sun times is none so `light_method` falls back to `fixed`
     assert ecosystem_config.light_method is gv.LightMethod.fixed
-    ecosystem_config.general._sun_times = sun_times
+    ecosystem_config.general._sun_times = {
+        "home": {"last_update": date.today(), "data": sun_times}
+    }
     assert ecosystem_config.light_method is new_method
 
 

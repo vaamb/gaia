@@ -571,7 +571,7 @@ class Engine(metaclass=SingletonMeta):
         """Download sunrise and sunset times if needed by an Ecosystem"""
         self.logger.info("Refreshing ecosystems sun times")
         self.config.refresh_sun_times()
-        if self.config.sun_times is None:
+        if self.config.home_sun_times is None:
             self.logger.warning(
                 "EngineConfig is None, cannot update ecosystems sun times"
             )

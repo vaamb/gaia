@@ -17,7 +17,7 @@ import weakref
 from weakref import WeakValueDictionary
 
 import pydantic
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, ValidationError
 from requests import ConnectionError, Session
 
 import gaia_validators as gv
@@ -44,6 +44,7 @@ def format_pydantic_error(error: pydantic.ValidationError) -> str:
         for e in errors
     ])
 
+
 class ConfigType(Enum):
     ecosystems = "ecosystems.cfg"
     private = "private.cfg"
@@ -61,13 +62,18 @@ DaytimeEvents = Literal[
     "civil_twilight_begin", "sunrise", "sunset", "civil_twilight_end"]
 
 
-class SunTimesCacheHomeDict(TypedDict):
-    home: gv.SunTimesDict
+class SunTimesCacheValidator(gv.LaxBaseModel):
+    last_update: date
+    data: gv.SunTimes
 
 
-class SunTimesCacheDict(TypedDict):
-    last_update: str
-    data: SunTimesCacheHomeDict
+class SunTimesCacheData(TypedDict):
+    last_update: date
+    data: gv.SunTimesDict
+
+
+class RootSunTimesCacheValidator(gv.BaseModel):
+    config: dict[str, SunTimesCacheValidator]
 
 
 class CoordinatesValidator(gv.BaseModel):
@@ -197,7 +203,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._engine: "Engine" | None = None
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
         self._private_config: dict = {}
-        self._sun_times: gv.SunTimes | None = None
+        self._sun_times: [str, SunTimesCacheData] = {}
         self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
         self._config_files_modif: dict[Path, int] = {}
@@ -354,25 +360,41 @@ class EngineConfig(metaclass=SingletonMeta):
                     path = self.get_file_path(cfg_type)
                     self._config_files_modif[path] = os.stat(path).st_mtime_ns
         self.load(CacheType.chaos)
+        self.load(CacheType.sun_times)
+        for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items():
+            ecosystem_name = self.get_IDs(ecosystem_uid).name
+            self.logger.debug(
+                f"Checking if light method for ecosystem {ecosystem_name} is possible.")
+            light_is_method_valid = self.check_lighting_method_validity(ecosystem_uid)
+            if not light_is_method_valid:
+                self.logger.warning(
+                    f"Using light method for ecosystem '{ecosystem_name}' is not "
+                    f"possible. Will fall back to 'fixed'."
+                )
+        self.save(CacheType.sun_times)
         self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType | CacheType) -> None:
         if isinstance(cfg_type, ConfigType):
             with self.config_files_lock():
-                self.logger.debug(f"Updating {cfg_type.name} configuration file(s)")
+                self.logger.debug(f"Updating {cfg_type.name} configuration file(s).")
                 self._dump_config(cfg_type)
         else:
             if cfg_type == CacheType.chaos:
                 self._dump_chaos_memory()
+            elif cfg_type == CacheType.sun_times:
+                self._dump_sun_times()
 
     def load(self, cfg_type: ConfigType | CacheType) -> None:
         if isinstance(cfg_type, ConfigType):
             with self.config_files_lock():
-                self.logger.debug(f"Loading {cfg_type.name} configuration file(s)")
+                self.logger.debug(f"Loading {cfg_type.name} configuration file(s).")
                 self._load_config(cfg_type)
         else:
             if cfg_type == CacheType.chaos:
                 self._load_chaos_memory()
+            elif cfg_type == CacheType.sun_times:
+                self._load_cached_sun_times()
 
     # File watchdog
     def _get_changed_config_files(self) -> set[ConfigType]:
@@ -612,97 +634,219 @@ class EngineConfig(metaclass=SingletonMeta):
         return self._private_config.get("units", {})
 
     @property
-    def sun_times(self) -> gv.SunTimes | None:
+    def sun_times(self) -> dict[str, SunTimesCacheData]:
         return self._sun_times
 
-    def refresh_sun_times(self) -> None:
-        # TODO: don't update if already up to date in instance
-        needed = False
-        for ecosystem_config in self.ecosystems_config_dict.values():
-            sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
-            if sky.lighting != gv.LightMethod.fixed:
-                needed = True
-                break
-        if not needed:
-            self.logger.debug("No need to refresh sun times")
-            return
-        # Determine if the file needs to be updated
-        sun_times_data: gv.SunTimesDict | None = None
-        self.logger.debug("Trying to load cached sun times")
+    def get_sun_times(self, place: str) -> gv.SunTimesDict | None:
+        sun_times = self.sun_times.get(place)
+        if sun_times is None:
+            return None
+        if sun_times["last_update"] < date.today():
+            del self._sun_times[place]
+            return None
+        return sun_times["data"]
+
+    def set_sun_times(self, place: str, sun_times: gv.SunTimesDict) -> None:
+        validated_sun_times: gv.SunTimesDict = gv.SunTimes(
+            **sun_times).model_dump()
+        self._sun_times[place] = SunTimesCacheData(
+            last_update=date.today(),
+            data=validated_sun_times,
+        )
+
+    @property
+    def home_sun_times(self) -> gv.SunTimesDict | None:
+        return self.get_sun_times("home")
+
+    def _clean_sun_times_cache(
+            self,
+            sun_times_cache: dict[str, SunTimesCacheData],
+    ) -> tuple[dict[str, SunTimesCacheData], bool]:
+        outdated: list[str] = []
+        today = date.today()
+        for place in sun_times_cache:
+            if sun_times_cache[place]["last_update"] < today:
+                outdated.append(place)
+        for place in outdated:
+            self.logger.debug(f"Cached sun times of {place} is outdated.")
+            del sun_times_cache[place]
+        return sun_times_cache, bool(outdated)
+
+    def _load_cached_sun_times(self) -> None:
+        self.logger.debug("Loading cached sun times.")
+        validated: dict[str, SunTimesCacheData] = {}
         try:
             file_path = self.get_file_path(CacheType.sun_times)
             with file_path.open("r") as file:
-                payload: SunTimesCacheDict = json.loads(file.read())
-                last_update: datetime = \
-                    datetime.fromisoformat(payload["last_update"]).astimezone()
+                unvalidated = json.loads(file.read())
+                try:
+                    validated: dict[str, SunTimesCacheData] = RootSunTimesCacheValidator(
+                        **{"config": unvalidated}
+                    ).model_dump()["config"]
+                except ValidationError:
+                    self.logger.debug("Cached sun times data out of format.")
+                    os.remove(file_path)
         except (FileNotFoundError, JSONDecodeError, KeyError):
-            pass
-        else:
-            if last_update.date() >= date.today():
-                sun_times_data = payload["data"]["home"]
-                self.logger.info("Sun times already up to date")
-        if sun_times_data is None:
-            sun_times_data = self.download_sun_times()
+            self.logger.debug("No sun times cached.")
 
-        if sun_times_data is not None:
-            self._sun_times = sun_times_data
+        cleaned_validated, any_outdated = self._clean_sun_times_cache(validated)
+        self._sun_times = cleaned_validated
+        if any_outdated:
+            self.save(CacheType.sun_times)
 
-        else:
+    def _dump_sun_times(self) -> None:
+        sun_times_path = self.get_file_path(CacheType.sun_times)
+        with sun_times_path.open("w") as file:
+            file.write(json.dumps(self._sun_times))
+
+    def refresh_sun_times(self) -> None:
+        # Remove outdated data
+        cleaned_validated, any_outdated = self._clean_sun_times_cache(self._sun_times)
+        self._sun_times = cleaned_validated
+
+        # Check if an update is required
+        places: set[str] = set()
+        for ecosystem_config in self.ecosystems_config_dict.values():
+            sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
+            if sky.lighting == gv.LightMethod.elongate:
+                # If we don't have an updated value, add "home" to the checklist
+                if not self.home_sun_times:
+                    places.add("home")
+            elif sky.lighting == gv.LightMethod.mimic:
+                target = sky.target
+                # Check that we have the target coordinates. If we don't, log an
+                #  error and use a fixed light method
+                if not target:
+                    ecosystem_name = ecosystem_config["name"]
+                    self.logger.error(
+                        f"Ecosystem '{ecosystem_name}' has no target set.")
+                    ecosystem_config["environment"]["sky"]["lighting"] = gv.LightMethod.fixed
+                    continue
+                # If we don't have an updated value, add the target to the checklist
+                if not self.get_sun_times(target):
+                    places.add(target)
+        if not places:
+            self.logger.debug("No need to refresh sun times.")
+            if any_outdated:
+                self.save(CacheType.sun_times)
+            return
+
+        any_failed = False
+        any_success = False
+        for place in places:
+            sun_times = self.download_sun_times(place)
+            if sun_times is not None:
+                self.set_sun_times(place, sun_times)
+                any_success = True
+            else:
+                any_failed = True
+
+        if any_failed:
             self.logger.warning(
-                "Could not refresh sun times, some functionalities might not "
-                "work as expected. All 'light_method's were set to 'fixed'."
+                "Could not refresh all sun times, some functionalities might not "
+                "work as expected."
             )
-            self._sun_times = None
+        if any_outdated or any_success:
+            self.save(CacheType.sun_times)
 
-    def download_sun_times(self) -> gv.SunTimesDict | None:
+    def download_sun_times(self, place: str = "home") -> gv.SunTimesDict | None:
         self.logger.info("Trying to download sun times")
         try:
-            home_coordinates = self.home_coordinates
+            coordinates = self.get_place(place).coordinates
         except UndefinedParameter:
             self.logger.warning(
-                "You need to define your home city coordinates in "
-                "'private.cfg' in order to download sun times."
+                f"You need to define '{place}' coordinates in "
+                f"'private.cfg' in order to download sun times."
             )
             return None
         else:
             try:
                 self.logger.debug(
-                    "Trying to update sunrise and sunset times on "
-                    "sunrise-sunset.org"
+                    f"Trying to update sunrise and sunset times for '{place}' "
+                    f"on sunrise-sunset.org."
                 )
                 with Session() as session:
                     response = session.get(
                         url=f"https://api.sunrise-sunset.org/json",
                         params={
-                            "lat": home_coordinates.latitude,
-                            "lng": home_coordinates.longitude
+                            "lat": coordinates.latitude,
+                            "lng": coordinates.longitude
                         },
                         timeout=3.0,
                     )
                 data = response.json()
-                results: gv.SunTimesDict = gv.SunTimes(**data["results"]).model_dump()
+                try:
+                    results: gv.SunTimesDict = gv.SunTimes(
+                        **data["results"]
+                    ).model_dump()
+                    return results
+                except ValidationError:
+                    self.logger.error(
+                        f"Could not validate sun times data for '{place}'.")
+                    return None
             except ConnectionError:
-                self.logger.debug(
-                    "Failed to update sunrise and sunset times due to a "
-                    "connection error"
+                self.logger.error(
+                    f"Failed to update sunrise and sunset times for '{place}' "
+                    f"due to a connection error."
                 )
                 return None
-            else:
-                payload: SunTimesCacheDict = {
-                    "last_update": datetime.now().astimezone().isoformat(),
-                    "data": {"home": results},
-                }
-                file_path = self.get_file_path(CacheType.sun_times)
-                with file_path.open("w") as file:
-                    file.write(json.dumps(payload))
-                self.logger.info(
-                    "Sunrise and sunset times successfully updated")
-                return results
+
+    def check_lighting_method_validity(
+            self,
+            ecosystem_uid: str,
+            lighting_method: gv.LightMethod | None = None
+    ) -> bool:
+        ecosystem_name = self.get_IDs(ecosystem_uid).name
+        sky_cfg: gv.SkyConfigDict = \
+            self.ecosystems_config_dict[ecosystem_uid]["environment"]["sky"]
+        lighting_method = lighting_method or sky_cfg["lighting"]
+        lighting_method = safe_enum_from_name(gv.LightMethod, lighting_method)
+        if lighting_method == gv.LightMethod.fixed:
+            return  True
+        # Try to get the target
+        elif lighting_method == gv.LightMethod.elongate:
+            target = "home"
+        elif lighting_method == gv.LightMethod.mimic:
+            target = sky_cfg.get("target")
+            if target is None:
+                self.logger.warning(
+                    f"Lighting method for ecosystem {ecosystem_name} cannot be "
+                    f"'mimic' as no target is specified in the ecosystems "
+                    f"configuration file."
+                )
+                return False
+        else:
+            raise ValueError("'lighting_method' should be a valid lighting method.")
+        # Try to get the target's coordinates
+        try:
+            self.get_place(target)
+        except UndefinedParameter:
+            self.logger.warning(
+                f"Lighting method for ecosystem {ecosystem_name} cannot be "
+                f"'{lighting_method.name}' as the coordinates of '{target}' is "
+                f"provided in the private configuration file."
+            )
+            return False
+        # Try to get the target's sun times
+        sun_times = self.get_sun_times(target)
+        if sun_times:
+            return True
+        sun_times = self.download_sun_times(target)
+        if sun_times is None:
+            self.logger.warning(
+                f"Lighting method for ecosystem {ecosystem_name} cannot be "
+                f"'{lighting_method.name}' as the sun times of '{target}' "
+                f"wasn't found."
+            )
+            return False
+        self.set_sun_times(target, sun_times)
+        return True
 
     def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
 
     def _load_chaos_memory(self) -> None:
+        self.logger.debug("Trying to load chaos memory.")
         chaos_path = self.get_file_path(CacheType.chaos)
         validated: dict[str, ChaosMemory]
         try:
@@ -713,7 +857,7 @@ class EngineConfig(metaclass=SingletonMeta):
                         root=unvalidated
                     ).model_dump()["root"]
                 except pydantic.ValidationError:
-                    self.engine.logger.error("Error while loading chaos")
+                    self.logger.error("Error while loading chaos.")
                     raise
         except (FileNotFoundError, JSONDecodeError):
             validated = {}
@@ -885,22 +1029,32 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return self.environment["sky"]
 
     @property
+    def _light_method(self) -> gv.LightMethod:
+        return safe_enum_from_name(gv.LightMethod, self.sky["lighting"])
+
+    @property
     def light_method(self) -> gv.LightMethod:
         if self.sun_times is None:
             return gv.LightMethod.fixed
-        return safe_enum_from_name(gv.LightMethod, self.sky["lighting"])
+        return self._light_method
 
     def set_light_method(self, method: gv.LightMethod) -> None:
-        try:
-            validated_method = safe_enum_from_name(gv.LightMethod, method)
-        except KeyError:
-            raise ValueError("'method' is not a valid 'LightMethod'")
-        self.sky["lighting"] = validated_method
-        if (
-                validated_method != gv.LightMethod.fixed
-                and not self.general.app_config.TESTING
-        ):
-            self.general.refresh_sun_times()
+        method = safe_enum_from_name(gv.LightMethod, method)
+        method_is_valid = self.general.check_lighting_method_validity(self.uid, method)
+        if not method_is_valid:
+            raise ValueError(
+                    f"Cannot set light method to '{method.name}'. Look at the "
+                    f"logs to see the reason."
+                )
+        self.sky["lighting"] = method
+
+    @property
+    def light_target(self) -> str | None:
+        return self.sky["target"]
+
+    def set_light_target(self, target: str | None) -> None:
+        assert self.general.get_place(target)
+        self.sky["target"] = target
 
     @property
     def chaos_parameters(self) -> gv.ChaosConfig:
@@ -1213,8 +1367,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.environment["sky"].update(validated_value)
 
     @property
-    def sun_times(self) -> gv.SunTimes | None:
-        return self.general.sun_times
+    def sun_times(self) -> gv.SunTimesDict | None:
+        if self._light_method == gv.LightMethod.mimic:
+            target = self.light_target
+            sun_times = self.general.get_sun_times(target)
+            return sun_times
+        return self.general.home_sun_times
 
 
 # ---------------------------------------------------------------------------
