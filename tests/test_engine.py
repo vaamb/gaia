@@ -160,6 +160,7 @@ def test_engine_states(engine: Engine):
         engine.resume()
 
     engine.stop()
+    engine.shutdown()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Shutting down Gaia ..." in logs
     assert not engine.started
