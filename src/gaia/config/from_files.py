@@ -361,6 +361,13 @@ class EngineConfig(metaclass=SingletonMeta):
                     self._config_files_modif[path] = os.stat(path).st_mtime_ns
         self.load(CacheType.chaos)
         self.load(CacheType.sun_times)
+        for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items():
+            ecosystem_name = self.get_IDs(ecosystem_uid).name
+            self.logger.info(
+                f"Checking if light method for ecosystem {ecosystem_name} is valid.")
+            light_is_method_valid = self.check_lighting_method_validity(ecosystem_uid)
+            if not light_is_method_valid:
+                eco_cfg_dict["environment"]["sky"]["lighting"] = gv.LightMethod.fixed
         self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType | CacheType) -> None:
@@ -689,7 +696,6 @@ class EngineConfig(metaclass=SingletonMeta):
             file.write(json.dumps(self._sun_times))
 
     def refresh_sun_times(self) -> None:
-        # TODO: don't update if already up to date in instance
         # Remove outdated data
         cleaned_validated, any_outdated = self._clean_sun_times_cache(self._sun_times)
         self._sun_times = cleaned_validated
@@ -703,7 +709,14 @@ class EngineConfig(metaclass=SingletonMeta):
                     places.add("home")
             elif sky.lighting == gv.LightMethod.mimic:
                 target = sky.target
-                if target and not self.get_sun_times(target):
+                if not target:
+                    ecosystem_name = ecosystem_config["name"]
+                    self.logger.error(
+                        f"Ecosystem '{ecosystem_name}' has no target set"
+                    )
+                    ecosystem_config["environment"]["sky"]["lighting"] = gv.LightMethod.fixed
+                    continue
+                if not self.get_sun_times(target):
                     places.add(target)
         if not places:
             self.logger.debug("No need to refresh sun times.")
@@ -769,6 +782,57 @@ class EngineConfig(metaclass=SingletonMeta):
                     f"due to a connection error."
                 )
                 return None
+
+    def check_lighting_method_validity(
+            self,
+            ecosystem_uid: str,
+            lighting_method: gv.LightMethod | None = None
+    ) -> bool:
+        ecosystem_name = self.get_IDs(ecosystem_uid).name
+        sky_cfg: gv.SkyConfigDict = \
+            self.ecosystems_config_dict[ecosystem_uid]["environment"]["sky"]
+        lighting_method = lighting_method or sky_cfg["lighting"]
+        lighting_method = safe_enum_from_name(gv.LightMethod, lighting_method)
+        if lighting_method == gv.LightMethod.fixed:
+            return  True
+        # Try to get the target
+        elif lighting_method == gv.LightMethod.elongate:
+            target = "home"
+        elif lighting_method == gv.LightMethod.mimic:
+            target = sky_cfg.get("target")
+            if target is None:
+                self.logger.warning(
+                    f"Lighting method for ecosystem {ecosystem_name} cannot be "
+                    f"'mimic' as no target is specified in the ecosystems "
+                    f"configuration file."
+                )
+                return False
+        else:
+            raise ValueError("'lighting_method' should be a valid lighting method.")
+        # Try to get the target's coordinates
+        try:
+            self.get_place(target)
+        except UndefinedParameter:
+            self.logger.warning(
+                f"Lighting method for ecosystem {ecosystem_name} cannot be "
+                f"'{lighting_method.name}' as the coordinates of '{target}' is "
+                f"provided in the private configuration file."
+            )
+            return False
+        # Try to get the target's sun times
+        sun_times = self.get_sun_times(target)
+        if sun_times:
+            return True
+        sun_times = self.download_sun_times(target)
+        if sun_times is None:
+            self.logger.warning(
+                f"Lighting method for ecosystem {ecosystem_name} cannot be "
+                f"'{lighting_method.name}' as the sun times of '{target}' "
+                f"wasn't found."
+            )
+            return False
+        self.set_sun_times(target, sun_times)
+        return True
 
     def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
@@ -967,15 +1031,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return self._light_method
 
     def set_light_method(self, method: gv.LightMethod) -> None:
-        try:
-            validated_method = safe_enum_from_name(gv.LightMethod, method)
-        except KeyError:
-            raise ValueError("'method' is not a valid 'LightMethod'")
-        self.sky["lighting"] = validated_method
-        if (
-                validated_method != gv.LightMethod.fixed
-                and not self.general.app_config.TESTING
-        ):
+        method = safe_enum_from_name(gv.LightMethod, method)
+        method_is_valid = self.general.check_lighting_method_validity(self.uid, method)
+        if not method_is_valid:
+            raise ValueError(
+                    f"Cannot set light method to '{method.name}'. Look at the "
+                    f"logs to see the reason."
+                )
+        self.sky["lighting"] = method
+        if method != gv.LightMethod.fixed:
             self.general.refresh_sun_times()
 
     @property
