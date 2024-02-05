@@ -195,7 +195,7 @@ class EngineConfig(metaclass=SingletonMeta):
         configure_logging(self.app_config)
         self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
-        self._ecosystems_config: dict[str, EcosystemConfigDict] = {}
+        self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
         self._private_config: dict = {}
         self._sun_times: gv.SunTimes | None = None
         self._chaos_memory: dict[str, ChaosMemory] = {}
@@ -307,7 +307,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     )
                     raise e
                 else:
-                    self._ecosystems_config = validated
+                    self._ecosystems_config_dict = validated
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
                 self._private_config = yaml.load(file)
@@ -319,13 +319,13 @@ class EngineConfig(metaclass=SingletonMeta):
         config_path = self.get_file_path(cfg_type)
         with open(config_path, "w") as file:
             if cfg_type == ConfigType.ecosystems:
-                cfg = self._ecosystems_config
+                cfg = self.ecosystems_config_dict
             else:
                 cfg = self._private_config
             yaml.dump(cfg, file)
 
     def _create_ecosystems_config_file(self):
-        self._ecosystems_config = {}
+        self._ecosystems_config_dict = {}
         self._create_ecosystem("Default Ecosystem")
         self._dump_config(ConfigType.ecosystems)
 
@@ -473,25 +473,25 @@ class EngineConfig(metaclass=SingletonMeta):
     def _create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
         ecosystem_cfg = EcosystemConfigValidator(name=ecosystem_name).model_dump()
-        self._ecosystems_config.update({uid: ecosystem_cfg})
+        self.ecosystems_config_dict.update({uid: ecosystem_cfg})
 
     def create_ecosystem(self, ecosystem_name: str) -> None:
         self._create_ecosystem(ecosystem_name)
 
     def delete_ecosystem(self, ecosystem_id: str) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
-        del self._ecosystems_config[ecosystem_ids.uid]
+        del self.ecosystems_config_dict[ecosystem_ids.uid]
 
     @property
-    def ecosystems_config(self) -> dict[str, EcosystemConfigDict]:
-        return self._ecosystems_config
+    def ecosystems_config_dict(self) -> dict[str, EcosystemConfigDict]:
+        return self._ecosystems_config_dict
 
-    @ecosystems_config.setter
-    def ecosystems_config(self, value: dict):
+    @ecosystems_config_dict.setter
+    def ecosystems_config_dict(self, value: dict):
         if self.app_config.TESTING:
-            self._ecosystems_config = value
+            self._ecosystems_config_dict = value
         else:
-            raise AttributeError("can't set attribute 'ecosystems_config'")
+            raise AttributeError("Can't set attribute 'ecosystems_config_dict'")
 
     @property
     def private_config(self) -> dict:
@@ -506,26 +506,31 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def ecosystems_uid(self) -> list[str]:
-        return [i for i in self._ecosystems_config.keys()]
+        return [i for i in self.ecosystems_config_dict.keys()]
 
     @property
     def ecosystems_name(self) -> list:
-        return [i["name"] for i in self._ecosystems_config.values()]
+        return [i["name"] for i in self.ecosystems_config_dict.values()]
 
     @property
     def id_to_name_dict(self) -> dict:
-        return {ecosystem: self._ecosystems_config[ecosystem]["name"]
-                for ecosystem in self._ecosystems_config}
+        return {
+            ecosystem_uid: eco_cfg_dict["name"]
+            for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
+        }
 
     @property
     def name_to_id_dict(self) -> dict:
-        return {self._ecosystems_config[ecosystem]["name"]: ecosystem
-                for ecosystem in self._ecosystems_config}
+        return {
+            eco_cfg_dict["name"]: ecosystem_uid
+            for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
+        }
 
     def get_ecosystems_expected_to_run(self) -> set:
         return set([
-            ecosystem_uid for ecosystem_uid in self._ecosystems_config
-            if self._ecosystems_config[ecosystem_uid]["status"]
+            ecosystem_uid
+            for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
+            if eco_cfg_dict["status"]
         ])
 
     def get_IDs(self, ecosystem_id: str) -> gv.IDs:
@@ -613,7 +618,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def refresh_sun_times(self) -> None:
         # TODO: don't update if already up to date in instance
         needed = False
-        for ecosystem_config in self._ecosystems_config.values():
+        for ecosystem_config in self.ecosystems_config_dict.values():
             sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
             if sky.lighting != gv.LightMethod.fixed:
                 needed = True
@@ -713,7 +718,7 @@ class EngineConfig(metaclass=SingletonMeta):
         except (FileNotFoundError, JSONDecodeError):
             validated = {}
         incomplete = False
-        for ecosystem_uid in self._ecosystems_config:
+        for ecosystem_uid in self.ecosystems_config_dict:
             if ecosystem_uid not in validated:
                 incomplete = True
                 validated.update(self._create_chaos_memory(ecosystem_uid))
@@ -727,7 +732,7 @@ class EngineConfig(metaclass=SingletonMeta):
             file.write(json.dumps(self._chaos_memory))
 
     def get_chaos_memory(self, ecosystem_uid: str) -> ChaosMemory:
-        if ecosystem_uid not in self._ecosystems_config:
+        if ecosystem_uid not in self.ecosystems_config_dict:
             raise ValueError(
                 f"No ecosystem with uid '{ecosystem_uid}' found in ecosystems "
                 f"config"
@@ -738,6 +743,10 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
         return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
+
+    @property
+    def ecosystems_config(self) -> dict[str, EcosystemConfig]:
+        return _MetaEcosystemConfig.instances
 
 
 # ---------------------------------------------------------------------------
@@ -781,7 +790,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             engine_config: EngineConfig | None = None
     ) -> None:
         engine_config = engine_config or EngineConfig()
-        self._engine_config: EngineConfig = weakref.proxy(engine_config)
+        self._engine_config: EngineConfig = engine_config
         ids = self._engine_config.get_IDs(ecosystem_id)
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
@@ -794,7 +803,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def __dict(self) -> EcosystemConfigDict:
-        return self._engine_config.ecosystems_config[self.uid]
+        return self._engine_config.ecosystems_config_dict[self.uid]
 
     def as_dict(self) -> EcosystemConfigDict:
         return self.__dict
