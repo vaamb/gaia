@@ -83,105 +83,101 @@ class GaiaConfigHelper:
         cls._config = None
 
 
-def configure_logging(config_class: GaiaConfig) -> None:
-    testing = config_class.TESTING
-    debug = config_class.DEBUG or testing
-    log_to_stdout = config_class.LOG_TO_STDOUT
-    log_to_file = config_class.LOG_TO_FILE
-    log_error = config_class.LOG_ERROR
+handlers: list[str] = []
 
+
+file_format = (
+    "{"
+    "timestamp: '%(asctime)s', "
+    "level: '%(levelname)s', "
+    "name: '%(name)s', "
+    # "module: '%(module)s', "
+    # "lineno: %(lineno)d, "
+    # "function: '%(funcName)s', "
+    "message: '%(message)s'"
+    "}"
+)
+
+
+logging_config = {
+    "version": 1,
+    "disable_existing_loggers": False,
+
+    "formatters": {
+        "base_formatter": {
+            "format": "%(asctime)s %(levelname)-7.7s: %(name)-35.35s: %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "file_formatter": {
+            "format": file_format,
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+
+    "handlers": {
+        "stream_handler": {
+            "level": "INFO",
+            "formatter": "base_formatter",
+            "class": "logging.StreamHandler",
+        },
+        "file_handler": {
+            "level": "INFO",
+            "formatter": "file_formatter",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": "gaia.log",
+            "mode": "a",
+            "maxBytes": 4 * 1024 * 1024,
+            "backupCount": 5,
+        },
+    },
+
+    "loggers": {
+        "gaia": {
+            "handlers": handlers,
+            "level": "INFO",
+        },
+        "virtual": {
+            "handlers": "",
+            "level": "INFO",
+        },
+        "dispatcher": {
+            "handlers": handlers,
+            "level": "WARNING",
+        },
+        "apscheduler": {
+            "handlers": handlers,
+            "level": "WARNING",
+        },
+    },
+}
+
+
+def configure_logging(config_class: GaiaConfig) -> None:
+    # Create the log dir if it doesn't exist
     log_dir = Path(config_class.LOG_DIR)
     if not log_dir.exists():
         log_dir.mkdir(parents=True)
 
-    base_level = 'DEBUG' if debug else 'INFO'
+    # Prepend log_dir path to the file handler file name
+    file_handler_filename = logging_config["handlers"]["file_handler"]["filename"]
+    logging_config["handlers"]["file_handler"]["filename"] = str(log_dir / file_handler_filename)
 
-    handlers = []
+    if config_class.DEBUG or config_class.TESTING:
+        debug_fmt = "%(asctime)s %(levelname)-7.7s: [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s"
+        logging_config["formatters"]["base_format"]["format"] = debug_fmt
+        logging_config["handlers"]["stream_handler"]["level"] = 'DEBUG'
+        logging_config["loggers"]["gaia"]["level"] = 'DEBUG'
+        logging_config["loggers"]["virtual"]["level"] = 'DEBUG'
+        logging_config["loggers"]["dispatcher"]["level"] = 'DEBUG'
+        logging_config["loggers"]["gaia"]["level"] = 'DEBUG'
+        logging_config["loggers"]["apscheduler"]["level"] = 'DEBUG'
 
-    if log_to_stdout:
-        handlers.append("streamHandler")
+    if config_class.LOG_TO_STDOUT:
+        handlers.append("stream_handler")
+        if config_class.DEVELOPMENT:
+            logging_config["loggers"]["virtual"]["handlers"] = ["stream_handler"]
 
-    if log_to_file:
-        handlers.append("fileHandler")
+    if config_class.LOG_TO_FILE:
+        handlers.append("file_handler")
 
-    if log_error:
-        handlers.append("errorFileHandler")
-
-    logging_config = {
-        "version": 1,
-        "disable_existing_loggers": False,
-
-        "formatters": {
-            "streamFormat": {
-                "format": (
-                    "%(asctime)s %(levelname)-4.4s [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s"
-                    if debug else
-                    "%(asctime)s %(levelname)-4.4s %(name)-35.35s: %(message)s"
-                ),
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-            "fileFormat": {
-                "format": "%(asctime)s -- %(levelname)-7.7s  -- %(name)s -- %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-            "testingFormat": {
-                "format": "%(message)s",
-            },
-        },
-
-        "handlers": {
-            "streamHandler": {
-                "level": base_level,
-                "formatter": "streamFormat",
-                "class": "logging.StreamHandler",
-            },
-            "fileHandler": {
-                "level": base_level,
-                "formatter": "fileFormat" if not testing else "testingFormat",
-                "class": "logging.handlers.RotatingFileHandler",
-                'filename': f"{log_dir/'base.log'}",
-                "mode": "w+",
-                "maxBytes": 1024 * 512,
-                "backupCount": 5,
-            },
-            "errorFileHandler": {
-                "level": "ERROR",
-                "formatter": "fileFormat",
-                "class": "logging.FileHandler",
-                "filename": f"{log_dir/'errors.log'}",
-                "mode": "a",
-            }
-        },
-
-        "loggers": {
-            "": {
-                "handlers": "",
-                "level": base_level,
-            },
-            "gaia": {
-                "handlers": handlers,
-                "level": base_level,
-            },
-            "apscheduler": {
-                "handlers": handlers,
-                "level": f"{'DEBUG' if debug else 'WARNING'}",
-            },
-            "engineio": {
-                "handlers": handlers,
-                "level": f"{'DEBUG' if debug else 'INFO'}",
-            },
-            "dispatcher": {
-                "handlers": handlers,
-                "level": f"{'DEBUG' if debug else 'WARNING'}",
-            },
-            "urllib3": {
-                "handlers": handlers,
-                "level": "WARNING",
-            },
-            "virtual" : {
-                "handlers": ["streamHandler"] if config_class.DEVELOPMENT and log_to_stdout else "",
-                "level": "INFO",
-            }
-        },
-    }
     logging.config.dictConfig(logging_config)
