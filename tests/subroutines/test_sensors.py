@@ -26,7 +26,7 @@ def test_add_hardware(sensors_subroutine: Sensors, engine_config: EngineConfig):
     sensors_subroutine.add_hardware(gv.HardwareConfig(uid=sensor_uid, **sensor_info))
 
     sensors_subroutine.add_hardware(gv.HardwareConfig(uid=heater_uid, **heater_info))
-    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "not in the list of the hardware available." in logs
 
 

@@ -49,7 +49,7 @@ def test_add_hardware(climate_subroutine: Climate, engine_config: EngineConfig):
     climate_subroutine.add_hardware(gv.HardwareConfig(uid=heater_uid, **heater_info))
 
     climate_subroutine.add_hardware(gv.HardwareConfig(uid=sensor_uid, **sensor_info))
-    with get_logs_content(engine_config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "not in the list of the hardware available." in logs
 
 

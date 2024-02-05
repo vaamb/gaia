@@ -49,7 +49,7 @@ def test_engine_message_broker(engine: Engine):
 
     engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = url
     engine.init_message_broker()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Initialising the event dispatcher" in logs
 
     assert engine.use_message_broker is True
@@ -75,7 +75,7 @@ def test_engine_database(engine: Engine):
     assert engine.plugins_needed is True
 
     engine.init_database()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Initialising the database" in logs
     assert engine.use_db is True
     assert isinstance(engine.db, SQLAlchemyWrapper)
@@ -100,7 +100,7 @@ def test_engine_plugins(engine: Engine):
     assert engine.plugins_needed is True
 
     engine.init_plugins()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Initialising the plugins" in logs
     assert engine.plugins_initialized is True
 
@@ -110,10 +110,10 @@ def test_engine_plugins(engine: Engine):
 
 def test_engine_background_tasks(engine: Engine):
     engine.start_background_tasks()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Starting the background tasks" in logs
     engine.stop_background_tasks()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Stopping the background tasks" in logs
 
 
@@ -125,7 +125,7 @@ def test_engine_states(engine: Engine):
     assert not engine.stopped
 
     engine.start()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Starting Gaia ..." in logs
     assert engine.started
     assert engine.running
@@ -136,7 +136,7 @@ def test_engine_states(engine: Engine):
         engine.resume()
 
     engine.pause()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Pausing Gaia ..." in logs
     assert engine.started
     assert not engine.running
@@ -147,7 +147,7 @@ def test_engine_states(engine: Engine):
         engine.pause()
 
     engine.resume()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Resuming Gaia ..." in logs
     assert engine.started
     assert engine.running
@@ -158,7 +158,7 @@ def test_engine_states(engine: Engine):
         engine.resume()
 
     engine.stop()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Shutting down Gaia ..." in logs
     assert not engine.started
     assert not engine.running
@@ -174,7 +174,7 @@ def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig
     ecosystem_config.set_management("light", True)
 
     engine.init_ecosystem(ecosystem_uid)
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert f"Ecosystem {ecosystem_uid} has been created" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* already exists"):
         engine.init_ecosystem(ecosystem_uid)
@@ -182,7 +182,7 @@ def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig
         engine.stop_ecosystem(ecosystem_uid)
 
     engine.start_ecosystem(ecosystem_uid)
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert f"Starting ecosystem {ecosystem_uid}" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         engine.start_ecosystem(ecosystem_uid)
@@ -190,13 +190,13 @@ def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig
         engine.dismount_ecosystem(ecosystem_uid)
 
     engine.stop_ecosystem(ecosystem_uid)
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert f"Ecosystem {ecosystem_uid} has been stopped" in logs
     with pytest.raises(RuntimeError, match=r"Cannot stop Ecosystem .*"):
         engine.stop_ecosystem(ecosystem_uid)
 
     engine.dismount_ecosystem(ecosystem_uid)
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert f"Ecosystem {ecosystem_uid} has been dismounted" in logs
     with pytest.raises(RuntimeError, match=r"Need to initialise Ecosystem .* first"):
         engine.start_ecosystem(ecosystem_uid)
@@ -207,7 +207,7 @@ def test_refresh_sun_times(engine: Engine):
     #  tested there
     engine.config._sun_times = sun_times
     engine.refresh_sun_times()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Refreshing ecosystems sun times" in logs
 
 
@@ -215,5 +215,5 @@ def test_refresh_chaos(engine: Engine):
     # Simply dispatches work to `EcosystemConfig` and `EngineConfig`, methods are
     #  tested there
     engine.update_chaos_time_window()
-    with get_logs_content(engine.config.logs_dir / "base.log") as logs:
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Updating ecosystems chaos time window" in logs

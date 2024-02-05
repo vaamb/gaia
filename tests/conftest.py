@@ -100,7 +100,7 @@ def engine_config(default_testing_cfg: Type[None]) -> YieldFixture[EngineConfig]
     engine_config.initialize_configs()
     for files in engine_config.cache_dir.iterdir():
         files.unlink()
-    with get_logs_content(engine_config.logs_dir/"base.log"):
+    with get_logs_content(engine_config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
     yield engine_config
@@ -114,7 +114,7 @@ def engine_config(default_testing_cfg: Type[None]) -> YieldFixture[EngineConfig]
 @pytest.fixture(scope="function", autouse=True)
 def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     engine = Engine(engine_config=engine_config)
-    with get_logs_content(engine_config.logs_dir/"base.log"):
+    with get_logs_content(engine_config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
     yield engine
@@ -128,7 +128,7 @@ def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
 @pytest.fixture(scope="function")
 def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfig]:
     ecosystem_config = engine_config.get_ecosystem_config(ecosystem_name)
-    with get_logs_content(ecosystem_config.general.logs_dir/"base.log"):
+    with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log"):
         pass  # Clear logs
 
     yield ecosystem_config
@@ -139,7 +139,7 @@ def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfi
 @pytest.fixture(scope="function")
 def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     ecosystem = engine.get_ecosystem(ecosystem_name)
-    with get_logs_content(engine.config.logs_dir/"base.log"):
+    with get_logs_content(engine.config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
     yield ecosystem
