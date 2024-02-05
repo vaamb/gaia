@@ -744,6 +744,10 @@ class EngineConfig(metaclass=SingletonMeta):
     def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
         return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
 
+    @property
+    def ecosystems_config(self) -> dict[str, EcosystemConfig]:
+        return _MetaEcosystemConfig.instances
+
 
 # ---------------------------------------------------------------------------
 #   EcosystemConfig class
