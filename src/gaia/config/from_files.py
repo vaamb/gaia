@@ -1047,6 +1047,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return self.sky["target"]
 
     def set_light_target(self, target: str | None) -> None:
+        assert self.general.get_place(target)
         self.sky["target"] = target
         if self.light_method == gv.LightMethod.mimic:
             self.general.refresh_sun_times()
