@@ -363,17 +363,21 @@ class EngineConfig(metaclass=SingletonMeta):
         self.load(CacheType.sun_times)
         for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items():
             ecosystem_name = self.get_IDs(ecosystem_uid).name
-            self.logger.info(
-                f"Checking if light method for ecosystem {ecosystem_name} is valid.")
+            self.logger.debug(
+                f"Checking if light method for ecosystem {ecosystem_name} is possible.")
             light_is_method_valid = self.check_lighting_method_validity(ecosystem_uid)
             if not light_is_method_valid:
-                eco_cfg_dict["environment"]["sky"]["lighting"] = gv.LightMethod.fixed
+                self.logger.warning(
+                    f"Using light method for ecosystem '{ecosystem_name}' is not "
+                    f"possible. Will fall back to 'fixed'."
+                )
+        self.save(CacheType.sun_times)
         self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType | CacheType) -> None:
         if isinstance(cfg_type, ConfigType):
             with self.config_files_lock():
-                self.logger.debug(f"Updating {cfg_type.name} configuration file(s)")
+                self.logger.debug(f"Updating {cfg_type.name} configuration file(s).")
                 self._dump_config(cfg_type)
         else:
             if cfg_type == CacheType.chaos:
@@ -384,7 +388,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def load(self, cfg_type: ConfigType | CacheType) -> None:
         if isinstance(cfg_type, ConfigType):
             with self.config_files_lock():
-                self.logger.debug(f"Loading {cfg_type.name} configuration file(s)")
+                self.logger.debug(f"Loading {cfg_type.name} configuration file(s).")
                 self._load_config(cfg_type)
         else:
             if cfg_type == CacheType.chaos:
@@ -661,7 +665,7 @@ class EngineConfig(metaclass=SingletonMeta):
         outdated: list[str] = []
         today = date.today()
         for place in sun_times_cache:
-            if sun_times_cache[place]["last_update"] <= today:
+            if sun_times_cache[place]["last_update"] < today:
                 outdated.append(place)
         for place in outdated:
             self.logger.debug(f"Cached sun times of {place} is outdated.")
@@ -1366,8 +1370,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if self._light_method == gv.LightMethod.mimic:
             target = self.light_target
             sun_times = self.general.get_sun_times(target)
-            if sun_times is not None:
-                return sun_times
+            return sun_times
         return self.general.home_sun_times
 
 
