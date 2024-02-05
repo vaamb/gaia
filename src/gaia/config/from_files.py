@@ -790,7 +790,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             engine_config: EngineConfig | None = None
     ) -> None:
         engine_config = engine_config or EngineConfig()
-        self._engine_config: EngineConfig = weakref.proxy(engine_config)
+        self._engine_config: EngineConfig = engine_config
         ids = self._engine_config.get_IDs(ecosystem_id)
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
