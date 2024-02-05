@@ -656,8 +656,8 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def _clean_sun_times_cache(
             self,
-            sun_times_cache: [str, SunTimesCacheData],
-    ) -> tuple[[str, SunTimesCacheData], bool]:
+            sun_times_cache: dict[str, SunTimesCacheData],
+    ) -> tuple[dict[str, SunTimesCacheData], bool]:
         outdated: list[str] = []
         today = date.today()
         for place in sun_times_cache:
@@ -705,17 +705,20 @@ class EngineConfig(metaclass=SingletonMeta):
         for ecosystem_config in self.ecosystems_config_dict.values():
             sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
             if sky.lighting == gv.LightMethod.elongate:
+                # If we don't have an updated value, add "home" to the checklist
                 if not self.home_sun_times:
                     places.add("home")
             elif sky.lighting == gv.LightMethod.mimic:
                 target = sky.target
+                # Check that we have the target coordinates. If we don't, log an
+                #  error and use a fixed light method
                 if not target:
                     ecosystem_name = ecosystem_config["name"]
                     self.logger.error(
-                        f"Ecosystem '{ecosystem_name}' has no target set"
-                    )
+                        f"Ecosystem '{ecosystem_name}' has no target set.")
                     ecosystem_config["environment"]["sky"]["lighting"] = gv.LightMethod.fixed
                     continue
+                # If we don't have an updated value, add the target to the checklist
                 if not self.get_sun_times(target):
                     places.add(target)
         if not places:
@@ -1039,8 +1042,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"logs to see the reason."
                 )
         self.sky["lighting"] = method
-        if method != gv.LightMethod.fixed:
-            self.general.refresh_sun_times()
 
     @property
     def light_target(self) -> str | None:
@@ -1049,8 +1050,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def set_light_target(self, target: str | None) -> None:
         assert self.general.get_place(target)
         self.sky["target"] = target
-        if self.light_method == gv.LightMethod.mimic:
-            self.general.refresh_sun_times()
 
     @property
     def chaos_parameters(self) -> gv.ChaosConfig:
