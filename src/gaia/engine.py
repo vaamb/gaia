@@ -564,6 +564,7 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem_uid in to_delete:
             self.stop_ecosystem(ecosystem_uid)
             self.dismount_ecosystem(ecosystem_uid)
+        self.refresh_ecosystems_lighting_hours()
         if send_info:
             self._send_ecosystem_info()
 
@@ -618,8 +619,6 @@ class Engine(metaclass=SingletonMeta):
         # Load the ecosystem configs into memory and start the watchdog
         self.config.initialize_configs()
         self.config.start_watchdog()
-        # Get the info required just before starting the ecosystems
-        self.refresh_ecosystems_lighting_hours()
         # Start background tasks and plugins
         self.start_background_tasks()
         if self.plugins_initialized:
@@ -631,6 +630,7 @@ class Engine(metaclass=SingletonMeta):
             daemon=True,
         )
         self.thread.start()
+        # Refresh ecosystems a first time
         self._resume()
         self.logger.info("Gaia started")
 

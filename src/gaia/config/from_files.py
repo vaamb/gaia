@@ -419,12 +419,11 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"Change in '{config_type.value}' detected. Updating "
                         f"{config_type.name} configuration.")
                     self._load_config(cfg_type=config_type)
-                    if config_type is ConfigType.ecosystems:
-                        self.refresh_sun_times()
                 with self.new_config:
                     self.new_config.notify_all()
-                if self.engine_set_up and self.engine.use_message_broker:
-                    self.engine.event_handler.send_ecosystems_info()
+                    # This unblocks the engine loop. It will then refresh
+                    #  ecosystems, update sun times, ecosystem lighting hours
+                    #  and send the data if it is connected.
 
     def _watchdog_loop(self) -> None:
         sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
