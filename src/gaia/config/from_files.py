@@ -1063,6 +1063,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"logs to see the reason."
                 )
         self.sky["lighting"] = method
+        self.refresh_lighting_hours(send=True)
 
     @property
     def light_target(self) -> str | None:
@@ -1075,11 +1076,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def lighting_hours(self) -> gv.LightingHours:
+        # TODO: reduce the use of this
         with self.lighting_hours_lock:
             return self._lighting_hours
 
     def refresh_lighting_hours(self, send: bool = True) -> None:
-        self.logger.debug("Refreshing lighting hours.")
+        self.logger.info("Refreshing lighting hours.")
         time_parameters = self.time_parameters
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"

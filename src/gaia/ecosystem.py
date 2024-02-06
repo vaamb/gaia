@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
 import logging
-from threading import Lock
 import typing
 import weakref
 
@@ -118,7 +116,6 @@ class Ecosystem:
 
     def set_light_method(self, value: gv.LightMethod) -> None:
         self.config.set_light_method(value)
-        self.refresh_lighting_hours(send=True)
 
     @property
     def lighting_hours(self) -> gv.LightingHours:
@@ -364,7 +361,7 @@ class Ecosystem:
         return gv.Empty()
 
     # Light
-    def refresh_lighting_hours(self, send: bool = False) -> None:
+    def refresh_lighting_hours(self, send: bool = True) -> None:
         self.config.refresh_lighting_hours(send=send)
 
     # Health
