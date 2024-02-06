@@ -569,35 +569,24 @@ class Engine(metaclass=SingletonMeta):
 
     def refresh_sun_times(self) -> None:
         """Download sunrise and sunset times if needed by an Ecosystem"""
-        self.logger.info("Refreshing ecosystems sun times")
+        self.logger.info("Refreshing ecosystems sun times.")
         self.config.refresh_sun_times()
-        if self.config.home_sun_times is None:
-            self.logger.warning(
-                "EngineConfig is None, cannot update ecosystems sun times"
-            )
-            return
-        need_refresh = []
-        for ecosystem in self.ecosystems:
+        need_refresh: list[str] = []
+        for ecosystem_uid, ecosystem in self.ecosystems.items():
+            if (
+                ecosystem.config.light_method in
+                (gv.LightMethod.mimic, gv.LightMethod.elongate)
+                # And expected to be running
+                and ecosystem.config.status
+            ):
+                need_refresh.append(ecosystem_uid)
+        for ecosystem_uid in need_refresh:
             try:
-                if (
-                    self.ecosystems[ecosystem].config.light_method in
-                    (gv.LightMethod.mimic, gv.LightMethod.elongate)
-                    # And expected to be running
-                    and self.ecosystems[ecosystem].config.status
-                ):
-                    need_refresh.append(ecosystem)
-            except UndefinedParameter:
-                # Bad configuration file
-                pass
-        for ecosystem in need_refresh:
-            try:
-                if self.ecosystems[ecosystem].started:
-                    self.ecosystems[ecosystem].refresh_lighting_hours()
+                if self.ecosystems[ecosystem_uid].started:
+                    self.ecosystems[ecosystem_uid].refresh_lighting_hours()
             except KeyError:
-                self.logger.error(
-                    f"Error while refreshing lighting hours of Ecosystem "
-                    f"{self.ecosystems[ecosystem].name}"
-                )
+                # ecosystem was removed in the meantime
+                pass
 
     def update_chaos_time_window(self) -> None:
         self.logger.info("Updating ecosystems chaos time window.")

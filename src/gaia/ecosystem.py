@@ -377,7 +377,7 @@ class Ecosystem:
 
     # Light
     def refresh_lighting_hours(self, send: bool = True) -> None:
-        self.logger.debug("Refreshing sun times")
+        self.logger.debug("Refreshing lighting hours.")
         time_parameters = self.config.time_parameters
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
@@ -391,11 +391,12 @@ class Ecosystem:
         elif self.config.light_method == gv.LightMethod.mimic:
             if self.config.sun_times is None:
                 self.logger.warning(
-                    "Cannot use lighting method 'place' without sun times available. "
-                    "Using 'fixed' method instead."
+                    "Cannot use lighting method 'mimic' without sun times "
+                    "available. Using 'fixed' method instead."
                 )
                 self.config.set_light_method(gv.LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
+                return
             else:
                 with self.lighting_hours_lock:
                     self._lighting_hours = gv.LightingHours(
@@ -410,11 +411,13 @@ class Ecosystem:
                     or self.config.sun_times is None
             ):
                 self.logger.warning(
-                    "Cannot use lighting method 'elongate' without time parameters set in "
-                    "config and sun times available. Using 'fixed' method instead."
+                    "Cannot use lighting method 'elongate' without time "
+                    "parameters set in config and sun times available. Using "
+                    "'fixed' method instead."
                 )
                 self.config.set_light_method(gv.LightMethod.fixed)
                 self.refresh_lighting_hours(send=send)
+                return
             else:
                 sunrise: datetime = _to_dt(self.config.sun_times["sunrise"])
                 sunset: datetime = _to_dt(self.config.sun_times["sunset"])

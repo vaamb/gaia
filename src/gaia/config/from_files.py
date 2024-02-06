@@ -29,7 +29,7 @@ from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import Hardware, hardware_models
 from gaia.subroutines import subroutine_dict
-from gaia.utils import json, SingletonMeta, yaml
+from gaia.utils import humanize_list, json, SingletonMeta, yaml
 
 
 if t.TYPE_CHECKING:
@@ -359,14 +359,18 @@ class EngineConfig(metaclass=SingletonMeta):
         self.load(CacheType.chaos)
         self.load(CacheType.sun_times)
         for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items():
+            light_method = safe_enum_from_name(
+                gv.LightMethod, eco_cfg_dict["environment"]["sky"]["lighting"])
             ecosystem_name = self.get_IDs(ecosystem_uid).name
             self.logger.debug(
                 f"Checking if light method for ecosystem {ecosystem_name} is possible.")
-            light_is_method_valid = self.check_lighting_method_validity(ecosystem_uid)
+            light_is_method_valid = self.check_lighting_method_validity(
+                ecosystem_uid, light_method)
             if not light_is_method_valid:
                 self.logger.warning(
-                    f"Using light method for ecosystem '{ecosystem_name}' is not "
-                    f"possible. Will fall back to 'fixed'."
+                    f"Light method '{light_method.name}' is not a valid option "
+                    f"for ecosystem '{ecosystem_name}'. Will fall back to "
+                    f"'fixed'."
                 )
         self.save(CacheType.sun_times)
         self.configs_loaded = True
@@ -696,12 +700,15 @@ class EngineConfig(metaclass=SingletonMeta):
             file.write(json.dumps(self._sun_times))
 
     def refresh_sun_times(self) -> None:
+        self.logger.info("Looking if sun times need to be updated.")
         # Remove outdated data
         cleaned_validated, any_outdated = self._clean_sun_times_cache(self._sun_times)
         self._sun_times = cleaned_validated
+        self.logger.debug("Found outdated sun times.")
 
         # Check if an update is required
         places: set[str] = set()
+        # TODO: only do for running ecosystems ?
         for ecosystem_config in self.ecosystems_config_dict.values():
             sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
             if sky.lighting == gv.LightMethod.elongate:
@@ -727,6 +734,10 @@ class EngineConfig(metaclass=SingletonMeta):
                 self.save(CacheType.sun_times)
             return
 
+        self.logger.info(
+            f"Sun times of the following targets need to be refreshed: "
+            f"{humanize_list(list(places))}."
+        )
         any_failed = False
         any_success = False
         for place in places:
@@ -746,13 +757,13 @@ class EngineConfig(metaclass=SingletonMeta):
             self.save(CacheType.sun_times)
 
     def download_sun_times(self, place: str = "home") -> gv.SunTimesDict | None:
-        self.logger.info("Trying to download sun times")
+        self.logger.info(f"Trying to download sun times for the target '{place}'.")
         try:
             coordinates = self.get_place(place).coordinates
         except UndefinedParameter:
             self.logger.warning(
                 f"You need to define '{place}' coordinates in "
-                f"'private.cfg' in order to download sun times."
+                f"'private.cfg' in order to be able to download sun times."
             )
             return None
         else:
@@ -798,7 +809,7 @@ class EngineConfig(metaclass=SingletonMeta):
         lighting_method = lighting_method or sky_cfg["lighting"]
         lighting_method = safe_enum_from_name(gv.LightMethod, lighting_method)
         if lighting_method == gv.LightMethod.fixed:
-            return  True
+            return True
         # Try to get the target
         elif lighting_method == gv.LightMethod.elongate:
             target = "home"
@@ -820,7 +831,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.warning(
                 f"Lighting method for ecosystem {ecosystem_name} cannot be "
                 f"'{lighting_method.name}' as the coordinates of '{target}' is "
-                f"provided in the private configuration file."
+                f"not provided in the private configuration file."
             )
             return False
         # Try to get the target's sun times
