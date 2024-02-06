@@ -293,7 +293,7 @@ class Engine(metaclass=SingletonMeta):
         self.scheduler.add_job(
             func=self.refresh_ecosystems_lighting_hours,
             id="refresh_sun_times",
-            trigger=CronTrigger(hour="1"),
+            trigger=CronTrigger(hour="0", minute="1"),
             misfire_grace_time=15 * 60,
         )
         self.scheduler.add_job(
@@ -564,30 +564,22 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem_uid in to_delete:
             self.stop_ecosystem(ecosystem_uid)
             self.dismount_ecosystem(ecosystem_uid)
-        self.refresh_ecosystems_lighting_hours()
+        # self.refresh_ecosystems_lighting_hours()  # done by Ecosystem during their startup
         if send_info:
             self._send_ecosystem_info()
 
     def refresh_ecosystems_lighting_hours(self) -> None:
-        """Download sunrise and sunset times if needed by an Ecosystem"""
+        """Refresh all the Ecosystems lighting hours
+
+        Should only be called routinely, once a day. Other than that, Ecosystems
+        will try to compute their lighting hours based on the method chosen and
+        get recent sun times if needed by the method."""
         self.logger.info("Refreshing ecosystems lighting hours.")
         self.config.refresh_sun_times()
-        need_refresh: list[str] = []
-        for ecosystem_uid, ecosystem in self.ecosystems.items():
-            imply_refresh = (gv.LightMethod.mimic, gv.LightMethod.elongate)
-            if (
-                ecosystem.config.light_method in imply_refresh
-                and ecosystem.started
-            ):
-                need_refresh.append(ecosystem_uid)
-        for ecosystem_uid in need_refresh:
-            try:
-                if self.ecosystems[ecosystem_uid].started:
-                    self.ecosystems[ecosystem_uid].refresh_lighting_hours(
-                        send=False)
-            except KeyError:
-                # ecosystem was removed in the meantime
-                pass
+        for ecosystem in self.ecosystems.values():
+            if ecosystem.started:
+                ecosystem.refresh_lighting_hours()
+        self.event_handler.send_light_data()
 
     def update_chaos_time_window(self) -> None:
         self.logger.info("Updating ecosystems chaos time window.")
