@@ -18,18 +18,17 @@ if typing.TYPE_CHECKING:
     from gaia.actuator_handler import ActuatorHandler
 
 
-# TODO: improve
 def _is_time_between(
         begin_time: time,
         end_time: time,
-        check_time: time | None = None
+        now: time | None = None
 ) -> bool:
-    check_time = check_time or datetime.now().astimezone().time()
+    now = now or datetime.now().time()
     try:
         if begin_time < end_time:
-            return begin_time <= check_time < end_time
+            return begin_time <= now < end_time
         else:  # crosses midnight
-            return check_time >= begin_time or check_time < end_time
+            return now >= begin_time or now < end_time
     except TypeError:
         # one of times is a none
         return False
@@ -182,23 +181,19 @@ class Light(SubroutineTemplate):
         return mean(light_level)
 
     def compute_status(self, _now: time | None = None) -> bool:
-        now: time = _now or datetime.now().astimezone().time()
+        hours = self.config.lighting_hours
         if self.light_method == gv.LightMethod.elongate:
-            # If time between lightning hours
+            now = datetime.now().time()
+            # Is time between lightning hours
             if (
-                self.lighting_hours.morning_start <= now <= self.lighting_hours.morning_end
-                or
-                self.lighting_hours.evening_start <= now <= self.lighting_hours.evening_end
+                hours.morning_start <= now <= hours.morning_end
+                or hours.evening_start <= now <= hours.evening_end
             ):
                 return True
             else:
                 return False
         else:
-            return _is_time_between(
-                self.lighting_hours.morning_start,
-                self.lighting_hours.evening_end,
-                check_time=now
-            )
+            return _is_time_between(hours.morning_start, hours.evening_end)
 
     def compute_level(self,  _now: time | None = None) -> float:
         if not self.light_sensors or not self.any_dimmable_light:
