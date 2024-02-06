@@ -589,14 +589,11 @@ class EngineConfig(metaclass=SingletonMeta):
             self._private_config["places"] = {}
             return self._private_config["places"]
 
-    def get_place(self, place: str) -> PlaceValidator:
+    def get_place(self, place: str) -> CoordinatesDict | None:
         try:
-            coordinates: CoordinatesDict = self.places[place]
-            return PlaceValidator(name=place, coordinates=coordinates)
+            return self.places[place]
         except KeyError:
-            raise UndefinedParameter(
-                f"No place named '{place}' was found in the private "
-                f"configuration file")
+            return None
 
     def set_place(
             self,
@@ -765,47 +762,45 @@ class EngineConfig(metaclass=SingletonMeta):
         if any_outdated or any_success:
             self.save(CacheType.sun_times)
 
-    def download_sun_times(self, place: str = "home") -> gv.SunTimesDict | None:
-        self.logger.info(f"Trying to download sun times for the target '{place}'.")
-        try:
-            coordinates = self.get_place(place).coordinates
-        except UndefinedParameter:
+    def download_sun_times(self, target: str = "home") -> gv.SunTimesDict | None:
+        self.logger.info(f"Trying to download sun times for the target '{target}'.")
+        place = self.get_place(target)
+        if place is None:
             self.logger.warning(
-                f"You need to define '{place}' coordinates in "
+                f"You need to define '{target}' coordinates in "
                 f"'private.cfg' in order to be able to download sun times."
             )
             return None
-        else:
+        try:
+            self.logger.debug(
+                f"Trying to update sunrise and sunset times for '{place}' "
+                f"on sunrise-sunset.org."
+            )
+            with Session() as session:
+                response = session.get(
+                    url=f"https://api.sunrise-sunset.org/json",
+                    params={
+                        "lat": place["latitude"],
+                        "lng": place["longitude"],
+                    },
+                    timeout=3.0,
+                )
+            data = response.json()
             try:
-                self.logger.debug(
-                    f"Trying to update sunrise and sunset times for '{place}' "
-                    f"on sunrise-sunset.org."
-                )
-                with Session() as session:
-                    response = session.get(
-                        url=f"https://api.sunrise-sunset.org/json",
-                        params={
-                            "lat": coordinates.latitude,
-                            "lng": coordinates.longitude
-                        },
-                        timeout=3.0,
-                    )
-                data = response.json()
-                try:
-                    results: gv.SunTimesDict = gv.SunTimes(
-                        **data["results"]
-                    ).model_dump()
-                    return results
-                except ValidationError:
-                    self.logger.error(
-                        f"Could not validate sun times data for '{place}'.")
-                    return None
-            except ConnectionError:
+                results: gv.SunTimesDict = gv.SunTimes(
+                    **data["results"]
+                ).model_dump()
+                return results
+            except ValidationError:
                 self.logger.error(
-                    f"Failed to update sunrise and sunset times for '{place}' "
-                    f"due to a connection error."
-                )
+                    f"Could not validate sun times data for '{place}'.")
                 return None
+        except ConnectionError:
+            self.logger.error(
+                f"Failed to update sunrise and sunset times for '{place}' "
+                f"due to a connection error."
+            )
+            return None
 
     def check_lighting_method_validity(
             self,
@@ -834,9 +829,8 @@ class EngineConfig(metaclass=SingletonMeta):
         else:
             raise ValueError("'lighting_method' should be a valid lighting method.")
         # Try to get the target's coordinates
-        try:
-            self.get_place(target)
-        except UndefinedParameter:
+        place = self.get_place(target)
+        if place is None:
             self.logger.warning(
                 f"Lighting method for ecosystem {ecosystem_name} cannot be "
                 f"'{lighting_method.name}' as the coordinates of '{target}' is "
