@@ -109,10 +109,7 @@ class Ecosystem:
 
     @property
     def light_method(self) -> gv.LightMethod:
-        try:
-            return self.config.light_method
-        except UndefinedParameter:
-            return gv.LightMethod.fixed
+        return self.config.light_method
 
     def set_light_method(self, value: gv.LightMethod) -> None:
         self.config.set_light_method(value)

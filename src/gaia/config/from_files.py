@@ -1050,9 +1050,18 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def light_method(self) -> gv.LightMethod:
+        if self.general.app_config.TESTING:
+            return self._light_method
         if self.sun_times is None:
             return gv.LightMethod.fixed
         return self._light_method
+
+    @light_method.setter
+    def light_method(self, light_method: gv.LightMethod) -> None:
+        if not self.general.app_config.TESTING:
+            raise AttributeError(
+                "'light_method' can only be set when 'TESTING' is True.")
+        self.sky["lighting"] = light_method
 
     def set_light_method(self, method: gv.LightMethod) -> None:
         method = safe_enum_from_name(gv.LightMethod, method)
@@ -1083,7 +1092,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     @lighting_hours.setter
     def lighting_hours(self, lighting_hours: gv.LightingHours) -> None:
         if not self.general.app_config.TESTING:
-            raise AttributeError("'lighting_hours' can only be set when 'TESTING' is True")
+            raise AttributeError(
+                "'lighting_hours' can only be set when 'TESTING' is True.")
         with self.lighting_hours_lock:
             self._lighting_hours = lighting_hours
 
@@ -1474,7 +1484,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             sun_times = self.general.get_sun_times(target)
             return sun_times
         return self.general.home_sun_times
-
 
 # ---------------------------------------------------------------------------
 #   Functions to interact with the module

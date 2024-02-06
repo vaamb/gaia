@@ -21,9 +21,8 @@ if typing.TYPE_CHECKING:
 def _is_time_between(
         begin_time: time,
         end_time: time,
-        now: time | None = None
+        now: time
 ) -> bool:
-    now = now or datetime.now().time()
     try:
         if begin_time < end_time:
             return begin_time <= now < end_time
@@ -43,7 +42,6 @@ class Light(SubroutineTemplate):
             self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
         self._light_sensors: list[LightSensor] | None = None
         self._any_dimmable_light: bool | None = None
-        self._light_method: gv.LightMethod | None = None  # For tests only
         self._finish__init__()
 
     def _safe_light_routine(self) -> None:
@@ -79,7 +77,7 @@ class Light(SubroutineTemplate):
     def _compute_if_manageable(self) -> bool:
         if all((
                 self.config.get_IO_group_uids(gv.HardwareType.light),
-                self.light_method,
+                self.config.light_method,
                 bool(self.config.lighting_hours.morning_start)
         )):
             return True
@@ -129,18 +127,6 @@ class Light(SubroutineTemplate):
         return self.ecosystem.actuator_hub.get_pid(gv.ClimateParameter.light)
 
     @property
-    def light_method(self) -> gv.LightMethod:
-        if self._light_method is None:
-            return self.ecosystem.light_method
-        return self._light_method
-
-    @light_method.setter
-    def light_method(self, light_method: gv.LightMethod) -> None:
-        if not self.ecosystem.engine.config.app_config.TESTING:
-            raise AttributeError("'light_method' can only be set when 'TESTING' is True")
-        self._light_method = light_method
-
-    @property
     def light_sensors(self) -> list[LightSensor]:
         if self._light_sensors is None:
             self._light_sensors = [
@@ -181,9 +167,9 @@ class Light(SubroutineTemplate):
         return mean(light_level)
 
     def compute_status(self, _now: time | None = None) -> bool:
+        now = _now or datetime.now().time()
         hours = self.config.lighting_hours
-        if self.light_method == gv.LightMethod.elongate:
-            now = datetime.now().time()
+        if self.config.light_method == gv.LightMethod.elongate:
             # Is time between lightning hours
             if (
                 hours.morning_start <= now <= hours.morning_end
@@ -193,7 +179,7 @@ class Light(SubroutineTemplate):
             else:
                 return False
         else:
-            return _is_time_between(hours.morning_start, hours.evening_end)
+            return _is_time_between(hours.morning_start, hours.evening_end, now)
 
     def compute_level(self,  _now: time | None = None) -> float:
         if not self.light_sensors or not self.any_dimmable_light:
