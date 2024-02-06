@@ -291,7 +291,7 @@ class Engine(metaclass=SingletonMeta):
     def start_background_tasks(self) -> None:
         self.logger.debug("Starting the background tasks.")
         self.scheduler.add_job(
-            func=self.refresh_sun_times,
+            func=self.refresh_ecosystems_lighting_hours,
             id="refresh_sun_times",
             trigger=CronTrigger(hour="1"),
             misfire_grace_time=15 * 60,
@@ -567,17 +567,16 @@ class Engine(metaclass=SingletonMeta):
         if send_info:
             self._send_ecosystem_info()
 
-    def refresh_sun_times(self) -> None:
+    def refresh_ecosystems_lighting_hours(self) -> None:
         """Download sunrise and sunset times if needed by an Ecosystem"""
-        self.logger.info("Refreshing ecosystems sun times.")
+        self.logger.info("Refreshing ecosystems lighting hours.")
         self.config.refresh_sun_times()
         need_refresh: list[str] = []
         for ecosystem_uid, ecosystem in self.ecosystems.items():
+            imply_refresh = (gv.LightMethod.mimic, gv.LightMethod.elongate)
             if (
-                ecosystem.config.light_method in
-                (gv.LightMethod.mimic, gv.LightMethod.elongate)
-                # And expected to be running
-                and ecosystem.config.status
+                ecosystem.config.light_method in imply_refresh
+                and ecosystem.started
             ):
                 need_refresh.append(ecosystem_uid)
         for ecosystem_uid in need_refresh:
@@ -620,7 +619,7 @@ class Engine(metaclass=SingletonMeta):
         self.config.initialize_configs()
         self.config.start_watchdog()
         # Get the info required just before starting the ecosystems
-        self.refresh_sun_times()
+        self.refresh_ecosystems_lighting_hours()
         # Start background tasks and plugins
         self.start_background_tasks()
         if self.plugins_initialized:

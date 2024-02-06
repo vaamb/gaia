@@ -204,15 +204,15 @@ def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig
         engine.start_ecosystem(ecosystem_uid)
 
 
-def test_refresh_sun_times(engine: Engine):
+def test_refresh_ecosystems_lighting_hours(engine: Engine):
     # Simply dispatches work to `EngineConfig` and `Ecosystem`, methods are
     #  tested there
     engine.config._sun_times = {
         "home": {"last_update": date.today(), "data": sun_times}
     }
-    engine.refresh_sun_times()
+    engine.refresh_ecosystems_lighting_hours()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
-        assert "Refreshing ecosystems sun times" in logs
+        assert "Refreshing ecosystems lighting hours" in logs
 
 
 def test_refresh_chaos(engine: Engine):
