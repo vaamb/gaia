@@ -1080,6 +1080,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         with self.lighting_hours_lock:
             return self._lighting_hours
 
+    @lighting_hours.setter
+    def lighting_hours(self, lighting_hours: gv.LightingHours) -> None:
+        if not self.general.app_config.TESTING:
+            raise AttributeError("'lighting_hours' can only be set when 'TESTING' is True")
+        with self.lighting_hours_lock:
+            self._lighting_hours = lighting_hours
+
     def refresh_lighting_hours(self, send: bool = True) -> None:
         self.logger.info("Refreshing lighting hours.")
         time_parameters = self.time_parameters

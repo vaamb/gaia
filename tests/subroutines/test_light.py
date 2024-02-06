@@ -29,7 +29,7 @@ def test_expected_status(light_subroutine: Light):
     )
 
     now = time(6)
-    light_subroutine.lighting_hours = lighting_hours
+    light_subroutine.config.lighting_hours = lighting_hours
     light_subroutine.light_method = gv.LightMethod.elongate
     assert not light_subroutine.compute_status(now)
     light_subroutine.light_method = gv.LightMethod.fixed
@@ -38,7 +38,7 @@ def test_expected_status(light_subroutine: Light):
     assert not light_subroutine.compute_status(now)
 
     now = time(9)
-    light_subroutine.lighting_hours = lighting_hours
+    light_subroutine.config.lighting_hours = lighting_hours
     light_subroutine.light_method = gv.LightMethod.elongate
     assert light_subroutine.compute_status(now)
     light_subroutine.light_method = gv.LightMethod.fixed
@@ -47,7 +47,7 @@ def test_expected_status(light_subroutine: Light):
     assert light_subroutine.compute_status(now)
 
     now = time(11)
-    light_subroutine.lighting_hours = lighting_hours
+    light_subroutine.config.lighting_hours = lighting_hours
     light_subroutine.light_method = gv.LightMethod.elongate
     assert not light_subroutine.compute_status(now)
     light_subroutine.light_method = gv.LightMethod.fixed
@@ -56,7 +56,7 @@ def test_expected_status(light_subroutine: Light):
     assert light_subroutine.compute_status(now)
 
     now = time(21)
-    light_subroutine.lighting_hours = lighting_hours
+    light_subroutine.config.lighting_hours = lighting_hours
     light_subroutine.light_method = gv.LightMethod.elongate
     assert not light_subroutine.compute_status(now)
     light_subroutine.light_method = gv.LightMethod.fixed
@@ -79,7 +79,7 @@ def test_add_hardware(light_subroutine: Light, engine_config: EngineConfig):
 
 
 def test_lighting_hours(light_subroutine: Light):
-    assert light_subroutine.lighting_hours == gv.LightingHours(
+    assert light_subroutine.config.lighting_hours == gv.LightingHours(
         morning_start=lighting_start, evening_end=lighting_stop)
 
 

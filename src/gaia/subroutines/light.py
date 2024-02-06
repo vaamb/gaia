@@ -45,7 +45,6 @@ class Light(SubroutineTemplate):
         self._light_sensors: list[LightSensor] | None = None
         self._any_dimmable_light: bool | None = None
         self._light_method: gv.LightMethod | None = None  # For tests only
-        self._lighting_hours: gv.LightingHours | None = None  # For test only
         self._finish__init__()
 
     def _safe_light_routine(self) -> None:
@@ -82,7 +81,7 @@ class Light(SubroutineTemplate):
         if all((
                 self.config.get_IO_group_uids(gv.HardwareType.light),
                 self.light_method,
-                bool(self.lighting_hours.morning_start)
+                bool(self.config.lighting_hours.morning_start)
         )):
             return True
         else:
@@ -141,18 +140,6 @@ class Light(SubroutineTemplate):
         if not self.ecosystem.engine.config.app_config.TESTING:
             raise AttributeError("'light_method' can only be set when 'TESTING' is True")
         self._light_method = light_method
-
-    @property
-    def lighting_hours(self) -> gv.LightingHours:
-        if self._lighting_hours is None:
-            return self.ecosystem.lighting_hours
-        return self._lighting_hours
-
-    @lighting_hours.setter
-    def lighting_hours(self, lighting_hours: gv.LightingHours) -> None:
-        if not self.ecosystem.engine.config.app_config.TESTING:
-            raise AttributeError("'lighting_hours' can only be set when 'TESTING' is True")
-        self._lighting_hours = lighting_hours
 
     @property
     def light_sensors(self) -> list[LightSensor]:
