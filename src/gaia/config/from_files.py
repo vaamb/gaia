@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
 from json.decoder import JSONDecodeError
 import logging
@@ -34,6 +34,12 @@ from gaia.utils import humanize_list, json, SingletonMeta, yaml
 
 if t.TYPE_CHECKING:
     from gaia.engine import Engine
+
+
+def _to_dt(_time: time) -> datetime:
+    # Transforms time to today's datetime. Needed to use timedelta
+    _date = date.today()
+    return datetime.combine(_date, _time)
 
 
 def format_pydantic_error(error: pydantic.ValidationError) -> str:
@@ -945,7 +951,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
-        self.logger.debug(f"Initializing EcosystemConfig for {ids.name}")
+        self._lighting_hours = gv.LightingHours(
+            morning_start=self.time_parameters.day,
+            evening_end=self.time_parameters.night,
+        )
+        self.lighting_hours_lock = Lock()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
@@ -1061,6 +1071,82 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def set_light_target(self, target: str | None) -> None:
         assert self.general.get_place(target)
         self.sky["target"] = target
+        self.refresh_lighting_hours(send=True)
+
+    @property
+    def lighting_hours(self) -> gv.LightingHours:
+        with self.lighting_hours_lock:
+            return self._lighting_hours
+
+    def refresh_lighting_hours(self, send: bool = True) -> None:
+        self.logger.debug("Refreshing lighting hours.")
+        time_parameters = self.time_parameters
+        # Check we've got the info required
+        # Then update info using lock as the whole dict should be transformed at the "same time"
+        # Compute for 'fixed' lighting method
+        if self.light_method == gv.LightMethod.fixed:
+            with self.lighting_hours_lock:
+                self._lighting_hours = gv.LightingHours(
+                    morning_start=time_parameters.day,
+                    evening_end=time_parameters.night,
+                )
+        # Compute for 'mimic' lighting method
+        elif self.light_method == gv.LightMethod.mimic:
+            if self.sun_times is None:
+                self.logger.warning(
+                    "Cannot use lighting method 'mimic' without sun times "
+                    "available. Using 'fixed' method instead."
+                )
+                self.set_light_method(gv.LightMethod.fixed)
+                self.refresh_lighting_hours(send=send)
+                return
+            else:
+                with self.lighting_hours_lock:
+                    self._lighting_hours = gv.LightingHours(
+                        morning_start=self.sun_times["sunrise"],
+                        evening_end=self.sun_times["sunset"],
+                    )
+        # Compute for 'elongate' lighting method
+        elif self.light_method == gv.LightMethod.elongate:
+            if (
+                    time_parameters.day is None
+                    or time_parameters.night is None
+                    or self.sun_times is None
+            ):
+                self.logger.warning(
+                    "Cannot use lighting method 'elongate' without time "
+                    "parameters set in config and sun times available. Using "
+                    "'fixed' method instead."
+                )
+                self.set_light_method(gv.LightMethod.fixed)
+                self.refresh_lighting_hours(send=send)
+                return
+            else:
+                sunrise: datetime = _to_dt(self.sun_times["sunrise"])
+                sunset: datetime = _to_dt(self.sun_times["sunset"])
+                twilight_begin: datetime = _to_dt(self.sun_times["twilight_begin"])
+                offset = sunrise - twilight_begin
+                with self.lighting_hours_lock:
+                    self._lighting_hours = gv.LightingHours(
+                        morning_start=time_parameters.day,
+                        morning_end=(sunrise + offset).time(),
+                        evening_start=(sunset - offset).time(),
+                        evening_end=time_parameters.night,
+                    )
+        if (
+                send
+                and self.general.engine_set_up
+                and self.general.engine.use_message_broker
+                and self.general.engine.event_handler.registered
+        ):
+            try:
+                self.general.engine.event_handler.send_light_data(
+                    ecosystem_uids=[self.uid])
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                )
 
     @property
     def chaos_parameters(self) -> gv.ChaosConfig:

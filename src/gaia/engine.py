@@ -583,7 +583,8 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem_uid in need_refresh:
             try:
                 if self.ecosystems[ecosystem_uid].started:
-                    self.ecosystems[ecosystem_uid].refresh_lighting_hours()
+                    self.ecosystems[ecosystem_uid].refresh_lighting_hours(
+                        send=False)
             except KeyError:
                 # ecosystem was removed in the meantime
                 pass
