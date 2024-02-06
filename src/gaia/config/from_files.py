@@ -1485,6 +1485,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return sun_times
         return self.general.home_sun_times
 
+
 # ---------------------------------------------------------------------------
 #   Functions to interact with the module
 # ---------------------------------------------------------------------------
