@@ -15,7 +15,7 @@ dependencies = [
     "cryptography~=40.0.1",
     "gevent~=23.9.1",
     "orjson~=3.8.10",
-    "pydantic>=2.4.0",
+    "pydantic",
     "requests~=2.25.1",
     "ruamel.yaml~=0.17.21",
     "simple_pid~=1.0.1",

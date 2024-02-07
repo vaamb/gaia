@@ -17,7 +17,7 @@ import weakref
 from weakref import WeakValueDictionary
 
 import pydantic
-from pydantic import Field, field_validator, RootModel
+from pydantic import Field, field_validator, ValidationError
 from requests import ConnectionError, Session
 
 import gaia_validators as gv
@@ -78,7 +78,8 @@ class SunTimesCacheData(TypedDict):
     data: gv.SunTimesDict
 
 
-RootSunTimesCacheValidator = RootModel[dict[str, SunTimesCacheValidator]]
+class RootSunTimesCacheValidator(gv.BaseModel):
+    config: dict[str, SunTimesCacheValidator]
 
 
 class CoordinatesValidator(gv.BaseModel):
@@ -139,7 +140,8 @@ class EcosystemConfigDict(TypedDict):
     IO: dict[str, gv.AnonymousHardwareConfigDict]
 
 
-RootEcosystemsConfigValidator = RootModel[dict[str, EcosystemConfigValidator]]
+class RootEcosystemsConfigValidator(gv.BaseModel):
+    config: dict[str, EcosystemConfigValidator]
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +309,9 @@ class EngineConfig(metaclass=SingletonMeta):
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
                 try:
-                    validated: dict[str, EcosystemConfigDict] = \
-                        RootEcosystemsConfigValidator(unvalidated).model_dump()
+                    validated = RootEcosystemsConfigValidator(
+                        **{"config": unvalidated}
+                    ).model_dump()["config"]
                 except pydantic.ValidationError as e:
                     self.logger.error(
                         f"Could not validate ecosystems configuration file. "
@@ -686,9 +689,10 @@ class EngineConfig(metaclass=SingletonMeta):
             with file_path.open("r") as file:
                 unvalidated = json.loads(file.read())
                 try:
-                    validated: dict[str, SunTimesCacheData] = \
-                        RootSunTimesCacheValidator(unvalidated).model_dump()
-                except pydantic.ValidationError:
+                    validated: dict[str, SunTimesCacheData] = RootSunTimesCacheValidator(
+                        **{"config": unvalidated}
+                    ).model_dump()["config"]
+                except ValidationError:
                     self.logger.debug("Cached sun times data out of format.")
                     os.remove(file_path)
         except (FileNotFoundError, JSONDecodeError, KeyError):
@@ -792,7 +796,7 @@ class EngineConfig(metaclass=SingletonMeta):
                         **data["results"]
                     ).model_dump()
                     return results
-                except pydantic.ValidationError:
+                except ValidationError:
                     self.logger.error(
                         f"Could not validate sun times data for '{place}'.")
                     return None
