@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
 import logging
-from threading import Lock
 import typing
 import weakref
 
@@ -20,12 +18,6 @@ from gaia.virtual import VirtualEcosystem
 if typing.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
     from gaia.events import Events
-
-
-def _to_dt(_time: time) -> datetime:
-    # Transforms time to today's datetime. Needed to use timedelta
-    _date = date.today()
-    return datetime.combine(_date, _time)
 
 
 class Ecosystem:
@@ -60,11 +52,6 @@ class Ecosystem:
             self._virtual_self = VirtualEcosystem(
                 self.engine.virtual_world, self.uid, **virtual_eco_cfg)
         self._alarms: list = []
-        self._lighting_hours = gv.LightingHours(
-            morning_start=self.config.time_parameters.day,
-            evening_end=self.config.time_parameters.night,
-        )
-        self.lighting_hours_lock = Lock()
         self.actuator_hub: ActuatorHub = ActuatorHub(self)
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine_name in subroutine_names:
@@ -122,19 +109,14 @@ class Ecosystem:
 
     @property
     def light_method(self) -> gv.LightMethod:
-        try:
-            return self.config.light_method
-        except UndefinedParameter:
-            return gv.LightMethod.fixed
+        return self.config.light_method
 
     def set_light_method(self, value: gv.LightMethod) -> None:
         self.config.set_light_method(value)
-        self.refresh_lighting_hours(send=True)
 
     @property
     def lighting_hours(self) -> gv.LightingHours:
-        with self.lighting_hours_lock:
-            return self._lighting_hours
+        return self.config.lighting_hours
 
     @property
     def light_info(self) -> gv.LightData:
@@ -377,73 +359,7 @@ class Ecosystem:
 
     # Light
     def refresh_lighting_hours(self, send: bool = True) -> None:
-        self.logger.debug("Refreshing sun times")
-        time_parameters = self.config.time_parameters
-        # Check we've got the info required
-        # Then update info using lock as the whole dict should be transformed at the "same time"
-        if self.config.light_method == gv.LightMethod.fixed:
-            with self.lighting_hours_lock:
-                self._lighting_hours = gv.LightingHours(
-                    morning_start=time_parameters.day,
-                    evening_end=time_parameters.night,
-                )
-
-        elif self.config.light_method == gv.LightMethod.mimic:
-            if self.config.sun_times is None:
-                self.logger.warning(
-                    "Cannot use lighting method 'place' without sun times available. "
-                    "Using 'fixed' method instead."
-                )
-                self.config.set_light_method(gv.LightMethod.fixed)
-                self.refresh_lighting_hours(send=send)
-            else:
-                with self.lighting_hours_lock:
-                    self._lighting_hours = gv.LightingHours(
-                        morning_start=self.config.sun_times["sunrise"],
-                        evening_end=self.config.sun_times["sunset"],
-                    )
-
-        elif self.config.light_method == gv.LightMethod.elongate:
-            if (
-                    time_parameters.day is None
-                    or time_parameters.night is None
-                    or self.config.sun_times is None
-            ):
-                self.logger.warning(
-                    "Cannot use lighting method 'elongate' without time parameters set in "
-                    "config and sun times available. Using 'fixed' method instead."
-                )
-                self.config.set_light_method(gv.LightMethod.fixed)
-                self.refresh_lighting_hours(send=send)
-            else:
-                sunrise: datetime = _to_dt(self.config.sun_times["sunrise"])
-                sunset: datetime = _to_dt(self.config.sun_times["sunset"])
-                twilight_begin: datetime = _to_dt(self.config.sun_times["twilight_begin"])
-                offset = sunrise - twilight_begin
-                with self.lighting_hours_lock:
-                    self._lighting_hours = gv.LightingHours(
-                        morning_start=time_parameters.day,
-                        morning_end=(sunrise + offset).time(),
-                        evening_start=(sunset - offset).time(),
-                        evening_end=time_parameters.night,
-                    )
-
-        if (
-                send
-                and self.engine.use_message_broker
-                and self.event_handler.registered
-        ):
-            try:
-                self.event_handler.send_light_data(
-                    ecosystem_uids=[self._uid])
-            except Exception as e:
-                msg = e.args[1] if len(e.args) > 1 else e.args[0]
-                if "is not a connected namespace" in msg:
-                    return  # TODO: find a way to catch if many errors
-                self.logger.error(
-                    f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
-                )
+        self.config.refresh_lighting_hours(send=send)
 
     # Health
     @property

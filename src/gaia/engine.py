@@ -291,9 +291,9 @@ class Engine(metaclass=SingletonMeta):
     def start_background_tasks(self) -> None:
         self.logger.debug("Starting the background tasks.")
         self.scheduler.add_job(
-            func=self.refresh_sun_times,
+            func=self.refresh_ecosystems_lighting_hours,
             id="refresh_sun_times",
-            trigger=CronTrigger(hour="1"),
+            trigger=CronTrigger(hour="0", minute="1"),
             misfire_grace_time=15 * 60,
         )
         self.scheduler.add_job(
@@ -564,40 +564,23 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem_uid in to_delete:
             self.stop_ecosystem(ecosystem_uid)
             self.dismount_ecosystem(ecosystem_uid)
+        # self.refresh_ecosystems_lighting_hours()  # done by Ecosystem during their startup
         if send_info:
             self._send_ecosystem_info()
 
-    def refresh_sun_times(self) -> None:
-        """Download sunrise and sunset times if needed by an Ecosystem"""
-        self.logger.info("Refreshing ecosystems sun times")
+    def refresh_ecosystems_lighting_hours(self) -> None:
+        """Refresh all the Ecosystems lighting hours
+
+        Should only be called routinely, once a day. Other than that, Ecosystems
+        will try to compute their lighting hours based on the method chosen and
+        get recent sun times if needed by the method."""
+        self.logger.info("Refreshing ecosystems lighting hours.")
         self.config.refresh_sun_times()
-        if self.config.home_sun_times is None:
-            self.logger.warning(
-                "EngineConfig is None, cannot update ecosystems sun times"
-            )
-            return
-        need_refresh = []
-        for ecosystem in self.ecosystems:
-            try:
-                if (
-                    self.ecosystems[ecosystem].config.light_method in
-                    (gv.LightMethod.mimic, gv.LightMethod.elongate)
-                    # And expected to be running
-                    and self.ecosystems[ecosystem].config.status
-                ):
-                    need_refresh.append(ecosystem)
-            except UndefinedParameter:
-                # Bad configuration file
-                pass
-        for ecosystem in need_refresh:
-            try:
-                if self.ecosystems[ecosystem].started:
-                    self.ecosystems[ecosystem].refresh_lighting_hours()
-            except KeyError:
-                self.logger.error(
-                    f"Error while refreshing lighting hours of Ecosystem "
-                    f"{self.ecosystems[ecosystem].name}"
-                )
+        for ecosystem in self.ecosystems.values():
+            if ecosystem.started:
+                ecosystem.refresh_lighting_hours()
+        if self.use_message_broker:
+            self.event_handler.send_light_data()
 
     def update_chaos_time_window(self) -> None:
         self.logger.info("Updating ecosystems chaos time window.")
@@ -630,8 +613,6 @@ class Engine(metaclass=SingletonMeta):
         # Load the ecosystem configs into memory and start the watchdog
         self.config.initialize_configs()
         self.config.start_watchdog()
-        # Get the info required just before starting the ecosystems
-        self.refresh_sun_times()
         # Start background tasks and plugins
         self.start_background_tasks()
         if self.plugins_initialized:
@@ -643,6 +624,7 @@ class Engine(metaclass=SingletonMeta):
             daemon=True,
         )
         self.thread.start()
+        # Refresh ecosystems a first time
         self._resume()
         self.logger.info("Gaia started")
 

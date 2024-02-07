@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
 from json.decoder import JSONDecodeError
 import logging
@@ -29,11 +29,17 @@ from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import Hardware, hardware_models
 from gaia.subroutines import subroutine_dict
-from gaia.utils import json, SingletonMeta, yaml
+from gaia.utils import humanize_list, json, SingletonMeta, yaml
 
 
 if t.TYPE_CHECKING:
     from gaia.engine import Engine
+
+
+def _to_dt(_time: time) -> datetime:
+    # Transforms time to today's datetime. Needed to use timedelta
+    _date = date.today()
+    return datetime.combine(_date, _time)
 
 
 def format_pydantic_error(error: pydantic.ValidationError) -> str:
@@ -359,14 +365,18 @@ class EngineConfig(metaclass=SingletonMeta):
         self.load(CacheType.chaos)
         self.load(CacheType.sun_times)
         for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items():
+            light_method = safe_enum_from_name(
+                gv.LightMethod, eco_cfg_dict["environment"]["sky"]["lighting"])
             ecosystem_name = self.get_IDs(ecosystem_uid).name
             self.logger.debug(
                 f"Checking if light method for ecosystem {ecosystem_name} is possible.")
-            light_is_method_valid = self.check_lighting_method_validity(ecosystem_uid)
+            light_is_method_valid = self.check_lighting_method_validity(
+                ecosystem_uid, light_method)
             if not light_is_method_valid:
                 self.logger.warning(
-                    f"Using light method for ecosystem '{ecosystem_name}' is not "
-                    f"possible. Will fall back to 'fixed'."
+                    f"Light method '{light_method.name}' is not a valid option "
+                    f"for ecosystem '{ecosystem_name}'. Will fall back to "
+                    f"'fixed'."
                 )
         self.save(CacheType.sun_times)
         self.configs_loaded = True
@@ -415,12 +425,11 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"Change in '{config_type.value}' detected. Updating "
                         f"{config_type.name} configuration.")
                     self._load_config(cfg_type=config_type)
-                    if config_type is ConfigType.ecosystems:
-                        self.refresh_sun_times()
                 with self.new_config:
                     self.new_config.notify_all()
-                if self.engine_set_up and self.engine.use_message_broker:
-                    self.engine.event_handler.send_ecosystems_info()
+                    # This unblocks the engine loop. It will then refresh
+                    #  ecosystems, update sun times, ecosystem lighting hours
+                    #  and send the data if it is connected.
 
     def _watchdog_loop(self) -> None:
         sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
@@ -696,12 +705,15 @@ class EngineConfig(metaclass=SingletonMeta):
             file.write(json.dumps(self._sun_times))
 
     def refresh_sun_times(self) -> None:
+        self.logger.info("Looking if sun times need to be updated.")
         # Remove outdated data
         cleaned_validated, any_outdated = self._clean_sun_times_cache(self._sun_times)
         self._sun_times = cleaned_validated
+        self.logger.debug("Found outdated sun times.")
 
         # Check if an update is required
         places: set[str] = set()
+        # TODO: only do for running ecosystems ?
         for ecosystem_config in self.ecosystems_config_dict.values():
             sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
             if sky.lighting == gv.LightMethod.elongate:
@@ -727,6 +739,10 @@ class EngineConfig(metaclass=SingletonMeta):
                 self.save(CacheType.sun_times)
             return
 
+        self.logger.info(
+            f"Sun times of the following targets need to be refreshed: "
+            f"{humanize_list(list(places))}."
+        )
         any_failed = False
         any_success = False
         for place in places:
@@ -746,13 +762,13 @@ class EngineConfig(metaclass=SingletonMeta):
             self.save(CacheType.sun_times)
 
     def download_sun_times(self, place: str = "home") -> gv.SunTimesDict | None:
-        self.logger.info("Trying to download sun times")
+        self.logger.info(f"Trying to download sun times for the target '{place}'.")
         try:
             coordinates = self.get_place(place).coordinates
         except UndefinedParameter:
             self.logger.warning(
                 f"You need to define '{place}' coordinates in "
-                f"'private.cfg' in order to download sun times."
+                f"'private.cfg' in order to be able to download sun times."
             )
             return None
         else:
@@ -798,7 +814,7 @@ class EngineConfig(metaclass=SingletonMeta):
         lighting_method = lighting_method or sky_cfg["lighting"]
         lighting_method = safe_enum_from_name(gv.LightMethod, lighting_method)
         if lighting_method == gv.LightMethod.fixed:
-            return  True
+            return True
         # Try to get the target
         elif lighting_method == gv.LightMethod.elongate:
             target = "home"
@@ -820,7 +836,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.warning(
                 f"Lighting method for ecosystem {ecosystem_name} cannot be "
                 f"'{lighting_method.name}' as the coordinates of '{target}' is "
-                f"provided in the private configuration file."
+                f"not provided in the private configuration file."
             )
             return False
         # Try to get the target's sun times
@@ -935,7 +951,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
-        self.logger.debug(f"Initializing EcosystemConfig for {ids.name}")
+        self._lighting_hours = gv.LightingHours(
+            morning_start=self.time_parameters.day,
+            evening_end=self.time_parameters.night,
+        )
+        self.lighting_hours_lock = Lock()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
@@ -1030,9 +1050,18 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def light_method(self) -> gv.LightMethod:
+        if self.general.app_config.TESTING:
+            return self._light_method
         if self.sun_times is None:
             return gv.LightMethod.fixed
         return self._light_method
+
+    @light_method.setter
+    def light_method(self, light_method: gv.LightMethod) -> None:
+        if not self.general.app_config.TESTING:
+            raise AttributeError(
+                "'light_method' can only be set when 'TESTING' is True.")
+        self.sky["lighting"] = light_method
 
     def set_light_method(self, method: gv.LightMethod) -> None:
         method = safe_enum_from_name(gv.LightMethod, method)
@@ -1043,6 +1072,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"logs to see the reason."
                 )
         self.sky["lighting"] = method
+        self.refresh_lighting_hours(send=True)
 
     @property
     def light_target(self) -> str | None:
@@ -1051,6 +1081,91 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def set_light_target(self, target: str | None) -> None:
         assert self.general.get_place(target)
         self.sky["target"] = target
+        self.refresh_lighting_hours(send=True)
+
+    @property
+    def lighting_hours(self) -> gv.LightingHours:
+        # TODO: reduce the use of this
+        with self.lighting_hours_lock:
+            return self._lighting_hours
+
+    @lighting_hours.setter
+    def lighting_hours(self, lighting_hours: gv.LightingHours) -> None:
+        if not self.general.app_config.TESTING:
+            raise AttributeError(
+                "'lighting_hours' can only be set when 'TESTING' is True.")
+        with self.lighting_hours_lock:
+            self._lighting_hours = lighting_hours
+
+    def refresh_lighting_hours(self, send: bool = True) -> None:
+        self.logger.info("Refreshing lighting hours.")
+        time_parameters = self.time_parameters
+        # Check we've got the info required
+        # Then update info using lock as the whole dict should be transformed at the "same time"
+        # Compute for 'fixed' lighting method
+        if self.light_method == gv.LightMethod.fixed:
+            with self.lighting_hours_lock:
+                self._lighting_hours = gv.LightingHours(
+                    morning_start=time_parameters.day,
+                    evening_end=time_parameters.night,
+                )
+        # Compute for 'mimic' lighting method
+        elif self.light_method == gv.LightMethod.mimic:
+            if self.sun_times is None:
+                self.logger.warning(
+                    "Cannot use lighting method 'mimic' without sun times "
+                    "available. Using 'fixed' method instead."
+                )
+                self.set_light_method(gv.LightMethod.fixed)
+                self.refresh_lighting_hours(send=send)
+                return
+            else:
+                with self.lighting_hours_lock:
+                    self._lighting_hours = gv.LightingHours(
+                        morning_start=self.sun_times["sunrise"],
+                        evening_end=self.sun_times["sunset"],
+                    )
+        # Compute for 'elongate' lighting method
+        elif self.light_method == gv.LightMethod.elongate:
+            if (
+                    time_parameters.day is None
+                    or time_parameters.night is None
+                    or self.sun_times is None
+            ):
+                self.logger.warning(
+                    "Cannot use lighting method 'elongate' without time "
+                    "parameters set in config and sun times available. Using "
+                    "'fixed' method instead."
+                )
+                self.set_light_method(gv.LightMethod.fixed)
+                self.refresh_lighting_hours(send=send)
+                return
+            else:
+                sunrise: datetime = _to_dt(self.sun_times["sunrise"])
+                sunset: datetime = _to_dt(self.sun_times["sunset"])
+                twilight_begin: datetime = _to_dt(self.sun_times["twilight_begin"])
+                offset = sunrise - twilight_begin
+                with self.lighting_hours_lock:
+                    self._lighting_hours = gv.LightingHours(
+                        morning_start=time_parameters.day,
+                        morning_end=(sunrise + offset).time(),
+                        evening_start=(sunset - offset).time(),
+                        evening_end=time_parameters.night,
+                    )
+        if (
+                send
+                and self.general.engine_set_up
+                and self.general.engine.use_message_broker
+                and self.general.engine.event_handler.registered
+        ):
+            try:
+                self.general.engine.event_handler.send_light_data(
+                    ecosystem_uids=[self.uid])
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                )
 
     @property
     def chaos_parameters(self) -> gv.ChaosConfig:
