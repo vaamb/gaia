@@ -160,6 +160,9 @@ class Climate(SubroutineTemplate):
             for couple_direction in actuator_couple.directions():
                 actuator_type = actuator_couple[couple_direction]
                 actuator_handler = self.get_actuator_handler(actuator_type)
+                if not actuator_handler.get_linked_actuators():
+                    # No actuator to act on, go next
+                    continue
                 if couple_direction == "increase":
                     if pid_output > 0.0:
                         corrected_output = pid_output
