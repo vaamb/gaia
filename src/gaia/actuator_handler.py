@@ -84,6 +84,8 @@ class HystericalPID:
     """A PID able to take hysteresis into account."""
     def __init__(
             self,
+            actuator_hub: ActuatorHub,
+            climate_parameter: gv.ClimateParameter,
             target: float = 0.0,
             hysteresis: float | None = None,
             Kp: float = 1.0,
@@ -94,6 +96,8 @@ class HystericalPID:
             integration_period: int = 10,
             used_regularly: bool = True,
     ) -> None:
+        self.actuator_hub: ActuatorHub = actuator_hub
+        self.climate_parameter: gv.ClimateParameter = climate_parameter
         self.target: float = target
         self.hysteresis: float | None = hysteresis
         self.Kp: float = Kp
@@ -108,6 +112,10 @@ class HystericalPID:
         self._used_regularly: bool = used_regularly
         self._last_input: float | None = None
         self._last_output: float = 0.0
+
+    def __repr__(self) -> str:
+        uid = self.actuator_hub.ecosystem.uid
+        return f"{self.__class__.__name__}({uid}, parameter={self.climate_parameter})"
 
     @staticmethod
     def clamp(
@@ -212,18 +220,18 @@ class ActuatorHandler:
     __slots__ = (
         "_active", "_actuators", "_expected_status_function", "_level", "_last_mode",
         "_last_status", "_mode", "_status", "_time_limit", "_timer_on",
-        "ecosystem", "handlers_hub", "logger", "type"
+        "ecosystem", "actuator_hub", "logger", "type"
     )
 
     def __init__(
             self,
-            handlers_hub: ActuatorHub,
-            actuator_type: gv.HardwareType.actuator,
+            actuator_hub: ActuatorHub,
+            actuator_type: gv.HardwareType,
     ) -> None:
         assert actuator_type in gv.HardwareType.actuator
-        self.handlers_hub: ActuatorHub = handlers_hub
-        self.ecosystem = self.handlers_hub.ecosystem
-        self.type = actuator_type
+        self.actuator_hub: ActuatorHub = actuator_hub
+        self.ecosystem = self.actuator_hub.ecosystem
+        self.type = actuator_type  # TODO: add the direction of the actuator
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
             f"gaia.engine.{eco_name}.actuators.{self.type.name}")
@@ -235,7 +243,11 @@ class ActuatorHandler:
         self._time_limit: float = 0.0
         self._last_status: bool = self.status
         self._last_mode: gv.ActuatorMode = self.mode
-        self._actuators: list[Hardware] | None = None
+        self._actuators: list[Switch | Dimmer] | None = None
+
+    def __repr__(self) -> str:
+        uid = self.actuator_hub.ecosystem.uid
+        return f"ActuatorHandler({uid}, actuator_type={self.type.name})"
 
     def get_linked_actuators(self) -> list[Switch | Dimmer]:
         if self._actuators is None:
@@ -252,7 +264,7 @@ class ActuatorHandler:
 
     def get_associated_pid(self) -> HystericalPID:
         climate_parameter = hardware_to_parameter[self.type]
-        return self.handlers_hub.get_pid(climate_parameter)
+        return self.actuator_hub.get_pid(climate_parameter)
 
     def as_dict(self) -> gv.ActuatorStateDict:
         return {
@@ -429,6 +441,7 @@ class ActuatorHandler:
                 # TODO: log, this should not happen
                 return False
             else:
+                # TODO: use the actuator direction to determine if need > or < 0
                 return expected_level > 0.0
         else:
             if self.status:
@@ -449,6 +462,7 @@ class ActuatorHub:
             climate_parameter: gv.ClimateParameter
             pid_parameters = pid_values[climate_parameter]
             self._pids[climate_parameter] = HystericalPID(
+                self, climate_parameter,
                 Kp=pid_parameters.Kp, Ki=pid_parameters.Ki, Kd=pid_parameters.Kd,
                 minimum_output=-100.0, maximum_output=100.0,
             )
