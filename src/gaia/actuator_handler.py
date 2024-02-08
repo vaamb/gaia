@@ -19,13 +19,13 @@ if t.TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class ActuatorCouple:
-    increase: gv.HardwareType.actuator | None
-    decrease: gv.HardwareType.actuator | None
+    increase: gv.HardwareType | None
+    decrease: gv.HardwareType | None
 
     def __iter__(self) -> typing.Iterable[gv.HardwareType | None]:
         return iter((self.increase, self.decrease))
 
-    def __getitem__(self, key: str) -> gv.HardwareType.actuator | None:
+    def __getitem__(self, key: str) -> gv.HardwareType | None:
         try:
             return getattr(self, key)
         except AttributeError:
@@ -56,6 +56,7 @@ def generate_hardware_to_parameter_dict() -> dict[gv.HardwareType.actuator, gv.C
                 continue
             rv[direction] = climate_parameter
     return rv
+
 
 hardware_to_parameter = generate_hardware_to_parameter_dict()
 
