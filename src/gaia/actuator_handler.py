@@ -351,7 +351,7 @@ class ActuatorHandler:
         actuators_linked = self.get_linked_actuators()
         if not actuators_linked:
             raise RuntimeError(
-                f"{self.type.name.capitalize()} handler cannot be turned"
+                f"{self.type.name.capitalize()} handler cannot be turned "
                 f"{'on' if self.status else 'off'} as it has no actuator linked "
                 f"to it."
             )
@@ -435,11 +435,11 @@ class ActuatorHandler:
                 # TODO: use a callback ?
         self.logger.info(
             f"{self.type.name} has been manually turned to '{turn_to.name}'"
-            f"{additional_message}")
+            f"{additional_message}.")
         if self._status != self._last_status or self._mode != self._last_mode:
             self.logger.info(
                 f"{self.type.name.capitalize()} has been turned "
-                f"{'on' if self.status else 'off'} with '{self.mode.name}' mode")
+                f"{'on' if self.status else 'off'} with '{self.mode.name}' mode.")
             self.send_actuators_state()
         self._last_mode = self.mode
         self._last_status = self.status
@@ -449,25 +449,16 @@ class ActuatorHandler:
                 self.ecosystem.engine.use_message_broker
                 and self.ecosystem.event_handler.registered
         ):
-            self.ecosystem.logger.debug(
-                "Sending actuators data to Ouranos")
-            try:
-                self.ecosystem.event_handler.send_actuator_data(
-                    ecosystem_uids=self.ecosystem.config.uid)
-            except Exception as e:
-                msg = e.args[1] if len(e.args) > 1 else e.args[0]
-                if "is not a connected namespace" in msg:
-                    pass
-                self.logger.error(
-                    f"Encountered an error while sending actuator data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
-                )
+            self.ecosystem.event_handler.send_actuator_data(
+                ecosystem_uids=self.ecosystem.config.uid)
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
         self.check_countdown()
         if self.mode == gv.ActuatorMode.automatic:
             if expected_level is None:
-                # TODO: log, this should not happen
+                self.logger.error(
+                    "Cannot compute an expected status for automatic mode "
+                    "without an expected PID level. Falling back to off status.")
                 return False
             else:
                 if self.direction == Direction.increase:
