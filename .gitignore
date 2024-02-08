@@ -3,9 +3,9 @@ __pycache__/
 .pytest_cache/
 
 .cache/
-.logs/
+logs/
 migrations/
-venv/
+*venv/
 
 config.py
 *.cfg
