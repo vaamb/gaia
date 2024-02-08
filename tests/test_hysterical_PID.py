@@ -33,12 +33,12 @@ def test_hysterical_PID():
 
     pid._last_output = -1.0
     assert pid.update_pid(current_value) == 0.0
-    assert pid.direction == Direction.stable
+    assert pid.direction == Direction.both
     pid.reset()
 
     pid._last_output = 0.0
     assert pid.update_pid(current_value) == 0.0
-    assert pid.direction == Direction.stable
+    assert pid.direction == Direction.both
     pid.reset()
 
     pid._last_output = 1.0
@@ -56,12 +56,12 @@ def test_hysterical_PID():
 
     pid._last_output = 0.0
     assert pid.update_pid(current_value) == 0.0
-    assert pid.direction == Direction.stable
+    assert pid.direction == Direction.both
     pid.reset()
 
     pid._last_output = 1.0
     assert pid.update_pid(current_value) == 0.0
-    assert pid.direction == Direction.stable
+    assert pid.direction == Direction.both
     pid.reset()
 
     # Above target, out of hysteresis range
