@@ -147,15 +147,10 @@ def test_get_IDs(engine_config: EngineConfig, ecosystem_config: EcosystemConfig)
 
 def test_home(engine_config: EngineConfig):
     with pytest.raises(UndefinedParameter):
-        engine_config.home
-    with pytest.raises(UndefinedParameter):
         engine_config.home_coordinates
     engine_config.home_coordinates = (4, 2)
-    assert engine_config.home_coordinates.latitude == \
-           engine_config.home.coordinates.latitude == 4.0
-    assert engine_config.home_coordinates.longitude == \
-           engine_config.home.coordinates.longitude == 2.0
-    assert engine_config.home.name == "home"
+    assert engine_config.home_coordinates["latitude"] == 4.0
+    assert engine_config.home_coordinates["longitude"] == 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +245,10 @@ def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
 
     # Should not happen
     ecosystem_config.general._sun_times = {}
+    ecosystem_config.general.app_config.TESTING = False
     # Sun times is none so `light_method` falls back to `fixed`
     assert ecosystem_config.light_method is gv.LightMethod.fixed
+    ecosystem_config.general.app_config.TESTING = True
     ecosystem_config.general._sun_times = {
         "home": {"last_update": date.today(), "data": sun_times}
     }

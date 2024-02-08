@@ -624,12 +624,13 @@ class EngineConfig(metaclass=SingletonMeta):
         self.places[place] = validated_value["coordinates"]
 
     @property
-    def home(self) -> PlaceValidator:
-        return self.get_place("home")
-
-    @property
-    def home_coordinates(self) -> CoordinatesValidator:
-        return self.home.coordinates
+    def home_coordinates(self) -> CoordinatesDict:
+        home = self.get_place("home")
+        if home is None:
+            raise UndefinedParameter(
+                f"No location named 'home' was found in the private "
+                f"configuration file.")
+        return home
 
     @home_coordinates.setter
     def home_coordinates(self, value: tuple[float, float] | CoordinatesDict) -> None:
