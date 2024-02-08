@@ -1414,33 +1414,27 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_repr.pop("uid")
         self.IO_dict.update({uid: hardware_repr})
 
-    def CRUD_create_hardware(self, value: gv.HardwareConfigDict) -> None:
-        self.create_new_hardware(**value)
-
-    def update_hardware(self, uid: str, update_value: dict) -> None:
-        try:
-            non_null_values = {
-                key: value for key, value in update_value.items()
-                if value is not None
-            }
-            hardware_dict: gv.AnonymousHardwareConfigDict = self.IO_dict[uid].copy()
-            hardware_dict: gv.HardwareConfigDict = cast(gv.HardwareConfigDict, hardware_dict)
-            hardware_dict.update({"uid": uid, **non_null_values})
-            check_address = "address" in update_value  # Don't check address if not trying to update it
-            hardware = self._validate_hardware_dict(hardware_dict, check_address)
-            hardware_repr = hardware.dict_repr(shorten=True)
-            hardware_repr.pop("uid")
-            self.IO_dict[uid] = hardware_repr
-        except KeyError:
-            raise HardwareNotFound
-
-    def CRUD_update_hardware(self, value: gv.HardwareConfigDict) -> None:
-        validated_value: gv.HardwareConfigDict = gv.HardwareConfig(
-            **value).model_dump()
-        uid = validated_value.pop("uid")
-        if uid not in self.IO_dict:
-            raise HardwareNotFound
-        self.IO_dict[uid] = validated_value
+    def update_hardware(
+            self,
+            uid: str,
+            **update_value: gv.AnonymousHardwareConfigDict
+    ) -> None:
+        base_hardware_dict = self.IO_dict.get(uid)
+        if base_hardware_dict is None:
+            raise HardwareNotFound(
+                "No hardware with uid '{uid}' found in the hardware config.")
+        hardware_dict = base_hardware_dict.copy()
+        hardware_dict: gv.HardwareConfigDict = cast(gv.HardwareConfigDict, hardware_dict)
+        hardware_dict["uid"] = uid
+        hardware_dict.update({
+            key: value for key, value in update_value.items()
+            if value is not None
+        })
+        check_address = "address" in update_value  # Don't check address if not trying to update it
+        hardware = self._validate_hardware_dict(hardware_dict, check_address)
+        hardware_repr = hardware.dict_repr(shorten=True)
+        hardware_repr.pop("uid")
+        self.IO_dict[uid] = hardware_repr
 
     def delete_hardware(self, uid: str) -> None:
         """

@@ -377,8 +377,8 @@ class Events(EventHandler):
             "update_environment_parameter": self.ecosystems[ecosystem_uid].config.CRUD_update_climate_parameter,
             "delete_environment_parameter": self.ecosystems[ecosystem_uid].config.delete_climate_parameter,
             # Hardware creation, deletion and update
-            "create_hardware": self.ecosystems[ecosystem_uid].config.CRUD_create_hardware,
-            "update_hardware": self.ecosystems[ecosystem_uid].config.CRUD_update_hardware,
+            "create_hardware": self.ecosystems[ecosystem_uid].config.create_new_hardware,
+            "update_hardware": self.ecosystems[ecosystem_uid].config.update_hardware,
             "delete_hardware": self.ecosystems[ecosystem_uid].config.delete_hardware,
             # Private
             "create_place": self.engine.config.CRUD_create_place,
