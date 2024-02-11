@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import typing as t
 from typing import Type
-import weakref
 
 import gaia_validators as gv
 
@@ -22,7 +21,7 @@ class SubroutineTemplate(ABC):
     def __init__(self, ecosystem: "Ecosystem") -> None:
         """Base class to manage an ecosystem subroutine
         """
-        self._ecosystem: "Ecosystem" = weakref.proxy(ecosystem)
+        self._ecosystem: "Ecosystem" = ecosystem
         self.name: str = self.__class__.__name__.lower()
         eco_name = self._ecosystem.name.replace(" ", "_")
         self.logger: logging.Logger = logging.getLogger(
