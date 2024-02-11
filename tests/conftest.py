@@ -92,6 +92,7 @@ def default_testing_cfg(testing_cfg: Type[BaseConfig]) -> YieldFixture[None]:
     yield None
 
     GaiaConfigHelper.reset_config()
+    SingletonMeta.clear_instances()
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -108,7 +109,6 @@ def engine_config(default_testing_cfg: Type[None]) -> YieldFixture[EngineConfig]
     if engine_config.started:
         engine_config.stop_watchdog()
     del engine_config
-    SingletonMeta.detach_instance("EngineConfig")
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -122,7 +122,6 @@ def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     if engine.started:
         engine.stop()
     del engine
-    SingletonMeta.detach_instance("Engine")
 
 
 @pytest.fixture(scope="function")
