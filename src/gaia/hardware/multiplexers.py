@@ -15,7 +15,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class _MetaMultiplexer(type):
-    instances: dict[str, "Multiplexer"] = WeakValueDictionary()
+    instances: WeakValueDictionary[str, "Multiplexer"] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> "Multiplexer":
         address: int = kwargs["address"]

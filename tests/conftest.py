@@ -1,9 +1,8 @@
-from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 import os
 import shutil
 import tempfile
-from typing import Generator, Type, TypeVar
+from typing import Generator, TypeVar
 
 import pytest
 
@@ -11,6 +10,7 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler
 from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHelper
+from gaia.config.from_files import _MetaEcosystemConfig
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.subroutines import (
@@ -111,8 +111,6 @@ def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConf
         engine_config_master.private_config = {}
         engine_config_master.chaos_memory = {}
         engine_config_master.sun_times = {}
-        engine_config_master._executor = ThreadPoolExecutor(
-                thread_name_prefix=f"Engine_ThreadPoolExecutor", max_workers=10)
         if engine_config_master.started:
             engine_config_master.stop_watchdog()
 
@@ -141,6 +139,7 @@ def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfi
     try:
         yield ecosystem_config
     finally:
+        del _MetaEcosystemConfig.instances[ecosystem_config.uid]
         del ecosystem_config
 
 
