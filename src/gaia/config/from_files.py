@@ -606,19 +606,19 @@ class EngineConfig(metaclass=SingletonMeta):
             )
         self.places[place] = validated_coordinates
 
-    def CRUD_create_place(self, value: gv.PlaceDict):
-        validated_value: gv.PlaceDict = gv.Place(**value).model_dump()
-        place = validated_value.pop("name")
-        self.places[place] = validated_value["coordinates"]
-
-    def CRUD_update_place(self, value: gv.PlaceDict) -> None:
-        validated_value: gv.PlaceDict = gv.Place(**value).model_dump()
-        place = validated_value.pop("name")
-        if place not in self.places:
+    def update_place(
+            self,
+            place: str,
+            coordinates: tuple[float, float] | CoordinatesDict,
+    ) -> None:
+        if not self.get_place(place):
             raise UndefinedParameter(
-                f"No place named '{place}' was found in the private "
-                f"configuration file")
-        self.places[place] = validated_value["coordinates"]
+                f"No location named '{place}' was found in the private "
+                f"configuration file.")
+        self.set_place(place, coordinates)
+
+    def delete_place(self, place: str) -> None:
+        del self.places[place]
 
     @property
     def home_coordinates(self) -> gv.Coordinates:

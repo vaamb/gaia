@@ -381,8 +381,9 @@ class Events(EventHandler):
             "update_hardware": self.ecosystems[ecosystem_uid].config.update_hardware,
             "delete_hardware": self.ecosystems[ecosystem_uid].config.delete_hardware,
             # Private
-            "create_place": self.engine.config.CRUD_create_place,
-            "update_place": self.engine.config.CRUD_update_place,
+            "create_place": self.engine.config.set_place,
+            "update_place": self.engine.config.update_place,
+            "delete_place": self.engine.config.delete_place,
         }[crud_key]
 
     def get_CRUD_event_name(self, crud_key: str) -> EventNames:
