@@ -140,8 +140,7 @@ class HystericalPID:
             return self._direction
         direction: Direction = Direction.none
         actuator_couple: ActuatorCouple = actuator_couples[self.climate_parameter]
-        for direction_name in actuator_couple.directions():
-            actuator_type = actuator_couple[direction_name]
+        for direction_name, actuator_type in actuator_couple.items():
             if actuator_type is None:
                 continue
             actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(
@@ -487,11 +486,11 @@ class ActuatorHub:
 
     def _populate_actuators(self) -> None:
         for actuator_couple in actuator_couples.values():
-            for direction, actuator_type in actuator_couple.items():
+            for direction_name, actuator_type in actuator_couple.items():
                 if actuator_type is None:
                     continue
                 self._actuator_handlers[actuator_type] = ActuatorHandler(
-                    self, actuator_type, Direction[direction])
+                    self, actuator_type, Direction[direction_name])
 
     def get_pid(
             self,

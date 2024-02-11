@@ -157,27 +157,16 @@ class Climate(SubroutineTemplate):
                 pid_output = pid.update_pid(current_value)
 
             actuator_couple: ActuatorCouple = actuator_couples[climate_parameter]
-            for couple_direction in actuator_couple.directions():
-                actuator_type = actuator_couple[couple_direction]
+            for direction_name, actuator_type in actuator_couple.items():
                 actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
                 if not actuator_handler.get_linked_actuators():
                     # No actuator to act on, go next
                     continue
-                if couple_direction == "increase":
-                    if pid_output > 0.0:
-                        corrected_output = pid_output
-                    else:
-                        corrected_output = 0.0
-                else:
-                    if pid_output < 0.0:
-                        corrected_output = -pid_output
-                    else:
-                        corrected_output = 0.0
                 expected_status = actuator_handler.compute_expected_status(
-                    corrected_output)
+                    pid_output)
                 if expected_status:
                     actuator_handler.turn_on()
-                    actuator_handler.set_level(corrected_output)
+                    actuator_handler.set_level(abs(pid_output))
                 else:
                     actuator_handler.turn_off()
                     actuator_handler.set_level(0.0)
