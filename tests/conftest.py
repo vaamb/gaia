@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 import os
 import shutil
 import tempfile
@@ -73,7 +75,7 @@ def temp_dir(patch) -> YieldFixture[str]:
 
 
 @pytest.fixture(scope="session")
-def testing_cfg(temp_dir) -> YieldFixture[Type[BaseConfig]]:
+def testing_cfg(temp_dir) -> None:
     class Config(BaseConfig):
         LOG_TO_STDOUT = False
         TESTING = True
@@ -82,33 +84,40 @@ def testing_cfg(temp_dir) -> YieldFixture[Type[BaseConfig]]:
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
 
-    yield Config
+    GaiaConfigHelper.set_config(Config)
 
 
-@pytest.fixture(scope="function", autouse=True)
-def default_testing_cfg(testing_cfg: Type[BaseConfig]) -> YieldFixture[None]:
-    GaiaConfigHelper.set_config(testing_cfg)
+@pytest.fixture(scope="session", autouse=True)
+def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
+    engine_config = EngineConfig()
+    engine_config.initialize_configs()
 
-    yield None
+    yield engine_config
 
-    GaiaConfigHelper.reset_config()
     SingletonMeta.clear_instances()
 
 
 @pytest.fixture(scope="function", autouse=True)
-def engine_config(default_testing_cfg: Type[None]) -> YieldFixture[EngineConfig]:
-    engine_config = EngineConfig()
-    engine_config.initialize_configs()
-    for files in engine_config.cache_dir.iterdir():
+def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConfig]:
+    app_config = deepcopy(engine_config_master.app_config)
+    for files in engine_config_master.cache_dir.iterdir():
         files.unlink()
-    with get_logs_content(engine_config.logs_dir / "gaia.log"):
+    with get_logs_content(engine_config_master.logs_dir / "gaia.log"):
         pass  # Clear logs
 
-    yield engine_config
+    try:
+        yield engine_config_master
+    finally:
+        engine_config_master.app_config = app_config
+        engine_config_master.ecosystems_config_dict = deepcopy(ecosystem_info)
+        engine_config_master.private_config = {}
+        engine_config_master.chaos_memory = {}
+        engine_config_master.sun_times = {}
+        engine_config_master._executor = ThreadPoolExecutor(
+                thread_name_prefix=f"Engine_ThreadPoolExecutor", max_workers=10)
 
-    if engine_config.started:
-        engine_config.stop_watchdog()
-    del engine_config
+        if engine_config_master.started:
+            raise
 
 
 @pytest.fixture(scope="function", autouse=True)

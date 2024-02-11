@@ -9,8 +9,8 @@ from sqlalchemy import select
 import gaia_validators as gv
 from sqlalchemy_wrapper import SQLAlchemyWrapper
 
+from gaia import EngineConfig
 from gaia.database import db as gaia_db
-from gaia.config import GaiaConfig
 from gaia.database.models import SensorBuffer, SensorRecord
 
 from .data import ecosystem_uid, sensor_uid
@@ -27,11 +27,10 @@ def generate_sensor_data(timestamp: datetime | None = None) -> dict:
 
 
 @pytest.fixture(scope="session")
-def db(testing_cfg: Type[GaiaConfig]) -> SQLAlchemyWrapper:
-    cfg = testing_cfg()
+def db(engine_config_master: EngineConfig) -> SQLAlchemyWrapper:
     dict_cfg = {
-        key: getattr(cfg, key)
-        for key in dir(cfg)
+        key: getattr(engine_config_master.app_config, key)
+        for key in dir(engine_config_master.app_config)
         if key.isupper()
     }
     gaia_db.init(dict_cfg)
