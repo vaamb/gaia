@@ -115,7 +115,7 @@ def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConf
                 thread_name_prefix=f"Engine_ThreadPoolExecutor", max_workers=10)
 
         if engine_config_master.started:
-            raise
+            raise RuntimeError("EngineConfig watchdog was not stopped.")
 
 
 @pytest.fixture(scope="function", autouse=True)
