@@ -373,8 +373,8 @@ class Events(EventHandler):
             "update_management": CRUD_update(self.ecosystems[ecosystem_uid].config, "managements"),
             "update_time_parameters": CRUD_update(self.ecosystems[ecosystem_uid].config, "time_parameters"),
             # Environment parameter creation, deletion and update
-            "create_environment_parameter": self.ecosystems[ecosystem_uid].config.CRUD_create_climate_parameter,
-            "update_environment_parameter": self.ecosystems[ecosystem_uid].config.CRUD_update_climate_parameter,
+            "create_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
+            "update_environment_parameter": self.ecosystems[ecosystem_uid].config.update_climate_parameter,
             "delete_environment_parameter": self.ecosystems[ecosystem_uid].config.delete_climate_parameter,
             # Hardware creation, deletion and update
             "create_hardware": self.ecosystems[ecosystem_uid].config.create_new_hardware,

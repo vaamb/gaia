@@ -108,7 +108,7 @@ class PrivateConfigDict(TypedDict):
 class EnvironmentConfigValidator(gv.BaseModel):
     chaos: gv.ChaosConfig = Field(default_factory=gv.ChaosConfig)
     sky: gv.SkyConfig = Field(default_factory=gv.SkyConfig)
-    climate: dict[gv.ClimateParameterNames, gv.AnonymousClimateConfig] = \
+    climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfig] = \
         Field(default_factory=dict)
 
     @field_validator("climate", mode="before")
@@ -119,7 +119,7 @@ class EnvironmentConfigValidator(gv.BaseModel):
 class EnvironmentConfigDict(TypedDict):
     chaos: gv.ChaosConfigDict
     sky: gv.SkyConfigDict
-    climate: dict[str, gv.AnonymousClimateConfigDict]
+    climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
 
 
 class EcosystemConfigValidator(gv.BaseModel):
@@ -1255,7 +1255,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         })
 
     @property
-    def climate(self) -> dict[gv.ClimateParameterNames, gv.AnonymousClimateConfigDict]:
+    def climate(self) -> dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]:
         """
         Returns the sky config for the ecosystem
         """
@@ -1265,20 +1265,25 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.environment["climate"] = {}
             return self.environment["climate"]
 
-    def get_climate_parameter(self, parameter: gv.ClimateParameterNames) -> gv.ClimateConfig:
+    def get_climate_parameter(
+            self,
+            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+    ) -> gv.ClimateConfig:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             data = self.climate[parameter]
             return gv.ClimateConfig(parameter=parameter, **data)
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
-                f"'{self.name}' in ecosystems configuration file")
+                f"'{self.name}' in ecosystems configuration file.")
 
     def set_climate_parameter(
             self,
-            parameter: gv.ClimateParameterNames,
-            value: gv.AnonymousClimateConfigDict
+            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            **value: gv.AnonymousClimateConfigDict,
     ) -> None:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             validated_value = gv.AnonymousClimateConfig(**value).model_dump()
         except pydantic.ValidationError as e:
@@ -1288,30 +1293,29 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         self.climate[parameter] = validated_value
 
+    def update_climate_parameter(
+            self,
+            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            **value: gv.AnonymousClimateConfigDict,
+    ) -> None:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
+        if not self.climate.get(parameter):
+            raise UndefinedParameter(
+                f"No climate parameter {parameter} was found for ecosystem "
+                f"'{self.name}' in ecosystems configuration file.")
+        self.set_climate_parameter(parameter, **value)
+
     def delete_climate_parameter(
             self,
-            parameter: gv.ClimateParameterNames,
+            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
     ) -> None:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             del self.climate[parameter]
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
-
-    def CRUD_create_climate_parameter(self, value: gv.AnonymousClimateConfigDict) -> None:
-        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).model_dump()
-        parameter = validated_value.pop("parameter")
-        self.climate[parameter] = validated_value
-
-    def CRUD_update_climate_parameter(self, value: gv.AnonymousClimateConfigDict) -> None:
-        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).model_dump()
-        parameter = validated_value.pop("parameter")
-        if parameter not in self.climate:
-            raise UndefinedParameter(
-                f"No climate parameter {parameter} was found for ecosystem "
-                f"'{self.name}' in ecosystems configuration file")
-        self.climate[parameter] = validated_value
 
     """Parameters related to IO"""    
     @property
