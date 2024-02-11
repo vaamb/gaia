@@ -128,10 +128,10 @@ class HystericalPID:
             lower_limit: float | None,
             higher_limit: float | None
     ) -> float:
-        if (lower_limit is not None) and (value < lower_limit):
-            return lower_limit
-        elif (higher_limit is not None) and (value > higher_limit):
-            return higher_limit
+        if lower_limit is not None:
+            value = max(value, lower_limit)
+        if higher_limit is not None:
+            value = min(value, higher_limit)
         return value
 
     @property
