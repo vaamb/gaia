@@ -254,6 +254,12 @@ class EngineConfig(metaclass=SingletonMeta):
     def app_config(self) -> GaiaConfig:
         return self._app_config
 
+    @app_config.setter
+    def app_config(self, app_config: GaiaConfig) -> None:
+        if not self.app_config.TESTING:
+            raise AttributeError("can't set attribute 'app_config'")
+        self._app_config = app_config
+
     def _get_dir(self, dir_name: str) -> Path:
         try:
             return self._dirs[dir_name]
@@ -519,10 +525,9 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @ecosystems_config_dict.setter
     def ecosystems_config_dict(self, value: dict):
-        if self.app_config.TESTING:
-            self._ecosystems_config_dict = value
-        else:
-            raise AttributeError("Can't set attribute 'ecosystems_config_dict'")
+        if not self.app_config.TESTING:
+            raise AttributeError("can't set attribute 'ecosystems_config_dict'")
+        self._ecosystems_config_dict = value
 
     @property
     def private_config(self) -> dict:
@@ -530,10 +535,9 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @private_config.setter
     def private_config(self, value: dict):
-        if self.app_config.TESTING:
-            self._private_config = value
-        else:
+        if not self.app_config.TESTING:
             raise AttributeError("can't set attribute 'private_config'")
+        self._private_config = value
 
     @property
     def ecosystems_uid(self) -> list[str]:
@@ -643,6 +647,12 @@ class EngineConfig(metaclass=SingletonMeta):
     @property
     def sun_times(self) -> dict[str, SunTimesCacheData]:
         return self._sun_times
+
+    @sun_times.setter
+    def sun_times(self, sun_times: dict[str, SunTimesCacheData]) -> None:
+        if not self.app_config.TESTING:
+            raise AttributeError("can't set attribute 'sun_times'")
+        self._sun_times = sun_times
 
     def get_sun_times(self, place: str) -> gv.SunTimesDict | None:
         sun_times = self.sun_times.get(place)
@@ -853,6 +863,16 @@ class EngineConfig(metaclass=SingletonMeta):
         self.set_sun_times(target, sun_times)
         return True
 
+    @property
+    def chaos_memory(self) -> dict[str, ChaosMemory]:
+        return self._chaos_memory
+
+    @chaos_memory.setter
+    def chaos_memory(self, chaos_memory: dict[str, ChaosMemory]) -> None:
+        if not self.app_config.TESTING:
+            raise AttributeError("can't set attribute 'chaos_memory'")
+        self._chaos_memory = chaos_memory
+
     def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
 
@@ -890,11 +910,11 @@ class EngineConfig(metaclass=SingletonMeta):
         if ecosystem_uid not in self.ecosystems_config_dict:
             raise ValueError(
                 f"No ecosystem with uid '{ecosystem_uid}' found in ecosystems "
-                f"config"
+                f"config."
             )
         if ecosystem_uid not in self._chaos_memory:
             self._chaos_memory.update(self._create_chaos_memory(ecosystem_uid))
-        return self._chaos_memory[ecosystem_uid]
+        return self.chaos_memory[ecosystem_uid]
 
     def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
         return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
@@ -1058,8 +1078,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     @light_method.setter
     def light_method(self, light_method: gv.LightMethod) -> None:
         if not self.general.app_config.TESTING:
-            raise AttributeError(
-                "'light_method' can only be set when 'TESTING' is True.")
+            raise AttributeError("can't set attribute 'light_method'")
         self.sky["lighting"] = light_method
 
     def set_light_method(self, method: gv.LightMethod) -> None:
