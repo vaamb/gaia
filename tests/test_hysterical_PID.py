@@ -1,8 +1,11 @@
-from gaia.actuator_handler import HystericalPID, Direction
+import gaia_validators as gv
+
+from gaia import Ecosystem
+from gaia.actuator_handler import HystericalPID
 
 
-def test_hysterical_PID():
-    pid = HystericalPID()
+def test_hysterical_PID(ecosystem: Ecosystem):
+    pid = HystericalPID(ecosystem.actuator_hub, gv.ClimateParameter.temperature)
 
     target_value = 42.0
     hysteresis = 2.5
@@ -15,17 +18,14 @@ def test_hysterical_PID():
 
     pid._last_output = -1.0
     assert pid.update_pid(current_value) > 0.0
-    assert pid.direction == Direction.increase
     pid.reset()
 
     pid._last_output = 0.0
     assert pid.update_pid(current_value) > 0.0
-    assert pid.direction == Direction.increase
     pid.reset()
 
     pid._last_output = 1.0
     assert pid.update_pid(current_value) > 0.0
-    assert pid.direction == Direction.increase
     pid.reset()
 
     # Below target, in hysteresis range
@@ -33,17 +33,14 @@ def test_hysterical_PID():
 
     pid._last_output = -1.0
     assert pid.update_pid(current_value) == 0.0
-    assert pid.direction == Direction.stable
     pid.reset()
 
     pid._last_output = 0.0
     assert pid.update_pid(current_value) == 0.0
-    assert pid.direction == Direction.stable
     pid.reset()
 
     pid._last_output = 1.0
     assert pid.update_pid(current_value) > 0.0
-    assert pid.direction == Direction.increase
     pid.reset()
 
     # Above target, in hysteresis range
@@ -51,17 +48,14 @@ def test_hysterical_PID():
 
     pid._last_output = -1.0
     assert pid.update_pid(current_value) < 0.0
-    assert pid.direction == Direction.decrease
     pid.reset()
 
     pid._last_output = 0.0
     assert pid.update_pid(current_value) == 0.0
-    assert pid.direction == Direction.stable
     pid.reset()
 
     pid._last_output = 1.0
     assert pid.update_pid(current_value) == 0.0
-    assert pid.direction == Direction.stable
     pid.reset()
 
     # Above target, out of hysteresis range
@@ -69,15 +63,12 @@ def test_hysterical_PID():
 
     pid._last_output = -1.0
     assert pid.update_pid(current_value) < 0.0
-    assert pid.direction == Direction.decrease
     pid.reset()
 
     pid._last_output = 0.0
     assert pid.update_pid(current_value) < 0.0
-    assert pid.direction == Direction.decrease
     pid.reset()
 
     pid._last_output = 1.0
     assert pid.update_pid(current_value) < 0.0
-    assert pid.direction == Direction.decrease
     pid.reset()

@@ -119,6 +119,11 @@ class Light(SubroutineTemplate):
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids(gv.HardwareType.light))
 
+    def refresh_hardware(self) -> None:
+        super().refresh_hardware()
+        actuator_handler = self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
+        actuator_handler.reset_cached_actuators()
+
     @property
     def actuator_handler(self) -> ActuatorHandler:
         return self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)

@@ -142,39 +142,31 @@ class Climate(SubroutineTemplate):
         sensors_average: dict[str, float] = {
             data.measure: data.value for data in sensors_data.average
         }
-        for parameter in self.regulated_parameters:
+        for climate_parameter in self.regulated_parameters:
             # Minimal change between run, should be ok to change pid target
-            pid: HystericalPID = self.get_pid(parameter)
-            target, hysteresis = self.compute_target(parameter)
+            pid: HystericalPID = self.ecosystem.actuator_hub.get_pid(climate_parameter)
+            target, hysteresis = self.compute_target(climate_parameter)
             pid.target = target
             pid.hysteresis = hysteresis
 
             # Current value is None if there is no sensor reading for it
-            current_value: float | None = sensors_average.get(parameter, None)
+            current_value: float | None = sensors_average.get(climate_parameter, None)
             if current_value is None:
                 pid_output = 0.0  # TODO: log and add a miss ?
             else:
                 pid_output = pid.update_pid(current_value)
 
-            actuator_couple: ActuatorCouple = actuator_couples[parameter]
-            for couple_direction in actuator_couple.directions():
-                actuator_type = actuator_couple[couple_direction]
-                actuator_handler = self.get_actuator_handler(actuator_type)
-                if couple_direction == "increase":
-                    if pid_output > 0.0:
-                        corrected_output = pid_output
-                    else:
-                        corrected_output = 0.0
-                else:
-                    if pid_output < 0.0:
-                        corrected_output = -pid_output
-                    else:
-                        corrected_output = 0.0
+            actuator_couple: ActuatorCouple = actuator_couples[climate_parameter]
+            for direction_name, actuator_type in actuator_couple.items():
+                actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+                if not actuator_handler.get_linked_actuators():
+                    # No actuator to act on, go next
+                    continue
                 expected_status = actuator_handler.compute_expected_status(
-                    corrected_output)
+                    pid_output)
                 if expected_status:
                     actuator_handler.turn_on()
-                    actuator_handler.set_level(corrected_output)
+                    actuator_handler.set_level(abs(pid_output))
                 else:
                     actuator_handler.turn_off()
                     actuator_handler.set_level(0.0)
@@ -220,7 +212,7 @@ class Climate(SubroutineTemplate):
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
         for climate_parameter in self._regulated_parameters:
-            pid = self.get_pid(climate_parameter)
+            pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
             pid.reset()
         self.ecosystem.engine.scheduler.add_job(
             func=self._climate_routine,
@@ -231,7 +223,7 @@ class Climate(SubroutineTemplate):
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
-                actuator_handler = self.get_actuator_handler(actuator_type)
+                actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
                 actuator_handler.activate()
 
     def _stop(self) -> None:
@@ -240,7 +232,7 @@ class Climate(SubroutineTemplate):
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
-                actuator_handler = self.get_actuator_handler(actuator_type)
+                actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
                 actuator_handler.deactivate()
 
     """API calls"""
@@ -254,20 +246,11 @@ class Climate(SubroutineTemplate):
                 hardware_needed = hardware_needed | extra
         return hardware_needed
 
-    def get_actuator_handler(
-            self,
-            climate_actuator: gv.HardwareType.climate_actuator | gv.HardwareTypeNames
-    ) -> ActuatorHandler:
-        climate_actuator = gv.safe_enum_from_name(gv.HardwareType, climate_actuator)
-        assert climate_actuator in gv.HardwareType.climate_actuator
-        return self.ecosystem.actuator_hub.get_handler(climate_actuator)
-
-    def get_pid(
-            self,
-            climate_parameter: gv.ClimateParameter | gv.ClimateParameterNames
-    ) -> HystericalPID:
-        climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
-        return self.ecosystem.actuator_hub.get_pid(climate_parameter)
+    def refresh_hardware(self) -> None:
+        super().refresh_hardware()
+        for actuator_type in gv.HardwareType.climate_actuator:
+            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            actuator_handler.reset_cached_actuators()
 
     @property
     def regulated_parameters(self) -> list[gv.ClimateParameter]:

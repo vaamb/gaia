@@ -159,6 +159,8 @@ class Address:
                     raise ValueError
             except ValueError:
                 raise ValueError(self._hint())
+        elif address_type == AddressType.SPI:
+            raise ValueError("SPI address is not currently supported.")
         return address_type, main, multiplexer_address, multiplexer_channel
 
     @property

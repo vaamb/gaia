@@ -4,7 +4,6 @@ import enum
 import dataclasses
 import logging
 import time
-import typing as t
 import typing
 import weakref
 
@@ -13,23 +12,26 @@ import gaia_validators as gv
 from gaia.hardware.abc import Dimmer, Hardware, Switch
 
 
-if t.TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from gaia import Ecosystem
 
 
 @dataclasses.dataclass(frozen=True)
 class ActuatorCouple:
-    increase: gv.HardwareType.actuator | None
-    decrease: gv.HardwareType.actuator | None
+    increase: gv.HardwareType | None
+    decrease: gv.HardwareType | None
 
     def __iter__(self) -> typing.Iterable[gv.HardwareType | None]:
         return iter((self.increase, self.decrease))
 
-    def __getitem__(self, key: str) -> gv.HardwareType.actuator | None:
+    def __getitem__(self, key: str) -> gv.HardwareType | None:
         try:
             return getattr(self, key)
         except AttributeError:
             raise KeyError(f"{key}")
+
+    def items(self) -> typing.ItemsView[str, gv.HardwareType | None]:
+        return self.__dict__.items()
 
     @staticmethod
     def directions() -> tuple[str, str]:
@@ -57,6 +59,7 @@ def generate_hardware_to_parameter_dict() -> dict[gv.HardwareType.actuator, gv.C
             rv[direction] = climate_parameter
     return rv
 
+
 hardware_to_parameter = generate_hardware_to_parameter_dict()
 
 
@@ -74,16 +77,19 @@ pid_values: dict[gv.ClimateParameter: PIDParameters] = {
 }
 
 
-class Direction(enum.Enum):
-    increase = enum.auto()
-    decrease = enum.auto()
-    stable = enum.auto()
+class Direction(enum.IntFlag):
+    none = 0
+    decrease = 1
+    increase = 2
+    both = decrease | increase
 
 
 class HystericalPID:
     """A PID able to take hysteresis into account."""
     def __init__(
             self,
+            actuator_hub: ActuatorHub,
+            climate_parameter: gv.ClimateParameter,
             target: float = 0.0,
             hysteresis: float | None = None,
             Kp: float = 1.0,
@@ -94,6 +100,8 @@ class HystericalPID:
             integration_period: int = 10,
             used_regularly: bool = True,
     ) -> None:
+        self.actuator_hub: ActuatorHub = actuator_hub
+        self.climate_parameter: gv.ClimateParameter = climate_parameter
         self.target: float = target
         self.hysteresis: float | None = hysteresis
         self.Kp: float = Kp
@@ -101,6 +109,7 @@ class HystericalPID:
         self.Kd: float = Kd
         self.minimum_output: float | None = minimum_output
         self.maximum_output: float | None = maximum_output
+        self._direction: Direction | None = None
         self._last_sampling_time: float | None = None
         self._last_error: float = 0.0
         self._integrator: list[float] = []
@@ -109,26 +118,40 @@ class HystericalPID:
         self._last_input: float | None = None
         self._last_output: float = 0.0
 
+    def __repr__(self) -> str:
+        uid = self.actuator_hub.ecosystem.uid
+        return f"{self.__class__.__name__}({uid}, parameter={self.climate_parameter})"
+
     @staticmethod
     def clamp(
             value: float,
             lower_limit: float | None,
             higher_limit: float | None
     ) -> float:
-        if (lower_limit is not None) and (value < lower_limit):
-            return lower_limit
-        elif (higher_limit is not None) and (value > higher_limit):
-            return higher_limit
+        if lower_limit is not None:
+            value = max(value, lower_limit)
+        if higher_limit is not None:
+            value = min(value, higher_limit)
         return value
 
     @property
     def direction(self) -> Direction:
-        if self._last_output == 0:
-            return Direction.stable
-        elif self._last_output < 0:
-            return Direction.decrease
-        elif self._last_output > 0:
-            return Direction.increase
+        if self._direction is not None:
+            return self._direction
+        direction: Direction = Direction.none
+        actuator_couple: ActuatorCouple = actuator_couples[self.climate_parameter]
+        for direction_name, actuator_type in actuator_couple.items():
+            if actuator_type is None:
+                continue
+            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(
+                actuator_type)
+            if actuator_handler.get_linked_actuators():
+                direction = direction | Direction[direction_name]
+        self._direction = direction
+        return direction
+
+    def reset_direction(self) -> None:
+        self._direction = None
 
     @property
     def last_output(self) -> float:
@@ -145,27 +168,41 @@ class HystericalPID:
         self._last_sampling_time = sampling_time
         self._last_input = current_value
         self._last_output = output
+        if output > 0 and not self.direction | Direction.increase:
+            self.actuator_hub.logger.debug(
+                f"PID output for {self.climate_parameter.name} is > 0 but "
+                f"actuator able to increase {self.climate_parameter.name} "
+                f"has been detected. {self.climate_parameter.name.capitalize()} "
+                f"may remain under the targeted value."
+            )
+        if output < 0 and not self.direction | Direction.decrease:
+            self.actuator_hub.logger.debug(
+                f"PID output for {self.climate_parameter.name} is < 0 but "
+                f"actuator able to decrease {self.climate_parameter.name} "
+                f"has been detected. {self.climate_parameter.name.capitalize()} "
+                f"may remain above the targeted value."
+            )
         return output
 
-    def _hysteresis_internal(self, current_value) -> float | None:
+    def _hysteresis_internal(self, current_value: float) -> float | None:
         target_min = self.target - self.hysteresis
         target_max = self.target + self.hysteresis
 
-        if self.direction == Direction.stable:
+        if self.last_output == 0:
             if target_min <= current_value <= target_max:
                 self._reset_errors()
                 return 0.0
             else:  # Out ouf targeted range, need PID
                 return None
 
-        elif self.direction == Direction.increase:
+        elif self.last_output > 0:
             if self.target <= current_value <= target_max:
                 self._reset_errors()
                 return 0.0
             else:  # Out ouf targeted range, need PID
                 return None
 
-        elif self.direction == Direction.decrease:
+        elif self.last_output < 0:
             if target_min <= current_value <= self.target:
                 self._reset_errors()
                 return 0.0
@@ -204,26 +241,25 @@ class HystericalPID:
         self._reset_errors()
 
 
-def always_off(**kwargs) -> bool:
-    return False
-
-
 class ActuatorHandler:
     __slots__ = (
-        "_active", "_actuators", "_expected_status_function", "_level", "_last_mode",
-        "_last_status", "_mode", "_status", "_time_limit", "_timer_on",
-        "ecosystem", "handlers_hub", "logger", "type"
+        "_active", "_actuators", "_level", "_last_mode", "_last_status",
+        "_mode", "_status", "_time_limit", "_timer_on", "actuator_hub",
+        "direction", "ecosystem", "logger", "type"
     )
 
     def __init__(
             self,
-            handlers_hub: ActuatorHub,
-            actuator_type: gv.HardwareType.actuator,
+            actuator_hub: ActuatorHub,
+            actuator_type: gv.HardwareType,
+            actuator_direction: Direction,
     ) -> None:
         assert actuator_type in gv.HardwareType.actuator
-        self.handlers_hub: ActuatorHub = handlers_hub
-        self.ecosystem = self.handlers_hub.ecosystem
-        self.type = actuator_type
+        assert actuator_direction in (Direction.decrease, Direction.increase)
+        self.actuator_hub: ActuatorHub = actuator_hub
+        self.ecosystem = self.actuator_hub.ecosystem
+        self.type: gv.HardwareType = actuator_type
+        self.direction: Direction = actuator_direction
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
             f"gaia.engine.{eco_name}.actuators.{self.type.name}")
@@ -235,7 +271,11 @@ class ActuatorHandler:
         self._time_limit: float = 0.0
         self._last_status: bool = self.status
         self._last_mode: gv.ActuatorMode = self.mode
-        self._actuators: list[Hardware] | None = None
+        self._actuators: list[Switch | Dimmer] | None = None
+
+    def __repr__(self) -> str:
+        uid = self.actuator_hub.ecosystem.uid
+        return f"ActuatorHandler({uid}, actuator_type={self.type.name})"
 
     def get_linked_actuators(self) -> list[Switch | Dimmer]:
         if self._actuators is None:
@@ -249,10 +289,12 @@ class ActuatorHandler:
     # TODO: use when update hardware
     def reset_cached_actuators(self) -> None:
         self._actuators = None
+        pid: HystericalPID = self.get_associated_pid()
+        pid.reset_direction()
 
     def get_associated_pid(self) -> HystericalPID:
         climate_parameter = hardware_to_parameter[self.type]
-        return self.handlers_hub.get_pid(climate_parameter)
+        return self.actuator_hub.get_pid(climate_parameter)
 
     def as_dict(self) -> gv.ActuatorStateDict:
         return {
@@ -315,7 +357,14 @@ class ActuatorHandler:
 
     def _set_status_no_update(self, value: bool) -> None:
         self._status = value
-        for actuator in self.get_linked_actuators():
+        actuators_linked = self.get_linked_actuators()
+        if not actuators_linked:
+            raise RuntimeError(
+                f"{self.type.name.capitalize()} handler cannot be turned "
+                f"{'on' if self.status else 'off'} as it has no actuator linked "
+                f"to it."
+            )
+        for actuator in actuators_linked:
             if isinstance(actuator, Switch):
                 if value:
                     actuator.turn_on()
@@ -392,13 +441,14 @@ class ActuatorHandler:
                 self._time_limit = 0.0
                 self.increase_countdown(countdown)
                 additional_message = f" for {countdown} seconds"
+                # TODO: use a callback ?
         self.logger.info(
             f"{self.type.name} has been manually turned to '{turn_to.name}'"
-            f"{additional_message}")
+            f"{additional_message}.")
         if self._status != self._last_status or self._mode != self._last_mode:
             self.logger.info(
                 f"{self.type.name.capitalize()} has been turned "
-                f"{'on' if self.status else 'off'} with '{self.mode.name}' mode")
+                f"{'on' if self.status else 'off'} with '{self.mode.name}' mode.")
             self.send_actuators_state()
         self._last_mode = self.mode
         self._last_status = self.status
@@ -408,28 +458,22 @@ class ActuatorHandler:
                 self.ecosystem.engine.use_message_broker
                 and self.ecosystem.event_handler.registered
         ):
-            self.ecosystem.logger.debug(
-                "Sending actuators data to Ouranos")
-            try:
-                self.ecosystem.event_handler.send_actuator_data(
-                    ecosystem_uids=self.ecosystem.config.uid)
-            except Exception as e:
-                msg = e.args[1] if len(e.args) > 1 else e.args[0]
-                if "is not a connected namespace" in msg:
-                    pass
-                self.logger.error(
-                    f"Encountered an error while sending actuator data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
-                )
+            self.ecosystem.event_handler.send_actuator_data(
+                ecosystem_uids=self.ecosystem.config.uid)
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
         self.check_countdown()
         if self.mode == gv.ActuatorMode.automatic:
             if expected_level is None:
-                # TODO: log, this should not happen
+                self.logger.error(
+                    "Cannot compute an expected status for automatic mode "
+                    "without an expected PID level. Falling back to off status.")
                 return False
             else:
-                return expected_level > 0.0
+                if self.direction == Direction.increase:
+                    return expected_level > 0  # Should be on when trying to increase measure
+                else:
+                    return expected_level < 0  # Should be on when trying to decrease measure
         else:
             if self.status:
                 return True
@@ -439,6 +483,8 @@ class ActuatorHandler:
 class ActuatorHub:
     def __init__(self, ecosystem: "Ecosystem") -> None:
         self.ecosystem: Ecosystem = weakref.proxy(ecosystem)
+        self.logger = logging.getLogger(
+            f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: dict[gv.ClimateParameter, HystericalPID] = {}
         self._populate_pids()
         self._actuator_handlers: dict[gv.HardwareType.actuator, ActuatorHandler] = {}
@@ -449,19 +495,18 @@ class ActuatorHub:
             climate_parameter: gv.ClimateParameter
             pid_parameters = pid_values[climate_parameter]
             self._pids[climate_parameter] = HystericalPID(
+                self, climate_parameter,
                 Kp=pid_parameters.Kp, Ki=pid_parameters.Ki, Kd=pid_parameters.Kd,
                 minimum_output=-100.0, maximum_output=100.0,
             )
 
     def _populate_actuators(self) -> None:
-        for hardware_type in gv.HardwareType.actuator:
-            hardware_type: gv.HardwareType
-            if hardware_type == gv.HardwareType.light:
-                self._actuator_handlers[hardware_type] = ActuatorHandler(
-                    self, hardware_type)
-            elif hardware_type in gv.HardwareType.climate_actuator:
-                self._actuator_handlers[hardware_type] = ActuatorHandler(
-                    self, hardware_type)
+        for actuator_couple in actuator_couples.values():
+            for direction_name, actuator_type in actuator_couple.items():
+                if actuator_type is None:
+                    continue
+                self._actuator_handlers[actuator_type] = ActuatorHandler(
+                    self, actuator_type, Direction[direction_name])
 
     def get_pid(
             self,
