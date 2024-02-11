@@ -123,12 +123,13 @@ def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     with get_logs_content(engine_config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
-    yield engine
-
-    if engine.started:
-        engine.stop()
-    SingletonMeta.detach_instance("Engine")
-    del engine
+    try:
+        yield engine
+    finally:
+        if engine.started:
+            engine.stop()
+        SingletonMeta.detach_instance("Engine")
+        del engine
 
 
 @pytest.fixture(scope="function")
@@ -137,9 +138,10 @@ def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfi
     with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log"):
         pass  # Clear logs
 
-    yield ecosystem_config
-
-    del ecosystem_config
+    try:
+        yield ecosystem_config
+    finally:
+        del ecosystem_config
 
 
 @pytest.fixture(scope="function")
@@ -148,11 +150,12 @@ def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     with get_logs_content(engine.config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
-    yield ecosystem
-
-    if ecosystem.started:
-        ecosystem.stop()
-    del ecosystem
+    try:
+        yield ecosystem
+    finally:
+        if ecosystem.started:
+            ecosystem.stop()
+        del ecosystem
 
 
 @pytest.fixture(scope="function")
@@ -169,42 +172,46 @@ def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
         {"day": 25, "night": 20, "hysteresis": 2}
     )
 
-    yield climate_subroutine
-
-    if ecosystem.get_subroutine_status("sensors"):
-        ecosystem.stop_subroutine("sensors")
-    if climate_subroutine.started:
-        climate_subroutine.stop()
+    try:
+        yield climate_subroutine
+    finally:
+        if ecosystem.get_subroutine_status("sensors"):
+            ecosystem.stop_subroutine("sensors")
+        if climate_subroutine.started:
+            climate_subroutine.stop()
 
 
 @pytest.fixture(scope="function")
 def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
     light_subroutine: Light = ecosystem.subroutines["light"]
 
-    yield light_subroutine
-
-    if light_subroutine.started:
-        light_subroutine.stop()
+    try:
+        yield light_subroutine
+    finally:
+        if light_subroutine.started:
+            light_subroutine.stop()
 
 
 @pytest.fixture(scope="function")
 def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
     sensor_subroutine: Sensors = ecosystem.subroutines["sensors"]
 
-    yield sensor_subroutine
-
-    if sensor_subroutine.started:
-        sensor_subroutine.stop()
+    try:
+        yield sensor_subroutine
+    finally:
+        if sensor_subroutine.started:
+            sensor_subroutine.stop()
 
 
 @pytest.fixture(scope="function")
 def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
     dummy_subroutine: Sensors = ecosystem.subroutines["dummy"]
 
-    yield dummy_subroutine
-
-    if dummy_subroutine.started:
-        dummy_subroutine.stop()
+    try:
+        yield dummy_subroutine
+    finally:
+        if dummy_subroutine.started:
+            dummy_subroutine.stop()
 
 
 @pytest.fixture(scope="function")
