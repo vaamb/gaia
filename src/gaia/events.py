@@ -48,6 +48,29 @@ payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
 }
 
 
+crud_events_name: dict[str, EventNames] = {
+    # Ecosystem creation and deletion
+    "create_ecosystem": "base_info",
+    "delete_ecosystem": "base_info",
+    # Ecosystem properties update
+    #"update_chaos": ,
+    "update_light_method": "light_data",
+    "update_management": "management",
+    "update_time_parameters": "light_data",
+    # Environment parameter creation, deletion and update
+    "create_environment_parameter": "environmental_parameters",
+    "update_environment_parameter": "environmental_parameters",
+    "delete_environment_parameter": "environmental_parameters",
+    # Hardware creation, deletion and update
+    "create_hardware": "hardware",
+    "update_hardware": "hardware",
+    "delete_hardware": "hardware",
+    # Private
+    #"create_place": ,
+    #"update_place": ,
+}
+
+
 class Events(EventHandler):
     """A class holding all the events coming from event-dispatcher
 
@@ -344,23 +367,31 @@ class Events(EventHandler):
             self.engine.config.save(ConfigType.ecosystems)
             self.emit_event("management", ecosystem_uids=[ecosystem_uid])
 
-    def get_CRUD_function(
+    def get_crud_function(
             self,
             crud_key: str,
             ecosystem_uid: str | None = None
     ) -> Callable:
         if "ecosystem" in crud_key:
             return {
-            # Ecosystem creation and deletion
-            "create_ecosystem": self.engine.config.create_ecosystem,
-            "delete_ecosystem": self.engine.config.delete_ecosystem,
+                # Ecosystem creation and deletion
+                "create_ecosystem": self.engine.config.create_ecosystem,
+                "delete_ecosystem": self.engine.config.delete_ecosystem,
             }[crud_key]
-        else:
-            if ecosystem_uid is None:
-                raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
+        if "place" in crud_key:
+            return {
+                # Private
+                "create_place": self.engine.config.set_place,
+                "update_place": self.engine.config.update_place,
+                "delete_place": self.engine.config.delete_place,
+            }[crud_key]
+
+        if ecosystem_uid is None:
+            raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
+
         ecosystem_uid = cast(str, ecosystem_uid)
 
-        def CRUD_update(config: EcosystemConfig, attr_name: str) -> Callable:
+        def crud_update(config: EcosystemConfig, attr_name: str) -> Callable:
             def inner(payload: dict):
                 setattr(config, attr_name, payload)
 
@@ -368,10 +399,10 @@ class Events(EventHandler):
 
         return {
             # Ecosystem properties update
-            "update_chaos": CRUD_update(self.ecosystems[ecosystem_uid].config, "chaos"),
-            "update_light_method": CRUD_update(self.ecosystems[ecosystem_uid].config, "light_method"),
-            "update_management": CRUD_update(self.ecosystems[ecosystem_uid].config, "managements"),
-            "update_time_parameters": CRUD_update(self.ecosystems[ecosystem_uid].config, "time_parameters"),
+            "update_chaos": crud_update(self.ecosystems[ecosystem_uid].config, "chaos"),
+            "update_light_method": crud_update(self.ecosystems[ecosystem_uid].config, "light_method"),
+            "update_management": crud_update(self.ecosystems[ecosystem_uid].config, "managements"),
+            "update_time_parameters": crud_update(self.ecosystems[ecosystem_uid].config, "time_parameters"),
             # Environment parameter creation, deletion and update
             "create_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
             "update_environment_parameter": self.ecosystems[ecosystem_uid].config.update_climate_parameter,
@@ -380,34 +411,6 @@ class Events(EventHandler):
             "create_hardware": self.ecosystems[ecosystem_uid].config.create_new_hardware,
             "update_hardware": self.ecosystems[ecosystem_uid].config.update_hardware,
             "delete_hardware": self.ecosystems[ecosystem_uid].config.delete_hardware,
-            # Private
-            "create_place": self.engine.config.set_place,
-            "update_place": self.engine.config.update_place,
-            "delete_place": self.engine.config.delete_place,
-        }[crud_key]
-
-    def get_CRUD_event_name(self, crud_key: str) -> EventNames:
-        # TODO: handle ecosystem creation and deletion
-        return {
-            # Ecosystem creation and deletion
-            "create_ecosystem": "base_info",
-            "delete_ecosystem": "base_info",
-            # Ecosystem properties update
-            #"update_chaos": ,
-            "update_light_method": "light_data",
-            "update_management": "management",
-            "update_time_parameters": "light_data",
-            # Environment parameter creation, deletion and update
-            "create_environment_parameter": "environmental_parameters",
-            "update_environment_parameter": "environmental_parameters",
-            "delete_environment_parameter": "environmental_parameters",
-            # Hardware creation, deletion and update
-            "create_hardware": "hardware",
-            "update_hardware": "hardware",
-            "delete_hardware": "hardware",
-            # Private
-            #"create_place": ,
-            #"update_place": ,
         }[crud_key]
 
     def on_crud(self, message: gv.CrudPayloadDict) -> None:
@@ -425,14 +428,14 @@ class Events(EventHandler):
         crud_key = f"{data['action'].value}_{data['target']}"
         ecosystem_uid = data["routing"]["ecosystem_uid"]
         try:
-            crud_function = self.get_CRUD_function(crud_key, ecosystem_uid)
+            crud_function = self.get_crud_function(crud_key, ecosystem_uid)
         except KeyError:
             self.logger.error(
                 f"No CRUD function linked to action '{data['action'].value}' on"
                 f"target '{data['target']}' could be found. Aborting")
             return
         try:
-            crud_function(data["data"])
+            crud_function(**data["data"])
             self.engine.config.save(ConfigType.ecosystems)
             self.emit(
                 event="crud_result",
@@ -444,7 +447,7 @@ class Events(EventHandler):
             self.logger.info(
                 f"CRUD request '{crud_uuid}' was successfully treated")
             try:
-                event_name = self.get_CRUD_event_name(crud_key)
+                event_name = crud_events_name[crud_key]
             except KeyError:
                 self.logger.debug(
                     f"No CRUD payload linked to action '{data['action'].value}' "
