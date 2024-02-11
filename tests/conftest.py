@@ -170,7 +170,7 @@ def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
     # ... as well as a climate parameter
     ecosystem.config.set_climate_parameter(
         "temperature",
-        {"day": 25, "night": 20, "hysteresis": 2}
+        **{"day": 25, "night": 20, "hysteresis": 2}
     )
 
     try:

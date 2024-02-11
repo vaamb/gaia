@@ -258,10 +258,10 @@ def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
     with pytest.raises(UndefinedParameter):
         ecosystem_config.get_climate_parameter("temperature")
     with pytest.raises(ValueError):
-        ecosystem_config.set_climate_parameter("temperature", {"wrong": "value"})
+        ecosystem_config.set_climate_parameter("temperature", **{"wrong": "value"})
 
     parameters = {"day": 25, "night": 20, "hysteresis": 1}
-    ecosystem_config.set_climate_parameter("temperature", parameters)
+    ecosystem_config.set_climate_parameter("temperature", **parameters)
     assert ecosystem_config.get_climate_parameter("temperature") == \
            gv.ClimateConfig(parameter="temperature", **parameters)
 

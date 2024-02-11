@@ -91,7 +91,7 @@ def test_climate_actuators(ecosystem: "Ecosystem"):
     # ... and climatic parameters set
     ecosystem.config.set_climate_parameter(
         "temperature",
-        {"day": 25, "night": 20, "hysteresis": 2}
+        **{"day": 25, "night": 20, "hysteresis": 2}
     )
 
     # All subroutines are disabled by default in testing config
