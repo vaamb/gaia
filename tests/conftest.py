@@ -94,8 +94,6 @@ def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
 
     yield engine_config
 
-    SingletonMeta.clear_instances()
-
 
 @pytest.fixture(scope="function", autouse=True)
 def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConfig]:
@@ -130,6 +128,7 @@ def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
 
     if engine.started:
         engine.stop()
+    SingletonMeta.detach_instance("Engine")
     del engine
 
 

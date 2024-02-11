@@ -389,5 +389,5 @@ class SingletonMeta(type):
             return instance
 
     @classmethod
-    def clear_instances(cls) -> None:
-        cls._instances = WeakValueDictionary()
+    def detach_instance(cls, cls_name: str):
+        del cls._instances[cls_name]
