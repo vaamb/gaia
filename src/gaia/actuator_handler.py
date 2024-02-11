@@ -229,9 +229,9 @@ class HystericalPID:
 
 class ActuatorHandler:
     __slots__ = (
-        "_active", "_actuators", "_expected_status_function", "_level", "_last_mode",
-        "_last_status", "_mode", "_status", "_time_limit", "_timer_on",
-        "ecosystem", "actuator_hub", "direction", "logger", "type"
+        "_active", "_actuators", "_level", "_last_mode", "_last_status",
+        "_mode", "_status", "_time_limit", "_timer_on", "actuator_hub",
+        "direction", "ecosystem", "logger", "type"
     )
 
     def __init__(
