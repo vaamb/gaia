@@ -270,10 +270,6 @@ class Climate(SubroutineTemplate):
         return self.ecosystem.actuator_hub.get_pid(climate_parameter)
 
     @property
-    def lighting_hours(self) -> gv.LightData:
-        return self.ecosystem.light_info
-
-    @property
     def regulated_parameters(self) -> list[gv.ClimateParameter]:
         return [
             climate_param for climate_param, regulated
@@ -292,7 +288,8 @@ class Climate(SubroutineTemplate):
         parameter = self.config.get_climate_parameter(climate_parameter.name)
         now: time = _now or datetime.now().astimezone().time()
         chaos_factor = self.config.get_chaos_factor()
-        if self.lighting_hours.morning_start < now <= self.lighting_hours.evening_end:
+        lighting_hours = self.config.lighting_hours
+        if lighting_hours.morning_start < now <= lighting_hours.evening_end:
             target = parameter.day * chaos_factor
         else:
             target = parameter.night * chaos_factor

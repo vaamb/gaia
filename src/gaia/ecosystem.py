@@ -115,16 +115,9 @@ class Ecosystem:
         self.config.set_light_method(value)
 
     @property
-    def lighting_hours(self) -> gv.LightingHours:
-        return self.config.lighting_hours
-
-    @property
     def light_info(self) -> gv.LightData:
-        return gv.LightData(
-            method=self.config.light_method,
-            morning_start=self.config.time_parameters.day,
-            evening_end=self.config.time_parameters.night,
-        )
+        return gv.LightData.from_lighting_hours(
+            self.config.lighting_hours, self.config.light_method)
 
     light_data = light_info
 
