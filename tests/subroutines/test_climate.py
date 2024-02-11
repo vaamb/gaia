@@ -60,6 +60,7 @@ def test_turn_actuator(climate_subroutine: Climate):
 
     climate_subroutine.enable()
     climate_subroutine.start()
+
     climate_subroutine.turn_climate_actuator(
         gv.HardwareType.heater, gv.ActuatorModePayload.on)
     climate_subroutine.turn_climate_actuator(
@@ -67,14 +68,13 @@ def test_turn_actuator(climate_subroutine: Climate):
     climate_subroutine.turn_climate_actuator(
         gv.HardwareType.heater, gv.ActuatorModePayload.automatic)
 
-    climate_subroutine.turn_climate_actuator(
-        gv.HardwareType.cooler, gv.ActuatorModePayload.on)
+    with pytest.raises(RuntimeError, match=r"no actuator linked to it"):
+        climate_subroutine.turn_climate_actuator(
+            gv.HardwareType.cooler, gv.ActuatorModePayload.on)
 
-    climate_subroutine.turn_climate_actuator(
-        gv.HardwareType.humidifier, gv.ActuatorModePayload.on)
-
-    climate_subroutine.turn_climate_actuator(
-        gv.HardwareType.dehumidifier, gv.ActuatorModePayload.on)
+    with pytest.raises(RuntimeError, match=r"no actuator linked to it"):
+        climate_subroutine.turn_climate_actuator(
+            gv.HardwareType.cooler, gv.ActuatorModePayload.off)
 
     with pytest.raises(ValueError):
         climate_subroutine.turn_climate_actuator(

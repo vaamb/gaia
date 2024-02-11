@@ -6,7 +6,7 @@ import gaia_validators as gv
 ecosystem_uid = "Rfrg5Kiv"
 ecosystem_name = "Testing ecosystem"
 
-hardware_address = "GPIO_10"
+hardware_address = "GPIO_19"
 i2c_address = "I2C_default"
 gpio_address = "GPIO_4:BOARD_12"
 
@@ -26,7 +26,7 @@ sensor_info = {
 light_uid = "cpgCZFJGGYlIXlLL"
 light_info = {
     "name": "VirtualLight",
-    "address": "GPIO_7:GPIO_12",
+    "address": "GPIO_5:GPIO_13",
     "model": "gpioDimmable",
     "type": "light",
     "level": "environment",
@@ -38,7 +38,7 @@ light_info = {
 heater_uid = "A0oZpCJ50D0ajfJs"
 heater_info = {
     "name": "VirtualHeater",
-    "address": "GPIO_37:GPIO_10",
+    "address": "GPIO_26:GPIO_12",
     "model": "gpioDimmable",
     "type": "heater",
     "level": "environment",
