@@ -943,7 +943,7 @@ class _MetaEcosystemConfig(type):
         engine_config = EngineConfig()
         if not engine_config.configs_loaded:
             raise RuntimeError(
-                "Configuration files need to be loaded by `EngineConfig` in"
+                "Configuration files need to be loaded by `EngineConfig` in "
                 "order to get an `EcosystemConfig` instance. To do so, use the "
                 "`EngineConfig().initialize_configs()` method."
             )

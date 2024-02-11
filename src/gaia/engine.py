@@ -12,11 +12,8 @@ from apscheduler.executors.pool import BasePoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-import gaia_validators as gv
-
 from gaia.config import CacheType, EngineConfig
 from gaia.ecosystem import Ecosystem
-from gaia.exceptions import UndefinedParameter
 from gaia.utils import SingletonMeta
 from gaia.virtual import VirtualWorld
 
