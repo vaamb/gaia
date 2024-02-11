@@ -168,6 +168,20 @@ class HystericalPID:
         self._last_sampling_time = sampling_time
         self._last_input = current_value
         self._last_output = output
+        if output > 0 and not self.direction | Direction.increase:
+            self.actuator_hub.logger.debug(
+                f"PID output for {self.climate_parameter.name} is > 0 but "
+                f"actuator able to increase {self.climate_parameter.name} "
+                f"has been detected. {self.climate_parameter.name.capitalize()} "
+                f"may remain under the targeted value."
+            )
+        if output < 0 and not self.direction | Direction.decrease:
+            self.actuator_hub.logger.debug(
+                f"PID output for {self.climate_parameter.name} is < 0 but "
+                f"actuator able to decrease {self.climate_parameter.name} "
+                f"has been detected. {self.climate_parameter.name.capitalize()} "
+                f"may remain above the targeted value."
+            )
         return output
 
     def _hysteresis_internal(self, current_value: float) -> float | None:
@@ -469,6 +483,8 @@ class ActuatorHandler:
 class ActuatorHub:
     def __init__(self, ecosystem: "Ecosystem") -> None:
         self.ecosystem: Ecosystem = weakref.proxy(ecosystem)
+        self.logger = logging.getLogger(
+            f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: dict[gv.ClimateParameter, HystericalPID] = {}
         self._populate_pids()
         self._actuator_handlers: dict[gv.HardwareType.actuator, ActuatorHandler] = {}
