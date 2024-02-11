@@ -228,10 +228,6 @@ class HystericalPID:
         self._reset_errors()
 
 
-def always_off(**kwargs) -> bool:
-    return False
-
-
 class ActuatorHandler:
     __slots__ = (
         "_active", "_actuators", "_expected_status_function", "_level", "_last_mode",
