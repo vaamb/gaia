@@ -16,8 +16,8 @@ sensor_info = {
     "name": "VirtualSensor",
     "address": hardware_address,
     "model": "virtualDHT22",
-    "type": "sensor",
-    "level": "environment",
+    "type": gv.HardwareType.sensor,
+    "level": gv.HardwareLevel.environment,
     "measures": ["temperature", "humidity"],
     "plants": [],
 }
@@ -28,8 +28,8 @@ light_info = {
     "name": "VirtualLight",
     "address": "GPIO_5:GPIO_13",
     "model": "gpioDimmable",
-    "type": "light",
-    "level": "environment",
+    "type": gv.HardwareType.light,
+    "level": gv.HardwareLevel.environment,
     "measures": [],
     "plants": [],
 }
@@ -40,8 +40,8 @@ heater_info = {
     "name": "VirtualHeater",
     "address": "GPIO_26:GPIO_12",
     "model": "gpioDimmable",
-    "type": "heater",
-    "level": "environment",
+    "type": gv.HardwareType.heater,
+    "level": gv.HardwareLevel.environment,
     "measures": [],
     "plants": [],
 }

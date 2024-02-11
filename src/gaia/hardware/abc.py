@@ -169,7 +169,7 @@ class Address:
 
 
 class _MetaHardware(type):
-    instances: dict[str, "Hardware"] = WeakValueDictionary()
+    instances: WeakValueDictionary[str, "Hardware"] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> "Hardware":
         uid = kwargs["uid"]

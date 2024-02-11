@@ -378,7 +378,7 @@ def generate_secret_key_from_password(
 
 
 class SingletonMeta(type):
-    _instances: dict[str, type] = WeakValueDictionary()
+    _instances: WeakValueDictionary[str, type] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs):
         try:

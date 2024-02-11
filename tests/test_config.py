@@ -112,7 +112,6 @@ def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
     assert engine_config.home_sun_times is None
 
 
-# TODO: add a cache to be sure data is not downloaded again
 @pytest.mark.skipif(is_not_connected)
 def test_refresh_suntimes_success(
         engine_config: EngineConfig,

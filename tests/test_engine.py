@@ -61,6 +61,10 @@ def test_engine_message_broker(engine: Engine):
     engine.start_message_broker()
     engine.stop_message_broker()
 
+    # Reset the message broker
+    engine.message_broker = None
+    engine.event_handler = None
+
 
 def test_engine_database(engine: Engine):
     assert engine.config.app_config.USE_DATABASE is False
@@ -85,6 +89,9 @@ def test_engine_database(engine: Engine):
     engine.start_database()
     engine.stop_database()
 
+    # Reset the database
+    engine.db = None
+
 
 @pytest.mark.timeout(10)
 def test_engine_plugins(engine: Engine):
@@ -108,6 +115,11 @@ def test_engine_plugins(engine: Engine):
 
     engine.start_plugins()
     engine.stop_plugins()
+
+    # Reset the message broker and the database
+    engine.message_broker = None
+    engine.event_handler = None
+    engine.db = None
 
 
 def test_engine_background_tasks(engine: Engine):
@@ -160,6 +172,7 @@ def test_engine_states(engine: Engine):
         engine.resume()
 
     engine.stop()
+    engine.shutdown()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Shutting down Gaia ..." in logs
     assert not engine.started

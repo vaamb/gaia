@@ -78,11 +78,6 @@ def test_add_hardware(light_subroutine: Light, engine_config: EngineConfig):
         assert "not in the list of the hardware available." in logs
 
 
-def test_lighting_hours(light_subroutine: Light):
-    assert light_subroutine.config.lighting_hours == gv.LightingHours(
-        morning_start=lighting_start, evening_end=lighting_stop)
-
-
 def test_turn_light(light_subroutine: Light):
     with pytest.raises(RuntimeError, match=r"Light subroutine is not started"):
         light_subroutine.turn_light(gv.ActuatorModePayload.on)

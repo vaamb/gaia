@@ -1,7 +1,8 @@
+from copy import deepcopy
 import os
 import shutil
 import tempfile
-from typing import Generator, Type, TypeVar
+from typing import Generator, TypeVar
 
 import pytest
 
@@ -9,6 +10,7 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler
 from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHelper
+from gaia.config.from_files import _MetaEcosystemConfig
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.subroutines import (
@@ -73,7 +75,7 @@ def temp_dir(patch) -> YieldFixture[str]:
 
 
 @pytest.fixture(scope="session")
-def testing_cfg(temp_dir) -> YieldFixture[Type[BaseConfig]]:
+def testing_cfg(temp_dir) -> None:
     class Config(BaseConfig):
         LOG_TO_STDOUT = False
         TESTING = True
@@ -82,33 +84,35 @@ def testing_cfg(temp_dir) -> YieldFixture[Type[BaseConfig]]:
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
 
-    yield Config
+    GaiaConfigHelper.set_config(Config)
 
 
-@pytest.fixture(scope="function", autouse=True)
-def default_testing_cfg(testing_cfg: Type[BaseConfig]) -> YieldFixture[None]:
-    GaiaConfigHelper.set_config(testing_cfg)
-
-    yield None
-
-    GaiaConfigHelper.reset_config()
-
-
-@pytest.fixture(scope="function", autouse=True)
-def engine_config(default_testing_cfg: Type[None]) -> YieldFixture[EngineConfig]:
+@pytest.fixture(scope="session", autouse=True)
+def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
     engine_config = EngineConfig()
     engine_config.initialize_configs()
-    for files in engine_config.cache_dir.iterdir():
-        files.unlink()
-    with get_logs_content(engine_config.logs_dir / "gaia.log"):
-        pass  # Clear logs
 
     yield engine_config
 
-    if engine_config.started:
-        engine_config.stop_watchdog()
-    del engine_config
-    SingletonMeta.detach_instance("EngineConfig")
+
+@pytest.fixture(scope="function", autouse=True)
+def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConfig]:
+    app_config = deepcopy(engine_config_master.app_config)
+    for files in engine_config_master.cache_dir.iterdir():
+        files.unlink()
+    with get_logs_content(engine_config_master.logs_dir / "gaia.log"):
+        pass  # Clear logs
+
+    try:
+        yield engine_config_master
+    finally:
+        engine_config_master.app_config = app_config
+        engine_config_master.ecosystems_config_dict = deepcopy(ecosystem_info)
+        engine_config_master.private_config = {}
+        engine_config_master.chaos_memory = {}
+        engine_config_master.sun_times = {}
+        if engine_config_master.started:
+            engine_config_master.stop_watchdog()
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -117,12 +121,13 @@ def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     with get_logs_content(engine_config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
-    yield engine
-
-    if engine.started:
-        engine.stop()
-    del engine
-    SingletonMeta.detach_instance("Engine")
+    try:
+        yield engine
+    finally:
+        if engine.started:
+            engine.stop()
+        SingletonMeta.detach_instance("Engine")
+        del engine
 
 
 @pytest.fixture(scope="function")
@@ -131,9 +136,11 @@ def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfi
     with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log"):
         pass  # Clear logs
 
-    yield ecosystem_config
-
-    del ecosystem_config
+    try:
+        yield ecosystem_config
+    finally:
+        del _MetaEcosystemConfig.instances[ecosystem_config.uid]
+        del ecosystem_config
 
 
 @pytest.fixture(scope="function")
@@ -142,11 +149,12 @@ def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     with get_logs_content(engine.config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
-    yield ecosystem
-
-    if ecosystem.started:
-        ecosystem.stop()
-    del ecosystem
+    try:
+        yield ecosystem
+    finally:
+        if ecosystem.started:
+            ecosystem.stop()
+        del ecosystem
 
 
 @pytest.fixture(scope="function")
@@ -163,42 +171,46 @@ def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
         {"day": 25, "night": 20, "hysteresis": 2}
     )
 
-    yield climate_subroutine
-
-    if ecosystem.get_subroutine_status("sensors"):
-        ecosystem.stop_subroutine("sensors")
-    if climate_subroutine.started:
-        climate_subroutine.stop()
+    try:
+        yield climate_subroutine
+    finally:
+        if ecosystem.get_subroutine_status("sensors"):
+            ecosystem.stop_subroutine("sensors")
+        if climate_subroutine.started:
+            climate_subroutine.stop()
 
 
 @pytest.fixture(scope="function")
 def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
     light_subroutine: Light = ecosystem.subroutines["light"]
 
-    yield light_subroutine
-
-    if light_subroutine.started:
-        light_subroutine.stop()
+    try:
+        yield light_subroutine
+    finally:
+        if light_subroutine.started:
+            light_subroutine.stop()
 
 
 @pytest.fixture(scope="function")
 def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
     sensor_subroutine: Sensors = ecosystem.subroutines["sensors"]
 
-    yield sensor_subroutine
-
-    if sensor_subroutine.started:
-        sensor_subroutine.stop()
+    try:
+        yield sensor_subroutine
+    finally:
+        if sensor_subroutine.started:
+            sensor_subroutine.stop()
 
 
 @pytest.fixture(scope="function")
 def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
     dummy_subroutine: Sensors = ecosystem.subroutines["dummy"]
 
-    yield dummy_subroutine
-
-    if dummy_subroutine.started:
-        dummy_subroutine.stop()
+    try:
+        yield dummy_subroutine
+    finally:
+        if dummy_subroutine.started:
+            dummy_subroutine.stop()
 
 
 @pytest.fixture(scope="function")

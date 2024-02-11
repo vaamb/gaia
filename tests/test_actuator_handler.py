@@ -97,7 +97,6 @@ def test_timer(light_handler: ActuatorHandler):
     assert light_handler.countdown is None
 
 
-@pytest.mark.skip
 def test_turn_to(light_handler: ActuatorHandler):
     ecosystem = light_handler.ecosystem
     hardware = ecosystem.subroutines["light"].hardware
