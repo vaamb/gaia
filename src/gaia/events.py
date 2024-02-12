@@ -295,12 +295,12 @@ class Events(EventHandler):
         rv: list[gv.EcosystemPayloadDict] = []
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
-            f"Getting '{event_name}' payload for {humanize_list(uids)}")
+            f"Getting '{event_name}' payload for {humanize_list(uids)}.")
         for uid in uids:
             if hasattr(self.ecosystems[uid], event_name):
                 data = getattr(self.ecosystems[uid], event_name)
             else:
-                self.logger.error(f"Payload for event {event_name} is not defined")
+                self.logger.error(f"Payload for event '{event_name}' is not defined.")
                 return rv
             if not isinstance(data, gv.Empty):
                 payload_class = payload_classes[event_name]
@@ -315,13 +315,14 @@ class Events(EventHandler):
             ecosystem_uids: str | list[str] | None = None,
             ttl: int | None = None,
     ) -> bool:
-        self.logger.debug(f"Sending event {event_name} requested")
+        self.logger.debug(f"Requested to emit event '{event_name}'.")
         payload = self.get_event_payload(event_name, ecosystem_uids)
         if payload:
-            self.logger.debug(f"Payload for event {event_name} sent")
-            return self.emit(event_name, data=payload, ttl=ttl)
+            result = self.emit(event_name, data=payload, ttl=ttl)
+            self.logger.debug(f"Payload for event '{event_name}' sent.")
+            return result
         else:
-            self.logger.debug(f"No payload for event {event_name}")
+            self.logger.debug(f"No payload for event '{event_name}' found.")
             return False
 
     def send_sensors_data(
