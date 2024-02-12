@@ -1,3 +1,5 @@
+from datetime import time
+
 import gaia_validators as gv
 
 from gaia.events import Events
@@ -38,3 +40,22 @@ def test_missing_ecosystem_uid(events_handler: Events):
     emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
     assert emitted_msg["status"] == gv.Result.failure
     assert error_msg in emitted_msg["message"]
+
+
+def test_update_time_parameters(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="time_parameters",
+        data={"day": time(8, 0), "night": time(20, 0)},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+        assert "was successfully treated" in logs
+    emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
+    assert emitted_msg["status"] == gv.Result.success
+
+    updated_data: list[gv.LightDataPayloadDict] = events_handler._dispatcher.emit_store[1]["data"]
+    gv.LightDataPayload(**updated_data[0])
