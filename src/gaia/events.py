@@ -8,7 +8,8 @@ import inspect
 import logging
 from time import monotonic, sleep
 import typing as t
-from typing import Callable, cast, Literal, Type
+from typing import Any, Callable, Literal, NamedTuple, Type
+from uuid import UUID
 import weakref
 
 from apscheduler.triggers.interval import IntervalTrigger
@@ -48,26 +49,32 @@ payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
 }
 
 
-crud_events_name: dict[str, EventNames] = {
+class CrudLinks(NamedTuple):
+    function_name: str
+    event_name: EventNames
+
+
+crud_links: dict[str, CrudLinks] = {
     # Ecosystem creation and deletion
-    "create_ecosystem": "base_info",
-    "delete_ecosystem": "base_info",
+    "create_ecosystem": CrudLinks("create_ecosystem", "base_info"),
+    "delete_ecosystem": CrudLinks("delete_ecosystem", "base_info"),
+    # Places creation, update and deletion
+    "create_place": CrudLinks("set_place", ""),
+    "update_place": CrudLinks("update_place", ""),
+    "delete_place": CrudLinks("delete_place", ""),
     # Ecosystem properties update
-    #"update_chaos": ,
-    "update_light_method": "light_data",
-    "update_management": "management",
-    "update_time_parameters": "light_data",
+#    "update_chaos": CrudLinks("chaos", ""),
+    "update_management": CrudLinks("managements", "management"),
+    "update_time_parameters": CrudLinks("time_parameters", "light_data"),
+    "update_light_method": CrudLinks("set_light_method", "light_data"),
     # Environment parameter creation, deletion and update
-    "create_environment_parameter": "environmental_parameters",
-    "update_environment_parameter": "environmental_parameters",
-    "delete_environment_parameter": "environmental_parameters",
+    "create_environment_parameter": CrudLinks("set_climate_parameter", "environmental_parameters"),
+    "update_environment_parameter": CrudLinks("update_climate_parameter", "environmental_parameters"),
+    "delete_environment_parameter": CrudLinks("delete_climate_parameter", "environmental_parameters"),
     # Hardware creation, deletion and update
-    "create_hardware": "hardware",
-    "update_hardware": "hardware",
-    "delete_hardware": "hardware",
-    # Private
-    #"create_place": ,
-    #"update_place": ,
+    "create_hardware": CrudLinks("create_new_hardware", "hardware"),
+    "update_hardware": CrudLinks("update_hardware", "hardware"),
+    "delete_hardware": CrudLinks("delete_hardware", "hardware"),
 }
 
 
@@ -150,7 +157,7 @@ class Events(EventHandler):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while tying to emit event `{event_name}`. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`")
+                f"ERROR msg: `{e.__class__.__name__}: {e}`")
 
     def _schedule_jobs(self) -> None:
         self.engine.scheduler.add_job(
@@ -367,96 +374,76 @@ class Events(EventHandler):
             self.engine.config.save(ConfigType.ecosystems)
             self.emit_event("management", ecosystem_uids=[ecosystem_uid])
 
-    def get_crud_function(
+    def _get_crud_function(
             self,
-            crud_key: str,
+            action: gv.CrudAction,
+            target: str,
             ecosystem_uid: str | None = None
     ) -> Callable:
-        if "ecosystem" in crud_key:
-            return {
-                # Ecosystem creation and deletion
-                "create_ecosystem": self.engine.config.create_ecosystem,
-                "delete_ecosystem": self.engine.config.delete_ecosystem,
-            }[crud_key]
-        if "place" in crud_key:
-            return {
-                # Private
-                "create_place": self.engine.config.set_place,
-                "update_place": self.engine.config.update_place,
-                "delete_place": self.engine.config.delete_place,
-            }[crud_key]
+        if target in ("ecosystem", "place"):
+            base_obj = self.engine.config
+        else:
+            if ecosystem_uid is None:
+                raise ValueError(
+                    f"{action.name.capitalize()} {target} requires the "
+                    f"'ecosystem_uid' field to be set.")
+            if ecosystem_uid not in self.engine.ecosystems:
+                pass
+                raise ValueError(
+                    f"Ecosystem with uid '{ecosystem_uid}' is not one of the "
+                    f"started ecosystems.")
+            base_obj = self.engine.ecosystems[ecosystem_uid].config
 
-        if ecosystem_uid is None:
-            raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
+        crud_key = f"{action.name}_{target}"
 
-        ecosystem_uid = cast(str, ecosystem_uid)
+        crud_link = crud_links.get(crud_key)
+        if crud_link is None:
+            raise ValueError(
+                f"{action.name.capitalize()} {target} is not possible for this "
+                f"engine.")
 
-        def crud_update(config: EcosystemConfig, attr_name: str) -> Callable:
-            def inner(payload: dict):
-                setattr(config, attr_name, payload)
+        if target in ("management", "time_parameters"):
+            # Need to update a setter
+            def crud_update_setter(config: EcosystemConfig, attr_name: str) -> Callable:
+                def inner(**value: dict):
+                    setattr(config, attr_name, value)
 
-            return inner
+                return inner
 
-        return {
-            # Ecosystem properties update
-            "update_chaos": crud_update(self.ecosystems[ecosystem_uid].config, "chaos"),
-            "update_light_method": crud_update(self.ecosystems[ecosystem_uid].config, "light_method"),
-            "update_management": crud_update(self.ecosystems[ecosystem_uid].config, "managements"),
-            "update_time_parameters": crud_update(self.ecosystems[ecosystem_uid].config, "time_parameters"),
-            # Environment parameter creation, deletion and update
-            "create_environment_parameter": self.ecosystems[ecosystem_uid].config.set_climate_parameter,
-            "update_environment_parameter": self.ecosystems[ecosystem_uid].config.update_climate_parameter,
-            "delete_environment_parameter": self.ecosystems[ecosystem_uid].config.delete_climate_parameter,
-            # Hardware creation, deletion and update
-            "create_hardware": self.ecosystems[ecosystem_uid].config.create_new_hardware,
-            "update_hardware": self.ecosystems[ecosystem_uid].config.update_hardware,
-            "delete_hardware": self.ecosystems[ecosystem_uid].config.delete_hardware,
-        }[crud_key]
+            return crud_update_setter(base_obj, crud_link.function_name)
+        else:
+            def get_function(obj: Any, func_name: str) -> Callable:
+                return getattr(obj, func_name)
+
+            return get_function(base_obj, crud_link.function_name)
 
     def on_crud(self, message: gv.CrudPayloadDict) -> None:
-        data: gv.CrudPayloadDict = self.validate_payload(
-            message, gv.CrudPayload)
-        crud_uuid = data["uuid"]
-        self.logger.info(
-            f"Received CRUD request '{crud_uuid}' from Ouranos")
+        # Validate the payload
+        data: gv.CrudPayloadDict = self.validate_payload(message, gv.CrudPayload)
+        # Verify it is the intended recipient
         engine_uid = data["routing"]["engine_uid"]
         if engine_uid != self.engine.uid:
             self.logger.warning(
-                f"Received 'on_crud' event intended to engine {engine_uid}"
-            )
+                f"Received a CRUD request intended to engine '{engine_uid}'.")
             return
-        crud_key = f"{data['action'].value}_{data['target']}"
-        ecosystem_uid = data["routing"]["ecosystem_uid"]
+
+        # Extract CRUD request data
+        crud_uuid: UUID = data["uuid"]
+        action: gv.CrudAction = data['action']
+        target: str = data['target']
+        ecosystem_uid: str | None = data["routing"]["ecosystem_uid"]
+        crud_key = f"{action.name}_{target}"
+        self.logger.info(f"Received CRUD request '{crud_uuid}' from Ouranos.")
+
+        # Treat the CRUD request
         try:
-            crud_function = self.get_crud_function(crud_key, ecosystem_uid)
-        except KeyError:
-            self.logger.error(
-                f"No CRUD function linked to action '{data['action'].value}' on"
-                f"target '{data['target']}' could be found. Aborting")
-            return
-        try:
+            crud_function = self._get_crud_function(action, target, ecosystem_uid)
             crud_function(**data["data"])
             self.engine.config.save(ConfigType.ecosystems)
-            self.emit(
-                event="crud_result",
-                data=gv.RequestResult(
-                    uuid=crud_uuid,
-                    status=gv.Result.success
-                ).model_dump()
-            )
-            self.logger.info(
-                f"CRUD request '{crud_uuid}' was successfully treated")
-            try:
-                event_name = crud_events_name[crud_key]
-            except KeyError:
-                self.logger.debug(
-                    f"No CRUD payload linked to action '{data['action'].value}' "
-                    f"on target '{data['target']}' was found. New data won't be "
-                    f"sent to Ouranos")
-            else:
-                self.emit_event(
-                    event_name=event_name, ecosystem_uids=ecosystem_uid)
         except Exception as e:
+            self.logger.error(
+                f"Encountered an error while treating CRUD request "
+                f"`{crud_uuid}`. ERROR msg: `{e.__class__.__name__}: {e}`.")
             self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
@@ -465,8 +452,26 @@ class Events(EventHandler):
                     message=str(e)
                 ).model_dump()
             )
+            return
+        else:
+            self.emit(
+                event="crud_result",
+                data=gv.RequestResult(
+                    uuid=crud_uuid,
+                    status=gv.Result.success
+                ).model_dump()
+            )
             self.logger.info(
-                f"CRUD request '{crud_uuid}' could not be treated")
+                f"CRUD request '{crud_uuid}' was successfully treated.")
+
+        # Send back the updated info
+            crud_link = crud_links[crud_key]
+            if not crud_link.event_name:
+                self.logger.warning(
+                    f"No CRUD payload linked to action '{action.name} {target}' "
+                    f"was found. Updated data won't be sent to Ouranos.")
+            event_name = crud_link.event_name
+            self.emit_event(event_name=event_name, ecosystem_uids=ecosystem_uid)
 
     def send_buffered_data(self) -> None:
         if not self.use_db:

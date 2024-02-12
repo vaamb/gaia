@@ -18,4 +18,4 @@ def test_wrong_routing(events_handler: Events):
     events_handler.on_crud(message)
 
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
-        assert "Received 'on_crud' event intended to engine" in logs
+        assert "Received a CRUD request intended to engine" in logs

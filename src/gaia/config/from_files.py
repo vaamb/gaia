@@ -384,6 +384,8 @@ class EngineConfig(metaclass=SingletonMeta):
         self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType | CacheType) -> None:
+        if self.app_config.TESTING:
+            return
         if isinstance(cfg_type, ConfigType):
             with self.config_files_lock():
                 self.logger.debug(f"Updating {cfg_type.name} configuration file(s).")
