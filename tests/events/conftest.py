@@ -1,6 +1,6 @@
 import pytest
 
-from gaia import Engine
+from gaia import Ecosystem, Engine
 from gaia.events import Events
 
 from ..utils import MockDispatcher
@@ -13,7 +13,11 @@ def mock_dispatcher():
 
 
 @pytest.fixture(scope="function")
-def events_handler(mock_dispatcher: MockDispatcher, engine: Engine):
+def events_handler(
+        mock_dispatcher: MockDispatcher,
+        engine: Engine,
+        ecosystem: Ecosystem,
+):
     events_handler = Events(engine)
     mock_dispatcher.register_event_handler(events_handler)
     engine.message_broker = mock_dispatcher
