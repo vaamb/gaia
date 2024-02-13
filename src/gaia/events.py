@@ -446,13 +446,14 @@ class Events(EventHandler):
                 f"CRUD request '{crud_uuid}' was successfully treated.")
 
         # Send back the updated info
-            crud_link = crud_links[crud_key]
-            if not crud_link.event_name:
-                self.logger.warning(
-                    f"No CRUD payload linked to action '{action.name} {target}' "
-                    f"was found. Updated data won't be sent to Ouranos.")
-            event_name = crud_link.event_name
-            self.emit_event(event_name=event_name, ecosystem_uids=ecosystem_uid)
+        self.engine.refresh_ecosystems(send_info=False)
+        crud_link = crud_links[crud_key]
+        if not crud_link.event_name:
+            self.logger.warning(
+                f"No CRUD payload linked to action '{action.name} {target}' "
+                f"was found. Updated data won't be sent to Ouranos.")
+        event_name = crud_link.event_name
+        self.emit_event(event_name=event_name, ecosystem_uids=ecosystem_uid)
 
     def send_buffered_data(self) -> None:
         if not self.use_db:
