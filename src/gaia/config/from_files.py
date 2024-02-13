@@ -147,27 +147,9 @@ class RootEcosystemsConfigValidator(gv.BaseModel):
 # ---------------------------------------------------------------------------
 #   Ecosystem chaos models
 # ---------------------------------------------------------------------------
-class ChaosTimeWindowValidator(gv.BaseModel):
-    beginning: datetime | None = None
-    end: datetime | None = None
-
-    @field_validator("beginning", "end", mode="before")
-    def parse_time(cls, value):
-        if isinstance(value, str):
-            dt = datetime.fromisoformat(value)
-            dt.astimezone(timezone.utc)
-            return dt
-        return value
-
-
-class ChaosTimeWindow(TypedDict):
-    beginning: datetime | None
-    end: datetime | None
-
-
 class ChaosMemoryValidator(gv.BaseModel):
     last_update: date = Field(default_factory=date.today)
-    time_window: ChaosTimeWindowValidator = ChaosTimeWindowValidator()
+    time_window: gv.TimeWindow = gv.TimeWindow()
 
     @field_validator("last_update", mode="before")
     def parse_last_update(cls, value):
@@ -178,7 +160,7 @@ class ChaosMemoryValidator(gv.BaseModel):
 
 class ChaosMemory(TypedDict):
     last_update: date
-    time_window: ChaosTimeWindow
+    time_window: gv.TimeWindow
 
 
 class ChaosMemoryRootValidator(gv.BaseModel):
@@ -1209,7 +1191,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.environment["chaos"] = validated_values
 
     @property
-    def chaos_time_window(self) -> ChaosTimeWindow:
+    def chaos_time_window(self) -> gv.TimeWindow:
         chaos_memory = self.general.get_chaos_memory(self.uid)
         if chaos_memory["last_update"] < date.today():
             self._update_chaos_time_window()
