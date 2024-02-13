@@ -42,6 +42,24 @@ def test_missing_ecosystem_uid(events_handler: Events):
     assert error_msg in emitted_msg["message"]
 
 
+def test_create_ecosystem(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.create,
+        target="ecosystem",
+        data={"ecosystem_name": "TestCrud"},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+        assert "was successfully treated" in logs
+    emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
+    assert emitted_msg["status"] == gv.Result.success
+    assert len(events_handler.ecosystems) == 2
+    assert "TestCrud" in [ecosystem.name for ecosystem in events_handler.ecosystems.values()]
+
+
 def test_update_time_parameters(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
