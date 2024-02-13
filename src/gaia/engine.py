@@ -577,7 +577,7 @@ class Engine(metaclass=SingletonMeta):
             if ecosystem.started:
                 ecosystem.refresh_lighting_hours()
         if self.use_message_broker:
-            self.event_handler.send_light_data()
+            self.event_handler.emit_event("light_data")
 
     def update_chaos_time_window(self) -> None:
         self.logger.info("Updating ecosystems chaos time window.")
@@ -585,7 +585,7 @@ class Engine(metaclass=SingletonMeta):
             ecosystem.config.update_chaos_time_window()
         self.config.save(CacheType.chaos)
         if self.use_message_broker:
-            self.event_handler.emit_event_if_connected("chaos_parameters")
+            self.event_handler.emit_event_if_connected("chaos")
 
     # ---------------------------------------------------------------------------
     #   Engine start and stop

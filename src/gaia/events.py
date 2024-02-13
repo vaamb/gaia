@@ -328,30 +328,6 @@ class Events(EventHandler):
             self.logger.debug(f"No payload for event '{event_name}' found.")
             return False
 
-    def send_sensors_data(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        self.emit_event("sensors_data", ecosystem_uids)
-
-    def send_health_data(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        self.emit_event("health_data", ecosystem_uids)
-
-    def send_light_data(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        self.emit_event("light_data", ecosystem_uids)
-
-    def send_actuator_data(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        self.emit_event("actuator_data", ecosystem_uids)
-
     def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
         message["actuator"] = gv.HardwareType.light
         self.on_turn_actuator(message)
@@ -368,6 +344,7 @@ class Events(EventHandler):
                 countdown=message.get("countdown", 0.0)
             )
 
+    # TODO: use CRUD
     def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
         data: gv.ManagementConfigPayloadDict = self.validate_payload(
             message, gv.ManagementConfigPayload)

@@ -1172,8 +1172,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 and self.general.engine.event_handler.registered
         ):
             try:
-                self.general.engine.event_handler.send_light_data(
-                    ecosystem_uids=[self.uid])
+                self.general.engine.event_handler.emit_event(
+                    "light_data", ecosystem_uids=[self.uid])
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while sending light data. "
