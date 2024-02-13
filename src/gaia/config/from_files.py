@@ -1168,14 +1168,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 )
 
     @property
-    def chaos_parameters(self) -> gv.ChaosConfig:
-        try:
-            return gv.ChaosConfig(**self.environment["chaos"])
-        except KeyError:
-            raise UndefinedParameter(f"Chaos as not been set in {self.name}")
+    def chaos_config(self) -> gv.ChaosConfig:
+        return gv.ChaosConfig(**self.environment["chaos"])
 
-    @chaos_parameters.setter
-    def chaos_parameters(self, values: gv.ChaosConfigDict) -> None:
+    @chaos_config.setter
+    def chaos_config(self, values: gv.ChaosConfigDict) -> None:
         """Set chaos parameter
 
         :param values: A dict with the entries 'frequency': int,
@@ -1213,15 +1210,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 beginning = None
                 end = None
         else:
-            if self.chaos_parameters.frequency:
-                chaos_probability = random.randint(1, self.chaos_parameters.frequency)
+            if self.chaos_config.frequency:
+                chaos_probability = random.randint(1, self.chaos_config.frequency)
             else:
                 chaos_probability = 0
             if chaos_probability == 1:
                 today = datetime.now(timezone.utc).replace(
                     hour=14, minute=0, second=0, microsecond=0)
                 beginning = today
-                end = today + timedelta(days=self.chaos_parameters.duration)
+                end = today + timedelta(days=self.chaos_config.duration)
         chaos_memory["time_window"]["beginning"] = beginning
         chaos_memory["time_window"]["end"] = end
         chaos_memory["last_update"] = date.today()
@@ -1237,7 +1234,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         chaos_start_to_now = (now - beginning).total_seconds() // 60
         chaos_fraction = chaos_start_to_now / chaos_duration
         chaos_radian = chaos_fraction * pi
-        return (sin(chaos_radian) * (self.chaos_parameters.intensity - 1.0)) + 1.0
+        return (sin(chaos_radian) * (self.chaos_config.intensity - 1.0)) + 1.0
+
+    @property
+    def chaos_parameters(self) -> gv.ChaosParameters:
+        return gv.ChaosParameters(**{
+            **self.environment["chaos"],
+            "time_window": self.chaos_time_window,
+        })
 
     @property
     def climate(self) -> dict[gv.ClimateParameterNames, gv.AnonymousClimateConfigDict]:
