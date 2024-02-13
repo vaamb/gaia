@@ -273,6 +273,11 @@ class Ecosystem:
             raise Exception(f"Failed to stop ecosystem {self.name}")
         self._started = False
 
+    # Chaos
+    @property
+    def chaos_parameters(self) -> gv.ChaosParameters:
+        return self.config.chaos_parameters
+
     # Actuator
     @property
     def actuator_data(self) -> gv.ActuatorsDataDict:

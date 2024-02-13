@@ -34,7 +34,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 EventNames = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
-    "sensors_data", "health_data", "light_data", "actuator_data"]
+    "sensors_data", "health_data", "light_data", "actuator_data", "chaos"]
 
 
 payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
@@ -46,6 +46,7 @@ payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
     "actuator_data": gv.ActuatorsDataPayload,
+    "chaos": gv.ChaosParametersPayload,
 }
 
 
@@ -63,7 +64,7 @@ crud_links: dict[str, CrudLinks] = {
     "update_place": CrudLinks("update_place", ""),
     "delete_place": CrudLinks("delete_place", ""),
     # Ecosystem properties update
-#    "update_chaos": CrudLinks("chaos", ""),
+    "update_chaos": CrudLinks("chaos", "chaos_parameters"),
     "update_management": CrudLinks("managements", "management"),
     "update_time_parameters": CrudLinks("time_parameters", "light_data"),
     "update_light_method": CrudLinks("set_light_method", "light_data"),
