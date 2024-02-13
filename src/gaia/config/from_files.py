@@ -1428,7 +1428,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         base_hardware_dict = self.IO_dict.get(uid)
         if base_hardware_dict is None:
             raise HardwareNotFound(
-                "No hardware with uid '{uid}' found in the hardware config.")
+                f"No hardware with uid '{uid}' found in the hardware config.")
         hardware_dict = base_hardware_dict.copy()
         hardware_dict: gv.HardwareConfigDict = cast(gv.HardwareConfigDict, hardware_dict)
         hardware_dict["uid"] = uid
@@ -1450,20 +1450,23 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         try:
             del self.IO_dict[uid]
         except KeyError:
-            raise HardwareNotFound
+            raise HardwareNotFound(
+                f"No hardware with uid '{uid}' found in the hardware config.")
 
     def get_hardware_uid(self, name: str) -> str:
         for uid, hardware in self.IO_dict.items():
             if hardware["name"] == name:
                 return uid
-        raise HardwareNotFound
+        raise HardwareNotFound(
+                f"No hardware with name '{name}' found in the hardware config.")
 
     def get_hardware_config(self, uid: str) -> gv.HardwareConfig:
         try:
             hardware_config = self.IO_dict[uid]
             return gv.HardwareConfig(uid=uid, **hardware_config)
         except KeyError:
-            raise HardwareNotFound
+            raise HardwareNotFound(
+                f"No hardware with uid '{uid}' found in the hardware config.")
 
     @staticmethod
     def supported_hardware() -> list:
