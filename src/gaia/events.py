@@ -145,19 +145,15 @@ class Events(EventHandler):
     def emit_event_if_connected(
             self,
             event_name: EventNames,
+            ecosystem_uids: str | list[str] | None = None,
             ttl: int | None = None
     ) -> None:
         if not self.is_connected():
             self.logger.info(
-                f"Events handler not currently connected. Scheduled emission "
-                f"of event '{event_name}' aborted")
+                f"Events handler not currently connected. Emission of event "
+                f"'{event_name}' aborted.")
             return
-        try:
-            self.emit_event(event_name, ttl=ttl)
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an error while tying to emit event `{event_name}`. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`")
+        self.emit_event(event_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
     def _schedule_jobs(self) -> None:
         self.engine.scheduler.add_job(
@@ -318,9 +314,15 @@ class Events(EventHandler):
         self.logger.debug(f"Requested to emit event '{event_name}'.")
         payload = self.get_event_payload(event_name, ecosystem_uids)
         if payload:
-            result = self.emit(event_name, data=payload, ttl=ttl)
-            self.logger.debug(f"Payload for event '{event_name}' sent.")
-            return result
+            try:
+                result = self.emit(event_name, data=payload, ttl=ttl)
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while emitting event '{event_name}'. "
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`.")
+            else:
+                self.logger.debug(f"Payload for event '{event_name}' sent.")
+                return result
         else:
             self.logger.debug(f"No payload for event '{event_name}' found.")
             return False
