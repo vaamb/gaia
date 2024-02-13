@@ -198,16 +198,16 @@ def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
     today = datetime.now(timezone.utc).replace(
         hour=14, minute=0, second=0, microsecond=0)
 
-    assert ecosystem_config.chaos_parameters == gv.ChaosConfig()
+    assert ecosystem_config.chaos_config == gv.ChaosConfig()
 
     with pytest.raises(ValueError):
-        ecosystem_config.chaos_parameters = {"wrong": "value"}
+        ecosystem_config.chaos_config = {"wrong": "value"}
 
     max_intensity = 1.2
     duration = 2
     parameters = {"frequency": 1, "duration": duration, "intensity": max_intensity}
-    ecosystem_config.chaos_parameters = parameters
-    assert ecosystem_config.chaos_parameters == gv.ChaosConfig(**parameters)
+    ecosystem_config.chaos_config = parameters
+    assert ecosystem_config.chaos_config == gv.ChaosConfig(**parameters)
 
     # By default, the newly created cfg has empty chaos time window
     chaos_time_window = ecosystem_config.chaos_time_window
