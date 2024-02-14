@@ -82,9 +82,20 @@ class RootSunTimesCacheValidator(gv.BaseModel):
     config: dict[str, SunTimesCacheValidator]
 
 
+# ---------------------------------------------------------------------------
+#   Private config models
+# ---------------------------------------------------------------------------
 class CoordinatesDict(TypedDict):
     latitude: float
     longitude: float
+
+
+class PrivateConfigValidator(gv.BaseModel):
+    places: dict[str, gv.Coordinates] = Field(default_factory=dict)
+
+
+class PrivateConfigDict(TypedDict):
+    places: dict[str, gv.Coordinates]
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +186,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
-        self._private_config: dict = {}
+        self._private_config: PrivateConfigDict = {"places": {}}
         self._sun_times: [str, SunTimesCacheData] = {}
         self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
@@ -295,7 +306,19 @@ class EngineConfig(metaclass=SingletonMeta):
                     self._ecosystems_config_dict = validated
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
-                self._private_config = yaml.load(file)
+                unvalidated = yaml.load(file)
+                try:
+                    validated = PrivateConfigValidator(
+                        **unvalidated
+                    ).model_dump()
+                except pydantic.ValidationError as e:
+                    self.logger.error(
+                        f"Could not validate private configuration file. "
+                        f"ERROR msg(s): `{format_pydantic_error(e)}`."
+                    )
+                    raise e
+                else:
+                    self._private_config = validated
 
     def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
@@ -315,7 +338,8 @@ class EngineConfig(metaclass=SingletonMeta):
         self._dump_config(ConfigType.ecosystems)
 
     def _create_private_config_file(self):
-        self._private_config = {}
+        self._private_config: PrivateConfigDict = \
+            PrivateConfigValidator().model_dump()
         self._dump_config(ConfigType.private)
 
     def initialize_configs(self) -> None:
