@@ -476,7 +476,10 @@ class Engine(metaclass=SingletonMeta):
         :param send_info: If `True`, will try to send the ecosystem info to
                   Ouranos if possible.
         """
-        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
+        if ecosystem_id in self.ecosystems:
+            ecosystem_uid = ecosystem_id
+        else:
+            ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 ecosystem = self.ecosystems[ecosystem_uid]
@@ -507,7 +510,10 @@ class Engine(metaclass=SingletonMeta):
         :param send_info: If `True`, will try to send the ecosystem info to
                   Ouranos if possible.
         """
-        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
+        if ecosystem_id in self.ecosystems:
+            ecosystem_uid = ecosystem_id
+        else:
+            ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 raise RuntimeError(
@@ -572,7 +578,8 @@ class Engine(metaclass=SingletonMeta):
         # delete Ecosystems which were created and are no longer on the
         # config file
         for ecosystem_uid in to_delete:
-            self.stop_ecosystem(ecosystem_uid)
+            if self.ecosystems[ecosystem_uid].started:
+                self.stop_ecosystem(ecosystem_uid)
             self.dismount_ecosystem(ecosystem_uid)
         # self.refresh_ecosystems_lighting_hours()  # done by Ecosystem during their startup
         if send_info:
