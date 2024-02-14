@@ -98,6 +98,9 @@ def test_create_place(events_handler: Events):
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert data_update["uid"] == engine_uid
     gv.Place(**data_update["data"][0])
+    coordinates = events_handler.engine.config.get_place("home")
+    assert coordinates.longitude == 0
+    assert coordinates.latitude == 0
 
 
 def test_update_time_parameters(events_handler: Events):
