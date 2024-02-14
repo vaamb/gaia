@@ -82,24 +82,9 @@ class RootSunTimesCacheValidator(gv.BaseModel):
     config: dict[str, SunTimesCacheValidator]
 
 
-class CoordinatesValidator(gv.BaseModel):
-    latitude: float
-    longitude: float
-
-
 class CoordinatesDict(TypedDict):
     latitude: float
     longitude: float
-
-
-class PlaceValidator(gv.BaseModel):
-    name: str
-    coordinates: CoordinatesValidator
-
-
-class PlaceDict(TypedDict):
-    name: str
-    coordinates: CoordinatesDict
 
 
 # ---------------------------------------------------------------------------
@@ -568,14 +553,14 @@ class EngineConfig(metaclass=SingletonMeta):
 
     """Private config parameters"""
     @property
-    def places(self) -> dict[str, CoordinatesDict]:
+    def places(self) -> dict[str, gv.Coordinates]:
         try:
             return self._private_config["places"]
         except KeyError:
             self._private_config["places"] = {}
             return self._private_config["places"]
 
-    def get_place(self, place: str) -> CoordinatesDict | None:
+    def get_place(self, place: str) -> gv.Coordinates | None:
         try:
             return self.places[place]
         except KeyError:
@@ -584,24 +569,28 @@ class EngineConfig(metaclass=SingletonMeta):
     def set_place(
             self,
             place: str,
-            coordinates: tuple[float, float] | CoordinatesDict
+            coordinates: tuple[float, float] | CoordinatesDict,
     ) -> None:
+        validated_coordinates: gv.Coordinates
         if isinstance(coordinates, tuple):
-            coordinates = CoordinatesDict(
+            validated_coordinates = gv.Coordinates(
                 latitude=coordinates[0],
                 longitude=coordinates[1]
             )
-        validated_coordinates: CoordinatesDict = CoordinatesValidator(
-            **coordinates).model_dump()
+        else:
+            validated_coordinates = gv.Coordinates(
+                latitude=coordinates["latitude"],
+                longitude=coordinates["longitude"],
+            )
         self.places[place] = validated_coordinates
 
-    def CRUD_create_place(self, value: PlaceDict):
-        validated_value: PlaceDict = PlaceValidator(**value).model_dump()
+    def CRUD_create_place(self, value: gv.PlaceDict):
+        validated_value: gv.PlaceDict = gv.Place(**value).model_dump()
         place = validated_value.pop("name")
         self.places[place] = validated_value["coordinates"]
 
-    def CRUD_update_place(self, value: PlaceDict) -> None:
-        validated_value: PlaceDict = PlaceValidator(**value).model_dump()
+    def CRUD_update_place(self, value: gv.PlaceDict) -> None:
+        validated_value: gv.PlaceDict = gv.Place(**value).model_dump()
         place = validated_value.pop("name")
         if place not in self.places:
             raise UndefinedParameter(
@@ -610,7 +599,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self.places[place] = validated_value["coordinates"]
 
     @property
-    def home_coordinates(self) -> CoordinatesDict:
+    def home_coordinates(self) -> gv.Coordinates:
         home = self.get_place("home")
         if home is None:
             raise UndefinedParameter(
