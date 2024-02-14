@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from dispatcher import EventHandler
 import gaia_validators as gv
 
+from gaia import Ecosystem, Engine
 from gaia.config import EcosystemConfig
 from gaia.config.from_files import ConfigType
 from gaia.utils import humanize_list, local_ip_address
@@ -28,13 +29,12 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
     from gaia.database.models import SensorBuffer
-    from gaia.ecosystem import Ecosystem
-    from gaia.engine import Engine
 
 
 EventNames = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
-    "sensors_data", "health_data", "light_data", "actuator_data", "chaos_parameters"]
+    "sensors_data", "health_data", "light_data", "actuator_data",
+    "chaos_parameters", "places_list"]
 
 
 payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
@@ -46,7 +46,8 @@ payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
     "actuator_data": gv.ActuatorsDataPayload,
-    "chaos": gv.ChaosParametersPayload,
+    "chaos_parameters": gv.ChaosParametersPayload,
+    "places_list": gv.PlacesPayload,
 }
 
 
@@ -60,9 +61,9 @@ crud_links: dict[str, CrudLinks] = {
     "create_ecosystem": CrudLinks("create_ecosystem", "base_info"),
     "delete_ecosystem": CrudLinks("delete_ecosystem", "base_info"),
     # Places creation, update and deletion
-    "create_place": CrudLinks("set_place", ""),
-    "update_place": CrudLinks("update_place", ""),
-    "delete_place": CrudLinks("delete_place", ""),
+    "create_place": CrudLinks("set_place", "places_list"),
+    "update_place": CrudLinks("update_place", "places_list"),
+    "delete_place": CrudLinks("delete_place", "places_list"),
     # Ecosystem properties update
     "update_chaos": CrudLinks("chaos", "chaos_parameters"),
     "update_management": CrudLinks("managements", "management"),
@@ -288,23 +289,51 @@ class Events(EventHandler):
             self,
             event_name: EventNames,
             ecosystem_uids: str | list[str] | None = None
-    ) -> list[gv.EcosystemPayloadDict]:
+    ) -> gv.EcosystemPayloadDict | list[gv.EcosystemPayloadDict] | None:
+        self.logger.debug(f"Getting '{event_name}' payload.")
+        if event_name in ("places_list", ):
+            return self._get_engine_event_payload(event_name)
+        else:
+            return self._get_ecosystem_event_payload(event_name, ecosystem_uids)
+
+    def _get_ecosystem_event_payload(
+            self,
+            event_name: EventNames,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> list[gv.EcosystemPayloadDict] | None:
+        # Check that the event is possible
+        if not hasattr(Ecosystem, event_name):
+            self.logger.error(f"Payload for event '{event_name}' is not defined.")
+            return None
+        # Get the data
         rv: list[gv.EcosystemPayloadDict] = []
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
             f"Getting '{event_name}' payload for {humanize_list(uids)}.")
         for uid in uids:
-            if hasattr(self.ecosystems[uid], event_name):
-                data = getattr(self.ecosystems[uid], event_name)
-            else:
-                self.logger.error(f"Payload for event '{event_name}' is not defined.")
-                return rv
-            if not isinstance(data, gv.Empty):
-                payload_class = payload_classes[event_name]
-                payload: gv.EcosystemPayload = payload_class.from_base(uid, data)
-                payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
-                rv.append(payload_dict)
+            data = getattr(self.ecosystems[uid], event_name)
+            if isinstance(data, gv.Empty):
+                continue
+            payload_class = payload_classes[event_name]
+            payload: gv.EcosystemPayload = payload_class.from_base(uid, data)
+            payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
+            rv.append(payload_dict)
         return rv
+
+    def _get_engine_event_payload(
+            self,
+            event_name: EventNames
+    ) -> gv.EcosystemPayloadDict | None:
+        # Check that the event is possible
+        if not hasattr(Engine, event_name):
+            self.logger.error(f"Payload for event '{event_name}' is not defined.")
+            return None
+        # Get the data
+        data = getattr(self.engine, event_name)
+        payload_class = payload_classes[event_name]
+        payload: gv.EcosystemPayload = payload_class.from_base(self.engine.uid, data)
+        payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
+        return payload_dict
 
     def emit_event(
             self,

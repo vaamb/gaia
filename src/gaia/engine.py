@@ -12,7 +12,9 @@ from apscheduler.executors.pool import BasePoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from gaia.config import CacheType, EngineConfig
+import gaia_validators as gv
+
+from gaia.config.from_files import CacheType, EngineConfig
 from gaia.ecosystem import Ecosystem
 from gaia.utils import SingletonMeta
 from gaia.virtual import VirtualWorld
@@ -376,6 +378,17 @@ class Engine(metaclass=SingletonMeta):
     @property
     def config(self) -> EngineConfig:
         return self._config
+
+    @property
+    def places_list(self) -> list[gv.Place]:
+        rv: list[gv.Place] = []
+        places = self.config.places
+        for place, coordinates in places.items():
+            rv.append(gv.Place(
+                name=place,
+                coordinates=coordinates,
+            ))
+        return rv
 
     @property
     def ecosystems_started(self) -> set[str]:
