@@ -77,6 +77,26 @@ def test_delete_ecosystem(events_handler: Events):
     assert len(events_handler.ecosystems) == 0
 
 
+def test_create_place(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.create,
+        target="place",
+        data={"place": "home", "coordinates": (0, 0)},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+        assert "was successfully treated" in logs
+    emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
+    assert emitted_msg["status"] == gv.Result.success
+
+    data_update = events_handler._dispatcher.emit_store[1]["data"]
+    assert data_update["uid"] == engine_uid
+    gv.Place(**data_update["data"][0])
+
+
 def test_update_time_parameters(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
