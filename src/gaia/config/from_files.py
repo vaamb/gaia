@@ -92,10 +92,12 @@ class CoordinatesDict(TypedDict):
 
 class PrivateConfigValidator(gv.BaseModel):
     places: dict[str, gv.Coordinates] = Field(default_factory=dict)
+    units: dict[str, str] = Field(default_factory=dict)
 
 
 class PrivateConfigDict(TypedDict):
     places: dict[str, gv.Coordinates]
+    units: dict[str, str]
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +188,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
-        self._private_config: PrivateConfigDict = {"places": {}}
+        self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         self._sun_times: [str, SunTimesCacheData] = {}
         self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
@@ -521,11 +523,11 @@ class EngineConfig(metaclass=SingletonMeta):
         self._ecosystems_config_dict = value
 
     @property
-    def private_config(self) -> dict:
+    def private_config(self) -> PrivateConfigDict:
         return self._private_config
 
     @private_config.setter
-    def private_config(self, value: dict):
+    def private_config(self, value: PrivateConfigDict):
         if not self.app_config.TESTING:
             raise AttributeError("can't set attribute 'private_config'")
         self._private_config = value
@@ -578,11 +580,7 @@ class EngineConfig(metaclass=SingletonMeta):
     """Private config parameters"""
     @property
     def places(self) -> dict[str, gv.Coordinates]:
-        try:
-            return self._private_config["places"]
-        except KeyError:
-            self._private_config["places"] = {}
-            return self._private_config["places"]
+        return self.private_config["places"]
 
     def get_place(self, place: str) -> gv.Coordinates | None:
         try:
@@ -637,7 +635,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def units(self) -> dict[str, str]:
-        return self._private_config.get("units", {})
+        return self.private_config.get("units", {})
 
     @property
     def sun_times(self) -> dict[str, SunTimesCacheData]:
