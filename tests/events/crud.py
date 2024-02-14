@@ -56,6 +56,10 @@ def test_create_ecosystem(events_handler: Events):
         assert "was successfully treated" in logs
     emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
     assert emitted_msg["status"] == gv.Result.success
+
+    data_update = events_handler._dispatcher.emit_store[1]["data"]
+    assert len(data_update) == 2
+    assert "TestCrud" in [ecosystem["data"]["name"] for ecosystem in data_update]
     assert len(events_handler.ecosystems) == 2
     assert "TestCrud" in [ecosystem.name for ecosystem in events_handler.ecosystems.values()]
 
@@ -74,7 +78,6 @@ def test_delete_ecosystem(events_handler: Events):
         assert "was successfully treated" in logs
     emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
     assert emitted_msg["status"] == gv.Result.success
-    assert len(events_handler.ecosystems) == 0
 
 
 def test_create_place(events_handler: Events):

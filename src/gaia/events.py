@@ -441,7 +441,11 @@ class Events(EventHandler):
         crud_uuid: UUID = data["uuid"]
         action: gv.CrudAction = data['action']
         target: str = data['target']
-        ecosystem_uid: str | None = data["routing"]["ecosystem_uid"]
+        ecosystem_uid: str | None
+        if target in ("ecosystem", "place"):
+            ecosystem_uid = None
+        else:
+            ecosystem_uid: str = data["routing"]["ecosystem_uid"]
         crud_key = f"{action.name}_{target}"
         self.logger.info(f"Received CRUD request '{crud_uuid}' from Ouranos.")
 
