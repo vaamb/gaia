@@ -82,24 +82,22 @@ class RootSunTimesCacheValidator(gv.BaseModel):
     config: dict[str, SunTimesCacheValidator]
 
 
-class CoordinatesValidator(gv.BaseModel):
-    latitude: float
-    longitude: float
-
-
+# ---------------------------------------------------------------------------
+#   Private config models
+# ---------------------------------------------------------------------------
 class CoordinatesDict(TypedDict):
     latitude: float
     longitude: float
 
 
-class PlaceValidator(gv.BaseModel):
-    name: str
-    coordinates: CoordinatesValidator
+class PrivateConfigValidator(gv.BaseModel):
+    places: dict[str, gv.Coordinates] = Field(default_factory=dict)
+    units: dict[str, str] = Field(default_factory=dict)
 
 
-class PlaceDict(TypedDict):
-    name: str
-    coordinates: CoordinatesDict
+class PrivateConfigDict(TypedDict):
+    places: dict[str, gv.Coordinates]
+    units: dict[str, str]
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +188,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._dirs: dict[str, Path] = {}
         self._engine: "Engine" | None = None
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
-        self._private_config: dict = {}
+        self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         self._sun_times: [str, SunTimesCacheData] = {}
         self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
@@ -310,7 +308,19 @@ class EngineConfig(metaclass=SingletonMeta):
                     self._ecosystems_config_dict = validated
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
-                self._private_config = yaml.load(file)
+                unvalidated = yaml.load(file)
+                try:
+                    validated = PrivateConfigValidator(
+                        **unvalidated
+                    ).model_dump()
+                except pydantic.ValidationError as e:
+                    self.logger.error(
+                        f"Could not validate private configuration file. "
+                        f"ERROR msg(s): `{format_pydantic_error(e)}`."
+                    )
+                    raise e
+                else:
+                    self._private_config = validated
 
     def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
@@ -330,7 +340,8 @@ class EngineConfig(metaclass=SingletonMeta):
         self._dump_config(ConfigType.ecosystems)
 
     def _create_private_config_file(self):
-        self._private_config = {}
+        self._private_config: PrivateConfigDict = \
+            PrivateConfigValidator().model_dump()
         self._dump_config(ConfigType.private)
 
     def initialize_configs(self) -> None:
@@ -512,11 +523,11 @@ class EngineConfig(metaclass=SingletonMeta):
         self._ecosystems_config_dict = value
 
     @property
-    def private_config(self) -> dict:
+    def private_config(self) -> PrivateConfigDict:
         return self._private_config
 
     @private_config.setter
-    def private_config(self, value: dict):
+    def private_config(self, value: PrivateConfigDict):
         if not self.app_config.TESTING:
             raise AttributeError("can't set attribute 'private_config'")
         self._private_config = value
@@ -568,14 +579,10 @@ class EngineConfig(metaclass=SingletonMeta):
 
     """Private config parameters"""
     @property
-    def places(self) -> dict[str, CoordinatesDict]:
-        try:
-            return self._private_config["places"]
-        except KeyError:
-            self._private_config["places"] = {}
-            return self._private_config["places"]
+    def places(self) -> dict[str, gv.Coordinates]:
+        return self.private_config["places"]
 
-    def get_place(self, place: str) -> CoordinatesDict | None:
+    def get_place(self, place: str) -> gv.Coordinates | None:
         try:
             return self.places[place]
         except KeyError:
@@ -584,24 +591,28 @@ class EngineConfig(metaclass=SingletonMeta):
     def set_place(
             self,
             place: str,
-            coordinates: tuple[float, float] | CoordinatesDict
+            coordinates: tuple[float, float] | CoordinatesDict,
     ) -> None:
+        validated_coordinates: gv.Coordinates
         if isinstance(coordinates, tuple):
-            coordinates = CoordinatesDict(
+            validated_coordinates = gv.Coordinates(
                 latitude=coordinates[0],
                 longitude=coordinates[1]
             )
-        validated_coordinates: CoordinatesDict = CoordinatesValidator(
-            **coordinates).model_dump()
+        else:
+            validated_coordinates = gv.Coordinates(
+                latitude=coordinates["latitude"],
+                longitude=coordinates["longitude"],
+            )
         self.places[place] = validated_coordinates
 
-    def CRUD_create_place(self, value: PlaceDict):
-        validated_value: PlaceDict = PlaceValidator(**value).model_dump()
+    def CRUD_create_place(self, value: gv.PlaceDict):
+        validated_value: gv.PlaceDict = gv.Place(**value).model_dump()
         place = validated_value.pop("name")
         self.places[place] = validated_value["coordinates"]
 
-    def CRUD_update_place(self, value: PlaceDict) -> None:
-        validated_value: PlaceDict = PlaceValidator(**value).model_dump()
+    def CRUD_update_place(self, value: gv.PlaceDict) -> None:
+        validated_value: gv.PlaceDict = gv.Place(**value).model_dump()
         place = validated_value.pop("name")
         if place not in self.places:
             raise UndefinedParameter(
@@ -610,7 +621,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self.places[place] = validated_value["coordinates"]
 
     @property
-    def home_coordinates(self) -> CoordinatesDict:
+    def home_coordinates(self) -> gv.Coordinates:
         home = self.get_place("home")
         if home is None:
             raise UndefinedParameter(
@@ -624,7 +635,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def units(self) -> dict[str, str]:
-        return self._private_config.get("units", {})
+        return self.private_config.get("units", {})
 
     @property
     def sun_times(self) -> dict[str, SunTimesCacheData]:

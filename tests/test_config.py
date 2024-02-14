@@ -148,8 +148,8 @@ def test_home(engine_config: EngineConfig):
     with pytest.raises(UndefinedParameter):
         engine_config.home_coordinates
     engine_config.home_coordinates = (4, 2)
-    assert engine_config.home_coordinates["latitude"] == 4.0
-    assert engine_config.home_coordinates["longitude"] == 2.0
+    assert engine_config.home_coordinates.latitude == 4.0
+    assert engine_config.home_coordinates.longitude == 2.0
 
 
 # ---------------------------------------------------------------------------
