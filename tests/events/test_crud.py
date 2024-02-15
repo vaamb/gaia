@@ -148,6 +148,26 @@ def test_delete_place(events_handler: Events):
     assert coordinates is None
 
 
+def test_update_chaos(events_handler: Events):
+    frequency = 10
+    duration = 5
+    intensity = 1.10
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="chaos_config",
+        data={"frequency": frequency, "duration": duration, "intensity": intensity},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    data_update = events_handler._dispatcher.emit_store[1]["data"]
+    verified = gv.ChaosParametersPayload(**data_update[0])
+    assert  verified.data.frequency == frequency
+    assert verified.data.duration == duration
+    assert verified.data.intensity == intensity
+
+
 def test_update_time_parameters(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
