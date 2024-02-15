@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
-from typing import cast, TypedDict
+from typing import TypedDict
 
 from dispatcher import Dispatcher
 
@@ -38,7 +38,7 @@ class MockDispatcher(Dispatcher):
             ttl: int | None = None,
             **kwargs
     ):
-        self.emit_store.append(cast(EmitDict, {
+        self.emit_store.append(EmitDict(**{
             "event": event,
             "data": data,
             "room": room,
