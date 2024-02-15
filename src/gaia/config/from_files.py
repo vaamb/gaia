@@ -784,8 +784,8 @@ class EngineConfig(metaclass=SingletonMeta):
                 response = session.get(
                     url=f"https://api.sunrise-sunset.org/json",
                     params={
-                        "lat": place["latitude"],
-                        "lng": place["longitude"],
+                        "lat": place.latitude,
+                        "lng": place.longitude,
                     },
                     timeout=3.0,
                 )

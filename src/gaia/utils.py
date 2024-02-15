@@ -11,7 +11,9 @@ from typing import Any
 from weakref import WeakValueDictionary
 
 import ruamel.yaml
-from ruamel.yaml import SafeRepresenter, ScalarNode
+from ruamel.yaml import SafeRepresenter, ScalarNode, SequenceNode
+
+import gaia_validators as gv
 
 
 remote_address = "1.1.1.1"
@@ -28,7 +30,12 @@ def _repr_enum(self: SafeRepresenter, data: Enum) -> ScalarNode:
     return self.represent_scalar('tag:yaml.org,2002:str', data.name)
 
 
+def _repr_coordinates(self: SafeRepresenter, data: gv.Coordinates) -> SequenceNode:
+    return self.represent_sequence('tag:yaml.org,2002:seq', tuple(data))
+
+
 ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
+ruamel.yaml.add_representer(gv.Coordinates, _repr_coordinates, yaml.representer)
 ruamel.yaml.add_multi_representer(Enum, _repr_enum, yaml.representer)
 yaml.Constructor = ruamel.yaml.constructor.SafeConstructor
 

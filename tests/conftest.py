@@ -98,6 +98,8 @@ def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
 @pytest.fixture(scope="function", autouse=True)
 def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConfig]:
     app_config = deepcopy(engine_config_master.app_config)
+    ecosystem_config = deepcopy(engine_config_master.ecosystems_config_dict)
+    private_config = deepcopy(engine_config_master.private_config)
     for files in engine_config_master.cache_dir.iterdir():
         files.unlink()
     with get_logs_content(engine_config_master.logs_dir / "gaia.log"):
@@ -107,8 +109,8 @@ def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConf
         yield engine_config_master
     finally:
         engine_config_master.app_config = app_config
-        engine_config_master.ecosystems_config_dict = deepcopy(ecosystem_info)
-        engine_config_master.private_config = {}
+        engine_config_master.ecosystems_config_dict = ecosystem_config
+        engine_config_master.private_config = private_config
         engine_config_master.chaos_memory = {}
         engine_config_master.sun_times = {}
         if engine_config_master.started:
