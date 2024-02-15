@@ -8,6 +8,14 @@ from ..data import ecosystem_uid, engine_uid
 from ..utils import get_logs_content
 
 
+def assert_success(events_handler: Events):
+    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+        assert "was successfully treated" in logs
+    assert len(events_handler._dispatcher.emit_store) > 0
+    emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
+    assert emitted_msg["status"] == gv.Result.success
+
+
 def test_wrong_engine_uid(events_handler: Events):
     # Wrong engine_uid
     message = gv.CrudPayloadDict = gv.CrudPayload(
@@ -52,10 +60,7 @@ def test_success(events_handler: Events):
 
     events_handler.on_crud(message)
 
-    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
-        assert "was successfully treated" in logs
-    emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
-    assert emitted_msg["status"] == gv.Result.success
+    assert_success(events_handler)
 
 
 def test_create_ecosystem(events_handler: Events):
@@ -67,6 +72,8 @@ def test_create_ecosystem(events_handler: Events):
     ).model_dump()
 
     events_handler.on_crud(message)
+
+    assert_success(events_handler)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert len(data_update) == 2
@@ -85,6 +92,8 @@ def test_delete_ecosystem(events_handler: Events):
 
     events_handler.on_crud(message)
 
+    assert_success(events_handler)
+
     assert len(events_handler.ecosystems) == 0
     assert len(events_handler.engine.ecosystems_started) == 0
     assert len(events_handler.engine.config.ecosystems_config_dict) == 0
@@ -99,6 +108,8 @@ def test_create_place(events_handler: Events):
     ).model_dump()
 
     events_handler.on_crud(message)
+
+    assert_success(events_handler)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert data_update["uid"] == engine_uid
@@ -120,6 +131,8 @@ def test_update_place(events_handler: Events):
 
     events_handler.on_crud(message)
 
+    assert_success(events_handler)
+
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert data_update["uid"] == engine_uid
     gv.Place(**data_update["data"][0])
@@ -139,6 +152,8 @@ def test_delete_place(events_handler: Events):
     ).model_dump()
 
     events_handler.on_crud(message)
+
+    assert_success(events_handler)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert data_update["uid"] == engine_uid
@@ -161,6 +176,8 @@ def test_update_chaos(events_handler: Events):
 
     events_handler.on_crud(message)
 
+    assert_success(events_handler)
+
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ChaosParametersPayload(**data_update[0])
     assert  verified.data.frequency == frequency
@@ -178,6 +195,8 @@ def test_update_management(events_handler: Events):
 
     events_handler.on_crud(message)
 
+    assert_success(events_handler)
+
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ManagementConfigPayload(**data_update[0])
     assert verified.data.light is True
@@ -192,6 +211,8 @@ def test_update_time_parameters(events_handler: Events):
     ).model_dump()
 
     events_handler.on_crud(message)
+
+    assert_success(events_handler)
 
     data_update: list[gv.LightDataPayloadDict] = events_handler._dispatcher.emit_store[1]["data"]
     gv.LightDataPayload(**data_update[0])
