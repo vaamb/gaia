@@ -124,8 +124,8 @@ def test_update_place(events_handler: Events):
     assert data_update["uid"] == engine_uid
     gv.Place(**data_update["data"][0])
     coordinates = events_handler.engine.config.get_place("home")
-    assert coordinates.longitude == 4
-    assert coordinates.latitude == 2
+    assert coordinates.latitude == 4
+    assert coordinates.longitude == 2
 
 
 def test_delete_place(events_handler: Events):
