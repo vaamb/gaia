@@ -1423,7 +1423,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_hardware(
             self,
             uid: str,
-            **update_value: gv.AnonymousHardwareConfigDict
+            **updating_values: gv.AnonymousHardwareConfigDict
     ) -> None:
         base_hardware_dict = self.IO_dict.get(uid)
         if base_hardware_dict is None:
@@ -1433,10 +1433,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_dict: gv.HardwareConfigDict = cast(gv.HardwareConfigDict, hardware_dict)
         hardware_dict["uid"] = uid
         hardware_dict.update({
-            key: value for key, value in update_value.items()
+            key: value for key, value in updating_values.items()
             if value is not None
         })
-        check_address = "address" in update_value  # Don't check address if not trying to update it
+        check_address = "address" in updating_values  # Don't check address if not trying to update it
         hardware = self._validate_hardware_dict(hardware_dict, check_address)
         hardware_repr = hardware.dict_repr(shorten=True)
         hardware_repr.pop("uid")
