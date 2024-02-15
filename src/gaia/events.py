@@ -65,7 +65,7 @@ crud_links: dict[str, CrudLinks] = {
     "update_place": CrudLinks("update_place", "places_list"),
     "delete_place": CrudLinks("delete_place", "places_list"),
     # Ecosystem properties update
-    "update_chaos": CrudLinks("chaos", "chaos_parameters"),
+    "update_chaos_config": CrudLinks("chaos_config", "chaos_parameters"),
     "update_management": CrudLinks("managements", "management"),
     "update_time_parameters": CrudLinks("time_parameters", "light_data"),
     "update_light_method": CrudLinks("set_light_method", "light_data"),
@@ -412,7 +412,7 @@ class Events(EventHandler):
                 f"{action.name.capitalize()} {target} is not possible for this "
                 f"engine.")
 
-        if target in ("management", "time_parameters"):
+        if target in ("management", "time_parameters", "chaos_config"):
             # Need to update a setter
             def crud_update_setter(config: EcosystemConfig, attr_name: str) -> Callable:
                 def inner(**value: dict):
