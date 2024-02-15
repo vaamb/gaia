@@ -168,6 +168,21 @@ def test_update_chaos(events_handler: Events):
     assert verified.data.intensity == intensity
 
 
+def test_update_management(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="management",
+        data={"light": True},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    data_update = events_handler._dispatcher.emit_store[1]["data"]
+    verified = gv.ManagementConfigPayload(**data_update[0])
+    assert verified.data.light is True
+
+
 def test_update_time_parameters(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
