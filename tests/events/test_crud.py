@@ -222,3 +222,23 @@ def test_update_time_parameters(events_handler: Events):
     assert verified.data.evening_end == night
     assert events_handler.ecosystems[ecosystem_uid].config.time_parameters.day == day
     assert events_handler.ecosystems[ecosystem_uid].config.time_parameters.night == night
+
+
+def test_update_light_method(events_handler: Events):
+    method = gv.LightMethod.elongate
+    events_handler.engine.config.set_place("home", (0, 0))
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="light_method",
+        data={"method": method},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    assert_success(events_handler)
+
+    data_update: list[gv.LightDataPayloadDict] = events_handler._dispatcher.emit_store[1]["data"]
+    verified = gv.LightDataPayload(**data_update[0])
+    assert verified.data.method == method
+    assert events_handler.ecosystems[ecosystem_uid].light_method == method
