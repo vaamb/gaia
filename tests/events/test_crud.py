@@ -203,11 +203,13 @@ def test_update_management(events_handler: Events):
 
 
 def test_update_time_parameters(events_handler: Events):
+    day = time(8, 0)
+    night = time(20, 0)
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="time_parameters",
-        data={"day": time(8, 0), "night": time(20, 0)},
+        data={"day": day, "night": night},
     ).model_dump()
 
     events_handler.on_crud(message)
@@ -215,4 +217,8 @@ def test_update_time_parameters(events_handler: Events):
     assert_success(events_handler)
 
     data_update: list[gv.LightDataPayloadDict] = events_handler._dispatcher.emit_store[1]["data"]
-    gv.LightDataPayload(**data_update[0])
+    verified = gv.LightDataPayload(**data_update[0])
+    assert verified.data.morning_start == day
+    assert verified.data.evening_end == night
+    assert events_handler.ecosystems[ecosystem_uid].config.time_parameters.day == day
+    assert events_handler.ecosystems[ecosystem_uid].config.time_parameters.night == night
