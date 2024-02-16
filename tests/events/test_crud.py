@@ -8,10 +8,10 @@ from ..data import ecosystem_uid, engine_uid, hardware_info, hardware_uid
 from ..utils import get_logs_content
 
 
-def assert_success(events_handler: Events):
+def assert_success(events_handler: Events, expected_events_emitted: int = 2):
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         assert "was successfully treated" in logs
-    assert len(events_handler._dispatcher.emit_store) > 0
+    assert len(events_handler._dispatcher.emit_store) == expected_events_emitted
     emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
     assert emitted_msg["status"] == gv.Result.success
 
@@ -108,7 +108,7 @@ def test_delete_ecosystem(events_handler: Events):
 
     events_handler.on_crud(message)
 
-    assert_success(events_handler)
+    assert_success(events_handler, 1)
 
     assert len(events_handler.ecosystems) == 0
     assert len(events_handler.engine.ecosystems_started) == 0
