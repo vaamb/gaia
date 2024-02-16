@@ -4,7 +4,7 @@ import gaia_validators as gv
 
 from gaia.events import Events
 
-from ..data import ecosystem_uid, engine_uid, hardware_info
+from ..data import ecosystem_uid, engine_uid, hardware_info, hardware_uid
 from ..utils import get_logs_content
 
 
@@ -436,3 +436,27 @@ def test_create_hardware(events_handler: Events):
     assert hardware.address == valid_hardware_info["address"]
     assert hardware.type == valid_hardware_info["type"]
     assert hardware.level == valid_hardware_info["level"]
+
+
+def test_update_hardware(events_handler: Events):
+    valid_hardware_info = {
+        "uid": hardware_uid,
+        "model": "gpioSwitch",
+        "address": "GPIO_11",  # Use a free address
+    }
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="hardware",
+        data=valid_hardware_info,
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    assert_success(events_handler)
+
+    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    verified = gv.HardwareConfigPayload(**data_update[0])
+    hardware: gv.HardwareConfig = verified.data[2]
+    assert hardware.address == valid_hardware_info["address"]
+    assert hardware.model == valid_hardware_info["model"]
