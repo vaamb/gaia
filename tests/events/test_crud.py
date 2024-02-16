@@ -242,3 +242,28 @@ def test_update_light_method(events_handler: Events):
     verified = gv.LightDataPayload(**data_update[0])
     assert verified.data.method == method
     assert events_handler.ecosystems[ecosystem_uid].light_method == method
+
+
+def test_create_environment_parameter(events_handler: Events):
+    parameter = gv.ClimateParameter.temperature
+    day = 10.0
+    night = 15.0
+    hysteresis = None
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.create,
+        target="environment_parameter",
+        data={"parameter": parameter, "day": day, "night": night, "hysteresis": hysteresis},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    assert_success(events_handler)
+
+    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    verified = gv.EnvironmentConfigPayload(**data_update[0])
+    environment_parameter = verified.data.climate[0]
+    assert environment_parameter.parameter == parameter
+    assert environment_parameter.day == day
+    assert environment_parameter.night == night
+    assert environment_parameter.hysteresis == hysteresis
