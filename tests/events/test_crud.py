@@ -17,7 +17,6 @@ def assert_success(events_handler: Events, expected_events_emitted: int = 2):
 
 
 def test_wrong_engine_uid(events_handler: Events):
-    # Wrong engine_uid
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": "wrong_uid", "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -32,7 +31,6 @@ def test_wrong_engine_uid(events_handler: Events):
 
 
 def test_missing_ecosystem_uid(events_handler: Events):
-    # Missing ecosystem_uid
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.create,
@@ -93,7 +91,6 @@ def test_delete_ecosystem_failure(events_handler: Events):
     events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
-
     assert result_msg["status"] == gv.Result.failure
     assert "Ecosystem with id 'does_not_exists' not found" in result_msg["message"]
 
@@ -146,7 +143,6 @@ def test_update_place_failure(events_handler: Events):
     events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
-
     assert result_msg["status"] == gv.Result.failure
     assert "No location named 'home' was found" in result_msg["message"]
 
@@ -184,7 +180,6 @@ def test_delete_place_failure(events_handler: Events):
     events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
-
     assert result_msg["status"] == gv.Result.failure
     assert "No location named 'home' was found" in result_msg["message"]
 
@@ -206,7 +201,6 @@ def test_delete_place(events_handler: Events):
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert data_update["uid"] == engine_uid
     assert len(data_update["data"]) == 0
-
     coordinates = events_handler.engine.config.get_place("home")
     assert coordinates is None
 
@@ -332,7 +326,6 @@ def test_update_environment_parameter_failure(events_handler: Events):
     events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
-
     assert result_msg["status"] == gv.Result.failure
     assert "No climate parameter temperature was found" in result_msg["message"]
 
@@ -381,7 +374,6 @@ def test_delete_environment_parameter_failure(events_handler: Events):
     events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
-
     assert result_msg["status"] == gv.Result.failure
     assert "No climate parameter temperature was found" in result_msg["message"]
 
@@ -452,8 +444,8 @@ def test_update_hardware_failure(events_handler: Events):
     ).model_dump()
 
     events_handler.on_crud(message)
-    result_msg = events_handler._dispatcher.emit_store[0]["data"]
 
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "No hardware with uid 'invalid_uid' found" in result_msg["message"]
 
@@ -491,8 +483,8 @@ def test_delete_hardware_failure(events_handler: Events):
     ).model_dump()
 
     events_handler.on_crud(message)
-    result_msg = events_handler._dispatcher.emit_store[0]["data"]
 
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "No hardware with uid 'invalid_uid' found" in result_msg["message"]
 

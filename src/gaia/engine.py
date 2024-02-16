@@ -479,7 +479,7 @@ class Engine(metaclass=SingletonMeta):
         if ecosystem_id in self.ecosystems:
             ecosystem_uid = ecosystem_id
         else:
-            ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
+            ecosystem_uid, _ = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 ecosystem = self.ecosystems[ecosystem_uid]
@@ -513,7 +513,7 @@ class Engine(metaclass=SingletonMeta):
         if ecosystem_id in self.ecosystems:
             ecosystem_uid = ecosystem_id
         else:
-            ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
+            ecosystem_uid, _ = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 raise RuntimeError(

@@ -58,36 +58,34 @@ def test_hardware_creation_success(ecosystem_config: EcosystemConfig):
 
 def test_hardware_update_fail_not_found(ecosystem_config: EcosystemConfig):
     with pytest.raises(HardwareNotFound):
-        ecosystem_config.update_hardware("invalid_uid", **{"address": "GPIO_7"})
+        ecosystem_config.update_hardware("invalid_uid", address="GPIO_7")
 
 
 def test_hardware_update_fail_address(ecosystem_config: EcosystemConfig):
     with pytest.raises(ValueError, match=r"Address .* already used"):
-        ecosystem_config.update_hardware(hardware_uid, **{"address": hardware_address})
+        ecosystem_config.update_hardware(hardware_uid, address=hardware_address)
 
 
 def test_hardware_update_fail_model(ecosystem_config: EcosystemConfig):
     with pytest.raises(ValueError, match="This hardware model is not supported"):
-        ecosystem_config.update_hardware(hardware_uid, **{"model": "Invalid"})
+        ecosystem_config.update_hardware(hardware_uid, model="Invalid")
 
 
 def test_hardware_update_fail_type(ecosystem_config: EcosystemConfig):
     error_msg = "VALUE ERROR at parameter 'type', input 'Invalid' is not valid"
     with pytest.raises(ValueError, match=error_msg):
-        ecosystem_config.update_hardware(hardware_uid, **{"type": "Invalid"})
+        ecosystem_config.update_hardware(hardware_uid, type="Invalid")
 
 
 def test_hardware_update_fail_level(ecosystem_config: EcosystemConfig):
     error_msg = "VALUE ERROR at parameter 'level', input 'Invalid' is not valid"
     with pytest.raises(ValueError, match=error_msg):
-        ecosystem_config.update_hardware(hardware_uid, **{"level": "Invalid"})
+        ecosystem_config.update_hardware(hardware_uid, level="Invalid")
 
 
 def test_hardware_update_success(ecosystem_config: EcosystemConfig):
     ecosystem_config.update_hardware(
-        hardware_uid,
-        **{"model": "gpioSwitch", "address": "GPIO_11"}
-    )
+        hardware_uid, model="gpioSwitch", address="GPIO_11")
 
 
 def test_hardware_delete_fail_not_found(ecosystem_config: EcosystemConfig):

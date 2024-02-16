@@ -8,7 +8,7 @@ import inspect
 import logging
 from time import monotonic, sleep
 import typing as t
-from typing import Any, Callable, Literal, NamedTuple, Type
+from typing import Any, Callable, cast, Literal, NamedTuple, Type
 from uuid import UUID
 import weakref
 
@@ -19,8 +19,7 @@ from pydantic import ValidationError
 from dispatcher import EventHandler
 import gaia_validators as gv
 
-from gaia import Ecosystem, Engine
-from gaia.config import EcosystemConfig
+from gaia import Ecosystem, EcosystemConfig, Engine
 from gaia.config.from_files import ConfigType
 from gaia.utils import humanize_list, local_ip_address
 
@@ -34,7 +33,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 PayloadName = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
     "sensors_data", "health_data", "light_data", "actuator_data",
-    "chaos_parameters", "places_list"
+    "chaos_parameters", "places_list",
 ]
 
 
@@ -68,7 +67,7 @@ CrudEventName = Literal[
 ]
 
 
-crud_links_dict: dict[str, CrudLinks] = {
+crud_links_dict: dict[CrudEventName, CrudLinks] = {
     # Ecosystem creation and deletion
     "create_ecosystem": CrudLinks("create_ecosystem", "base_info"),
     "delete_ecosystem": CrudLinks("delete_ecosystem", "base_info"),
@@ -100,13 +99,13 @@ class Events(EventHandler):
 
     :param engine: an `Engine` instance
     """
-    def __init__(self, engine: "Engine", **kwargs) -> None:
+    def __init__(self, engine: Engine, **kwargs) -> None:
         kwargs["namespace"] = "aggregator"
         super().__init__(**kwargs)
-        self.engine: "Engine" = weakref.proxy(engine)
+        self.engine: Engine = weakref.proxy(engine)
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
-        self._sensor_buffer_cls: "SensorBuffer" | None = None
+        self._sensor_buffer_cls: SensorBuffer | None = None
         self._last_heartbeat: float = monotonic()
         self._jobs_scheduled: bool = False
         self.logger = logging.getLogger(f"gaia.engine.events_handler")
@@ -116,11 +115,11 @@ class Events(EventHandler):
         return self.engine.use_db
 
     @property
-    def db(self) -> "SQLAlchemyWrapper":
+    def db(self) -> SQLAlchemyWrapper:
         return self.engine.db
 
     @property
-    def sensor_buffer_cls(self) -> "SensorBuffer":
+    def sensor_buffer_cls(self) -> SensorBuffer:
         if self._sensor_buffer_cls is None:
             if not self.use_db:
                 raise AttributeError(
@@ -227,6 +226,7 @@ class Events(EventHandler):
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
+        self.send_payload("places_list")
         uids = self.filter_uids(ecosystem_uids)
         self.send_payload("base_info", uids)
         self.send_payload("management", uids)
@@ -419,9 +419,9 @@ class Events(EventHandler):
                     f"started ecosystems.")
             base_obj = self.engine.ecosystems[ecosystem_uid].config
 
-        crud_key = f"{action.name}_{target}"
+        event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
 
-        crud_link = crud_links_dict.get(crud_key)
+        crud_link = crud_links_dict.get(event_name)
         if crud_link is None:
             raise ValueError(
                 f"{action.name.capitalize()} {target} is not possible for this "
@@ -461,7 +461,7 @@ class Events(EventHandler):
             ecosystem_uid = None
         else:
             ecosystem_uid: str = data["routing"]["ecosystem_uid"]
-        crud_key = f"{action.name}_{target}"
+        event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
         self.logger.info(f"Received CRUD request '{crud_uuid}' from Ouranos.")
 
         # Treat the CRUD request
@@ -495,13 +495,13 @@ class Events(EventHandler):
 
         # Send back the updated info
         self.engine.refresh_ecosystems(send_info=False)
-        crud_link = crud_links_dict[crud_key]
+        crud_link = crud_links_dict[event_name]
         if not crud_link.payload_name:
             self.logger.warning(
                 f"No CRUD payload linked to action '{action.name} {target}' "
                 f"was found. Updated data won't be sent to Ouranos.")
-        event_name = crud_link.payload_name
-        self.send_payload(payload_name=event_name, ecosystem_uids=ecosystem_uid)
+        payload_name = crud_link.payload_name
+        self.send_payload(payload_name=payload_name, ecosystem_uids=ecosystem_uid)
 
     def send_buffered_data(self) -> None:
         if not self.use_db:
