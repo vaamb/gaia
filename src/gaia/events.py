@@ -53,7 +53,7 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
 
 
 class CrudLinks(NamedTuple):
-    function_name: str
+    func_or_attr_name: str
     payload_name: PayloadName
 
 
@@ -82,9 +82,12 @@ crud_links_dict: dict[str, CrudLinks] = {
     "update_time_parameters": CrudLinks("time_parameters", "light_data"),
     "update_light_method": CrudLinks("set_light_method", "light_data"),
     # Environment parameter creation, deletion and update
-    "create_environment_parameter": CrudLinks("set_climate_parameter", "environmental_parameters"),
-    "update_environment_parameter": CrudLinks("update_climate_parameter", "environmental_parameters"),
-    "delete_environment_parameter": CrudLinks("delete_climate_parameter", "environmental_parameters"),
+    "create_environment_parameter": CrudLinks(
+        "set_climate_parameter", "environmental_parameters"),
+    "update_environment_parameter": CrudLinks(
+        "update_climate_parameter", "environmental_parameters"),
+    "delete_environment_parameter": CrudLinks(
+        "delete_climate_parameter", "environmental_parameters"),
     # Hardware creation, deletion and update
     "create_hardware": CrudLinks("create_new_hardware", "hardware"),
     "update_hardware": CrudLinks("update_hardware", "hardware"),
@@ -280,7 +283,7 @@ class Events(EventHandler):
         else:
             self.logger.warning(
                 f"Ouranos did not receive all the initial ecosystems info. "
-                f"Non-received info: {missing_data}")
+                f"Non-received info: {humanize_list(missing_data)}.")
             # TODO: resend ?
 
     def filter_uids(
@@ -426,18 +429,18 @@ class Events(EventHandler):
 
         if target in ("management", "time_parameters", "chaos_config"):
             # Need to update a setter
-            def crud_update_setter(config: EcosystemConfig, attr_name: str) -> Callable:
+            def get_attr_setter(config: EcosystemConfig, attr_name: str) -> Callable:
                 def inner(**value: dict):
                     setattr(config, attr_name, value)
 
                 return inner
 
-            return crud_update_setter(base_obj, crud_link.function_name)
+            return get_attr_setter(base_obj, crud_link.func_or_attr_name)
         else:
             def get_function(obj: Any, func_name: str) -> Callable:
                 return getattr(obj, func_name)
 
-            return get_function(base_obj, crud_link.function_name)
+            return get_function(base_obj, crud_link.func_or_attr_name)
 
     def on_crud(self, message: gv.CrudPayloadDict) -> None:
         # Validate the payload
@@ -504,18 +507,17 @@ class Events(EventHandler):
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
-                "parameter 'USE_DATABASE' to 'True'")
+                "parameter 'USE_DATABASE' to 'True'.")
         SensorBuffer = self.sensor_buffer_cls  # noqa
         with self.db.scoped_session() as session:
             for data in SensorBuffer.get_buffered_data(session):
-                self.emit(
-                    event="buffered_sensors_data", data=data)
+                self.emit(event="buffered_sensors_data", data=data)
 
     def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
-                "parameter 'USE_DATABASE' to 'True'")
+                "parameter 'USE_DATABASE' to 'True'.")
         data: gv.RequestResultDict = self.validate_payload(
             message, gv.RequestResult)
         SensorBuffer = self.sensor_buffer_cls  # noqa
