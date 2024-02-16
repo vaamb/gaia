@@ -438,6 +438,26 @@ def test_create_hardware(events_handler: Events):
     assert hardware.level == valid_hardware_info["level"]
 
 
+def test_update_hardware_failure(events_handler: Events):
+    invalid_hardware_info = {
+        "uid": "invalid_uid",
+        "model": "gpioSwitch",
+        "address": "GPIO_11",  # Use a free address
+    }
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="hardware",
+        data=invalid_hardware_info,
+    ).model_dump()
+
+    events_handler.on_crud(message)
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+
+    assert result_msg["status"] == gv.Result.failure
+    assert "No hardware with uid 'invalid_uid' found" in result_msg["message"]
+
+
 def test_update_hardware(events_handler: Events):
     valid_hardware_info = {
         "uid": hardware_uid,
@@ -460,6 +480,21 @@ def test_update_hardware(events_handler: Events):
     hardware: gv.HardwareConfig = verified.data[2]
     assert hardware.address == valid_hardware_info["address"]
     assert hardware.model == valid_hardware_info["model"]
+
+
+def test_delete_hardware_failure(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.delete,
+        target="hardware",
+        data={"uid": "invalid_uid"},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+
+    assert result_msg["status"] == gv.Result.failure
+    assert "No hardware with uid 'invalid_uid' found" in result_msg["message"]
 
 
 def test_delete_hardware(events_handler: Events):
