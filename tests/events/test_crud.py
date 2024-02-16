@@ -82,6 +82,22 @@ def test_create_ecosystem(events_handler: Events):
     assert "TestCrud" in [ecosystem.name for ecosystem in events_handler.ecosystems.values()]
 
 
+def test_delete_ecosystem_failure(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid},
+        action=gv.CrudAction.delete,
+        target="ecosystem",
+        data={"ecosystem_id": "does_not_exists"},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+
+    assert result_msg["status"] == gv.Result.failure
+    assert "Ecosystem with id 'does_not_exists' not found" in result_msg["message"]
+
+
 def test_delete_ecosystem(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
@@ -119,11 +135,27 @@ def test_create_place(events_handler: Events):
     assert coordinates.latitude == 0
 
 
+def test_update_place_failure(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid},
+        action=gv.CrudAction.update,
+        target="place",
+        data={"place": "home", "coordinates": (4, 2)},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+
+    assert result_msg["status"] == gv.Result.failure
+    assert "No location named 'home' was found" in result_msg["message"]
+
+
 def test_update_place(events_handler: Events):
     events_handler.engine.config.set_place("home", (0, 0))
 
     message = gv.CrudPayloadDict = gv.CrudPayload(
-        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        routing={"engine_uid": engine_uid},
         action=gv.CrudAction.update,
         target="place",
         data={"place": "home", "coordinates": (4, 2)},
@@ -139,6 +171,22 @@ def test_update_place(events_handler: Events):
     coordinates = events_handler.engine.config.get_place("home")
     assert coordinates.latitude == 4
     assert coordinates.longitude == 2
+
+
+def test_delete_place_failure(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.delete,
+        target="place",
+        data={"place": "home"},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+
+    assert result_msg["status"] == gv.Result.failure
+    assert "No location named 'home' was found" in result_msg["message"]
 
 
 def test_delete_place(events_handler: Events):
@@ -269,6 +317,26 @@ def test_create_environment_parameter(events_handler: Events):
     assert environment_parameter.hysteresis == hysteresis
 
 
+def test_update_environment_parameter_failure(events_handler: Events):
+    parameter = gv.ClimateParameter.temperature
+    day = 10.0
+    night = 15.0
+    hysteresis = None
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="environment_parameter",
+        data={"parameter": parameter, "day": day, "night": night, "hysteresis": hysteresis},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+
+    assert result_msg["status"] == gv.Result.failure
+    assert "No climate parameter temperature was found" in result_msg["message"]
+
+
 def test_update_environment_parameter(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
@@ -299,6 +367,23 @@ def test_update_environment_parameter(events_handler: Events):
     assert environment_parameter.day == day
     assert environment_parameter.night == night
     assert environment_parameter.hysteresis == hysteresis
+
+
+def test_delete_environment_parameter_failure(events_handler: Events):
+    parameter = gv.ClimateParameter.temperature
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.delete,
+        target="environment_parameter",
+        data={"parameter": parameter},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+
+    assert result_msg["status"] == gv.Result.failure
+    assert "No climate parameter temperature was found" in result_msg["message"]
 
 
 def test_delete_environment_parameter(events_handler: Events):
