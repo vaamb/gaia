@@ -460,3 +460,21 @@ def test_update_hardware(events_handler: Events):
     hardware: gv.HardwareConfig = verified.data[2]
     assert hardware.address == valid_hardware_info["address"]
     assert hardware.model == valid_hardware_info["model"]
+
+
+def test_delete_hardware(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.delete,
+        target="hardware",
+        data={"uid": hardware_uid},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    assert_success(events_handler)
+
+    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    verified = gv.HardwareConfigPayload(**data_update[0])
+    assert len(verified.data) == 2
+    assert hardware_uid not in [hardware.uid for hardware in verified.data]
