@@ -573,7 +573,7 @@ class EngineConfig(metaclass=SingletonMeta):
             ecosystem_name = ecosystem_id
             return gv.IDs(ecosystem_uid, ecosystem_name)
         raise EcosystemNotFound(
-            f"Ecosystem with id '{ecosystem_id}' not found.'ecosystem_id' parameter "
+            f"Ecosystem with id '{ecosystem_id}' not found. 'ecosystem_id' parameter "
             f"should either be an ecosystem uid or an ecosystem name present in "
             f"the 'ecosystems.cfg' file. If you want to create a new ecosystem "
             f"configuration use the function `create_ecosystem()`."
@@ -620,7 +620,12 @@ class EngineConfig(metaclass=SingletonMeta):
         self.set_place(place, coordinates)
 
     def delete_place(self, place: str) -> None:
-        del self.places[place]
+        try:
+            del self.places[place]
+        except KeyError:
+            raise UndefinedParameter(
+                f"No location named '{place}' was found in the private "
+                f"configuration file.")
 
     @property
     def home_coordinates(self) -> gv.Coordinates:
