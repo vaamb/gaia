@@ -1177,7 +1177,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 and self.general.engine.event_handler.registered
         ):
             try:
-                self.general.engine.event_handler.emit_event(
+                self.general.engine.event_handler.send_payload(
                     "light_data", ecosystem_uids=[self.uid])
             except Exception as e:
                 self.logger.error(

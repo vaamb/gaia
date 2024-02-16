@@ -597,7 +597,7 @@ class Engine(metaclass=SingletonMeta):
             if ecosystem.started:
                 ecosystem.refresh_lighting_hours()
         if self.use_message_broker:
-            self.event_handler.emit_event("light_data")
+            self.event_handler.send_payload("light_data")
 
     def update_chaos_time_window(self) -> None:
         self.logger.info("Updating ecosystems chaos time window.")

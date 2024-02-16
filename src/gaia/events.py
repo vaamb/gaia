@@ -31,13 +31,14 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.database.models import SensorBuffer
 
 
-EventNames = Literal[
+PayloadName = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
     "sensors_data", "health_data", "light_data", "actuator_data",
-    "chaos_parameters", "places_list"]
+    "chaos_parameters", "places_list"
+]
 
 
-payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
+payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "base_info": gv.BaseInfoConfigPayload,
     "management": gv.ManagementConfigPayload,
     "environmental_parameters": gv.EnvironmentConfigPayload,
@@ -53,10 +54,21 @@ payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
 
 class CrudLinks(NamedTuple):
     function_name: str
-    event_name: EventNames
+    payload_name: PayloadName
 
 
-crud_links: dict[str, CrudLinks] = {
+CrudEventName = Literal[
+    "create_ecosystem", "delete_ecosystem",
+    "create_place", "update_place", "delete_place",
+    "update_chaos_config", "update_management", "update_time_parameters",
+    "update_light_method",
+    "create_environment_parameter", "update_environment_parameter",
+    "delete_environment_parameter",
+    "create_hardware", "update_hardware", "delete_hardware",
+]
+
+
+crud_links_dict: dict[str, CrudLinks] = {
     # Ecosystem creation and deletion
     "create_ecosystem": CrudLinks("create_ecosystem", "base_info"),
     "delete_ecosystem": CrudLinks("delete_ecosystem", "base_info"),
@@ -146,16 +158,16 @@ class Events(EventHandler):
 
     def emit_event_if_connected(
             self,
-            event_name: EventNames,
+            payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None,
             ttl: int | None = None
     ) -> None:
         if not self.is_connected():
             self.logger.info(
                 f"Events handler not currently connected. Emission of event "
-                f"'{event_name}' aborted.")
+                f"'{payload_name}' aborted.")
             return
-        self.emit_event(event_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
+        self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
     def _schedule_jobs(self) -> None:
         self.engine.scheduler.add_job(
@@ -213,12 +225,12 @@ class Events(EventHandler):
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
         uids = self.filter_uids(ecosystem_uids)
-        self.emit_event("base_info", uids)
-        self.emit_event("management", uids)
-        self.emit_event("environmental_parameters", uids)
-        self.emit_event("hardware", uids)
-        self.emit_event("actuator_data", uids)
-        self.emit_event("light_data", uids)
+        self.send_payload("base_info", uids)
+        self.send_payload("management", uids)
+        self.send_payload("environmental_parameters", uids)
+        self.send_payload("hardware", uids)
+        self.send_payload("actuator_data", uids)
+        self.send_payload("light_data", uids)
 
     def on_connect(self, environment) -> None:  # noqa
         self.logger.info("Connection to message broker successful.")
@@ -285,76 +297,76 @@ class Events(EventHandler):
                 if uid in self.ecosystems.keys()
             ]
 
-    def get_event_payload(
+    def get_payload(
             self,
-            event_name: EventNames,
+            payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None
     ) -> gv.EcosystemPayloadDict | list[gv.EcosystemPayloadDict] | None:
-        self.logger.debug(f"Getting '{event_name}' payload.")
-        if event_name in ("places_list", ):
-            return self._get_engine_event_payload(event_name)
+        self.logger.debug(f"Getting '{payload_name}' payload.")
+        if payload_name in ("places_list",):
+            return self._get_engine_payload(payload_name)
         else:
-            return self._get_ecosystem_event_payload(event_name, ecosystem_uids)
+            return self._get_ecosystem_payload(payload_name, ecosystem_uids)
 
-    def _get_ecosystem_event_payload(
+    def _get_ecosystem_payload(
             self,
-            event_name: EventNames,
+            payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None
     ) -> list[gv.EcosystemPayloadDict] | None:
         # Check that the event is possible
-        if not hasattr(Ecosystem, event_name):
-            self.logger.error(f"Payload for event '{event_name}' is not defined.")
+        if not hasattr(Ecosystem, payload_name):
+            self.logger.error(f"Payload for event '{payload_name}' is not defined.")
             return None
         # Get the data
         rv: list[gv.EcosystemPayloadDict] = []
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
-            f"Getting '{event_name}' payload for {humanize_list(uids)}.")
+            f"Getting '{payload_name}' payload for {humanize_list(uids)}.")
         for uid in uids:
-            data = getattr(self.ecosystems[uid], event_name)
+            data = getattr(self.ecosystems[uid], payload_name)
             if isinstance(data, gv.Empty):
                 continue
-            payload_class = payload_classes[event_name]
+            payload_class = payload_classes_dict[payload_name]
             payload: gv.EcosystemPayload = payload_class.from_base(uid, data)
             payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
             rv.append(payload_dict)
         return rv
 
-    def _get_engine_event_payload(
+    def _get_engine_payload(
             self,
-            event_name: EventNames
+            payload_name: PayloadName
     ) -> gv.EcosystemPayloadDict | None:
         # Check that the event is possible
-        if not hasattr(Engine, event_name):
-            self.logger.error(f"Payload for event '{event_name}' is not defined.")
+        if not hasattr(Engine, payload_name):
+            self.logger.error(f"Payload for event '{payload_name}' is not defined.")
             return None
         # Get the data
-        data = getattr(self.engine, event_name)
-        payload_class = payload_classes[event_name]
+        data = getattr(self.engine, payload_name)
+        payload_class = payload_classes_dict[payload_name]
         payload: gv.EcosystemPayload = payload_class.from_base(self.engine.uid, data)
         payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
         return payload_dict
 
-    def emit_event(
+    def send_payload(
             self,
-            event_name: EventNames,
+            payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None,
             ttl: int | None = None,
     ) -> bool:
-        self.logger.debug(f"Requested to emit event '{event_name}'.")
-        payload = self.get_event_payload(event_name, ecosystem_uids)
+        self.logger.debug(f"Requested to emit event '{payload_name}'.")
+        payload = self.get_payload(payload_name, ecosystem_uids)
         if payload:
             try:
-                result = self.emit(event_name, data=payload, ttl=ttl)
+                result = self.emit(payload_name, data=payload, ttl=ttl)
             except Exception as e:
                 self.logger.error(
-                    f"Encountered an error while emitting event '{event_name}'. "
+                    f"Encountered an error while emitting event '{payload_name}'. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`.")
             else:
-                self.logger.debug(f"Payload for event '{event_name}' sent.")
+                self.logger.debug(f"Payload for event '{payload_name}' sent.")
                 return result
         else:
-            self.logger.debug(f"No payload for event '{event_name}' found.")
+            self.logger.debug(f"No payload for event '{payload_name}' found.")
             return False
 
     def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
@@ -382,7 +394,7 @@ class Events(EventHandler):
             for management, status in data["data"].items():
                 self.ecosystems[ecosystem_uid].config.set_management(management, status)
             self.engine.config.save(ConfigType.ecosystems)
-            self.emit_event("management", ecosystem_uids=[ecosystem_uid])
+            self.send_payload("management", ecosystem_uids=[ecosystem_uid])
 
     def _get_crud_function(
             self,
@@ -406,7 +418,7 @@ class Events(EventHandler):
 
         crud_key = f"{action.name}_{target}"
 
-        crud_link = crud_links.get(crud_key)
+        crud_link = crud_links_dict.get(crud_key)
         if crud_link is None:
             raise ValueError(
                 f"{action.name.capitalize()} {target} is not possible for this "
@@ -480,13 +492,13 @@ class Events(EventHandler):
 
         # Send back the updated info
         self.engine.refresh_ecosystems(send_info=False)
-        crud_link = crud_links[crud_key]
-        if not crud_link.event_name:
+        crud_link = crud_links_dict[crud_key]
+        if not crud_link.payload_name:
             self.logger.warning(
                 f"No CRUD payload linked to action '{action.name} {target}' "
                 f"was found. Updated data won't be sent to Ouranos.")
-        event_name = crud_link.event_name
-        self.emit_event(event_name=event_name, ecosystem_uids=ecosystem_uid)
+        event_name = crud_link.payload_name
+        self.send_payload(payload_name=event_name, ecosystem_uids=ecosystem_uid)
 
     def send_buffered_data(self) -> None:
         if not self.use_db:
