@@ -17,7 +17,8 @@ from gaia.subroutines import (
     Climate, Light, Sensors, subroutine_dict, subroutine_names)
 from gaia.utils import SingletonMeta, yaml
 
-from .data import ecosystem_info, ecosystem_name, light_info, light_uid
+from .data import (
+    ecosystem_info, ecosystem_name, engine_uid, light_info, light_uid)
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content
 
@@ -83,6 +84,7 @@ def testing_cfg(temp_dir) -> None:
         DIR = temp_dir
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
+        ENGINE_UID = engine_uid
 
     GaiaConfigHelper.set_config(Config)
 
@@ -170,7 +172,7 @@ def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
     # ... as well as a climate parameter
     ecosystem.config.set_climate_parameter(
         "temperature",
-        {"day": 25, "night": 20, "hysteresis": 2}
+        **{"day": 25, "night": 20, "hysteresis": 2}
     )
 
     try:

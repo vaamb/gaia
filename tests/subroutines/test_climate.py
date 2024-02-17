@@ -25,9 +25,7 @@ def test_manageable(climate_subroutine: Climate):
     assert not climate_subroutine.manageable
 
     climate_subroutine.ecosystem.config.set_climate_parameter(
-        "temperature",
-        {"day": 25, "night": 20, "hysteresis": 2}
-    )
+        parameter="temperature", day=25, night=20, hysteresis=2)
     assert climate_subroutine.manageable
 
     # Make sure a regulator is needed

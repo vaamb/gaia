@@ -273,6 +273,11 @@ class Ecosystem:
             raise Exception(f"Failed to stop ecosystem {self.name}")
         self._started = False
 
+    # Chaos
+    @property
+    def chaos_parameters(self) -> gv.ChaosParameters:
+        return self.config.chaos_parameters
+
     # Actuator
     @property
     def actuator_data(self) -> gv.ActuatorsDataDict:
@@ -325,8 +330,8 @@ class Ecosystem:
         else:
             if self.engine.use_message_broker and self.event_handler.registered:
                 try:
-                    self.event_handler.send_actuator_data(
-                        ecosystem_uids=[self._uid])
+                    self.event_handler.send_payload(
+                        "actuator_data", ecosystem_uids=[self._uid])
                 except Exception as e:
                     msg = e.args[1] if len(e.args) > 1 else e.args[0]
                     if "is not a connected namespace" in msg:

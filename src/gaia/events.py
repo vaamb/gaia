@@ -8,7 +8,8 @@ import inspect
 import logging
 from time import monotonic, sleep
 import typing as t
-from typing import Callable, cast, Literal, Type
+from typing import Any, Callable, cast, Literal, NamedTuple, Type
+from uuid import UUID
 import weakref
 
 from apscheduler.triggers.interval import IntervalTrigger
@@ -18,7 +19,7 @@ from pydantic import ValidationError
 from dispatcher import EventHandler
 import gaia_validators as gv
 
-from gaia.config import EcosystemConfig
+from gaia import Ecosystem, EcosystemConfig, Engine
 from gaia.config.from_files import ConfigType
 from gaia.utils import humanize_list, local_ip_address
 
@@ -27,16 +28,16 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
     from gaia.database.models import SensorBuffer
-    from gaia.ecosystem import Ecosystem
-    from gaia.engine import Engine
 
 
-EventNames = Literal[
+PayloadName = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
-    "sensors_data", "health_data", "light_data", "actuator_data"]
+    "sensors_data", "health_data", "light_data", "actuator_data",
+    "chaos_parameters", "places_list",
+]
 
 
-payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
+payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "base_info": gv.BaseInfoConfigPayload,
     "management": gv.ManagementConfigPayload,
     "environmental_parameters": gv.EnvironmentConfigPayload,
@@ -45,6 +46,51 @@ payload_classes: dict[EventNames, Type[gv.EcosystemPayload]] = {
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
     "actuator_data": gv.ActuatorsDataPayload,
+    "chaos_parameters": gv.ChaosParametersPayload,
+    "places_list": gv.PlacesPayload,
+}
+
+
+class CrudLinks(NamedTuple):
+    func_or_attr_name: str
+    payload_name: PayloadName
+
+
+CrudEventName = Literal[
+    "create_ecosystem", "delete_ecosystem",
+    "create_place", "update_place", "delete_place",
+    "update_chaos_config", "update_management", "update_time_parameters",
+    "update_light_method",
+    "create_environment_parameter", "update_environment_parameter",
+    "delete_environment_parameter",
+    "create_hardware", "update_hardware", "delete_hardware",
+]
+
+
+crud_links_dict: dict[CrudEventName, CrudLinks] = {
+    # Ecosystem creation and deletion
+    "create_ecosystem": CrudLinks("create_ecosystem", "base_info"),
+    "delete_ecosystem": CrudLinks("delete_ecosystem", "base_info"),
+    # Places creation, update and deletion
+    "create_place": CrudLinks("set_place", "places_list"),
+    "update_place": CrudLinks("update_place", "places_list"),
+    "delete_place": CrudLinks("delete_place", "places_list"),
+    # Ecosystem properties update
+    "update_chaos_config": CrudLinks("chaos_config", "chaos_parameters"),
+    "update_management": CrudLinks("managements", "management"),
+    "update_time_parameters": CrudLinks("time_parameters", "light_data"),
+    "update_light_method": CrudLinks("set_light_method", "light_data"),
+    # Environment parameter creation, deletion and update
+    "create_environment_parameter": CrudLinks(
+        "set_climate_parameter", "environmental_parameters"),
+    "update_environment_parameter": CrudLinks(
+        "update_climate_parameter", "environmental_parameters"),
+    "delete_environment_parameter": CrudLinks(
+        "delete_climate_parameter", "environmental_parameters"),
+    # Hardware creation, deletion and update
+    "create_hardware": CrudLinks("create_new_hardware", "hardware"),
+    "update_hardware": CrudLinks("update_hardware", "hardware"),
+    "delete_hardware": CrudLinks("delete_hardware", "hardware"),
 }
 
 
@@ -53,13 +99,13 @@ class Events(EventHandler):
 
     :param engine: an `Engine` instance
     """
-    def __init__(self, engine: "Engine", **kwargs) -> None:
+    def __init__(self, engine: Engine, **kwargs) -> None:
         kwargs["namespace"] = "aggregator"
         super().__init__(**kwargs)
-        self.engine: "Engine" = weakref.proxy(engine)
+        self.engine: Engine = weakref.proxy(engine)
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
-        self._sensor_buffer_cls: "SensorBuffer" | None = None
+        self._sensor_buffer_cls: SensorBuffer | None = None
         self._last_heartbeat: float = monotonic()
         self._jobs_scheduled: bool = False
         self.logger = logging.getLogger(f"gaia.engine.events_handler")
@@ -69,11 +115,11 @@ class Events(EventHandler):
         return self.engine.use_db
 
     @property
-    def db(self) -> "SQLAlchemyWrapper":
+    def db(self) -> SQLAlchemyWrapper:
         return self.engine.db
 
     @property
-    def sensor_buffer_cls(self) -> "SensorBuffer":
+    def sensor_buffer_cls(self) -> SensorBuffer:
         if self._sensor_buffer_cls is None:
             if not self.use_db:
                 raise AttributeError(
@@ -114,20 +160,16 @@ class Events(EventHandler):
 
     def emit_event_if_connected(
             self,
-            event_name: EventNames,
+            payload_name: PayloadName,
+            ecosystem_uids: str | list[str] | None = None,
             ttl: int | None = None
     ) -> None:
         if not self.is_connected():
             self.logger.info(
-                f"Events handler not currently connected. Scheduled emission "
-                f"of event '{event_name}' aborted")
+                f"Events handler not currently connected. Emission of event "
+                f"'{payload_name}' aborted.")
             return
-        try:
-            self.emit_event(event_name, ttl=ttl)
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an error while tying to emit event `{event_name}`. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`")
+        self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
     def _schedule_jobs(self) -> None:
         self.engine.scheduler.add_job(
@@ -184,13 +226,14 @@ class Events(EventHandler):
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
+        self.send_payload("places_list")
         uids = self.filter_uids(ecosystem_uids)
-        self.emit_event("base_info", uids)
-        self.emit_event("management", uids)
-        self.emit_event("environmental_parameters", uids)
-        self.emit_event("hardware", uids)
-        self.emit_event("actuator_data", uids)
-        self.emit_event("light_data", uids)
+        self.send_payload("base_info", uids)
+        self.send_payload("management", uids)
+        self.send_payload("environmental_parameters", uids)
+        self.send_payload("hardware", uids)
+        self.send_payload("actuator_data", uids)
+        self.send_payload("light_data", uids)
 
     def on_connect(self, environment) -> None:  # noqa
         self.logger.info("Connection to message broker successful.")
@@ -240,7 +283,7 @@ class Events(EventHandler):
         else:
             self.logger.warning(
                 f"Ouranos did not receive all the initial ecosystems info. "
-                f"Non-received info: {missing_data}")
+                f"Non-received info: {humanize_list(missing_data)}.")
             # TODO: resend ?
 
     def filter_uids(
@@ -257,66 +300,77 @@ class Events(EventHandler):
                 if uid in self.ecosystems.keys()
             ]
 
-    def get_event_payload(
+    def get_payload(
             self,
-            event_name: EventNames,
+            payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None
-    ) -> list[gv.EcosystemPayloadDict]:
+    ) -> gv.EcosystemPayloadDict | list[gv.EcosystemPayloadDict] | None:
+        self.logger.debug(f"Getting '{payload_name}' payload.")
+        if payload_name in ("places_list",):
+            return self._get_engine_payload(payload_name)
+        else:
+            return self._get_ecosystem_payload(payload_name, ecosystem_uids)
+
+    def _get_ecosystem_payload(
+            self,
+            payload_name: PayloadName,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> list[gv.EcosystemPayloadDict] | None:
+        # Check that the event is possible
+        if not hasattr(Ecosystem, payload_name):
+            self.logger.error(f"Payload for event '{payload_name}' is not defined.")
+            return None
+        # Get the data
         rv: list[gv.EcosystemPayloadDict] = []
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
-            f"Getting '{event_name}' payload for {humanize_list(uids)}")
+            f"Getting '{payload_name}' payload for {humanize_list(uids)}.")
         for uid in uids:
-            if hasattr(self.ecosystems[uid], event_name):
-                data = getattr(self.ecosystems[uid], event_name)
-            else:
-                self.logger.error(f"Payload for event {event_name} is not defined")
-                return rv
-            if not isinstance(data, gv.Empty):
-                payload_class = payload_classes[event_name]
-                payload: gv.EcosystemPayload = payload_class.from_base(uid, data)
-                payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
-                rv.append(payload_dict)
+            data = getattr(self.ecosystems[uid], payload_name)
+            if isinstance(data, gv.Empty):
+                continue
+            payload_class = payload_classes_dict[payload_name]
+            payload: gv.EcosystemPayload = payload_class.from_base(uid, data)
+            payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
+            rv.append(payload_dict)
         return rv
 
-    def emit_event(
+    def _get_engine_payload(
             self,
-            event_name: EventNames,
+            payload_name: PayloadName
+    ) -> gv.EcosystemPayloadDict | None:
+        # Check that the event is possible
+        if not hasattr(Engine, payload_name):
+            self.logger.error(f"Payload for event '{payload_name}' is not defined.")
+            return None
+        # Get the data
+        data = getattr(self.engine, payload_name)
+        payload_class = payload_classes_dict[payload_name]
+        payload: gv.EcosystemPayload = payload_class.from_base(self.engine.uid, data)
+        payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
+        return payload_dict
+
+    def send_payload(
+            self,
+            payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None,
             ttl: int | None = None,
     ) -> bool:
-        self.logger.debug(f"Sending event {event_name} requested")
-        payload = self.get_event_payload(event_name, ecosystem_uids)
+        self.logger.debug(f"Requested to emit event '{payload_name}'.")
+        payload = self.get_payload(payload_name, ecosystem_uids)
         if payload:
-            self.logger.debug(f"Payload for event {event_name} sent")
-            return self.emit(event_name, data=payload, ttl=ttl)
+            try:
+                result = self.emit(payload_name, data=payload, ttl=ttl)
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while emitting event '{payload_name}'. "
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`.")
+            else:
+                self.logger.debug(f"Payload for event '{payload_name}' sent.")
+                return result
         else:
-            self.logger.debug(f"No payload for event {event_name}")
+            self.logger.debug(f"No payload for event '{payload_name}' found.")
             return False
-
-    def send_sensors_data(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        self.emit_event("sensors_data", ecosystem_uids)
-
-    def send_health_data(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        self.emit_event("health_data", ecosystem_uids)
-
-    def send_light_data(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        self.emit_event("light_data", ecosystem_uids)
-
-    def send_actuator_data(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        self.emit_event("actuator_data", ecosystem_uids)
 
     def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
         message["actuator"] = gv.HardwareType.light
@@ -334,6 +388,7 @@ class Events(EventHandler):
                 countdown=message.get("countdown", 0.0)
             )
 
+    # TODO: use CRUD
     def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
         data: gv.ManagementConfigPayloadDict = self.validate_payload(
             message, gv.ManagementConfigPayload)
@@ -342,117 +397,82 @@ class Events(EventHandler):
             for management, status in data["data"].items():
                 self.ecosystems[ecosystem_uid].config.set_management(management, status)
             self.engine.config.save(ConfigType.ecosystems)
-            self.emit_event("management", ecosystem_uids=[ecosystem_uid])
+            self.send_payload("management", ecosystem_uids=[ecosystem_uid])
 
-    def get_CRUD_function(
+    def _get_crud_function(
             self,
-            crud_key: str,
+            action: gv.CrudAction,
+            target: str,
             ecosystem_uid: str | None = None
     ) -> Callable:
-        if "ecosystem" in crud_key:
-            return {
-            # Ecosystem creation and deletion
-            "create_ecosystem": self.engine.config.create_ecosystem,
-            "delete_ecosystem": self.engine.config.delete_ecosystem,
-            }[crud_key]
+        if target in ("ecosystem", "place"):
+            base_obj = self.engine.config
         else:
             if ecosystem_uid is None:
-                raise ValueError(f"{crud_key} requires 'ecosystem_uid' to be set")
-        ecosystem_uid = cast(str, ecosystem_uid)
+                raise ValueError(
+                    f"{action.name.capitalize()} {target} requires the "
+                    f"'ecosystem_uid' field to be set.")
+            if ecosystem_uid not in self.engine.ecosystems:
+                pass
+                raise ValueError(
+                    f"Ecosystem with uid '{ecosystem_uid}' is not one of the "
+                    f"started ecosystems.")
+            base_obj = self.engine.ecosystems[ecosystem_uid].config
 
-        def CRUD_update(config: EcosystemConfig, attr_name: str) -> Callable:
-            def inner(payload: dict):
-                setattr(config, attr_name, payload)
+        event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
 
-            return inner
+        crud_link = crud_links_dict.get(event_name)
+        if crud_link is None:
+            raise ValueError(
+                f"{action.name.capitalize()} {target} is not possible for this "
+                f"engine.")
 
-        return {
-            # Ecosystem properties update
-            "update_chaos": CRUD_update(self.ecosystems[ecosystem_uid].config, "chaos"),
-            "update_light_method": CRUD_update(self.ecosystems[ecosystem_uid].config, "light_method"),
-            "update_management": CRUD_update(self.ecosystems[ecosystem_uid].config, "managements"),
-            "update_time_parameters": CRUD_update(self.ecosystems[ecosystem_uid].config, "time_parameters"),
-            # Environment parameter creation, deletion and update
-            "create_environment_parameter": self.ecosystems[ecosystem_uid].config.CRUD_create_climate_parameter,
-            "update_environment_parameter": self.ecosystems[ecosystem_uid].config.CRUD_update_climate_parameter,
-            "delete_environment_parameter": self.ecosystems[ecosystem_uid].config.delete_climate_parameter,
-            # Hardware creation, deletion and update
-            "create_hardware": self.ecosystems[ecosystem_uid].config.CRUD_create_hardware,
-            "update_hardware": self.ecosystems[ecosystem_uid].config.CRUD_update_hardware,
-            "delete_hardware": self.ecosystems[ecosystem_uid].config.delete_hardware,
-            # Private
-            "create_place": self.engine.config.CRUD_create_place,
-            "update_place": self.engine.config.CRUD_update_place,
-        }[crud_key]
+        if target in ("management", "time_parameters", "chaos_config"):
+            # Need to update a setter
+            def get_attr_setter(config: EcosystemConfig, attr_name: str) -> Callable:
+                def inner(**value: dict):
+                    setattr(config, attr_name, value)
 
-    def get_CRUD_event_name(self, crud_key: str) -> EventNames:
-        # TODO: handle ecosystem creation and deletion
-        return {
-            # Ecosystem creation and deletion
-            "create_ecosystem": "base_info",
-            "delete_ecosystem": "base_info",
-            # Ecosystem properties update
-            #"update_chaos": ,
-            "update_light_method": "light_data",
-            "update_management": "management",
-            "update_time_parameters": "light_data",
-            # Environment parameter creation, deletion and update
-            "create_environment_parameter": "environmental_parameters",
-            "update_environment_parameter": "environmental_parameters",
-            "delete_environment_parameter": "environmental_parameters",
-            # Hardware creation, deletion and update
-            "create_hardware": "hardware",
-            "update_hardware": "hardware",
-            "delete_hardware": "hardware",
-            # Private
-            #"create_place": ,
-            #"update_place": ,
-        }[crud_key]
+                return inner
+
+            return get_attr_setter(base_obj, crud_link.func_or_attr_name)
+        else:
+            def get_function(obj: Any, func_name: str) -> Callable:
+                return getattr(obj, func_name)
+
+            return get_function(base_obj, crud_link.func_or_attr_name)
 
     def on_crud(self, message: gv.CrudPayloadDict) -> None:
-        data: gv.CrudPayloadDict = self.validate_payload(
-            message, gv.CrudPayload)
-        crud_uuid = data["uuid"]
-        self.logger.info(
-            f"Received CRUD request '{crud_uuid}' from Ouranos")
+        # Validate the payload
+        data: gv.CrudPayloadDict = self.validate_payload(message, gv.CrudPayload)
+        # Verify it is the intended recipient
         engine_uid = data["routing"]["engine_uid"]
         if engine_uid != self.engine.uid:
             self.logger.warning(
-                f"Received 'on_crud' event intended to engine {engine_uid}"
-            )
+                f"Received a CRUD request intended to engine '{engine_uid}'.")
             return
-        crud_key = f"{data['action'].value}_{data['target']}"
-        ecosystem_uid = data["routing"]["ecosystem_uid"]
+
+        # Extract CRUD request data
+        crud_uuid: UUID = data["uuid"]
+        action: gv.CrudAction = data['action']
+        target: str = data['target']
+        ecosystem_uid: str | None
+        if target in ("ecosystem", "place"):
+            ecosystem_uid = None
+        else:
+            ecosystem_uid: str = data["routing"]["ecosystem_uid"]
+        event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
+        self.logger.info(f"Received CRUD request '{crud_uuid}' from Ouranos.")
+
+        # Treat the CRUD request
         try:
-            crud_function = self.get_CRUD_function(crud_key, ecosystem_uid)
-        except KeyError:
-            self.logger.error(
-                f"No CRUD function linked to action '{data['action'].value}' on"
-                f"target '{data['target']}' could be found. Aborting")
-            return
-        try:
-            crud_function(data["data"])
+            crud_function = self._get_crud_function(action, target, ecosystem_uid)
+            crud_function(**data["data"])
             self.engine.config.save(ConfigType.ecosystems)
-            self.emit(
-                event="crud_result",
-                data=gv.RequestResult(
-                    uuid=crud_uuid,
-                    status=gv.Result.success
-                ).model_dump()
-            )
-            self.logger.info(
-                f"CRUD request '{crud_uuid}' was successfully treated")
-            try:
-                event_name = self.get_CRUD_event_name(crud_key)
-            except KeyError:
-                self.logger.debug(
-                    f"No CRUD payload linked to action '{data['action'].value}' "
-                    f"on target '{data['target']}' was found. New data won't be "
-                    f"sent to Ouranos")
-            else:
-                self.emit_event(
-                    event_name=event_name, ecosystem_uids=ecosystem_uid)
         except Exception as e:
+            self.logger.error(
+                f"Encountered an error while treating CRUD request "
+                f"`{crud_uuid}`. ERROR msg: `{e.__class__.__name__}: {e}`.")
             self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
@@ -461,25 +481,43 @@ class Events(EventHandler):
                     message=str(e)
                 ).model_dump()
             )
+            return
+        else:
+            self.emit(
+                event="crud_result",
+                data=gv.RequestResult(
+                    uuid=crud_uuid,
+                    status=gv.Result.success
+                ).model_dump()
+            )
             self.logger.info(
-                f"CRUD request '{crud_uuid}' could not be treated")
+                f"CRUD request '{crud_uuid}' was successfully treated.")
+
+        # Send back the updated info
+        self.engine.refresh_ecosystems(send_info=False)
+        crud_link = crud_links_dict[event_name]
+        if not crud_link.payload_name:
+            self.logger.warning(
+                f"No CRUD payload linked to action '{action.name} {target}' "
+                f"was found. Updated data won't be sent to Ouranos.")
+        payload_name = crud_link.payload_name
+        self.send_payload(payload_name=payload_name, ecosystem_uids=ecosystem_uid)
 
     def send_buffered_data(self) -> None:
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
-                "parameter 'USE_DATABASE' to 'True'")
+                "parameter 'USE_DATABASE' to 'True'.")
         SensorBuffer = self.sensor_buffer_cls  # noqa
         with self.db.scoped_session() as session:
             for data in SensorBuffer.get_buffered_data(session):
-                self.emit(
-                    event="buffered_sensors_data", data=data)
+                self.emit(event="buffered_sensors_data", data=data)
 
     def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
-                "parameter 'USE_DATABASE' to 'True'")
+                "parameter 'USE_DATABASE' to 'True'.")
         data: gv.RequestResultDict = self.validate_payload(
             message, gv.RequestResult)
         SensorBuffer = self.sensor_buffer_cls  # noqa

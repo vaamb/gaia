@@ -12,7 +12,9 @@ from apscheduler.executors.pool import BasePoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from gaia.config import CacheType, EngineConfig
+import gaia_validators as gv
+
+from gaia.config.from_files import CacheType, EngineConfig
 from gaia.ecosystem import Ecosystem
 from gaia.utils import SingletonMeta
 from gaia.virtual import VirtualWorld
@@ -378,6 +380,17 @@ class Engine(metaclass=SingletonMeta):
         return self._config
 
     @property
+    def places_list(self) -> list[gv.Place]:
+        rv: list[gv.Place] = []
+        places = self.config.places
+        for place, coordinates in places.items():
+            rv.append(gv.Place(
+                name=place,
+                coordinates=coordinates,
+            ))
+        return rv
+
+    @property
     def ecosystems_started(self) -> set[str]:
         return set([
             ecosystem.uid for ecosystem in self.ecosystems.values()
@@ -463,7 +476,10 @@ class Engine(metaclass=SingletonMeta):
         :param send_info: If `True`, will try to send the ecosystem info to
                   Ouranos if possible.
         """
-        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
+        if ecosystem_id in self.ecosystems:
+            ecosystem_uid = ecosystem_id
+        else:
+            ecosystem_uid, _ = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 ecosystem = self.ecosystems[ecosystem_uid]
@@ -494,7 +510,10 @@ class Engine(metaclass=SingletonMeta):
         :param send_info: If `True`, will try to send the ecosystem info to
                   Ouranos if possible.
         """
-        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
+        if ecosystem_id in self.ecosystems:
+            ecosystem_uid = ecosystem_id
+        else:
+            ecosystem_uid, _ = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
                 raise RuntimeError(
@@ -559,7 +578,8 @@ class Engine(metaclass=SingletonMeta):
         # delete Ecosystems which were created and are no longer on the
         # config file
         for ecosystem_uid in to_delete:
-            self.stop_ecosystem(ecosystem_uid)
+            if self.ecosystems[ecosystem_uid].started:
+                self.stop_ecosystem(ecosystem_uid)
             self.dismount_ecosystem(ecosystem_uid)
         # self.refresh_ecosystems_lighting_hours()  # done by Ecosystem during their startup
         if send_info:
@@ -577,13 +597,15 @@ class Engine(metaclass=SingletonMeta):
             if ecosystem.started:
                 ecosystem.refresh_lighting_hours()
         if self.use_message_broker:
-            self.event_handler.send_light_data()
+            self.event_handler.send_payload("light_data")
 
     def update_chaos_time_window(self) -> None:
         self.logger.info("Updating ecosystems chaos time window.")
         for ecosystem in self.ecosystems.values():
             ecosystem.config.update_chaos_time_window()
         self.config.save(CacheType.chaos)
+        if self.use_message_broker:
+            self.event_handler.emit_event_if_connected("chaos")
 
     # ---------------------------------------------------------------------------
     #   Engine start and stop

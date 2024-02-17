@@ -108,7 +108,7 @@ class PrivateConfigDict(TypedDict):
 class EnvironmentConfigValidator(gv.BaseModel):
     chaos: gv.ChaosConfig = Field(default_factory=gv.ChaosConfig)
     sky: gv.SkyConfig = Field(default_factory=gv.SkyConfig)
-    climate: dict[gv.ClimateParameterNames, gv.AnonymousClimateConfig] = \
+    climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfig] = \
         Field(default_factory=dict)
 
     @field_validator("climate", mode="before")
@@ -119,7 +119,7 @@ class EnvironmentConfigValidator(gv.BaseModel):
 class EnvironmentConfigDict(TypedDict):
     chaos: gv.ChaosConfigDict
     sky: gv.SkyConfigDict
-    climate: dict[str, gv.AnonymousClimateConfigDict]
+    climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
 
 
 class EcosystemConfigValidator(gv.BaseModel):
@@ -384,6 +384,8 @@ class EngineConfig(metaclass=SingletonMeta):
         self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType | CacheType) -> None:
+        if self.app_config.TESTING:
+            return
         if isinstance(cfg_type, ConfigType):
             with self.config_files_lock():
                 self.logger.debug(f"Updating {cfg_type.name} configuration file(s).")
@@ -571,7 +573,7 @@ class EngineConfig(metaclass=SingletonMeta):
             ecosystem_name = ecosystem_id
             return gv.IDs(ecosystem_uid, ecosystem_name)
         raise EcosystemNotFound(
-            f"Ecosystem with id '{ecosystem_id}' not found.'ecosystem_id' parameter "
+            f"Ecosystem with id '{ecosystem_id}' not found. 'ecosystem_id' parameter "
             f"should either be an ecosystem uid or an ecosystem name present in "
             f"the 'ecosystems.cfg' file. If you want to create a new ecosystem "
             f"configuration use the function `create_ecosystem()`."
@@ -606,19 +608,24 @@ class EngineConfig(metaclass=SingletonMeta):
             )
         self.places[place] = validated_coordinates
 
-    def CRUD_create_place(self, value: gv.PlaceDict):
-        validated_value: gv.PlaceDict = gv.Place(**value).model_dump()
-        place = validated_value.pop("name")
-        self.places[place] = validated_value["coordinates"]
-
-    def CRUD_update_place(self, value: gv.PlaceDict) -> None:
-        validated_value: gv.PlaceDict = gv.Place(**value).model_dump()
-        place = validated_value.pop("name")
-        if place not in self.places:
+    def update_place(
+            self,
+            place: str,
+            coordinates: tuple[float, float] | CoordinatesDict,
+    ) -> None:
+        if not self.get_place(place):
             raise UndefinedParameter(
-                f"No place named '{place}' was found in the private "
-                f"configuration file")
-        self.places[place] = validated_value["coordinates"]
+                f"No location named '{place}' was found in the private "
+                f"configuration file.")
+        self.set_place(place, coordinates)
+
+    def delete_place(self, place: str) -> None:
+        try:
+            del self.places[place]
+        except KeyError:
+            raise UndefinedParameter(
+                f"No location named '{place}' was found in the private "
+                f"configuration file.")
 
     @property
     def home_coordinates(self) -> gv.Coordinates:
@@ -1170,8 +1177,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 and self.general.engine.event_handler.registered
         ):
             try:
-                self.general.engine.event_handler.send_light_data(
-                    ecosystem_uids=[self.uid])
+                self.general.engine.event_handler.send_payload(
+                    "light_data", ecosystem_uids=[self.uid])
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while sending light data. "
@@ -1255,7 +1262,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         })
 
     @property
-    def climate(self) -> dict[gv.ClimateParameterNames, gv.AnonymousClimateConfigDict]:
+    def climate(self) -> dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]:
         """
         Returns the sky config for the ecosystem
         """
@@ -1265,20 +1272,25 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.environment["climate"] = {}
             return self.environment["climate"]
 
-    def get_climate_parameter(self, parameter: gv.ClimateParameterNames) -> gv.ClimateConfig:
+    def get_climate_parameter(
+            self,
+            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+    ) -> gv.ClimateConfig:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             data = self.climate[parameter]
             return gv.ClimateConfig(parameter=parameter, **data)
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
-                f"'{self.name}' in ecosystems configuration file")
+                f"'{self.name}' in ecosystems configuration file.")
 
     def set_climate_parameter(
             self,
-            parameter: gv.ClimateParameterNames,
-            value: gv.AnonymousClimateConfigDict
+            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            **value: gv.AnonymousClimateConfigDict,
     ) -> None:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             validated_value = gv.AnonymousClimateConfig(**value).model_dump()
         except pydantic.ValidationError as e:
@@ -1288,30 +1300,29 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         self.climate[parameter] = validated_value
 
+    def update_climate_parameter(
+            self,
+            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            **value: gv.AnonymousClimateConfigDict,
+    ) -> None:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
+        if not self.climate.get(parameter):
+            raise UndefinedParameter(
+                f"No climate parameter {parameter} was found for ecosystem "
+                f"'{self.name}' in ecosystems configuration file.")
+        self.set_climate_parameter(parameter, **value)
+
     def delete_climate_parameter(
             self,
-            parameter: gv.ClimateParameterNames,
+            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
     ) -> None:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             del self.climate[parameter]
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
-
-    def CRUD_create_climate_parameter(self, value: gv.AnonymousClimateConfigDict) -> None:
-        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).model_dump()
-        parameter = validated_value.pop("parameter")
-        self.climate[parameter] = validated_value
-
-    def CRUD_update_climate_parameter(self, value: gv.AnonymousClimateConfigDict) -> None:
-        validated_value: gv.ClimateConfigDict = gv.ClimateConfig(**value).model_dump()
-        parameter = validated_value.pop("parameter")
-        if parameter not in self.climate:
-            raise UndefinedParameter(
-                f"No climate parameter {parameter} was found for ecosystem "
-                f"'{self.name}' in ecosystems configuration file")
-        self.climate[parameter] = validated_value
 
     """Parameters related to IO"""    
     @property
@@ -1414,33 +1425,27 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_repr.pop("uid")
         self.IO_dict.update({uid: hardware_repr})
 
-    def CRUD_create_hardware(self, value: gv.HardwareConfigDict) -> None:
-        self.create_new_hardware(**value)
-
-    def update_hardware(self, uid: str, update_value: dict) -> None:
-        try:
-            non_null_values = {
-                key: value for key, value in update_value.items()
-                if value is not None
-            }
-            hardware_dict: gv.AnonymousHardwareConfigDict = self.IO_dict[uid].copy()
-            hardware_dict: gv.HardwareConfigDict = cast(gv.HardwareConfigDict, hardware_dict)
-            hardware_dict.update({"uid": uid, **non_null_values})
-            check_address = "address" in update_value  # Don't check address if not trying to update it
-            hardware = self._validate_hardware_dict(hardware_dict, check_address)
-            hardware_repr = hardware.dict_repr(shorten=True)
-            hardware_repr.pop("uid")
-            self.IO_dict[uid] = hardware_repr
-        except KeyError:
-            raise HardwareNotFound
-
-    def CRUD_update_hardware(self, value: gv.HardwareConfigDict) -> None:
-        validated_value: gv.HardwareConfigDict = gv.HardwareConfig(
-            **value).model_dump()
-        uid = validated_value.pop("uid")
-        if uid not in self.IO_dict:
-            raise HardwareNotFound
-        self.IO_dict[uid] = validated_value
+    def update_hardware(
+            self,
+            uid: str,
+            **updating_values: gv.AnonymousHardwareConfigDict
+    ) -> None:
+        base_hardware_dict = self.IO_dict.get(uid)
+        if base_hardware_dict is None:
+            raise HardwareNotFound(
+                f"No hardware with uid '{uid}' found in the hardware config.")
+        hardware_dict = base_hardware_dict.copy()
+        hardware_dict: gv.HardwareConfigDict = cast(gv.HardwareConfigDict, hardware_dict)
+        hardware_dict["uid"] = uid
+        hardware_dict.update({
+            key: value for key, value in updating_values.items()
+            if value is not None
+        })
+        check_address = "address" in updating_values  # Don't check address if not trying to update it
+        hardware = self._validate_hardware_dict(hardware_dict, check_address)
+        hardware_repr = hardware.dict_repr(shorten=True)
+        hardware_repr.pop("uid")
+        self.IO_dict[uid] = hardware_repr
 
     def delete_hardware(self, uid: str) -> None:
         """
@@ -1450,20 +1455,23 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         try:
             del self.IO_dict[uid]
         except KeyError:
-            raise HardwareNotFound
+            raise HardwareNotFound(
+                f"No hardware with uid '{uid}' found in the hardware config.")
 
     def get_hardware_uid(self, name: str) -> str:
         for uid, hardware in self.IO_dict.items():
             if hardware["name"] == name:
                 return uid
-        raise HardwareNotFound
+        raise HardwareNotFound(
+                f"No hardware with name '{name}' found in the hardware config.")
 
     def get_hardware_config(self, uid: str) -> gv.HardwareConfig:
         try:
             hardware_config = self.IO_dict[uid]
             return gv.HardwareConfig(uid=uid, **hardware_config)
         except KeyError:
-            raise HardwareNotFound
+            raise HardwareNotFound(
+                f"No hardware with uid '{uid}' found in the hardware config.")
 
     @staticmethod
     def supported_hardware() -> list:

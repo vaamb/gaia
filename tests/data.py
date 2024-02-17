@@ -3,6 +3,8 @@ from datetime import time
 import gaia_validators as gv
 
 
+engine_uid = "engine_uid"
+
 ecosystem_uid = "Rfrg5Kiv"
 ecosystem_name = "Testing ecosystem"
 
