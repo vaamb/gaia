@@ -7,6 +7,7 @@ from sqlalchemy.orm import scoped_session, Session
 import gaia_validators as gv
 
 from gaia.database.models import SensorBuffer, SensorRecord
+from gaia.utils import humanize_list
 
 
 if t.TYPE_CHECKING:
@@ -17,6 +18,7 @@ def log_sensors_data(
         scoped_session_: Callable[..., scoped_session],
         engine: "Engine"
 ) -> None:
+    logged_ecosystem: set[str] = set()
     sensors_logging_period = engine.config.app_config.SENSORS_LOGGING_PERIOD
     with scoped_session_() as session:
         session: Session
@@ -24,6 +26,7 @@ def log_sensors_data(
             sensors_data = ecosystem.sensors_data
             database_management = ecosystem.config.get_management("database")
             if isinstance(sensors_data, gv.SensorsData) and database_management:
+                logged_ecosystem.add(ecosystem_uid)
                 timestamp: datetime = sensors_data.timestamp
                 timestamp = timestamp.astimezone(timezone.utc)
                 if timestamp.minute % sensors_logging_period == 0:
@@ -46,3 +49,6 @@ def log_sensors_data(
                             sensor_buffer = SensorBuffer(**formatted_data)
                             session.add(sensor_buffer)
         session.commit()
+    if logged_ecosystem:
+        engine.logger.info(
+            f"Logged sensors data for {humanize_list(list(logged_ecosystem))}.")
