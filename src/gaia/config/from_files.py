@@ -586,7 +586,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def get_place(self, place: str) -> gv.Coordinates | None:
         try:
-            return self.places[place]
+            return gv.Coordinates(*self.places[place])
         except KeyError:
             return None
 
@@ -1224,7 +1224,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         beginning = chaos_memory["time_window"]["beginning"]
         end = chaos_memory["time_window"]["end"]
         if beginning and end:
-            if not (beginning <= date.today() <= end):  # End of chaos period
+            if not (beginning <= datetime.now(timezone.utc) <= end):  # End of chaos period
                 beginning = None
                 end = None
         else:
