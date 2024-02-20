@@ -510,8 +510,9 @@ class Events(EventHandler):
                 "parameter 'USE_DATABASE' to 'True'.")
         SensorBuffer = self.sensor_buffer_cls  # noqa
         with self.db.scoped_session() as session:
-            for data in SensorBuffer.get_buffered_data(session):
-                self.emit(event="buffered_sensors_data", data=data)
+            for payload in SensorBuffer.get_buffered_data(session):
+                payload_dict: gv.BufferedSensorsDataPayloadDict = payload.model_dump()
+                self.emit(event="buffered_sensors_data", data=payload_dict)
 
     def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
         if not self.use_db:
