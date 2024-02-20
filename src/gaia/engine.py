@@ -216,12 +216,15 @@ class Engine(metaclass=SingletonMeta):
     def start_database(self) -> None:
         self.logger.info("Starting the database.")
         from gaia.database import routines
-        if self.config.app_config.SENSORS_LOGGING_PERIOD:
+        if self.config.app_config.SENSORS_LOGGING_PERIOD is not None:
+            cron_minute: str = self.config.app_config.SENSORS_LOGGING_PERIOD
+            loop_period = self.config.app_config.SENSORS_LOOP_PERIOD
+            seconds_offset = loop_period * 1.5
             job_kwargs = {"scoped_session_": self.db.scoped_session, "engine": self}
             self.scheduler.add_job(
                 func=routines.log_sensors_data, kwargs=job_kwargs,
                 id="log_sensors_data",
-                trigger=CronTrigger(minute="*", second="2", jitter=1.5),
+                trigger=CronTrigger(minute=cron_minute, second=seconds_offset, jitter=1.5),
                 misfire_grace_time=10,
             )
 
