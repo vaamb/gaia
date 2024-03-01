@@ -1365,7 +1365,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             hardware_dict: gv.HardwareConfigDict,
             check_address: bool = True,
-    ) -> Hardware:
+    ) -> gv.HardwareConfigDict:
         try:
             hardware_config = gv.HardwareConfig(**hardware_dict)
         except pydantic.ValidationError as e:
@@ -1386,7 +1386,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 "'EcosystemConfig.supported_hardware()' to see supported hardware."
             )
         hardware_cls = hardware_models[hardware_config.model]
-        return hardware_cls.from_hardware_config(hardware_config, None)
+        hardware = hardware_cls.from_hardware_config(hardware_config, None)
+        return hardware.dict_repr()
 
     def create_new_hardware(
             self,
@@ -1422,10 +1423,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "plants": plants,
             "multiplexer_model": multiplexer_model,
         })
-        hardware = self._validate_hardware_dict(hardware_dict)
-        hardware_repr = hardware.dict_repr(shorten=True)
-        hardware_repr.pop("uid")
-        self.IO_dict.update({uid: hardware_repr})
+        hardware_dict = self._validate_hardware_dict(hardware_dict)
+        hardware_dict.pop("uid")
+        self.IO_dict.update({uid: hardware_dict})
 
     def update_hardware(
             self,
@@ -1444,10 +1444,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if value is not None
         })
         check_address = "address" in updating_values  # Don't check address if not trying to update it
-        hardware = self._validate_hardware_dict(hardware_dict, check_address)
-        hardware_repr = hardware.dict_repr(shorten=True)
-        hardware_repr.pop("uid")
-        self.IO_dict[uid] = hardware_repr
+        hardware_dict = self._validate_hardware_dict(hardware_dict, check_address)
+        hardware_dict.pop("uid")
+        self.IO_dict[uid] = hardware_dict
 
     def delete_hardware(self, uid: str) -> None:
         """
