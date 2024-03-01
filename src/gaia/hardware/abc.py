@@ -33,6 +33,28 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from gaia.hardware._compatibility import Pin, pwmio
 
 
+class Measure(Enum):
+    absolute_humidity = enum.auto()
+    AQI = enum.auto()
+    capacitive = enum.auto()
+    dew_point = enum.auto()
+    eCO2 = enum.auto()
+    humidity = enum.auto()
+    light = enum.auto()
+    moisture = enum.auto()
+    temperature = enum.auto()
+    TVOC = enum.auto()
+
+
+class Unit(Enum):
+    celsius_degree = "°C"
+    lux = enum.auto()
+    gram_per_cubic_m = "g.m-3"
+    ppm = enum.auto()
+    rel_humidity = "% humidity"
+    RWC = enum.auto()
+
+
 class PinNumberError(ValueError):
     pass
 
@@ -217,8 +239,8 @@ class Hardware(metaclass=_MetaHardware):
             type: gv.HardwareType | gv.HardwareTypeNames,
             model: str,
             name: str | None = None,
-            measures: list | None = None,
-            plants: list or None = None,
+            measures: list[str] | None = None,
+            plants: list[str] or None = None,
             multiplexer_model: str | None = None,
     ) -> None:
         self._subroutine: "SubroutineTemplate" | None
@@ -236,9 +258,7 @@ class Hardware(metaclass=_MetaHardware):
             primary=Address(address_list[0]),
             secondary=Address(address_list[1]) if len(address_list) == 2 else None
         )
-        if isinstance(measures, str):
-            measures = [measures]
-        self._measures = measures or []
+        self._measures: dict[Measure, Unit | None] = self._validate_measures(measures)
         if isinstance(plants, str):
             plants = [plants]
         self._plants = plants or []
@@ -249,6 +269,27 @@ class Hardware(metaclass=_MetaHardware):
             f"<{self.__class__.__name__}({self._uid}, name={self._name}, "
             f"model={self._model})>"
         )
+
+    @staticmethod
+    def _validate_measures(
+            measures: list[str] | None
+    ) -> dict[Measure, Unit | None]:
+        if measures is None:
+            measures = []
+        elif isinstance(measures, str):
+            measures = [measures]
+        rv: dict[Measure, Unit | None] = {}
+        for m in measures:
+            measure_and_unit = m.split("|")
+            measure = safe_enum_from_name(Measure, measure_and_unit[0])
+            try:
+                raw_unit = measure_and_unit[1]
+            except IndexError:
+                unit = None
+            else:
+                unit = safe_enum_from_name(Unit, raw_unit)
+            rv[measure] = unit
+        return rv
 
     @classmethod
     def get_mounted(cls) -> dict[str, Self]:
@@ -311,8 +352,6 @@ class Hardware(metaclass=_MetaHardware):
         else:
             return str(self._address_book.primary)
 
-    address = address_repr
-
     @property
     def model(self) -> str:
         return self._model
@@ -326,7 +365,7 @@ class Hardware(metaclass=_MetaHardware):
         return self._type
 
     @property
-    def measures(self) -> list[str]:
+    def measures(self) -> dict[Measure, Unit | None]:
         return self._measures
 
     @property
@@ -338,7 +377,19 @@ class Hardware(metaclass=_MetaHardware):
         return self._multiplexer_model
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
-        model = gv.HardwareConfig.model_validate(self)
+        model = gv.HardwareConfig(
+            uid=self._uid,
+            name=self._name,
+            address=self.address_repr,
+            type=self._type,
+            level=self._level,
+            model=self._model,
+            measures=[
+                f"{measure}|{unit}" for measure, unit in self._measures.items()
+            ],
+            plants=self._plants,
+            multiplexer_model=self._multiplexer_model,
+        )
         return model.model_dump(exclude_defaults=shorten)
 
 
@@ -478,28 +529,6 @@ class PlantLevelHardware(Hardware):
                 "Plants-level hardware should be provided a plant name "
                 "as kwarg with the key name 'plants'"
             )
-
-
-class Measure(Enum):
-    absolute_humidity = enum.auto()
-    AQI = enum.auto()
-    capacitive = enum.auto()
-    dew_point = enum.auto()
-    eCO2 = enum.auto()
-    humidity = enum.auto()
-    light = enum.auto()
-    moisture = enum.auto()
-    temperature = enum.auto()
-    TVOC = enum.auto()
-
-
-class Unit(Enum):
-    celsius_degree = "°C"
-    lux = enum.auto()
-    gram_per_cubic_m = "g.m-3"
-    ppm = enum.auto()
-    rel_humidity = "% humidity"
-    RWC = enum.auto()
 
 
 class BaseSensor(Hardware):

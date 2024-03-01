@@ -108,21 +108,21 @@ class ENS160(i2cSensor):
         # TODO: access temperature and humidity data to compensate
         data = []
         AQI, eCO2, TVOC = self._get_raw_data()
-        if "AQI" in self.measures:
+        if Measure.AQI in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="AQI",
                 value=AQI
             ))
 
-        if "eCO2" in self.measures:
+        if Measure.eCO2 in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="eCO2",
                 value=eCO2
             ))
 
-        if "TVOC" in self.measures:
+        if Measure.TVOC in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="TVOC",
@@ -165,7 +165,7 @@ class VEML7700(i2cSensor, LightSensor):
 
     def get_data(self) -> list[gv.SensorRecord]:
         data = []
-        if "light" in self.measures:
+        if Measure.light in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
@@ -208,7 +208,7 @@ class VCNL4040(i2cSensor, LightSensor):
 
     def get_data(self) -> list[gv.SensorRecord]:
         data = []
-        if "light" in self.measures:
+        if Measure.light in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
@@ -281,14 +281,14 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         except RuntimeError:
             moisture = raw_temperature = None
         data = []
-        if "moisture" in self.measures:
+        if Measure.moisture in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="moisture",
                 value=moisture
             ))
 
-        if "temperature" in self.measures:
+        if Measure.temperature in self.measures:
             temperature = temperature_converter(
                 raw_temperature, "celsius", get_unit("temperature", "celsius"))
             data.append(gv.SensorRecord(
