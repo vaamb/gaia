@@ -29,9 +29,12 @@ if t.TYPE_CHECKING:  # pragma: no cover
 #   I2C sensors
 # ---------------------------------------------------------------------------
 class AHT20(TempHumSensor, i2cSensor):
+    measures_available = {
+        "temperature": "°C",
+        "humidity": "% humidity",
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["temperature", "humidity"]
         super().__init__(*args, default_address=0x38, **kwargs)
 
     def _get_device(self) -> "AHTx0":
@@ -59,9 +62,13 @@ class AHT20(TempHumSensor, i2cSensor):
 
 
 class ENS160(i2cSensor):
+    measures_available = {
+        "AQI": "",
+        "eCO2": "ppm",
+        "TVOC": "ppm",
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["AQI", "eCO2", "TVOC"]
         super().__init__(*args, default_address=0x53, **kwargs)
 
     def _get_device(self) -> "_ENS160":
@@ -129,9 +136,11 @@ class ENS160(i2cSensor):
 
 
 class VEML7700(i2cSensor, LightSensor):
+    measures_available = {
+        "light": "lux",
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["lux"]
         super().__init__(*args, default_address=0x10, **kwargs)
 
     def _get_device(self) -> "_VEML7700":
@@ -160,7 +169,7 @@ class VEML7700(i2cSensor, LightSensor):
 
     def get_data(self) -> list[gv.SensorRecord]:
         data = []
-        if "lux" in self.measures or "light" in self.measures:
+        if "light" in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
@@ -170,9 +179,11 @@ class VEML7700(i2cSensor, LightSensor):
 
 
 class VCNL4040(i2cSensor, LightSensor):
+    measures_available = {
+        "light": "lux",
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["lux"]
         super().__init__(*args, default_address=0x60, **kwargs)
 
     def _get_device(self) -> "_VCNL4040":
@@ -201,7 +212,7 @@ class VCNL4040(i2cSensor, LightSensor):
 
     def get_data(self) -> list[gv.SensorRecord]:
         data = []
-        if "lux" in self.measures or "light" in self.measures:
+        if "light" in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
@@ -211,9 +222,11 @@ class VCNL4040(i2cSensor, LightSensor):
 
 
 class CapacitiveSensor(i2cSensor):
+    measures_available = {
+        "capacitive": "",
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["capacitive"]
         super().__init__(*args, default_address=0x36, **kwargs)
 
     def _get_device(self) -> "Seesaw":
@@ -236,9 +249,12 @@ class CapacitiveSensor(i2cSensor):
 
 
 class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
+    measures_available = {
+        "moisture": "% RWC",
+        "temperature": "°C"
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["moisture", "temperature"]
         super().__init__(*args, **kwargs)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:

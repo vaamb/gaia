@@ -480,8 +480,26 @@ class PlantLevelHardware(Hardware):
 
 
 class BaseSensor(Hardware):
+    measures_available: dict[str, str] | None = None
+
     def __init__(self, *args, **kwargs) -> None:
+        if self.measures_available is None:
+            raise NotImplementedError(
+                f"'cls.measures_available' should be a dict with 'measure: unit' "
+                f"as entries.")
         kwargs["type"] = gv.HardwareType.sensor
+        measures = kwargs.get("measures")
+        if not measures:
+            measures = [*self.measures_available.keys()]
+        else:
+            err = ""
+            for measure in measures:
+                if measure not in self.measures_available.keys():
+                    err += f"'{measure.capitalize()}' is not a valid measure " \
+                           f"for sensor {self.model}.\n"
+            if err:
+                raise ValueError(err)
+        kwargs["measures"] = measures
         super().__init__(*args, **kwargs)
         self.device: Any = self._get_device()
 
