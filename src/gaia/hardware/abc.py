@@ -310,6 +310,8 @@ class Hardware(metaclass=_MetaHardware):
         else:
             return str(self._address_book.primary)
 
+    address = address_repr
+
     @property
     def model(self) -> str:
         return self._model
@@ -334,20 +336,9 @@ class Hardware(metaclass=_MetaHardware):
     def multiplexer_model(self):
         return self._multiplexer_model
 
-    def dict_repr(self, shorten: bool = False) -> dict:
-        dict_repr = {
-            "uid": self._uid,
-            "name": self._name,
-            "address": self.address_repr,
-            "model": self._model,
-            "type": self._type,
-            "level": self._level,
-        }
-        if self._measures or not shorten:
-            dict_repr["measures"] = self._measures
-        if self._plants or not shorten:
-            dict_repr["plants"] = self._plants
-        return dict_repr
+    def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
+        model = gv.HardwareConfig.model_validate(self)
+        return model.model_dump(exclude_defaults=shorten)
 
 
 class gpioHardware(Hardware):
