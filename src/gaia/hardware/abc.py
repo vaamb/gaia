@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import enum
 from enum import Enum
 import io
 import os
@@ -477,6 +478,28 @@ class PlantLevelHardware(Hardware):
                 "Plants-level hardware should be provided a plant name "
                 "as kwarg with the key name 'plants'"
             )
+
+
+class Measure(Enum):
+    absolute_humidity = enum.auto()
+    AQI = enum.auto()
+    capacitive = enum.auto()
+    dew_point = enum.auto()
+    eCO2 = enum.auto()
+    humidity = enum.auto()
+    light = enum.auto()
+    moisture = enum.auto()
+    temperature = enum.auto()
+    TVOC = enum.auto()
+
+
+class Unit(Enum):
+    celsius_degree = "°C"
+    lux = enum.auto()
+    gram_per_cubic_m = "g.m-3"
+    ppm = enum.auto()
+    rel_humidity = "% humidity"
+    RWC = enum.auto()
 
 
 class BaseSensor(Hardware):
