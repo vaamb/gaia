@@ -1373,6 +1373,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid hardware information provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
+        if hardware_config.address.lower() == "i2c_default":
+            check_address = False
         if (
                 check_address
                 and hardware_config.address in self._used_addresses()
