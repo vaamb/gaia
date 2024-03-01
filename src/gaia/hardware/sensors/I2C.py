@@ -7,7 +7,8 @@ from typing import Type
 import gaia_validators as gv
 
 from gaia.hardware.abc import (
-    BaseSensor, hardware_logger, i2cSensor, LightSensor, PlantLevelHardware)
+    BaseSensor, hardware_logger, i2cSensor, LightSensor, Measure,
+    PlantLevelHardware, Unit)
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
@@ -29,11 +30,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 #   I2C sensors
 # ---------------------------------------------------------------------------
 class AHT20(TempHumSensor, i2cSensor):
-    measures_available = {
-        "temperature": "°C",
-        "humidity": "% humidity",
-    }
-
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, default_address=0x38, **kwargs)
 
@@ -63,9 +59,9 @@ class AHT20(TempHumSensor, i2cSensor):
 
 class ENS160(i2cSensor):
     measures_available = {
-        "AQI": "",
-        "eCO2": "ppm",
-        "TVOC": "ppm",
+        Measure.AQI: None,
+        Measure.eCO2: Unit.ppm,
+        Measure.TVOC: Unit.ppm,
     }
 
     def __init__(self, *args, **kwargs) -> None:
@@ -137,7 +133,7 @@ class ENS160(i2cSensor):
 
 class VEML7700(i2cSensor, LightSensor):
     measures_available = {
-        "light": "lux",
+        Measure.light: Unit.lux,
     }
 
     def __init__(self, *args, **kwargs) -> None:
@@ -180,7 +176,7 @@ class VEML7700(i2cSensor, LightSensor):
 
 class VCNL4040(i2cSensor, LightSensor):
     measures_available = {
-        "light": "lux",
+        Measure.light: Unit.lux,
     }
 
     def __init__(self, *args, **kwargs) -> None:
@@ -223,7 +219,7 @@ class VCNL4040(i2cSensor, LightSensor):
 
 class CapacitiveSensor(i2cSensor):
     measures_available = {
-        "capacitive": "",
+        Measure.capacitive: None,
     }
 
     def __init__(self, *args, **kwargs) -> None:
@@ -250,8 +246,8 @@ class CapacitiveSensor(i2cSensor):
 
 class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
     measures_available = {
-        "moisture": "% RWC",
-        "temperature": "°C"
+        Measure.moisture: Unit.RWC,
+        Measure.temperature: Unit.celsius_degree,
     }
 
     def __init__(self, *args, **kwargs) -> None:

@@ -503,7 +503,7 @@ class Unit(Enum):
 
 
 class BaseSensor(Hardware):
-    measures_available: dict[str, str] | None = None
+    measures_available: dict[Measure, Unit | None] | None = None
 
     def __init__(self, *args, **kwargs) -> None:
         if self.measures_available is None:
@@ -513,13 +513,17 @@ class BaseSensor(Hardware):
         kwargs["type"] = gv.HardwareType.sensor
         measures = kwargs.get("measures")
         if not measures:
-            measures = [*self.measures_available.keys()]
+            measures = [measure.value for measure in self.measures_available.keys()]
         else:
             err = ""
             for measure in measures:
-                if measure not in self.measures_available.keys():
-                    err += f"'{measure.capitalize()}' is not a valid measure " \
-                           f"for sensor {self.model}.\n"
+                try:
+                    m = Measure[measure]
+                    if m not in self.measures_available.keys():
+                        raise KeyError  # Ugly but works
+                except KeyError:
+                    err += f"Measure '{measure}' is not valid for sensor " \
+                           f"model '{self.model}'.\n"
             if err:
                 raise ValueError(err)
         kwargs["measures"] = measures

@@ -21,11 +21,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 #   GPIO sensors
 # ---------------------------------------------------------------------------
 class DHTSensor(TempHumSensor, gpioHardware):
-    measures_available = {
-        "temperature": "°C",
-        "humidity": "% humidity",
-    }
-
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Load dht device.

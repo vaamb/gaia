@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import gaia_validators as gv
 
-from gaia.hardware.abc import BaseSensor
+from gaia.hardware.abc import BaseSensor, Measure, Unit
 from gaia.utils import (
     get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 
 
 class TempHumSensor(BaseSensor):
+    measures_available = {
+        Measure.absolute_humidity: Unit.gram_per_cubic_m,
+        Measure.dew_point: Unit.celsius_degree,
+        Measure.humidity: Unit.rel_humidity,
+        Measure.temperature: Unit.celsius_degree,
+    }
+
     def _get_raw_data(self) -> tuple[float | None, float | None]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
