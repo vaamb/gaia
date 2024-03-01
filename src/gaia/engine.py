@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import logging.config
+from math import ceil
 import signal
 from threading import Event, Thread
 from time import sleep
@@ -219,7 +220,7 @@ class Engine(metaclass=SingletonMeta):
         if self.config.app_config.SENSORS_LOGGING_PERIOD is not None:
             cron_minute: str = self.config.app_config.SENSORS_LOGGING_PERIOD
             loop_period = self.config.app_config.SENSORS_LOOP_PERIOD
-            seconds_offset = loop_period * 1.5
+            seconds_offset = ceil(loop_period * 1.5)
             job_kwargs = {"scoped_session_": self.db.scoped_session, "engine": self}
             self.scheduler.add_job(
                 func=routines.log_sensors_data, kwargs=job_kwargs,
