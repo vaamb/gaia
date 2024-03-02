@@ -385,7 +385,8 @@ class Hardware(metaclass=_MetaHardware):
             level=self._level,
             model=self._model,
             measures=[
-                f"{measure}|{unit}" for measure, unit in self._measures.items()
+                f"{measure.name}|{unit.name}"
+                for measure, unit in self._measures.items()
             ],
             plants=self._plants,
             multiplexer_model=self._multiplexer_model,
