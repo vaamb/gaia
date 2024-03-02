@@ -552,8 +552,8 @@ class BaseSensor(Hardware):
             measures: list[str]
             validated_measures = []
             err = ""
-            for measure_unit in measures:
-                measure = measure_unit.split("|")[0]
+            for measure_and_unit in measures:
+                measure = measure_and_unit.split("|")[0]
                 try:
                     m = Measure[measure.lower()]
                     if m not in self.measures_available.keys():

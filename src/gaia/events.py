@@ -261,7 +261,7 @@ class Events(EventHandler):
         self.register()
 
     def on_registration_ack(self, host_uid: str) -> None:
-        if self._dispatcher.host_uid != host_uid:
+        if self._dispatcher.host_uid != UUID(host_uid):
             self.logger.warning(
                 "Received a registration acknowledgment for another dispatcher.")
             return
