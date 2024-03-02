@@ -541,21 +541,34 @@ class BaseSensor(Hardware):
                 f"as entries.")
         kwargs["type"] = gv.HardwareType.sensor
         measures = kwargs.get("measures")
+        validated_measures: list[str]
         if not measures:
-            measures = [measure.value for measure in self.measures_available.keys()]
+            validated_measures = [
+                f"{measure.name}|{unit.name}"
+                for measure, unit in self.measures_available.items()
+            ]
         else:
+            measures: list[str]
+            validated_measures = []
             err = ""
-            for measure in measures:
+            for measure_unit in measures:
+                measure = measure_unit.split("|")[0]
                 try:
-                    m = Measure[measure]
+                    m = Measure[measure.lower()]
                     if m not in self.measures_available.keys():
                         raise KeyError  # Ugly but works
                 except KeyError:
+                    model = kwargs["model"]
                     err += f"Measure '{measure}' is not valid for sensor " \
-                           f"model '{self.model}'.\n"
+                           f"model '{model}'.\n"
+                else:
+                    unit: Unit | None = self.measures_available[m]
+                    validated_measures.append(
+                        f"{m.name}|{unit.name if unit is not None else ''}"
+                    )
             if err:
                 raise ValueError(err)
-        kwargs["measures"] = measures
+        kwargs["measures"] = validated_measures
         super().__init__(*args, **kwargs)
         self.device: Any = self._get_device()
 
