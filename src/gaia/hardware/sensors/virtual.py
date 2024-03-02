@@ -5,7 +5,7 @@ from gaia.hardware.abc import BaseSensor
 from gaia.hardware.virtual import virtualHardware
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
-    AHT20, CapacitiveMoisture, VCNL4040, VEML7700)
+    AHT20, CapacitiveMoisture, ENS160, VCNL4040, VEML7700)
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -58,6 +58,13 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
         return Seesaw(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
+class virtualENS160(ENS160, virtualSensor):
+    def _get_device(self) -> "_ENS160":
+        from gaia.hardware._compatibility import ENS160 as _ENS160
+        if self.subroutine:
+            return _ENS160(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+
+
 virtual_sensor_models:  dict[str, Type[virtualSensor]]= {
     hardware.__name__: hardware for hardware in [
         virtualAHT20,
@@ -66,5 +73,6 @@ virtual_sensor_models:  dict[str, Type[virtualSensor]]= {
         virtualVCNL4040,
         virtualVEML7700,
         virtualCapacitiveMoisture,
+        virtualENS160,
     ]
 }
