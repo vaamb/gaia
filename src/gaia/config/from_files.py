@@ -307,6 +307,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     raise e
                 else:
                     self._ecosystems_config_dict = self._validate_IO_dict(validated)
+                    self._dump_config(cfg_type)
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
