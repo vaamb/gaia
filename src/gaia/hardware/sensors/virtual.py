@@ -25,37 +25,43 @@ class virtualDHT(DHTSensor, virtualSensor):
 class virtualDHT11(virtualDHT):
     def _get_device(self) -> "_DHT11":
         from gaia.hardware._compatibility import DHT11 as _DHT11
-        return _DHT11(ecosystem_uid=self.subroutine.ecosystem.uid)
+        if self.subroutine:
+            return _DHT11(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
 class virtualDHT22(virtualDHT):
     def _get_device(self) -> "_DHT22":
         from gaia.hardware._compatibility import DHT22 as _DHT22
-        return _DHT22(ecosystem_uid=self.subroutine.ecosystem.uid)
+        if self.subroutine:
+            return _DHT22(ecosystem_uid=self.subroutine.ecosystem.uid)
 
 
 class virtualAHT20(AHT20, virtualSensor):
     def _get_device(self) -> "AHTx0":
         from gaia.hardware._compatibility import AHTx0
-        return AHTx0(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        if self.subroutine:
+            return AHTx0(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
 class virtualVCNL4040(VCNL4040, virtualSensor):
     def _get_device(self) -> "_VCNL4040":
         from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
-        return _VCNL4040(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        if self.subroutine:
+            return _VCNL4040(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
     def _get_device(self) -> "_VEML7700":
         from gaia.hardware._compatibility import VEML7700 as _VEML7700
-        return _VEML7700(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        if self.subroutine:
+            return _VEML7700(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
 class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
     def _get_device(self) -> "Seesaw":
         from gaia.hardware._compatibility import Seesaw
-        return Seesaw(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        if self.subroutine:
+            return Seesaw(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
 
 
 class virtualENS160(ENS160, virtualSensor):
