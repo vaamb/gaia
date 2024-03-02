@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import enum
 from enum import Enum
 import io
 import os
@@ -13,7 +14,7 @@ import weakref
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
-from gaia_validators import safe_enum_from_name
+from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, Image
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
@@ -30,6 +31,28 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
     else:
         from gaia.hardware._compatibility import Pin, pwmio
+
+
+class Measure(Enum):
+    absolute_humidity = enum.auto()
+    AQI = enum.auto()
+    capacitive = enum.auto()
+    dew_point = enum.auto()
+    eCO2 = enum.auto()
+    humidity = enum.auto()
+    light = enum.auto()
+    moisture = enum.auto()
+    temperature = enum.auto()
+    TVOC = enum.auto()
+
+
+class Unit(Enum):
+    celsius_degree = "°C"
+    lux = "lux"
+    gram_per_cubic_m = "g.m-3"
+    ppm = "ppm"
+    rel_humidity = "% humidity"
+    RWC = "RWC"
 
 
 class PinNumberError(ValueError):
@@ -216,8 +239,8 @@ class Hardware(metaclass=_MetaHardware):
             type: gv.HardwareType | gv.HardwareTypeNames,
             model: str,
             name: str | None = None,
-            measures: list | None = None,
-            plants: list or None = None,
+            measures: list[str] | None = None,
+            plants: list[str] or None = None,
             multiplexer_model: str | None = None,
     ) -> None:
         self._subroutine: "SubroutineTemplate" | None
@@ -235,9 +258,7 @@ class Hardware(metaclass=_MetaHardware):
             primary=Address(address_list[0]),
             secondary=Address(address_list[1]) if len(address_list) == 2 else None
         )
-        if isinstance(measures, str):
-            measures = [measures]
-        self._measures = measures or []
+        self._measures: dict[Measure, Unit | None] = self._validate_measures(measures)
         if isinstance(plants, str):
             plants = [plants]
         self._plants = plants or []
@@ -248,6 +269,27 @@ class Hardware(metaclass=_MetaHardware):
             f"<{self.__class__.__name__}({self._uid}, name={self._name}, "
             f"model={self._model})>"
         )
+
+    @staticmethod
+    def _validate_measures(
+            measures: list[str] | None
+    ) -> dict[Measure, Unit | None]:
+        if measures is None:
+            measures = []
+        elif isinstance(measures, str):
+            measures = [measures]
+        rv: dict[Measure, Unit | None] = {}
+        for m in measures:
+            measure_and_unit = m.split("|")
+            measure = safe_enum_from_name(Measure, measure_and_unit[0])
+            try:
+                raw_unit = measure_and_unit[1]
+            except IndexError:
+                unit = None
+            else:
+                unit = safe_enum_from_value(Unit, raw_unit)
+            rv[measure] = unit
+        return rv
 
     @classmethod
     def get_mounted(cls) -> dict[str, Self]:
@@ -310,8 +352,6 @@ class Hardware(metaclass=_MetaHardware):
         else:
             return str(self._address_book.primary)
 
-    address = address_repr
-
     @property
     def model(self) -> str:
         return self._model
@@ -325,7 +365,7 @@ class Hardware(metaclass=_MetaHardware):
         return self._type
 
     @property
-    def measures(self) -> list[str]:
+    def measures(self) -> dict[Measure, Unit | None]:
         return self._measures
 
     @property
@@ -337,7 +377,20 @@ class Hardware(metaclass=_MetaHardware):
         return self._multiplexer_model
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
-        model = gv.HardwareConfig.model_validate(self)
+        model = gv.HardwareConfig(
+            uid=self._uid,
+            name=self._name,
+            address=self.address_repr,
+            type=self._type,
+            level=self._level,
+            model=self._model,
+            measures=[
+                f"{measure.name}|{unit.value}"
+                for measure, unit in self._measures.items()
+            ],
+            plants=self._plants,
+            multiplexer_model=self._multiplexer_model,
+        )
         return model.model_dump(exclude_defaults=shorten)
 
 
@@ -480,8 +533,43 @@ class PlantLevelHardware(Hardware):
 
 
 class BaseSensor(Hardware):
+    measures_available: dict[Measure, Unit | None] | None = None
+
     def __init__(self, *args, **kwargs) -> None:
+        if self.measures_available is None:
+            raise NotImplementedError(
+                f"'cls.measures_available' should be a dict with 'measure: unit' "
+                f"as entries.")
         kwargs["type"] = gv.HardwareType.sensor
+        measures = kwargs.get("measures")
+        validated_measures: list[str]
+        if not measures:
+            validated_measures = [
+                f"{measure.name}|{unit.value}"
+                for measure, unit in self.measures_available.items()
+            ]
+        else:
+            measures: list[str]
+            validated_measures = []
+            err = ""
+            for measure_and_unit in measures:
+                measure = measure_and_unit.split("|")[0]
+                try:
+                    m = Measure[measure.lower()]
+                    if m not in self.measures_available.keys():
+                        raise KeyError  # Ugly but works
+                except KeyError:
+                    model = kwargs["model"]
+                    err += f"Measure '{measure}' is not valid for sensor " \
+                           f"model '{model}'.\n"
+                else:
+                    unit: Unit | None = self.measures_available[m]
+                    validated_measures.append(
+                        f"{m.name}|{unit.value if unit is not None else ''}"
+                    )
+            if err:
+                raise ValueError(err)
+        kwargs["measures"] = validated_measures
         super().__init__(*args, **kwargs)
         self.device: Any = self._get_device()
 

@@ -7,7 +7,8 @@ from typing import Type
 import gaia_validators as gv
 
 from gaia.hardware.abc import (
-    BaseSensor, hardware_logger, i2cSensor, LightSensor, PlantLevelHardware)
+    BaseSensor, hardware_logger, i2cSensor, LightSensor, Measure,
+    PlantLevelHardware, Unit)
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
@@ -30,8 +31,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 class AHT20(TempHumSensor, i2cSensor):
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["temperature", "humidity"]
         super().__init__(*args, default_address=0x38, **kwargs)
 
     def _get_device(self) -> "AHTx0":
@@ -59,9 +58,13 @@ class AHT20(TempHumSensor, i2cSensor):
 
 
 class ENS160(i2cSensor):
+    measures_available = {
+        Measure.AQI: None,
+        Measure.eCO2: Unit.ppm,
+        Measure.TVOC: Unit.ppm,
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["AQI", "eCO2", "TVOC"]
         super().__init__(*args, default_address=0x53, **kwargs)
 
     def _get_device(self) -> "_ENS160":
@@ -105,21 +108,21 @@ class ENS160(i2cSensor):
         # TODO: access temperature and humidity data to compensate
         data = []
         AQI, eCO2, TVOC = self._get_raw_data()
-        if "AQI" in self.measures:
+        if Measure.AQI in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="AQI",
                 value=AQI
             ))
 
-        if "eCO2" in self.measures:
+        if Measure.eCO2 in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="eCO2",
                 value=eCO2
             ))
 
-        if "TVOC" in self.measures:
+        if Measure.TVOC in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="TVOC",
@@ -129,9 +132,11 @@ class ENS160(i2cSensor):
 
 
 class VEML7700(i2cSensor, LightSensor):
+    measures_available = {
+        Measure.light: Unit.lux,
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["lux"]
         super().__init__(*args, default_address=0x10, **kwargs)
 
     def _get_device(self) -> "_VEML7700":
@@ -160,7 +165,7 @@ class VEML7700(i2cSensor, LightSensor):
 
     def get_data(self) -> list[gv.SensorRecord]:
         data = []
-        if "lux" in self.measures or "light" in self.measures:
+        if Measure.light in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
@@ -170,9 +175,11 @@ class VEML7700(i2cSensor, LightSensor):
 
 
 class VCNL4040(i2cSensor, LightSensor):
+    measures_available = {
+        Measure.light: Unit.lux,
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["lux"]
         super().__init__(*args, default_address=0x60, **kwargs)
 
     def _get_device(self) -> "_VCNL4040":
@@ -201,7 +208,7 @@ class VCNL4040(i2cSensor, LightSensor):
 
     def get_data(self) -> list[gv.SensorRecord]:
         data = []
-        if "lux" in self.measures or "light" in self.measures:
+        if Measure.light in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
@@ -211,9 +218,11 @@ class VCNL4040(i2cSensor, LightSensor):
 
 
 class CapacitiveSensor(i2cSensor):
+    measures_available = {
+        Measure.capacitive: None,
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["capacitive"]
         super().__init__(*args, default_address=0x36, **kwargs)
 
     def _get_device(self) -> "Seesaw":
@@ -236,9 +245,12 @@ class CapacitiveSensor(i2cSensor):
 
 
 class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
+    measures_available = {
+        Measure.moisture: Unit.RWC,
+        Measure.temperature: Unit.celsius_degree,
+    }
+
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["moisture", "temperature"]
         super().__init__(*args, **kwargs)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
@@ -269,14 +281,14 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         except RuntimeError:
             moisture = raw_temperature = None
         data = []
-        if "moisture" in self.measures:
+        if Measure.moisture in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="moisture",
                 value=moisture
             ))
 
-        if "temperature" in self.measures:
+        if Measure.temperature in self.measures:
             temperature = temperature_converter(
                 raw_temperature, "celsius", get_unit("temperature", "celsius"))
             data.append(gv.SensorRecord(

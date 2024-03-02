@@ -22,8 +22,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 class DHTSensor(TempHumSensor, gpioHardware):
     def __init__(self, *args, **kwargs) -> None:
-        if not kwargs.get("measures"):
-            kwargs["measures"] = ["temperature", "humidity"]
         super().__init__(*args, **kwargs)
         # Load dht device.
         # Rem: don't use pulseio as it uses 100% of one core in Pi3

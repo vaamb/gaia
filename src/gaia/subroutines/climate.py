@@ -77,7 +77,7 @@ class Climate(SubroutineTemplate):
         ]
         measures: set[str] = set()
         for sensor in sensors:
-            measures.update(sensor.measures)
+            measures.update([measure.name for measure in sensor.measures])
 
         # Check if sensors taking regulated params are available
         for climate_param, regulated in regulated_parameters.items():
