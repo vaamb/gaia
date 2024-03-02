@@ -167,6 +167,18 @@ class Seesaw(MoistureCompatibility):
         return self.temperature
 
 
+class ENS160(CompatibilityDevice):
+    new_data_available = True
+    data_validity = True
+
+    def read_all_sensors(self) -> dict[str, float]:
+        return {
+            "AQI": random.randint(1, 5),
+            "eCO2": random.gauss(600, 60),
+            "TVOC": random.gauss(200, 40),
+        }
+
+
 class PiCamera:
     def create_preview_configuration(self) -> None:
         pass
