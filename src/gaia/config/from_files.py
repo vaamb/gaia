@@ -295,9 +295,10 @@ class EngineConfig(metaclass=SingletonMeta):
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
                 try:
-                    validated = RootEcosystemsConfigValidator(
-                        **{"config": unvalidated}
-                    ).model_dump()["config"]
+                    validated: dict[str, EcosystemConfigDict] = \
+                        RootEcosystemsConfigValidator(
+                            **{"config": unvalidated}
+                        ).model_dump()["config"]
                 except pydantic.ValidationError as e:
                     self.logger.error(
                         f"Could not validate ecosystems configuration file. "
@@ -305,7 +306,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     )
                     raise e
                 else:
-                    self._ecosystems_config_dict = validated
+                    self._ecosystems_config_dict = self._validate_IO_dict(validated)
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
@@ -321,6 +322,26 @@ class EngineConfig(metaclass=SingletonMeta):
                     raise e
                 else:
                     self._private_config = validated
+
+    @staticmethod
+    def _validate_IO_dict(
+            ecosystems_config_dict: dict[str, EcosystemConfigDict]
+    ) -> dict[str, EcosystemConfigDict]:
+        for ecosystem_name, ecosystem_dict in ecosystems_config_dict.items():
+            validated_IO_dict: dict[str, gv.AnonymousHardwareConfigDict] = {}
+            addresses_used = [
+                hardware["name"] for hardware in ecosystem_dict["IO"].values()
+            ]
+            for IO_uid, IO_dict in ecosystem_dict["IO"].items():
+                validated_hardware = EcosystemConfig.validate_hardware_dict(
+                    hardware_dict={"uid": IO_uid, **IO_dict},
+                    addresses_used=addresses_used,
+                    check_address=True
+                )
+                validated_hardware.pop("uid")
+                validated_IO_dict[IO_uid] = validated_hardware
+            ecosystem_dict["IO"] = validated_IO_dict
+        return ecosystems_config_dict
 
     def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
@@ -1361,9 +1382,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return [self.IO_dict[hardware]["address"]
                 for hardware in self.IO_dict]
 
-    def _validate_hardware_dict(
-            self,
+    @staticmethod
+    def validate_hardware_dict(
             hardware_dict: gv.HardwareConfigDict,
+            addresses_used: list,
             check_address: bool = True,
     ) -> gv.HardwareConfigDict:
         try:
@@ -1377,7 +1399,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             check_address = False
         if (
                 check_address
-                and hardware_config.address in self._used_addresses()
+                and hardware_config.address in addresses_used
         ):
             raise ValueError(f"Address {hardware_config.address} already used.")
         if hardware_config.model not in hardware_models:
@@ -1423,7 +1445,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "plants": plants,
             "multiplexer_model": multiplexer_model,
         })
-        hardware_dict = self._validate_hardware_dict(hardware_dict)
+        hardware_dict = self.validate_hardware_dict(hardware_dict, self._used_addresses())
         hardware_dict.pop("uid")
         self.IO_dict.update({uid: hardware_dict})
 
@@ -1444,7 +1466,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if value is not None
         })
         check_address = "address" in updating_values  # Don't check address if not trying to update it
-        hardware_dict = self._validate_hardware_dict(hardware_dict, check_address)
+        hardware_dict = self.validate_hardware_dict(
+            hardware_dict, self._used_addresses(), check_address)
         hardware_dict.pop("uid")
         self.IO_dict[uid] = hardware_dict
 
