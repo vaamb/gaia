@@ -14,7 +14,7 @@ import weakref
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
-from gaia_validators import safe_enum_from_name
+from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, Image
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
@@ -48,11 +48,11 @@ class Measure(Enum):
 
 class Unit(Enum):
     celsius_degree = "°C"
-    lux = enum.auto()
+    lux = "lux"
     gram_per_cubic_m = "g.m-3"
-    ppm = enum.auto()
+    ppm = "ppm"
     rel_humidity = "% humidity"
-    RWC = enum.auto()
+    RWC = "RWC"
 
 
 class PinNumberError(ValueError):
@@ -287,7 +287,7 @@ class Hardware(metaclass=_MetaHardware):
             except IndexError:
                 unit = None
             else:
-                unit = safe_enum_from_name(Unit, raw_unit)
+                unit = safe_enum_from_value(Unit, raw_unit)
             rv[measure] = unit
         return rv
 
@@ -385,7 +385,7 @@ class Hardware(metaclass=_MetaHardware):
             level=self._level,
             model=self._model,
             measures=[
-                f"{measure.name}|{unit.name}"
+                f"{measure.name}|{unit.value}"
                 for measure, unit in self._measures.items()
             ],
             plants=self._plants,
@@ -545,7 +545,7 @@ class BaseSensor(Hardware):
         validated_measures: list[str]
         if not measures:
             validated_measures = [
-                f"{measure.name}|{unit.name}"
+                f"{measure.name}|{unit.value}"
                 for measure, unit in self.measures_available.items()
             ]
         else:
@@ -565,7 +565,7 @@ class BaseSensor(Hardware):
                 else:
                     unit: Unit | None = self.measures_available[m]
                     validated_measures.append(
-                        f"{m.name}|{unit.name if unit is not None else ''}"
+                        f"{m.name}|{unit.value if unit is not None else ''}"
                     )
             if err:
                 raise ValueError(err)
