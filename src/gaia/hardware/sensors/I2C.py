@@ -59,9 +59,9 @@ class AHT20(TempHumSensor, i2cSensor):
 
 class ENS160(i2cSensor):
     measures_available = {
-        Measure.AQI: None,
-        Measure.eCO2: Unit.ppm,
-        Measure.TVOC: Unit.ppm,
+        Measure.aqi: None,
+        Measure.eco2: Unit.ppm,
+        Measure.tvoc: Unit.ppm,
     }
 
     def __init__(self, *args, **kwargs) -> None:
@@ -77,7 +77,7 @@ class ENS160(i2cSensor):
                     "adafruit-circuitpython-ens160` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import _ENS160
+            from gaia.hardware._compatibility import ENS160 as _ENS160
         return _ENS160(self._get_i2c(), self._address_book.primary.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None, float | None]:
@@ -108,21 +108,21 @@ class ENS160(i2cSensor):
         # TODO: access temperature and humidity data to compensate
         data = []
         AQI, eCO2, TVOC = self._get_raw_data()
-        if Measure.AQI in self.measures:
+        if Measure.aqi in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="AQI",
                 value=AQI
             ))
 
-        if Measure.eCO2 in self.measures:
+        if Measure.eco2 in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="eCO2",
                 value=eCO2
             ))
 
-        if Measure.TVOC in self.measures:
+        if Measure.tvoc in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="TVOC",

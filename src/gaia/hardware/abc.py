@@ -34,16 +34,16 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class Measure(Enum):
-    absolute_humidity = enum.auto()
-    AQI = enum.auto()
-    capacitive = enum.auto()
-    dew_point = enum.auto()
-    eCO2 = enum.auto()
-    humidity = enum.auto()
-    light = enum.auto()
-    moisture = enum.auto()
-    temperature = enum.auto()
-    TVOC = enum.auto()
+    absolute_humidity = "absolute_humidity"
+    aqi = "AQI"
+    capacitive = "capacitive"
+    dew_point = "dew_point"
+    eco2 = "eCO2"
+    humidity = "humidity"
+    light = "light"
+    moisture = "moisture"
+    temperature = "temperature"
+    tvoc = "TVOC"
 
 
 class Unit(Enum):
@@ -281,9 +281,11 @@ class Hardware(metaclass=_MetaHardware):
         rv: dict[Measure, Unit | None] = {}
         for m in measures:
             measure_and_unit = m.split("|")
-            measure = safe_enum_from_name(Measure, measure_and_unit[0])
+            measure = safe_enum_from_name(Measure, measure_and_unit[0].lower())
             try:
                 raw_unit = measure_and_unit[1]
+                if raw_unit == "":
+                    raise IndexError  # Ugly but works
             except IndexError:
                 unit = None
             else:
@@ -385,7 +387,7 @@ class Hardware(metaclass=_MetaHardware):
             level=self._level,
             model=self._model,
             measures=[
-                f"{measure.name}|{unit.value}"
+                f"{measure.value}|{unit.value if unit is not None else ''}"
                 for measure, unit in self._measures.items()
             ],
             plants=self._plants,
@@ -545,7 +547,7 @@ class BaseSensor(Hardware):
         validated_measures: list[str]
         if not measures:
             validated_measures = [
-                f"{measure.name}|{unit.value}"
+                f"{measure.value}|{unit.value if unit is not None else ''}"
                 for measure, unit in self.measures_available.items()
             ]
         else:
@@ -565,7 +567,7 @@ class BaseSensor(Hardware):
                 else:
                     unit: Unit | None = self.measures_available[m]
                     validated_measures.append(
-                        f"{m.name}|{unit.value if unit is not None else ''}"
+                        f"{m.value}|{unit.value if unit is not None else ''}"
                     )
             if err:
                 raise ValueError(err)
