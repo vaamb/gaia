@@ -225,18 +225,37 @@ class Ecosystem:
         # Stop the unneeded subroutines first.
         to_stop = self.subroutines_started - subroutines_needed
         for subroutine in to_stop:
-            self.logger.debug(f"Stopping the subroutine '{subroutine}'")
-            self.stop_subroutine(subroutine)
+            self.logger.debug(f"Stopping the subroutine '{subroutine}'.")
+            try:
+                self.stop_subroutine(subroutine)
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while stopping the subroutine "
+                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
         # Then update the already running subroutines
         for subroutine in self.subroutines_started:
-            self.subroutines[subroutine].refresh_hardware()
+            try:
+                self.subroutines[subroutine].refresh_hardware()
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while refreshing the hardware of "
+                    f"the subroutine '{subroutine}'. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
         # Finally, start the new subroutines
         to_start = subroutines_needed - self.subroutines_started
         for subroutine in subroutine_names:
             if subroutine not in to_start:
                 continue
-            self.logger.debug(f"Starting the subroutine '{subroutine}'")
-            self.start_subroutine(subroutine)
+            self.logger.debug(f"Starting the subroutine '{subroutine}'.")
+            try:
+                self.start_subroutine(subroutine)
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while starting the subroutine "
+                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
 
     def start(self):
         """Start the Ecosystem
