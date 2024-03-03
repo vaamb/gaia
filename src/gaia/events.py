@@ -177,13 +177,6 @@ class Events(EventHandler):
             id="events-ping",
             trigger=IntervalTrigger(seconds=15),
         )
-        sensor_offset: str = str(int(self.engine.config.app_config.SENSORS_LOOP_PERIOD + 1))
-        self.engine.scheduler.add_job(
-            func=self.emit_event_if_connected, kwargs={"payload_name": "sensors_data", "ttl": 15},
-            id="events-send_sensors_data",
-            trigger=CronTrigger(minute="*", second=sensor_offset),
-            misfire_grace_time=10,
-        )
         self.engine.scheduler.add_job(
             func=self.emit_event_if_connected, kwargs={"payload_name": "light_data"},
             id="events-send_light_data",
@@ -200,7 +193,6 @@ class Events(EventHandler):
 
     def _unschedule_jobs(self) -> None:
         self.engine.scheduler.remove_job(job_id="events-ping")
-        self.engine.scheduler.remove_job(job_id="events-send_sensors_data")
         self.engine.scheduler.remove_job(job_id="events-send_light_data")
         self.engine.scheduler.remove_job(job_id="events-send_health_data")
         self._jobs_scheduled = False

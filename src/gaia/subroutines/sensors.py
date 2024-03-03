@@ -152,5 +152,11 @@ class Sensors(SubroutineTemplate):
         ]
         if len(cache["records"]) > 0:
             self.sensors_data = gv.SensorsData(**cache)
+            if (
+                    self.ecosystem.engine.use_message_broker
+                    and self.ecosystem.engine.event_handler.is_connected()
+            ):
+                self.ecosystem.engine.event_handler.send_payload(
+                    "sensors_data", ecosystem_uids=[self.ecosystem.uid])
         else:
             self.sensors_data = gv.Empty()
