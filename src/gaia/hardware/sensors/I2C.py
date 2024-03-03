@@ -86,11 +86,15 @@ class ENS160(i2cSensor):
         # WARM_UP = 0x01
         # START_UP = 0x02
         # INVALID_OUT = 0x03
+        retry = 5
         while True:
             # if no data, wait
             if self.device.new_data_available:
                 break
             sleep(0.1)
+            retry -= 1
+            if retry <= 0:
+                return None, None, None
         # If sensor's output is invalid, return None
         if self.device.data_validity == 0x03:
             return None, None, None
