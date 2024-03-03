@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
+import hashlib
 from json.decoder import JSONDecodeError
 import logging
 import os
@@ -12,7 +13,7 @@ import random
 import string
 from threading import Condition, Event, Lock, Thread
 import typing as t
-from typing import cast, Literal, Type, TypedDict
+from typing import cast, Literal, Type, TypedDict, TypeVar
 import weakref
 from weakref import WeakValueDictionary
 
@@ -59,6 +60,26 @@ class ConfigType(Enum):
 class CacheType(Enum):
     chaos = "chaos.json"
     sun_times = "sun_time.json"
+
+
+H = TypeVar("H", int, bytes, str)
+
+
+def _file_checksum(file_path: Path, _buffer_size: int=4096) -> H:
+    try:
+        with open(file_path, "rb") as file_obj:
+            digest_obj = hashlib.md5(usedforsecurity=False)
+            # coming from hashlib.file_digest
+            buffer = bytearray(_buffer_size)
+            view = memoryview(buffer)
+            while True:
+                size = file_obj.readinto(buffer)
+                if size == 0:
+                    break  # EOF
+                digest_obj.update(view[:size])
+            return digest_obj.digest()
+    except FileNotFoundError:
+        return b"\x00"
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +213,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._sun_times: [str, SunTimesCacheData] = {}
         self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
-        self._config_files_modif: dict[Path, int] = {}
+        self._config_files_checksum: dict[Path, H] = {}
         self._config_files_lock = Lock()
         self.new_config = Condition()
         self._stop_event = Event()
@@ -385,8 +406,8 @@ class EngineConfig(metaclass=SingletonMeta):
                             "detected. Creating a default file.")
                         self._create_private_config_file()
                 finally:
-                    path = self.get_file_path(cfg_type)
-                    self._config_files_modif[path] = os.stat(path).st_mtime_ns
+                    file_path = self.get_file_path(cfg_type)
+                    self._config_files_checksum[file_path] = _file_checksum(file_path)
         self.load(CacheType.chaos)
         self.load(CacheType.sun_times)
         for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items():
@@ -432,19 +453,19 @@ class EngineConfig(metaclass=SingletonMeta):
 
     # File watchdog
     def _get_changed_config_files(self) -> set[ConfigType]:
-        config_files_mtime: dict[Path, int] = {}
+        config_files_checksum: dict[Path, H] = {}
         changed: set[ConfigType] = set()
-        for file_path, file_modif in self._config_files_modif.items():
-            modif = os.stat(file_path).st_mtime_ns
+        for file_path, file_modif in self._config_files_checksum.items():
+            modif = _file_checksum(file_path)
             if modif != file_modif:
                 changed.add(ConfigType(file_path.name))
-            config_files_mtime[file_path] = modif
-        self._config_files_modif = config_files_mtime
+            config_files_checksum[file_path] = modif
+        self._config_files_checksum = config_files_checksum
         return changed
 
     def _watchdog_routine(self) -> None:
         # Fill config files modification dict
-        with self.config_files_lock():
+        with self.config_files_lock_no_reset():
             changed_configs = self._get_changed_config_files()
             if changed_configs:
                 for config_type in changed_configs:
@@ -504,10 +525,15 @@ class EngineConfig(metaclass=SingletonMeta):
         self.logger.debug("Configuration files watchdog successfully stopped")
 
     @contextmanager
+    def config_files_lock_no_reset(self):
+        with self._config_files_lock:
+            yield
+
+    @contextmanager
     def config_files_lock(self):
         """A context manager that makes sure only one process access file
         content at the time"""
-        with self._config_files_lock:
+        with self.config_files_lock_no_reset():
             try:
                 yield
             finally:

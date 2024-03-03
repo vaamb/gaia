@@ -42,7 +42,7 @@ class BaseConfig:
     OURANOS_SECRET_KEY = os.environ.get("OURANOS_SECRET_KEY") or "secret_key"
 
     HEALTH_LOGGING_TIME = "00h00"
-    CONFIG_WATCHER_PERIOD = 250  # in ms
+    CONFIG_WATCHER_PERIOD = 500  # in ms
     CLIMATE_LOOP_PERIOD = 10.0  # in s
     LIGHT_LOOP_PERIOD = 0.5  # in s
     SENSORS_LOOP_PERIOD = 5.0  # in s
