@@ -579,6 +579,7 @@ class Engine(metaclass=SingletonMeta):
         started_before = self.ecosystems_started - to_start
         for ecosystem_uid in started_before:
             self.ecosystems[ecosystem_uid].refresh_subroutines()
+            self.ecosystems[ecosystem_uid].refresh_lighting_hours(send=False)
         # delete Ecosystems which were created and are no longer on the
         # config file
         for ecosystem_uid in to_delete:
