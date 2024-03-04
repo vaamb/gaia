@@ -609,7 +609,7 @@ class Engine(metaclass=SingletonMeta):
             ecosystem.config.update_chaos_time_window()
         self.config.save(CacheType.chaos)
         if self.use_message_broker:
-            self.event_handler.emit_event_if_connected("chaos")
+            self.event_handler.send_payload_if_connected("chaos_parameters")
 
     # ---------------------------------------------------------------------------
     #   Engine start and stop

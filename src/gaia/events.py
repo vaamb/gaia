@@ -158,7 +158,7 @@ class Events(EventHandler):
             and monotonic() - self._last_heartbeat < 30.0
         )
 
-    def emit_event_if_connected(
+    def send_payload_if_connected(
             self,
             payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None,
@@ -178,13 +178,13 @@ class Events(EventHandler):
             trigger=IntervalTrigger(seconds=15),
         )
         self.engine.scheduler.add_job(
-            func=self.emit_event_if_connected, kwargs={"payload_name": "light_data"},
+            func=self.send_payload_if_connected, kwargs={"payload_name": "light_data"},
             id="events-send_light_data",
             trigger=CronTrigger(hour="1", jitter=5.0),
             misfire_grace_time=10 * 60,
         )
         self.engine.scheduler.add_job(
-            func=self.emit_event_if_connected, kwargs={"payload_name": "health_data"},
+            func=self.send_payload_if_connected, kwargs={"payload_name": "health_data"},
             id="events-send_health_data",
             trigger=CronTrigger(hour="1", jitter=5.0),
             misfire_grace_time=10 * 60,
