@@ -111,8 +111,21 @@ class Ecosystem:
     def light_method(self) -> gv.LightMethod:
         return self.config.light_method
 
-    def set_light_method(self, value: gv.LightMethod) -> None:
+    def set_light_method(
+            self,
+            value: gv.LightMethod,
+            send_info: bool = True
+    ) -> None:
         self.config.set_light_method(value)
+        if send_info and self.engine.use_message_broker:
+            try:
+                self.engine.event_handler.send_payload_if_connected(
+                    "light_data", ecosystem_uids=[self.uid])
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                )
 
     @property
     def light_info(self) -> gv.LightData:
@@ -349,7 +362,7 @@ class Ecosystem:
         else:
             if self.engine.use_message_broker and self.event_handler.registered:
                 try:
-                    self.event_handler.send_payload(
+                    self.event_handler.send_payload_if_connected(
                         "actuator_data", ecosystem_uids=[self._uid])
                 except Exception as e:
                     msg = e.args[1] if len(e.args) > 1 else e.args[0]
@@ -375,8 +388,8 @@ class Ecosystem:
         return gv.Empty()
 
     # Light
-    def refresh_lighting_hours(self, send: bool = True) -> None:
-        self.config.refresh_lighting_hours(send=send)
+    def refresh_lighting_hours(self, send_info: bool = True) -> None:
+        self.config.refresh_lighting_hours(send_info=send_info)
 
     # Health
     @property

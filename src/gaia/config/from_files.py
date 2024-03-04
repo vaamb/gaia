@@ -1139,7 +1139,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"logs to see the reason."
                 )
         self.sky["lighting"] = method
-        self.refresh_lighting_hours(send=True)
+        self.refresh_lighting_hours(send_info=True)
 
     @property
     def light_target(self) -> str | None:
@@ -1148,7 +1148,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def set_light_target(self, target: str | None) -> None:
         assert self.general.get_place(target)
         self.sky["target"] = target
-        self.refresh_lighting_hours(send=True)
+        self.refresh_lighting_hours(send_info=True)
 
     @property
     def lighting_hours(self) -> gv.LightingHours:
@@ -1164,7 +1164,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         with self.lighting_hours_lock:
             self._lighting_hours = lighting_hours
 
-    def refresh_lighting_hours(self, send: bool = True) -> None:
+    def refresh_lighting_hours(self, send_info: bool = True) -> None:
         self.logger.info("Refreshing lighting hours.")
         time_parameters = self.time_parameters
         # Check we've got the info required
@@ -1184,7 +1184,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     "available. Using 'fixed' method instead."
                 )
                 self.set_light_method(gv.LightMethod.fixed)
-                self.refresh_lighting_hours(send=send)
+                self.refresh_lighting_hours(send_info=send_info)
                 return
             else:
                 with self.lighting_hours_lock:
@@ -1205,7 +1205,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     "'fixed' method instead."
                 )
                 self.set_light_method(gv.LightMethod.fixed)
-                self.refresh_lighting_hours(send=send)
+                self.refresh_lighting_hours(send_info=send_info)
                 return
             else:
                 sunrise: datetime = _to_dt(self.sun_times["sunrise"])
@@ -1220,13 +1220,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                         evening_end=time_parameters.night,
                     )
         if (
-                send
+                send_info
                 and self.general.engine_set_up
                 and self.general.engine.use_message_broker
-                and self.general.engine.event_handler.registered
         ):
             try:
-                self.general.engine.event_handler.send_payload(
+                self.general.engine.event_handler.send_payload_if_connected(
                     "light_data", ecosystem_uids=[self.uid])
             except Exception as e:
                 self.logger.error(
@@ -1261,10 +1260,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self._update_chaos_time_window()
         return self.general.get_chaos_memory(self.uid)["time_window"]
 
-    def update_chaos_time_window(self) -> None:
+    def update_chaos_time_window(self, send_info: bool = True) -> None:
         self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             self._update_chaos_time_window()
+            if (
+                    send_info
+                    and self.general.engine_set_up
+                    and self.general.engine.use_message_broker
+            ):
+                self.general.engine.event_handler.send_payload_if_connected(
+                    "chaos_parameters")
         else:
             self.logger.debug("Chaos time window is already up to date.")
 

@@ -158,14 +158,14 @@ class Events(EventHandler):
             and monotonic() - self._last_heartbeat < 30.0
         )
 
-    def emit_event_if_connected(
+    def send_payload_if_connected(
             self,
             payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None,
             ttl: int | None = None
     ) -> None:
         if not self.is_connected():
-            self.logger.info(
+            self.logger.debug(
                 f"Events handler not currently connected. Emission of event "
                 f"'{payload_name}' aborted.")
             return
@@ -177,24 +177,10 @@ class Events(EventHandler):
             id="events-ping",
             trigger=IntervalTrigger(seconds=15),
         )
-        self.engine.scheduler.add_job(
-            func=self.emit_event_if_connected, kwargs={"payload_name": "light_data"},
-            id="events-send_light_data",
-            trigger=CronTrigger(hour="1", jitter=5.0),
-            misfire_grace_time=10 * 60,
-        )
-        self.engine.scheduler.add_job(
-            func=self.emit_event_if_connected, kwargs={"payload_name": "health_data"},
-            id="events-send_health_data",
-            trigger=CronTrigger(hour="1", jitter=5.0),
-            misfire_grace_time=10 * 60,
-        )
         self._jobs_scheduled = True
 
     def _unschedule_jobs(self) -> None:
         self.engine.scheduler.remove_job(job_id="events-ping")
-        self.engine.scheduler.remove_job(job_id="events-send_light_data")
-        self.engine.scheduler.remove_job(job_id="events-send_health_data")
         self._jobs_scheduled = False
 
     def ping(self) -> None:
@@ -231,6 +217,8 @@ class Events(EventHandler):
         self.logger.info("Connection to message broker successful.")
         if self.registered:
             self.logger.info("Already registered.")
+            if not self._jobs_scheduled:
+                self._schedule_jobs()
         else:
             self.logger.info("Will try to register the engine to Ouranos.")
             self.register()

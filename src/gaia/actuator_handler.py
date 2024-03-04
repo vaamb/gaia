@@ -458,8 +458,8 @@ class ActuatorHandler:
                 self.ecosystem.engine.use_message_broker
                 and self.ecosystem.event_handler.registered
         ):
-            self.ecosystem.event_handler.send_payload(
-                "actuator_data", ecosystem_uids=self.ecosystem.config.uid)
+            self.ecosystem.event_handler.send_payload_if_connected(
+                "actuator_data", ecosystem_uids=[self.ecosystem.config.uid])
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
         self.check_countdown()
