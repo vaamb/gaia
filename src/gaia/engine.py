@@ -314,9 +314,12 @@ class Engine(metaclass=SingletonMeta):
         self.scheduler.remove_all_jobs()  # To be 100% sure
         self.scheduler.shutdown()
 
-    def _send_ecosystem_info(self) -> None:
+    def _send_ecosystems_info(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> None:
         if self.use_message_broker and self.event_handler.registered:
-            self.event_handler.send_ecosystems_info()
+            self.event_handler.send_ecosystems_info(ecosystem_uids=ecosystem_uids)
 
     def _loop(self) -> None:
         while not self._stop_event.is_set():
@@ -454,7 +457,7 @@ class Engine(metaclass=SingletonMeta):
                 )
                 ecosystem.start()
                 if send_info:
-                    self._send_ecosystem_info()
+                    self._send_ecosystems_info([ecosystem_uid])
             else:
                 raise RuntimeError(
                     f"Ecosystem {ecosystem_id} is already running"
@@ -491,7 +494,7 @@ class Engine(metaclass=SingletonMeta):
                 if dismount:
                     self.dismount_ecosystem(ecosystem_uid)
                 if send_info:
-                    self._send_ecosystem_info()
+                    self._send_ecosystems_info([ecosystem_uid])
                 self.logger.info(
                     f"Ecosystem {ecosystem_id} has been stopped"
                 )
@@ -526,7 +529,7 @@ class Engine(metaclass=SingletonMeta):
             else:
                 del self.ecosystems[ecosystem_uid]
                 if send_info:
-                    self._send_ecosystem_info()
+                    self._send_ecosystems_info([ecosystem_uid])
                 self.logger.info(
                     f"Ecosystem {ecosystem_id} has been dismounted"
                 )
@@ -549,7 +552,7 @@ class Engine(metaclass=SingletonMeta):
             ecosystem = self.init_ecosystem(ecosystem_uid)
         return ecosystem
 
-    def refresh_ecosystems(self, send_info: bool = False):
+    def refresh_ecosystems(self, send_info: bool = True):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file.
 
         :param send_info: If `True`, will try to send the ecosystem info to
@@ -569,12 +572,12 @@ class Engine(metaclass=SingletonMeta):
         # start Ecosystems which are expected to run and are not running
         to_start = expected_started - self.ecosystems_started
         for ecosystem_uid in to_start:
-            self.start_ecosystem(ecosystem_uid)
+            self.start_ecosystem(ecosystem_uid, send_info=False)
         # stop Ecosystems which are not expected to run and are currently
         # running
         to_stop = self.ecosystems_started - expected_started
         for ecosystem_uid in to_stop:
-            self.stop_ecosystem(ecosystem_uid)
+            self.stop_ecosystem(ecosystem_uid, send_info=False)
         # refresh Ecosystems that were already running and did not stop
         started_before = self.ecosystems_started - to_start
         for ecosystem_uid in started_before:
@@ -584,11 +587,11 @@ class Engine(metaclass=SingletonMeta):
         # config file
         for ecosystem_uid in to_delete:
             if self.ecosystems[ecosystem_uid].started:
-                self.stop_ecosystem(ecosystem_uid)
+                self.stop_ecosystem(ecosystem_uid, send_info=False)
             self.dismount_ecosystem(ecosystem_uid)
         # self.refresh_ecosystems_lighting_hours()  # done by Ecosystem during their startup
         if send_info:
-            self._send_ecosystem_info()
+            self._send_ecosystems_info()
 
     def refresh_ecosystems_lighting_hours(self, send_info: bool = True) -> None:
         """Refresh all the Ecosystems lighting hours
