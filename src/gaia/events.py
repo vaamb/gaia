@@ -165,7 +165,7 @@ class Events(EventHandler):
             ttl: int | None = None
     ) -> None:
         if not self.is_connected():
-            self.logger.info(
+            self.logger.debug(
                 f"Events handler not currently connected. Emission of event "
                 f"'{payload_name}' aborted.")
             return
