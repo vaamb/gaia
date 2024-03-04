@@ -178,12 +178,6 @@ class Events(EventHandler):
             trigger=IntervalTrigger(seconds=15),
         )
         self.engine.scheduler.add_job(
-            func=self.send_payload_if_connected, kwargs={"payload_name": "light_data"},
-            id="events-send_light_data",
-            trigger=CronTrigger(hour="1", jitter=5.0),
-            misfire_grace_time=10 * 60,
-        )
-        self.engine.scheduler.add_job(
             func=self.send_payload_if_connected, kwargs={"payload_name": "health_data"},
             id="events-send_health_data",
             trigger=CronTrigger(hour="1", jitter=5.0),
@@ -193,7 +187,6 @@ class Events(EventHandler):
 
     def _unschedule_jobs(self) -> None:
         self.engine.scheduler.remove_job(job_id="events-ping")
-        self.engine.scheduler.remove_job(job_id="events-send_light_data")
         self.engine.scheduler.remove_job(job_id="events-send_health_data")
         self._jobs_scheduled = False
 

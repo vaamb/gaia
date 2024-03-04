@@ -1223,10 +1223,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 send
                 and self.general.engine_set_up
                 and self.general.engine.use_message_broker
-                and self.general.engine.event_handler.registered
         ):
             try:
-                self.general.engine.event_handler.send_payload(
+                self.general.engine.event_handler.send_payload_if_connected(
                     "light_data", ecosystem_uids=[self.uid])
             except Exception as e:
                 self.logger.error(

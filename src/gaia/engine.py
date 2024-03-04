@@ -589,7 +589,7 @@ class Engine(metaclass=SingletonMeta):
         if send_info:
             self._send_ecosystem_info()
 
-    def refresh_ecosystems_lighting_hours(self) -> None:
+    def refresh_ecosystems_lighting_hours(self, send: bool = True) -> None:
         """Refresh all the Ecosystems lighting hours
 
         Should only be called routinely, once a day. Other than that, Ecosystems
@@ -599,9 +599,9 @@ class Engine(metaclass=SingletonMeta):
         self.config.refresh_sun_times()
         for ecosystem in self.ecosystems.values():
             if ecosystem.started:
-                ecosystem.refresh_lighting_hours()
-        if self.use_message_broker:
-            self.event_handler.send_payload("light_data")
+                ecosystem.refresh_lighting_hours(send=False)
+        if send and self.use_message_broker:
+            self.event_handler.send_payload_if_connected("light_data")
 
     def update_chaos_time_window(self) -> None:
         self.logger.info("Updating ecosystems chaos time window.")

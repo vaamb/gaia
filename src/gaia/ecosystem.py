@@ -111,8 +111,17 @@ class Ecosystem:
     def light_method(self) -> gv.LightMethod:
         return self.config.light_method
 
-    def set_light_method(self, value: gv.LightMethod) -> None:
+    def set_light_method(self, value: gv.LightMethod, send: bool = True) -> None:
         self.config.set_light_method(value)
+        if send and self.engine.use_message_broker:
+            try:
+                self.engine.event_handler.send_payload_if_connected(
+                    "light_data", ecosystem_uids=[self.uid])
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                )
 
     @property
     def light_info(self) -> gv.LightData:
