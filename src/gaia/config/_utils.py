@@ -86,16 +86,16 @@ class GaiaConfigHelper:
 handlers: list[str] = []
 
 
+# timestamp, level no, level name, name, file name, line no, func, msg
 file_format = (
-    "{"
-    "timestamp: '%(asctime)s', "
-    "level: '%(levelname)s', "
-    "name: '%(name)s', "
-    # "module: '%(module)s', "
-    # "lineno: %(lineno)d, "
-    # "function: '%(funcName)s', "
-    "message: '%(message)s'"
-    "}"
+    "%(asctime)s\t"
+    "%(levelno)d\t"
+    "%(levelname)s\t"
+    "%(name)s\t"
+    "%(filename)s\t"
+    "%(lineno)d\t"
+    "%(funcName)s\t"
+    "%(msg)s"
 )
 
 
