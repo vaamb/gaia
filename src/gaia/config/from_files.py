@@ -1260,12 +1260,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self._update_chaos_time_window()
         return self.general.get_chaos_memory(self.uid)["time_window"]
 
-    def update_chaos_time_window(self) -> None:
+    def update_chaos_time_window(self, send: bool = True) -> None:
         self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             self._update_chaos_time_window()
         else:
             self.logger.debug("Chaos time window is already up to date.")
+        if (
+                send
+                and self.general.engine_set_up
+                and self.general.engine.use_message_broker
+        ):
+            self.general.engine.event_handler.send_payload_if_connected(
+                "chaos_parameters")
 
     def _update_chaos_time_window(self) -> None:
         chaos_memory = self.general.get_chaos_memory(self.uid)

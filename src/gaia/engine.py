@@ -603,12 +603,12 @@ class Engine(metaclass=SingletonMeta):
         if send and self.use_message_broker:
             self.event_handler.send_payload_if_connected("light_data")
 
-    def update_chaos_time_window(self) -> None:
+    def update_chaos_time_window(self, send: bool = True) -> None:
         self.logger.info("Updating ecosystems chaos time window.")
         for ecosystem in self.ecosystems.values():
-            ecosystem.config.update_chaos_time_window()
+            ecosystem.config.update_chaos_time_window(send=False)
         self.config.save(CacheType.chaos)
-        if self.use_message_broker:
+        if send and self.use_message_broker:
             self.event_handler.send_payload_if_connected("chaos_parameters")
 
     # ---------------------------------------------------------------------------
