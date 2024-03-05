@@ -215,13 +215,8 @@ class Events(EventHandler):
 
     def on_connect(self, environment) -> None:  # noqa
         self.logger.info("Connection to message broker successful.")
-        if self.registered:
-            self.logger.info("Already registered.")
-            if not self._jobs_scheduled:
-                self._schedule_jobs()
-        else:
-            self.logger.info("Will try to register the engine to Ouranos.")
-            self.register()
+        self.logger.info("Will try to register the engine to Ouranos.")
+        self.register()
 
     def on_disconnect(self, *args) -> None:  # noqa
         if self.engine.stopping:
