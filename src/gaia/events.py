@@ -185,7 +185,10 @@ class Events(EventHandler):
 
     def ping(self) -> None:
         if self._dispatcher.connected:
-            ecosystems = [ecosystem.uid for ecosystem in self.ecosystems.values()]
+            ecosystems = [{
+                "uid": ecosystem.uid,
+                "status": ecosystem.started,
+            } for ecosystem in self.ecosystems.values()]
             self.logger.debug("Sending 'ping'.")
             self.emit("ping", data=ecosystems, ttl=20)
 
