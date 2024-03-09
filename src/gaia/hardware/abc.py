@@ -232,6 +232,41 @@ class Hardware(metaclass=_MetaHardware):
 
     def __init__(
             self,
+            uid: str,
+            name: str,
+            address: str,
+            level: gv.HardwareLevel,
+            type: gv.HardwareType,
+            model: str,
+            measures: list[gv.Measure] | None = None,
+            plants: list[str] or None = None,
+            multiplexer_model: str | None = None,
+            subroutine: SubroutineTemplate | None = None,
+    ) -> None:
+        self._subroutine: SubroutineTemplate | None
+        if subroutine is None:
+            self._subroutine = None
+        else:
+            self._subroutine = weakref.proxy(subroutine)
+        self._uid: str = uid
+        self._name: str = name
+        self._level: gv.HardwareLevel = level
+        self._type: gv.HardwareType = type
+        self._model: str = model
+        self._name: str = name
+        address_list: list = address.split(":")
+        self._address_book: AddressBook = AddressBook(
+            primary=Address(address_list[0]),
+            secondary=Address(address_list[1]) if len(address_list) == 2 else None
+        )
+        self._measures: dict[Measure, Unit | None] = \
+            self._format_measures(measures)
+        self._plants = plants
+        self._multiplexer_model = multiplexer_model
+
+    @classmethod
+    def from_unclean(
+            cls,
             subroutine: "SubroutineTemplate" | None,
             uid: str,
             address: str,
@@ -242,64 +277,20 @@ class Hardware(metaclass=_MetaHardware):
             measures: list[str] | None = None,
             plants: list[str] or None = None,
             multiplexer_model: str | None = None,
-    ) -> None:
-        self._subroutine: "SubroutineTemplate" | None
-        if subroutine is None:
-            self._subroutine = None
-        else:
-            self._subroutine = weakref.proxy(subroutine)
-        self._uid: str = uid
-        self._level: gv.HardwareLevel = safe_enum_from_name(gv.HardwareLevel, level)
-        self._type: gv.HardwareType = safe_enum_from_name(gv.HardwareType, type)
-        self._model: str = model
-        self._name: str = name or uid
-        address_list: list = address.split(":")
-        self._address_book: AddressBook = AddressBook(
-            primary=Address(address_list[0]),
-            secondary=Address(address_list[1]) if len(address_list) == 2 else None
+    ) -> Self:
+        name: str = name or uid
+        validated = gv.HardwareConfig(
+            uid=uid,
+            name=name,
+            address=address,
+            type=type,
+            level=level,
+            model=model,
+            measures=measures,
+            plants=plants,
+            multiplexer_model=multiplexer_model,
         )
-        self._measures: dict[Measure, Unit | None] = self._validate_measures(measures)
-        if isinstance(plants, str):
-            plants = [plants]
-        self._plants = plants or []
-        self._multiplexer_model = multiplexer_model
-
-    def __repr__(self) -> str:
-        return (
-            f"<{self.__class__.__name__}({self._uid}, name={self._name}, "
-            f"model={self._model})>"
-        )
-
-    @staticmethod
-    def _validate_measures(
-            measures: list[str] | None
-    ) -> dict[Measure, Unit | None]:
-        if measures is None:
-            measures = []
-        elif isinstance(measures, str):
-            measures = [measures]
-        rv: dict[Measure, Unit | None] = {}
-        for m in measures:
-            measure_and_unit = m.split("|")
-            measure = safe_enum_from_name(Measure, measure_and_unit[0].lower())
-            try:
-                raw_unit = measure_and_unit[1]
-                if raw_unit == "":
-                    raise IndexError  # Ugly but works
-            except IndexError:
-                unit = None
-            else:
-                unit = safe_enum_from_value(Unit, raw_unit)
-            rv[measure] = unit
-        return rv
-
-    @classmethod
-    def get_mounted(cls) -> dict[str, Self]:
-        return _MetaHardware.instances
-
-    @classmethod
-    def get_mounted_by_uid(cls, uid: str) -> Self | None:
-        return _MetaHardware.instances.get(uid)
+        return cls.from_hardware_config(validated, subroutine)
 
     @classmethod
     def from_hardware_config(
@@ -319,6 +310,34 @@ class Hardware(metaclass=_MetaHardware):
             plants=hardware_config.plants,
             multiplexer_model=hardware_config.multiplexer_model,
         )
+
+    def __repr__(self) -> str:
+        return (
+            f"<{self.__class__.__name__}({self._uid}, name={self._name}, "
+            f"model={self._model})>"
+        )
+
+    def _format_measures(
+            self,
+            measures: list[gv.Measure],
+    ) -> dict[Measure, Unit | None]:
+        rv: dict[Measure, Unit | None] = {}
+        for m in measures:
+            measure = safe_enum_from_name(Measure, m.name.lower())
+            try:
+                unit = safe_enum_from_value(Unit, m.unit)
+            except ValueError:
+                unit = None
+            rv[measure] = unit
+        return rv
+
+    @classmethod
+    def get_mounted(cls) -> dict[str, Self]:
+        return _MetaHardware.instances
+
+    @classmethod
+    def get_mounted_by_uid(cls, uid: str) -> Self | None:
+        return _MetaHardware.instances.get(uid)
 
     @property
     def subroutine(self) -> "SubroutineTemplate" | None:
@@ -379,21 +398,23 @@ class Hardware(metaclass=_MetaHardware):
         return self._multiplexer_model
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
-        model = gv.HardwareConfig(
+        base = gv.HardwareConfig(
             uid=self._uid,
             name=self._name,
             address=self.address_repr,
             type=self._type,
             level=self._level,
             model=self._model,
-            measures=[
-                f"{measure.value}|{unit.value if unit is not None else ''}"
-                for measure, unit in self._measures.items()
-            ],
+            measures=self._measures,
             plants=self._plants,
             multiplexer_model=self._multiplexer_model,
-        )
-        return model.model_dump(exclude_defaults=shorten)
+        ).model_dump(exclude_defaults=shorten)
+        if base.get("measures"):
+            base["measures"] = [
+                f"{measure.value}|{unit.value if unit is not None else ''}"
+                for measure, unit in self._measures.items()
+            ]
+        return base
 
 
 class gpioHardware(Hardware):
@@ -543,37 +564,32 @@ class BaseSensor(Hardware):
                 f"'cls.measures_available' should be a dict with 'measure: unit' "
                 f"as entries.")
         kwargs["type"] = gv.HardwareType.sensor
-        measures = kwargs.get("measures")
-        validated_measures: list[str]
-        if not measures:
-            validated_measures = [
-                f"{measure.value}|{unit.value if unit is not None else ''}"
-                for measure, unit in self.measures_available.items()
-            ]
-        else:
-            measures: list[str]
-            validated_measures = []
-            err = ""
-            for measure_and_unit in measures:
-                measure = measure_and_unit.split("|")[0]
-                try:
-                    m = Measure[measure.lower()]
-                    if m not in self.measures_available.keys():
-                        raise KeyError  # Ugly but works
-                except KeyError:
-                    model = kwargs["model"]
-                    err += f"Measure '{measure}' is not valid for sensor " \
-                           f"model '{model}'.\n"
-                else:
-                    unit: Unit | None = self.measures_available[m]
-                    validated_measures.append(
-                        f"{m.value}|{unit.value if unit is not None else ''}"
-                    )
-            if err:
-                raise ValueError(err)
-        kwargs["measures"] = validated_measures
         super().__init__(*args, **kwargs)
         self.device: Any = self._get_device()
+
+    def _format_measures(
+            self,
+            measures: list[gv.Measure],
+    ) -> dict[Measure, Unit | None]:
+        formatted_measures: dict[Measure, Unit | None] = super()._format_measures(measures)
+        if not formatted_measures:
+            formatted_measures = {
+                measure: unit
+                for measure, unit in self.measures_available.items()
+            }
+        else:
+            err = ""
+            validated: dict[Measure, Unit | None] = {}
+            for measure, unit in self.measures_available.items():
+                if measure not in self.measures_available:
+                    err += f"Measure '{measure.name}' is not valid for sensor " \
+                           f"model '{self.model}'.\n"
+                else:
+                    validated[measure] = self.measures_available[measure]
+            formatted_measures = validated
+            if err:
+                raise ValueError(err)
+        return formatted_measures
 
     def _get_device(self) -> Any:
         raise NotImplementedError(
