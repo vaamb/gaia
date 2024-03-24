@@ -201,7 +201,11 @@ class Events(EventHandler):
             engine_uid=self.engine.config.app_config.ENGINE_UID,
             address=local_ip_address(),
         ).model_dump()
-        self.emit("register_engine", data=data, ttl=15)
+        result = self.emit("register_engine", data=data, ttl=15)
+        if result:
+            self.logger.debug("Registration request sent.")
+        else:
+            self.logger.warning("Registration request could not be sent.")
 
     def send_ecosystems_info(
             self,
@@ -344,7 +348,11 @@ class Events(EventHandler):
                     f"Encountered an error while emitting event '{payload_name}'. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`.")
             else:
-                self.logger.debug(f"Payload for event '{payload_name}' sent.")
+                if result:
+                    self.logger.debug(f"Payload for event '{payload_name}' sent.")
+                else:
+                    self.logger.warning(
+                        f"Payload for event '{payload_name}' could not be sent.")
                 return result
         else:
             self.logger.debug(f"No payload for event '{payload_name}' found.")
