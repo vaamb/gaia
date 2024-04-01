@@ -5,17 +5,13 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia.config import CacheType, ConfigType, EcosystemConfig, EngineConfig
+from gaia.config import ConfigType, EcosystemConfig, EngineConfig
 from gaia.exceptions import UndefinedParameter
 from gaia.subroutines import subroutine_names
-from gaia.utils import is_connected, yaml
+from gaia.utils import yaml
 
 from .data import ecosystem_info, ecosystem_name, sun_times
 from .utils import get_logs_content
-
-
-def is_not_connected(*args):
-    return not is_connected()
 
 
 # ---------------------------------------------------------------------------

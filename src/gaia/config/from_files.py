@@ -6,7 +6,6 @@ from enum import Enum
 import hashlib
 from json.decoder import JSONDecodeError
 import logging
-import os
 from math import pi, sin
 from pathlib import Path
 import random
@@ -18,8 +17,7 @@ import weakref
 from weakref import WeakValueDictionary
 
 import pydantic
-from pydantic import Field, field_validator, ValidationError
-from requests import ConnectionError, Session
+from pydantic import Field, field_validator
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
@@ -28,7 +26,7 @@ from gaia.config import (
     BaseConfig, configure_logging, GaiaConfig, GaiaConfigHelper)
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
-from gaia.hardware import Hardware, hardware_models
+from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import get_sun_times, humanize_list, json, SingletonMeta, yaml
 
@@ -401,9 +399,9 @@ class EngineConfig(metaclass=SingletonMeta):
             ecosystem_name = self.get_IDs(ecosystem_uid).name
             self.logger.debug(
                 f"Checking if light method for ecosystem {ecosystem_name} is possible.")
-            light_is_method_valid = self.check_lighting_method_validity(
+            light_method_is_valid = self.check_lighting_method_validity(
                 ecosystem_uid, light_method)
-            if not light_is_method_valid:
+            if not light_method_is_valid:
                 self.logger.warning(
                     f"Light method '{light_method.name}' is not a valid option "
                     f"for ecosystem '{ecosystem_name}'. Will fall back to "
@@ -733,7 +731,7 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"Ecosystem '{ecosystem_name}' has no target set.")
                     ecosystem_config["environment"]["sky"]["lighting"] = gv.LightMethod.fixed
                     continue
-                # If we don't have an updated value, add the target to the checklist
+                # `get_sun_times` automatically refresh outdated data
                 ok = self.get_sun_times(target)
                 if ok:
                     places_ok.add(target)
@@ -1355,6 +1353,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param level: str: either 'environment' or 'plants'
         :param measures: list: the list of the measures taken
         :param plants: list: the name of the plant linked to the hardware
+        :param multiplexer_model: str: the model of the multiplexer used if there is one
         """
         uid = self._create_new_IO_uid()
         hardware_dict = gv.HardwareConfigDict(**{

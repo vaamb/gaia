@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 from enum import Enum
 from datetime import date, datetime, time, timedelta, timezone
-from datetime import timedelta
 from math import acos, asin, cos, log, e, pi, sin
 import os
 import platform
