@@ -709,12 +709,14 @@ class EngineConfig(metaclass=SingletonMeta):
         self.logger.info("Looking if sun times need to be updated.")
 
         # Check if an update is required
+        any_needed = False
         places_ok: set[str] = set()
         places_failed: set[str] = set()
         for ecosystem_config in self.ecosystems_config_dict.values():
             sky = gv.SkyConfig(**ecosystem_config["environment"]["sky"])
             if sky.lighting == gv.LightMethod.elongate:
                 # `get_sun_times` automatically refresh outdated data
+                any_needed = True
                 ok = self.get_sun_times("home")
                 if ok:
                     places_ok.add("home")
@@ -724,6 +726,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 target = sky.target
                 # Check that we have the target coordinates. If we don't, log an
                 #  error and use a fixed light method
+                any_needed = True
                 if not target:
                     ecosystem_name = ecosystem_config["name"]
                     self.logger.error(
@@ -736,6 +739,8 @@ class EngineConfig(metaclass=SingletonMeta):
                     places_ok.add(target)
                 else:
                     places_failed.add(target)
+        if not any_needed:
+            self.logger.debug("No need to refresh sun times.")
         if places_ok:
             self.logger.info(
                 f"Sun times of the following targets have been refreshed: "
