@@ -5,17 +5,13 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia.config import CacheType, ConfigType, EcosystemConfig, EngineConfig
+from gaia.config import ConfigType, EcosystemConfig, EngineConfig
 from gaia.exceptions import UndefinedParameter
 from gaia.subroutines import subroutine_names
-from gaia.utils import is_connected, yaml
+from gaia.utils import yaml
 
 from .data import ecosystem_info, ecosystem_name, sun_times
 from .utils import get_logs_content
-
-
-def is_not_connected(*args):
-    return not is_connected()
 
 
 # ---------------------------------------------------------------------------
@@ -87,24 +83,7 @@ def test_save_load(engine_config: EngineConfig):
     assert engine_config.private_config == private_config
 
 
-def test_download_sun_times_no_coordinates(engine_config: EngineConfig):
-    sun_times = engine_config.download_sun_times()
-    assert sun_times is None
-    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "You need to define 'home' coordinates" in logs
-
-
-@pytest.mark.skipif(is_not_connected)
-@pytest.mark.timeout(5)
-def test_download_sun_times_success(engine_config: EngineConfig):
-    engine_config.home_coordinates = (0, 0)
-    engine_config.download_sun_times()
-    cached_result = engine_config.get_file_path(CacheType.sun_times)
-    assert cached_result.exists()
-
-
 def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
-    engine_config.home_coordinates = (0, 0)
     assert engine_config.home_sun_times is None
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
@@ -112,21 +91,17 @@ def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
     assert engine_config.home_sun_times is None
 
 
-@pytest.mark.skipif(is_not_connected)
 def test_refresh_suntimes_success(
         engine_config: EngineConfig,
         ecosystem_config: EcosystemConfig,
 ):
-    engine_config.home_coordinates = (0, 0)
-    ecosystem_config.sky["lighting"] = gv.LightMethod.elongate
     assert engine_config.home_sun_times is None
+    ecosystem_config.sky["lighting"] = gv.LightMethod.elongate
+    engine_config.home_coordinates = (0, 0)
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "successfully updated" in logs
-    assert engine_config.home_sun_times is not None
-    engine_config.refresh_sun_times()
-    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "Sun times already up to date" in logs
+        assert "have been refreshed" in logs
+        assert "Failed to refresh" not in logs
     assert engine_config.home_sun_times is not None
 
 
@@ -243,6 +218,7 @@ def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
     ecosystem_config.set_light_method(new_method)
 
     # Should not happen
+    del ecosystem_config.general.places["home"]
     ecosystem_config.general._sun_times = {}
     ecosystem_config.general.app_config.TESTING = False
     # Sun times is none so `light_method` falls back to `fixed`
