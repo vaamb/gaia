@@ -404,7 +404,10 @@ def get_sun_times(
         secs_per_day = 60 * 60 * 24
         days = doy // 1
         secs = (doy % 1) * secs_per_day
-        return (datetime(year, 1, 1) + timedelta(days=days, seconds=secs)).time()
+        raw_dt = datetime(year, 1, 1) + timedelta(days=days, seconds=secs)
+        utc_dt = raw_dt.replace(tzinfo=timezone.utc)
+        dt = utc_dt.astimezone()
+        return dt.time()
 
     return {
         meaning: day_of_year_to_time(today.year, doy)
