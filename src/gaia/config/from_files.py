@@ -954,13 +954,26 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def managements(self, value: gv.ManagementConfigDict) -> None:
         self.__dict["management"] = gv.ManagementConfig(**value).model_dump()
 
+    @property
+    def management_flag(self) -> int:
+        management_config = gv.ManagementConfig(**self.managements)
+        return management_config.to_flag()
+
     def get_management(
             self,
             management: gv.ManagementNames | gv.ManagementFlags,
     ) -> bool:
         validated_management = safe_enum_from_name(gv.ManagementFlags, management)
-        management_name: gv.ManagementNames = validated_management.name
-        return self.__dict["management"].get(management_name, False)
+        # If management has dependencies, load them
+        if validated_management >= 256:
+            base_name: str = validated_management.name
+            dep = f"{validated_management.name}_enabled"
+            validated_management = safe_enum_from_name(gv.ManagementFlags, dep)
+            self.logger.debug(
+                f"{base_name.upper()} management has dependencies. Checking for "
+                f"{validated_management.name} ({validated_management.value}).")
+        flag = self.management_flag
+        return flag & validated_management == validated_management
 
     def set_management(
             self,
