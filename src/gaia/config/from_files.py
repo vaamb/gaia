@@ -954,6 +954,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def managements(self, value: gv.ManagementConfigDict) -> None:
         self.__dict["management"] = gv.ManagementConfig(**value).model_dump()
 
+    @property
+    def management_flag(self) -> int:
+        management_config = gv.ManagementConfig(**self.managements)
+        return management_config.to_flag()
+
     def get_management(
             self,
             management: gv.ManagementNames | gv.ManagementFlags,
