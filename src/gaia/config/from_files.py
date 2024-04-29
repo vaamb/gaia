@@ -28,7 +28,8 @@ from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
-from gaia.utils import get_sun_times, humanize_list, json, SingletonMeta, yaml
+from gaia.utils import (
+    get_sun_times, humanize_list, is_time_between, json, SingletonMeta, yaml)
 
 
 if t.TYPE_CHECKING:
@@ -1131,6 +1132,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"Encountered an error while sending light data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
                 )
+
+    @property
+    def period_of_day(self) -> gv.PeriodOfDay:
+        lighting_hours = self.lighting_hours
+        if is_time_between(
+                lighting_hours.morning_start,
+                lighting_hours.evening_end,
+                datetime.now().time()
+        ):
+            return gv.PeriodOfDay.day
+        return gv.PeriodOfDay.night
 
     @property
     def chaos_config(self) -> gv.ChaosConfig:
