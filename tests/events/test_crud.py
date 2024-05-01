@@ -290,7 +290,7 @@ def test_create_environment_parameter(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     day = 10.0
     night = 15.0
-    hysteresis = None
+    hysteresis = 0.0
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -341,7 +341,7 @@ def test_update_environment_parameter(events_handler: Events):
 
     day = 10.0
     night = 15.0
-    hysteresis = None
+    hysteresis = 0.0
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
