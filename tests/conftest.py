@@ -38,9 +38,10 @@ def patch() -> None:
     from enum import IntFlag
     management_flags = {
         flag.name: flag.value
-        for flag in gv.ManagementFlags
+        for flag in gv.ManagementFlags.__members__.values()
     }
-    management_flags["dummy"] = max(management_flags.values()) * 2
+    max_flag = max(*[flag.value for flag in gv.ManagementFlags])
+    management_flags["dummy"] = management_flags["dummy_enabled"] = max_flag * 2
     gv.ManagementFlags = IntFlag("ManagementFlags", management_flags)
 
     # Patch gaia_validators.ManagementConfig to add the dummy subroutine
