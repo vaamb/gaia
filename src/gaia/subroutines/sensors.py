@@ -166,8 +166,7 @@ class Sensors(SubroutineTemplate):
         if not parameter_limits:
             return cache
         sensor_warnings: list[gv.SensorAlarm] = []
-        sensors_data: gv.SensorsData = self.sensors_data
-        for record in sensors_data.records:
+        for record in cache["records"]:
             if not record.measure in parameter_limits:
                 continue
             p_lim = parameter_limits[record.measure]
