@@ -123,7 +123,7 @@ class Sensors(SubroutineTemplate):
         with self._data_lock:
             self._sensors_data = data
 
-    def _add_sensor_records(self, cache: gv.SensorsDataDict) -> None:
+    def _add_sensor_records(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
         futures = [
             self.executor.submit(hardware.get_data)
             for hardware in self.hardware.values()
@@ -134,8 +134,9 @@ class Sensors(SubroutineTemplate):
                 sensor_record for sensor_record in sensor
                 if sensor_record.value is not None
             )
+        return cache
 
-    def _add_sensor_averages(self, cache: gv.SensorsDataDict) -> None:
+    def _add_sensor_averages(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
         to_average: dict[str, list[float]] = {}
         for record in cache["records"]:
             try:
@@ -151,8 +152,9 @@ class Sensors(SubroutineTemplate):
             for measure, value in to_average.items()
         ]
         cache["average"] = average
+        return cache
 
-    def _add_sensor_warnings(self, cache: gv.SensorsDataDict) -> None:
+    def _add_sensor_warnings(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
         # Get the target, the hysteresis and the alarm threshold
         pod: Literal["day", "night"] = self.config.period_of_day.name
         parameter_limits: dict[str, tuple[float, float, float]] = {
@@ -162,7 +164,7 @@ class Sensors(SubroutineTemplate):
         }
         # If no `parameter_limits`: stop
         if not parameter_limits:
-            return
+            return cache
         sensor_warnings: list[gv.SensorAlarm] = []
         sensors_data: gv.SensorsData = self.sensors_data
         for record in sensors_data.records:
@@ -193,8 +195,8 @@ class Sensors(SubroutineTemplate):
                 delta=delta,
                 level=level,
             ))
-        if sensor_warnings:
-            cache["alarms"] = sensor_warnings
+        cache["alarms"] = sensor_warnings
+        return cache
 
     def update_sensors_data(self) -> None:
         """
@@ -210,11 +212,11 @@ class Sensors(SubroutineTemplate):
             "average": [],
             "alarms": [],
         }
-        self._add_sensor_records(cache)
-        self._add_sensor_averages(cache)
+        cache = self._add_sensor_records(cache)
+        cache = self._add_sensor_averages(cache)
         alarms_flag = gv.ManagementFlags.alarms
         if (self.config.management_flag & alarms_flag == alarms_flag):
-            self._add_sensor_warnings(cache)
+            cache = self._add_sensor_warnings(cache)
         if len(cache["records"]) > 0:
             self.sensors_data = gv.SensorsData(**cache)
         else:
