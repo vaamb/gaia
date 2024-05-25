@@ -2,11 +2,15 @@ class NonValidSubroutine(ValueError):
     pass
 
 
-class EcosystemNotFound(ValueError):
+class NotFound(ValueError):
     pass
 
 
-class HardwareNotFound(ValueError):
+class EcosystemNotFound(NotFound):
+    pass
+
+
+class HardwareNotFound(NotFound):
     pass
 
 

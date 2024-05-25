@@ -57,7 +57,7 @@ class CrudLinks(NamedTuple):
 
 
 CrudEventName = Literal[
-    "create_ecosystem", "delete_ecosystem",
+    "create_ecosystem", "update_ecosystem", "delete_ecosystem",
     "create_place", "update_place", "delete_place",
     "update_chaos_config", "update_management", "update_time_parameters",
     "update_light_method",
@@ -70,6 +70,7 @@ CrudEventName = Literal[
 crud_links_dict: dict[CrudEventName, CrudLinks] = {
     # Ecosystem creation and deletion
     "create_ecosystem": CrudLinks("create_ecosystem", "base_info"),
+    "update_ecosystem": CrudLinks("update_ecosystem", "base_info"),
     "delete_ecosystem": CrudLinks("delete_ecosystem", "base_info"),
     # Places creation, update and deletion
     "create_place": CrudLinks("set_place", "places_list"),
