@@ -80,6 +80,38 @@ def test_create_ecosystem(events_handler: Events):
     assert "TestCrud" in [ecosystem.name for ecosystem in events_handler.ecosystems.values()]
 
 
+def test_update_ecosystem_failure(events_handler: Events):
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid},
+        action=gv.CrudAction.update,
+        target="ecosystem",
+        data={"ecosystem_id": "does_not_exists", "name": "NewName"},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+    assert result_msg["status"] == gv.Result.failure
+    assert "Ecosystem with id 'does_not_exists' not found" in result_msg["message"]
+
+
+def test_update_ecosystem(events_handler: Events):
+    new_name = "NewName"
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid},
+        action=gv.CrudAction.update,
+        target="ecosystem",
+        data={"ecosystem_id": ecosystem_uid, "name": new_name},
+    ).model_dump()
+
+    events_handler.on_crud(message)
+
+    assert_success(events_handler)
+
+    ecosystem_config = events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]
+    assert ecosystem_config["name"] == new_name
+
+
 def test_delete_ecosystem_failure(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
