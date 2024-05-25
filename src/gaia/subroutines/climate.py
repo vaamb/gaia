@@ -267,7 +267,7 @@ class Climate(SubroutineTemplate):
             self,
             climate_parameter: gv.ClimateParameter,
             _now: time | None = None
-    ) -> tuple[float, float | None]:
+    ) -> tuple[float, float]:
         parameter = self.config.get_climate_parameter(climate_parameter.name)
         now: time = _now or datetime.now().astimezone().time()
         chaos_factor = self.config.get_chaos_factor()
@@ -277,8 +277,6 @@ class Climate(SubroutineTemplate):
         else:
             target = parameter.night * chaos_factor
         hysteresis = parameter.hysteresis * chaos_factor
-        if hysteresis == 0.0:
-            hysteresis = None
         return target, hysteresis
 
     def turn_climate_actuator(

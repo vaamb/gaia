@@ -415,6 +415,21 @@ def get_sun_times(
     }
 
 
+def is_time_between(
+        begin_time: time,
+        end_time: time,
+        now: time
+) -> bool:
+    try:
+        if begin_time < end_time:
+            return begin_time <= now < end_time
+        else:  # crosses midnight
+            return now >= begin_time or now < end_time
+    except TypeError:
+        # one of times is a none
+        return False
+
+
 def is_connected() -> bool:
     _is_connected = False
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

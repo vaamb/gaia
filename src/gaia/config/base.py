@@ -45,5 +45,5 @@ class BaseConfig:
     CONFIG_WATCHER_PERIOD = 500  # in ms
     CLIMATE_LOOP_PERIOD = 10.0  # in s
     LIGHT_LOOP_PERIOD = 0.5  # in s
-    SENSORS_LOOP_PERIOD = 5.0  # in s
+    SENSORS_LOOP_PERIOD = 10.0  # in s
     SENSORS_LOGGING_PERIOD = "*/10"  # in minute, cron-style

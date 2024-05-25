@@ -12,25 +12,11 @@ from gaia.actuator_handler import HystericalPID
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
 from gaia.subroutines.template import SubroutineTemplate
+from gaia.utils import is_time_between
 
 
 if typing.TYPE_CHECKING:
     from gaia.actuator_handler import ActuatorHandler
-
-
-def _is_time_between(
-        begin_time: time,
-        end_time: time,
-        now: time
-) -> bool:
-    try:
-        if begin_time < end_time:
-            return begin_time <= now < end_time
-        else:  # crosses midnight
-            return now >= begin_time or now < end_time
-    except TypeError:
-        # one of times is a none
-        return False
 
 
 class Light(SubroutineTemplate):
@@ -184,7 +170,7 @@ class Light(SubroutineTemplate):
             else:
                 return False
         else:
-            return _is_time_between(hours.morning_start, hours.evening_end, now)
+            return is_time_between(hours.morning_start, hours.evening_end, now)
 
     def compute_level(self,  _now: time | None = None) -> float:
         if not self.light_sensors or not self.any_dimmable_light:

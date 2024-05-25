@@ -5,6 +5,7 @@ from statistics import mean
 from threading import Lock
 from time import monotonic
 import typing as t
+from typing import Literal
 
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -39,6 +40,13 @@ class Sensors(SubroutineTemplate):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while updating sensors data. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+            )
+        try:
+            self.send_data()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while sending sensors data and warnings. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`."
             )
         loop_time = monotonic() - start_time
@@ -115,18 +123,7 @@ class Sensors(SubroutineTemplate):
         with self._data_lock:
             self._sensors_data = data
 
-    def update_sensors_data(self) -> None:
-        """
-        Loops through all the sensors and stores the value in self._data
-        """
-        if not self.started:
-            raise RuntimeError(
-                "Sensors subroutine has to be started to update the sensors data"
-            )
-        cache: gv.SensorsDataDict = {}
-        to_average: dict[str, list[float]] = {}
-        cache["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0)
-        cache["records"] = []
+    def _add_sensor_records(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
         futures = [
             self.executor.submit(hardware.get_data)
             for hardware in self.hardware.values()
@@ -137,12 +134,16 @@ class Sensors(SubroutineTemplate):
                 sensor_record for sensor_record in sensor
                 if sensor_record.value is not None
             )
+        return cache
+
+    def _add_sensor_averages(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
+        to_average: dict[str, list[float]] = {}
         for record in cache["records"]:
             try:
                 to_average[record.measure].append(record.value)
             except KeyError:
                 to_average[record.measure] = [record.value]
-        cache["average"] = [
+        average = [
             gv.MeasureAverage(
                 measure=measure,
                 value=round(mean(value), 2),
@@ -150,10 +151,78 @@ class Sensors(SubroutineTemplate):
             )
             for measure, value in to_average.items()
         ]
+        cache["average"] = average
+        return cache
+
+    def _add_sensor_warnings(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
+        # Get the target, the hysteresis and the alarm threshold
+        pod: Literal["day", "night"] = self.config.period_of_day.name
+        parameter_limits: dict[str, tuple[float, float, float]] = {
+            parameter: (values[pod], values["hysteresis"], values["alarm"])
+            for parameter, values in self.config.climate.items()
+            if values["alarm"]
+        }
+        # If no `parameter_limits`: stop
+        if not parameter_limits:
+            return cache
+        sensor_warnings: list[gv.SensorAlarm] = []
+        for record in cache["records"]:
+            if not record.measure in parameter_limits:
+                continue
+            p_lim = parameter_limits[record.measure]
+            direction: gv.Position
+            delta: float
+            if record.value < p_lim[0] - p_lim[1]:
+                direction = gv.Position.under
+                delta = p_lim[0] - p_lim[1] - record.value
+            elif record.value > p_lim[0] + p_lim[1]:
+                direction = gv.Position.above
+                delta = p_lim[0] - p_lim[1] - record.value
+            else:
+                continue
+            level: gv.WarningLevel
+            if p_lim[2] < delta <= 1.5 * p_lim[2]:
+                level = gv.WarningLevel.moderate
+            elif 1.5 * p_lim[2] < delta <= 2.0 * p_lim[2]:
+                level = gv.WarningLevel.high
+            else:
+                level = gv.WarningLevel.critical
+            sensor_warnings.append(gv.SensorAlarm(
+                sensor_uid=record.sensor_uid,
+                measure=record.measure,
+                position=direction,
+                delta=delta,
+                level=level,
+            ))
+        cache["alarms"] = sensor_warnings
+        return cache
+
+    def update_sensors_data(self) -> None:
+        """
+        Loops through all the sensors and stores the value in self._data
+        """
+        if not self.started:
+            raise RuntimeError(
+                "Sensors subroutine has to be started to update the sensors data"
+            )
+        cache: gv.SensorsDataDict = {
+            "timestamp": datetime.now(timezone.utc).replace(microsecond=0),
+            "records": [],
+            "average": [],
+            "alarms": [],
+        }
+        cache = self._add_sensor_records(cache)
+        cache = self._add_sensor_averages(cache)
+        alarms_flag = gv.ManagementFlags.alarms
+        if (self.config.management_flag & alarms_flag == alarms_flag):
+            cache = self._add_sensor_warnings(cache)
         if len(cache["records"]) > 0:
             self.sensors_data = gv.SensorsData(**cache)
-            if self.ecosystem.engine.use_message_broker:
-                self.ecosystem.engine.event_handler.send_payload_if_connected(
-                    "sensors_data", ecosystem_uids=[self.ecosystem.uid])
         else:
             self.sensors_data = gv.Empty()
+
+    def send_data(self) -> None:
+        if not self.ecosystem.engine.use_message_broker:
+            return
+        self.ecosystem.engine.event_handler.send_payload_if_connected(
+            "sensors_data", ecosystem_uids=[self.ecosystem.uid])

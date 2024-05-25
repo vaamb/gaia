@@ -91,7 +91,7 @@ class HystericalPID:
             actuator_hub: ActuatorHub,
             climate_parameter: gv.ClimateParameter,
             target: float = 0.0,
-            hysteresis: float | None = None,
+            hysteresis: float = 0.0,
             Kp: float = 1.0,
             Ki: float = 0.0,
             Kd: float = 0.0,
@@ -103,7 +103,7 @@ class HystericalPID:
         self.actuator_hub: ActuatorHub = actuator_hub
         self.climate_parameter: gv.ClimateParameter = climate_parameter
         self.target: float = target
-        self.hysteresis: float | None = hysteresis
+        self.hysteresis: float = hysteresis
         self.Kp: float = Kp
         self.Ki: float = Ki
         self.Kd: float = Kd
@@ -161,7 +161,7 @@ class HystericalPID:
         sampling_time = time.monotonic()
         output = None
 
-        if self.hysteresis is not None:
+        if self.hysteresis:
             output = self._hysteresis_internal(current_value)
         if output is None:
             output = self._pid_internal(current_value, sampling_time)
