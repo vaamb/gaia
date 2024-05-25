@@ -128,6 +128,11 @@ class EnvironmentConfigDict(TypedDict):
     climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
 
 
+class EcosystemBaseUpdateDict(TypedDict):
+    name: str
+    status: bool
+
+
 class EcosystemConfigValidator(gv.BaseModel):
     name: str
     status: bool = False
@@ -537,6 +542,19 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def create_ecosystem(self, ecosystem_name: str) -> None:
         self._create_ecosystem(ecosystem_name)
+
+    def update_ecosystem(
+            self,
+            ecosystem_id: str,
+            **updating_values: EcosystemBaseUpdateDict,
+    ) -> None:
+        ecosystem_ids = self.get_IDs(ecosystem_id)
+        ecosystem = self.ecosystems_config_dict.get(ecosystem_ids.uid)
+        # Make extra sure no "complex" field is overridden
+        updating_values.pop("management", None)
+        updating_values.pop("environment", None)
+        updating_values.pop("IO", None)
+        ecosystem.update(updating_values)
 
     def delete_ecosystem(self, ecosystem_id: str) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
