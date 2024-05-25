@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from concurrent.futures import Future, wait
 from datetime import datetime, timezone
 from statistics import mean
 from threading import Lock
 from time import monotonic
 import typing as t
-from typing import Literal
+from typing import cast, Literal
 
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -21,13 +22,19 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.light import Light
 
 
+class _SensorFuture(Future):
+    hardware_uid: str
+
+
 class Sensors(SubroutineTemplate):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = sensor_models
         self.hardware: dict[str, BaseSensor]
-        self._loop_timeout: float = float(
+        loop_timeout = float(
             self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
+        self._loop_timeout: float = max(loop_timeout, 10.0)
+        self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         self._data_lock = Lock()
         self._finish__init__()
@@ -124,14 +131,33 @@ class Sensors(SubroutineTemplate):
             self._sensors_data = data
 
     def _add_sensor_records(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
-        futures = [
-            self.executor.submit(hardware.get_data)
-            for hardware in self.hardware.values()
-        ]
-        sensors_data = [future.result() for future in futures]
-        for sensor in sensors_data:
+        slow_sensors: list[str] = [
+            future.hardware_uid for future in self._slow_sensor_futures]
+        futures: list[_SensorFuture] = []
+        for hardware in self.hardware.values():
+            # Do not try to get data from sensors still trying to get their measures
+            if hardware.uid in slow_sensors:
+                continue
+            future = cast(_SensorFuture, self.executor.submit(hardware.get_data))
+            future.hardware_uid = hardware.uid
+            futures.append(future)
+        # Try to get data from sensors that took too long during last loop
+        futures.extend(self._slow_sensor_futures)
+        # Wait for 5 secs for sensors to get data. This allows GPIO sensors to fail once
+        waited_futures = wait(futures, timeout=5)
+        new_slow_futures = waited_futures.not_done - self._slow_sensor_futures
+        # Log the sensors that took too long
+        for future in new_slow_futures:
+            self.logger.warning(
+                f"Sensor with uid '{future.hardware_uid}' took too long to "
+                f"fetch data. Will try to gather data during next routine.")
+        self._slow_sensor_futures = waited_futures.not_done
+        # Gather the data
+        sensors_data: list[list[gv.SensorRecord]] = \
+            [future.result() for future in waited_futures.done]
+        for sensor_data in sensors_data:
             cache["records"].extend(
-                sensor_record for sensor_record in sensor
+                sensor_record for sensor_record in sensor_data
                 if sensor_record.value is not None
             )
         return cache
