@@ -221,9 +221,13 @@ def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
     del ecosystem_config.general.places["home"]
     ecosystem_config.general._sun_times = {}
     ecosystem_config.general.app_config.TESTING = False
+    # Reset caches after this big change in config
+    ecosystem_config.reset_caches()
     # Sun times is none so `light_method` falls back to `fixed`
     assert ecosystem_config.lighting_method is gv.LightMethod.fixed
     ecosystem_config.general.app_config.TESTING = True
+    # Reset caches after this big change in config
+    ecosystem_config.reset_caches()
     ecosystem_config.general._sun_times = {
         "home": {"last_update": date.today(), "data": sun_times}
     }
@@ -250,7 +254,7 @@ def test_ecosystem_time_parameters(ecosystem_config: EcosystemConfig):
     assert ecosystem_config.nycthemeral_span == gv.NycthemeralSpanConfig()
 
     with pytest.raises(ValueError):
-        ecosystem_config.nycthemeral_span = {"wrong": "value"}
+        ecosystem_config.set_nycthemeral_span({"wrong": "value"})
 
-    ecosystem_config.nycthemeral_span = {"day": "4h21", "night": "22h00"}
+    ecosystem_config.set_nycthemeral_span({"day": "4h21", "night": "22h00"})
     assert ecosystem_config.nycthemeral_span.day == time(4, 21)

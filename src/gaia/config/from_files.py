@@ -472,6 +472,9 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"Change in '{config_type.value}' detected. Updating "
                         f"{config_type.name} configuration.")
                     self._load_config(cfg_type=config_type)
+                if ConfigType.ecosystems in changed_configs:
+                    for ecosystem_config in self.ecosystems_config.values():
+                        ecosystem_config.reset_caches()
                 with self.new_config:
                     self.new_config.notify_all()
                     # This unblocks the engine loop. It will then refresh
@@ -943,6 +946,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
+        self._nycthemeral_span_method_cache: gv.NycthemeralSpanMethod | None = None
+        self._nycthemeral_span_cache: gv.NycthemeralSpanConfig | None = None
+        self._lighting_method_cache: gv.LightingMethod | None = None
         self._lighting_hours = gv.LightingHours(
             morning_start=self.nycthemeral_span.day,
             evening_end=self.nycthemeral_span.night,
@@ -962,6 +968,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def save(self) -> None:
         self._engine_config.save(ConfigType.ecosystems)
+
+    def reset_caches(self) -> None:
+        self._nycthemeral_span_method_cache = None
+        self._nycthemeral_span_cache = None
+        self._lighting_method_cache = None
 
     @property
     def general(self) -> EngineConfig:
@@ -1065,19 +1076,23 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
-        span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
-            gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
-        if self.general.app_config.TESTING:
-            return span_method
-        # If using fixed method, no check required
-        if span_method & gv.NycthemeralSpanMethod.fixed:
-            return gv.NycthemeralSpanMethod.fixed
-        # Else, we need to make sure we have suntimes for the nycthemeral target
-        target = self.nycthemeral_span_target
-        sun_times = self.general.get_sun_times(target)
-        if sun_times is None:
-            return gv.NycthemeralSpanMethod.fixed
-        return gv.NycthemeralSpanMethod.mimic
+        if self._nycthemeral_span_method_cache is None:
+            span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
+                gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
+            if self.general.app_config.TESTING:
+                self._nycthemeral_span_method_cache = span_method
+            # If using fixed method, no check required
+            elif span_method & gv.NycthemeralSpanMethod.fixed:
+                self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.fixed
+            # Else, we need to make sure we have suntimes for the nycthemeral target
+            else:
+                target = self.nycthemeral_span_target
+                sun_times = self.general.get_sun_times(target)
+                if sun_times is None:
+                    self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.fixed
+                else:
+                    self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.mimic
+        return self._nycthemeral_span_method_cache
 
     def set_nycthemeral_span_method(self, method: gv.NycthemeralSpanMethod) -> None:
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
@@ -1088,25 +1103,28 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"See the logs to see the reason."
                 )
         self.nycthemeral_cycle["span"] = method
+        self._nycthemeral_span_method_cache = None
         self.refresh_lighting_hours(send_info=True)
 
     @property
     def nycthemeral_span(self) -> gv.NycthemeralSpanConfig:
-        if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
-            target = self.nycthemeral_span_target
-            sun_times = self.general.get_sun_times(target)
-            if sun_times is not None:
-                return gv.NycthemeralSpanConfig(
-                    day=sun_times["sunrise"],
-                    night=sun_times["sunset"],
-                )
-        return gv.NycthemeralSpanConfig(
-            day=self.nycthemeral_cycle["day"],
-            night=self.nycthemeral_cycle["night"],
-        )
+        if self._nycthemeral_span_cache is None:
+            if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
+                target = self.nycthemeral_span_target
+                sun_times = self.general.get_sun_times(target)
+                if sun_times is not None:
+                    self._nycthemeral_span_cache = gv.NycthemeralSpanConfig(
+                        day=sun_times["sunrise"],
+                        night=sun_times["sunset"],
+                    )
+            self._nycthemeral_span_cache = gv.NycthemeralSpanConfig(
+                day=self.nycthemeral_cycle["day"],
+                night=self.nycthemeral_cycle["night"],
+            )
+        return self._nycthemeral_span_cache
 
-    @nycthemeral_span.setter
-    def nycthemeral_span(self, value: gv.NycthemeralSpanConfigDict) -> None:
+
+    def set_nycthemeral_span(self, value: gv.NycthemeralSpanConfigDict) -> None:
         """Set time parameters
 
         :param value: A dict in the form {'day': '8h00', 'night': '22h00'}
@@ -1119,13 +1137,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
         self.environment["nycthemeral_cycle"].update(validated_value)
+        self._nycthemeral_span_cache = None
+        self.refresh_lighting_hours(send_info=True)
 
     @property
     def period_of_day(self) -> gv.PeriodOfDay:
-        lighting_hours = self.lighting_hours
+        nycthemeral_span = self.nycthemeral_span
         if is_time_between(
-                lighting_hours.morning_start,
-                lighting_hours.evening_end,
+                nycthemeral_span.day,
+                nycthemeral_span.night,
                 datetime.now().time()
         ):
             return gv.PeriodOfDay.day
@@ -1133,24 +1153,29 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def lighting_method(self) -> gv.LightingMethod:
-        lighting_method: gv.LightingMethod = safe_enum_from_name(
-            gv.LightingMethod, self.nycthemeral_cycle["lighting"])
-        if self.general.app_config.TESTING:
-            return lighting_method
-        # If using fixed method, no check required
-        if lighting_method & gv.LightingMethod.fixed:
-            return gv.LightingMethod.fixed
-        # Else, we need to make sure we have suntimes for "home"
-        sun_times = self.general.get_sun_times("home")
-        if sun_times is None:
-            return gv.LightingMethod.fixed
-        return gv.LightingMethod.elongate
+        if self._lighting_method_cache is None:
+            lighting_method: gv.LightingMethod = safe_enum_from_name(
+                gv.LightingMethod, self.nycthemeral_cycle["lighting"])
+            if self.general.app_config.TESTING:
+                self._lighting_method_cache = lighting_method
+            # If using fixed method, no check required
+            elif lighting_method & gv.LightingMethod.fixed:
+                self._lighting_method_cache = gv.LightingMethod.fixed
+            # Else, we need to make sure we have suntimes for "home"
+            else:
+                sun_times = self.general.get_sun_times("home")
+                if sun_times is None:
+                    self._lighting_method_cache = gv.LightingMethod.fixed
+                else:
+                    self._lighting_method_cache = gv.LightingMethod.elongate
+        return self._lighting_method_cache
 
     @lighting_method.setter
     def lighting_method(self, light_method: gv.LightingMethod) -> None:
         if not self.general.app_config.TESTING:
             raise AttributeError("can't set attribute 'light_method'")
         self.nycthemeral_cycle["lighting"] = light_method
+        self._lighting_method_cache = None
 
     def set_lighting_method(self, method: gv.LightingMethod) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
@@ -1161,6 +1186,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"logs to see the reason."
                 )
         self.nycthemeral_cycle["lighting"] = method
+        self._lighting_method_cache = None
         self.refresh_lighting_hours(send_info=True)
 
     @property
@@ -1178,6 +1204,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self._lighting_hours = lighting_hours
 
     def refresh_lighting_hours(self, send_info: bool = True) -> None:
+        self.reset_caches()
         self.logger.info("Refreshing lighting hours.")
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
