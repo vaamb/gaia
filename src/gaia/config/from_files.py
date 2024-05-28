@@ -1194,15 +1194,16 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Raw lighting method span is silently replaced if needed
         lighting_method: gv.LightingMethod = self.lighting_method
 
+        lighting_hours = {
+            "morning_start": nycthemeral_span.day,
+            "evening_end": nycthemeral_span.night,
+        }
+
         # Computation for 'fixed' lighting method
         if lighting_method == gv.LightingMethod.fixed:
-            with self.lighting_hours_lock:
-                self._lighting_hours = gv.LightingHours(
-                    morning_start=nycthemeral_span.day,
-                    morning_end=None,
-                    evening_start=None,
-                    evening_end=nycthemeral_span.night,
-                )
+            lighting_hours["morning_end"] = None
+            lighting_hours["evening_start"] = None
+
         # Computation for 'elongate' lighting method
         elif lighting_method == gv.LightingMethod.elongate:
             home_sun_times = self.general.home_sun_times
@@ -1210,15 +1211,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             sunset: datetime = _to_dt(home_sun_times["sunset"])
             civil_dawn: datetime = _to_dt(home_sun_times["civil_dawn"])
             offset = sunrise - civil_dawn
-            with self.lighting_hours_lock:
-                self._lighting_hours = gv.LightingHours(
-                    morning_start=nycthemeral_span.day,
-                    morning_end=(sunrise + offset).time(),
-                    evening_start=(sunset - offset).time(),
-                    evening_end=nycthemeral_span.night,
-                )
+            lighting_hours["morning_end"] = (sunrise + offset).time()
+            lighting_hours["evening_start"] = (sunset - offset).time()
         else:
             raise ValueError("'self.lighting_method' is not set to a valid value.")
+
+        with self.lighting_hours_lock:
+            self._lighting_hours = gv.LightingHours(**lighting_hours)
+
         if (
                 send_info
                 and self.general.engine_set_up
