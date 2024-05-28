@@ -96,7 +96,7 @@ def test_refresh_suntimes_success(
         ecosystem_config: EcosystemConfig,
 ):
     assert engine_config.home_sun_times is None
-    ecosystem_config.sky["lighting"] = gv.LightMethod.elongate
+    ecosystem_config.nycthemeral_cycle["lighting"] = gv.LightMethod.elongate
     engine_config.home_coordinates = (0, 0)
     engine_config.refresh_sun_times()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
@@ -208,26 +208,26 @@ def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
 
 
 def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
-    assert ecosystem_config.light_method is gv.LightMethod.fixed
+    assert ecosystem_config.lighting_method is gv.LightMethod.fixed
     new_method = gv.LightMethod.elongate
 
     with pytest.raises(ValueError):
-        ecosystem_config.set_light_method(new_method)
+        ecosystem_config.set_lighting_method(new_method)
 
     ecosystem_config.general.home_coordinates = (0, 0)
-    ecosystem_config.set_light_method(new_method)
+    ecosystem_config.set_lighting_method(new_method)
 
     # Should not happen
     del ecosystem_config.general.places["home"]
     ecosystem_config.general._sun_times = {}
     ecosystem_config.general.app_config.TESTING = False
     # Sun times is none so `light_method` falls back to `fixed`
-    assert ecosystem_config.light_method is gv.LightMethod.fixed
+    assert ecosystem_config.lighting_method is gv.LightMethod.fixed
     ecosystem_config.general.app_config.TESTING = True
     ecosystem_config.general._sun_times = {
         "home": {"last_update": date.today(), "data": sun_times}
     }
-    assert ecosystem_config.light_method is new_method
+    assert ecosystem_config.lighting_method is new_method
 
 
 def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
@@ -247,10 +247,10 @@ def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
 
 
 def test_ecosystem_time_parameters(ecosystem_config: EcosystemConfig):
-    assert ecosystem_config.time_parameters == gv.DayConfig()
+    assert ecosystem_config.nycthemeral_span == gv.NycthemeralSpanConfig()
 
     with pytest.raises(ValueError):
-        ecosystem_config.time_parameters = {"wrong": "value"}
+        ecosystem_config.nycthemeral_span = {"wrong": "value"}
 
-    ecosystem_config.time_parameters = {"day": "4h21", "night": "22h00"}
-    assert ecosystem_config.time_parameters.day == time(4, 21)
+    ecosystem_config.nycthemeral_span = {"day": "4h21", "night": "22h00"}
+    assert ecosystem_config.nycthemeral_span.day == time(4, 21)

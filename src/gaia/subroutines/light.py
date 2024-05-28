@@ -63,7 +63,6 @@ class Light(SubroutineTemplate):
     def _compute_if_manageable(self) -> bool:
         if all((
                 self.config.get_IO_group_uids(gv.HardwareType.light),
-                self.config.light_method,
                 bool(self.config.lighting_hours.morning_start)
         )):
             return True
@@ -160,7 +159,7 @@ class Light(SubroutineTemplate):
     def compute_status(self, _now: time | None = None) -> bool:
         now = _now or datetime.now().time()
         hours = self.config.lighting_hours
-        if self.config.light_method == gv.LightMethod.elongate:
+        if self.config.lighting_method == gv.LightMethod.elongate:
             # Is time between lightning hours
             if (
                 hours.morning_start <= now <= hours.morning_end
