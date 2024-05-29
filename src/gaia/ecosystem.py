@@ -108,15 +108,15 @@ class Ecosystem:
         )
 
     @property
-    def light_method(self) -> gv.LightMethod:
-        return self.config.light_method
+    def lighting_method(self) -> gv.LightMethod:
+        return self.config.lighting_method
 
-    def set_light_method(
+    def set_lighting_method(
             self,
             value: gv.LightMethod,
             send_info: bool = True
     ) -> None:
-        self.config.set_light_method(value)
+        self.config.set_lighting_method(value)
         if send_info and self.engine.use_message_broker:
             try:
                 self.engine.event_handler.send_payload_if_connected(
@@ -130,7 +130,7 @@ class Ecosystem:
     @property
     def light_info(self) -> gv.LightData:
         return gv.LightData.from_lighting_hours(
-            self.config.lighting_hours, self.config.light_method)
+            self.config.lighting_hours, self.config.lighting_method)
 
     light_data = light_info
 

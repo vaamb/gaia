@@ -294,8 +294,8 @@ def test_update_time_parameters(events_handler: Events):
     verified = gv.LightDataPayload(**data_update[0])
     assert verified.data.morning_start == day
     assert verified.data.evening_end == night
-    assert events_handler.ecosystems[ecosystem_uid].config.time_parameters.day == day
-    assert events_handler.ecosystems[ecosystem_uid].config.time_parameters.night == night
+    assert events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.day == day
+    assert events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.night == night
 
 
 def test_update_light_method(events_handler: Events):
@@ -315,7 +315,7 @@ def test_update_light_method(events_handler: Events):
     data_update: list[gv.LightDataPayloadDict] = events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.LightDataPayload(**data_update[0])
     assert verified.data.method == method
-    assert events_handler.ecosystems[ecosystem_uid].light_method == method
+    assert events_handler.ecosystems[ecosystem_uid].lighting_method == method
 
 
 def test_create_environment_parameter(events_handler: Events):

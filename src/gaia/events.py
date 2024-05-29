@@ -80,7 +80,7 @@ crud_links_dict: dict[CrudEventName, CrudLinks] = {
     "update_chaos_config": CrudLinks("chaos_config", "chaos_parameters"),
     "update_management": CrudLinks("managements", "management"),
     "update_time_parameters": CrudLinks("time_parameters", "light_data"),
-    "update_light_method": CrudLinks("set_light_method", "light_data"),
+    "update_light_method": CrudLinks("set_lighting_method", "light_data"),
     # Environment parameter creation, deletion and update
     "create_environment_parameter": CrudLinks(
         "set_climate_parameter", "environmental_parameters"),
