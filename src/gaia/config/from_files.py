@@ -709,6 +709,23 @@ class EngineConfig(metaclass=SingletonMeta):
         sun_times = self.sun_times.get(place)
         if sun_times is None or sun_times["last_update"] < date.today():
             new_sun_times = get_sun_times(coord.longitude, coord.latitude)
+            # Handle high and low latitude specificities
+            specific_sun_times = (
+                ("sunrise", "sunset"),
+                ("civil_dawn", "civil_dusk"),
+                ("nautical_dawn", "nautical_dusk"),
+                ("astronomical_dawn", "astronomical_dusk"),
+            )
+            for measures in specific_sun_times:
+                if new_sun_times[measures[0]] is None:  # new_sun_times[measures[0]] is None too
+                    # TODO: handle day and night differently
+                    self.logger.warning(
+                        f"Sun times of '{place}' has no {measures[0]} and "
+                        f"{measures[1]} (due to polar day/night). Replacing "
+                        f"values by 00:00:01 and 23:59:59, respectively."
+                    )
+                    new_sun_times[measures[0]] = time(0, 0, 1)
+                    new_sun_times[measures[1]] = time(23, 59, 59)
             self.set_sun_times(place, new_sun_times)
         return self.sun_times[place]["data"]
 
