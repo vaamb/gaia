@@ -10,7 +10,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import string
-from threading import Condition, Event, Lock, Thread
+from threading import Condition, Event, Lock, RLock, Thread
 import typing as t
 from typing import cast, Type, TypedDict, TypeVar
 import weakref
@@ -406,28 +406,12 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.debug(
                 f"Checking if lighting and nycthemeral span methods for "
                 f"ecosystem {ecosystem_name} are possible.")
-
             lighting_method = safe_enum_from_name(
                 gv.LightingMethod, eco_nyct_cfg["lighting"])
-            lighting_method_is_valid = self.check_nycthemeral_method_validity(
-                ecosystem_uid, lighting_method)
-            if not lighting_method_is_valid:
-                self.logger.warning(
-                    f"Lighting method '{lighting_method.name}' is not a valid "
-                    f"option for ecosystem '{ecosystem_name}'. Will fall back to "
-                    f"'fixed'."
-                )
-
+            self.check_nycthemeral_method_validity(ecosystem_uid, lighting_method)
             span_method = safe_enum_from_name(
                 gv.NycthemeralSpanMethod, eco_nyct_cfg["span"])
-            span_method_is_valid = self.check_nycthemeral_method_validity(
-                ecosystem_uid, span_method)
-            if not span_method_is_valid:
-                self.logger.warning(
-                    f"Nycthemeral span method '{span_method.name}' is not a "
-                    f"valid option for ecosystem '{ecosystem_name}'. Will fall "
-                    f"back to 'fixed'."
-                )
+            self.check_nycthemeral_method_validity(ecosystem_uid, span_method)
         self.configs_loaded = True
 
     def save(self, cfg_type: ConfigType | CacheType) -> None:
@@ -741,43 +725,15 @@ class EngineConfig(metaclass=SingletonMeta):
         return self.get_sun_times("home")
 
     def refresh_sun_times(self) -> None:
-        self.logger.info("Looking if sun times need to be updated.")
-
-        # Check if an update is required
-        any_needed = False
+        self.logger.info("Updating sun times.")
         places_ok: set[str] = set()
         places_failed: set[str] = set()
-        for ecosystem_config in self.ecosystems_config_dict.values():
-            nycthemeral_cycle = gv.NycthemeralCycleConfig(
-                **ecosystem_config["environment"]["nycthemeral_cycle"])
-            if nycthemeral_cycle.lighting == gv.LightingMethod.elongate:
-                # `get_sun_times` automatically refresh outdated data
-                any_needed = True
-                ok = self.get_sun_times("home")
-                if ok:
-                    places_ok.add("home")
-                else:
-                    places_failed.add("home")
-            elif nycthemeral_cycle.span == gv.NycthemeralSpanMethod.mimic:
-                target = nycthemeral_cycle.target
-                # Check that we have the target coordinates. If we don't, log an
-                #  error and use a fixed light method
-                any_needed = True
-                if not target:
-                    ecosystem_name = ecosystem_config["name"]
-                    self.logger.error(
-                        f"Ecosystem '{ecosystem_name}' has no target set.")
-                    ecosystem_config["environment"]["nycthemeral_cycle"]["span"] = \
-                        gv.NycthemeralSpanConfig.fixed
-                    continue
-                # `get_sun_times` automatically refresh outdated data
-                ok = self.get_sun_times(target)
-                if ok:
-                    places_ok.add(target)
-                else:
-                    places_failed.add(target)
-        if not any_needed:
-            self.logger.debug("No need to refresh sun times.")
+        for place in self.places.keys():
+            ok = self.get_sun_times(place)
+            if ok:
+                places_ok.add(place)
+            else:
+                places_failed.add(place)
         if places_ok:
             self.logger.info(
                 f"Sun times of the following targets have been refreshed: "
@@ -825,7 +781,8 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.warning(
                 f"{m} method for ecosystem {ecosystem_name} cannot be "
                 f"'{method.name}' as the coordinates of '{target}' is "
-                f"not provided in the private configuration file."
+                f"not provided in the private configuration file. Will fall "
+                f"back to 'fixed'."
             )
             return False
         # Try to get the target's sun times
@@ -834,7 +791,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.warning(
                 f"{m} method for ecosystem {ecosystem_name} cannot be "
                 f"'{method.name}' as the sun times of '{target}' "
-                f"weren't found."
+                f"weren't found. Will fall back to 'fixed'."
             )
             return False
         return True
@@ -946,14 +903,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
+        self._nycthemeral_hours_lock = RLock()
         self._nycthemeral_span_method_cache: gv.NycthemeralSpanMethod | None = None
-        self._nycthemeral_span_cache: gv.NycthemeralSpanConfig | None = None
+        self._nycthemeral_span_hours_data: gv.NycthemeralSpanConfig | None = None
         self._lighting_method_cache: gv.LightingMethod | None = None
-        self._lighting_hours = gv.LightingHours(
-            morning_start=self.nycthemeral_span.day,
-            evening_end=self.nycthemeral_span.night,
-        )
-        self.lighting_hours_lock = Lock()
+        self._lighting_hours_data: gv.LightingHours | None = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
@@ -969,10 +923,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def save(self) -> None:
         self._engine_config.save(ConfigType.ecosystems)
 
-    def reset_caches(self) -> None:
+    def reset_nycthemeral_caches(self) -> None:
         self._nycthemeral_span_method_cache = None
-        self._nycthemeral_span_cache = None
+        self._nycthemeral_span_hours_cache = None
         self._lighting_method_cache = None
+        self._lighting_hours_cache = None
+
+    def reset_caches(self) -> None:
+        self.reset_nycthemeral_caches()
 
     @property
     def general(self) -> EngineConfig:
@@ -1072,6 +1030,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 "`EngineConfig.set_place` before using it as a target."
             )
         self.nycthemeral_cycle["target"] = target
+        self.reset_nycthemeral_caches()
         self.refresh_lighting_hours(send_info=True)
 
     @property
@@ -1103,28 +1062,40 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"See the logs to see the reason."
                 )
         self.nycthemeral_cycle["span"] = method
-        self._nycthemeral_span_method_cache = None
+        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         self.refresh_lighting_hours(send_info=True)
 
     @property
-    def nycthemeral_span(self) -> gv.NycthemeralSpanConfig:
-        if self._nycthemeral_span_cache is None:
+    def _nycthemeral_span_hours_cache(self) -> gv.NycthemeralSpanConfig | None:
+        with self._nycthemeral_hours_lock:
+            return self._nycthemeral_span_hours_data
+
+    @_nycthemeral_span_hours_cache.setter
+    def _nycthemeral_span_hours_cache(
+            self,
+            span_hours: gv.NycthemeralSpanConfig | None,
+    ) -> None:
+        with self._nycthemeral_hours_lock:
+            self._nycthemeral_span_hours_data = span_hours
+
+    @property
+    def nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
+        if self._nycthemeral_span_hours_cache is None:
             if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
                 target = self.nycthemeral_span_target
                 sun_times = self.general.get_sun_times(target)
                 if sun_times is not None:
-                    self._nycthemeral_span_cache = gv.NycthemeralSpanConfig(
+                    self._nycthemeral_span_hours_cache = gv.NycthemeralSpanConfig(
                         day=sun_times["sunrise"],
                         night=sun_times["sunset"],
                     )
-            self._nycthemeral_span_cache = gv.NycthemeralSpanConfig(
+            self._nycthemeral_span_hours_cache = gv.NycthemeralSpanConfig(
                 day=self.nycthemeral_cycle["day"],
                 night=self.nycthemeral_cycle["night"],
             )
-        return self._nycthemeral_span_cache
+        return self._nycthemeral_span_hours_cache
 
-
-    def set_nycthemeral_span(self, value: gv.NycthemeralSpanConfigDict) -> None:
+    def set_nycthemeral_span_hours(self, value: gv.NycthemeralSpanConfigDict) -> None:
         """Set time parameters
 
         :param value: A dict in the form {'day': '8h00', 'night': '22h00'}
@@ -1137,12 +1108,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
         self.environment["nycthemeral_cycle"].update(validated_value)
-        self._nycthemeral_span_cache = None
+        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         self.refresh_lighting_hours(send_info=True)
 
     @property
     def period_of_day(self) -> gv.PeriodOfDay:
-        nycthemeral_span = self.nycthemeral_span
+        nycthemeral_span = self.nycthemeral_span_hours
         if is_time_between(
                 nycthemeral_span.day,
                 nycthemeral_span.night,
@@ -1186,26 +1157,60 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"logs to see the reason."
                 )
         self.nycthemeral_cycle["lighting"] = method
-        self._lighting_method_cache = None
+        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         self.refresh_lighting_hours(send_info=True)
 
     @property
+    def _lighting_hours_cache(self) -> gv.LightingHours | None:
+        with self._nycthemeral_hours_lock:
+            return self._lighting_hours_data
+
+    @_lighting_hours_cache.setter
+    def _lighting_hours_cache(self, lighting_hours: gv.LightingHours | None) -> None:
+        with self._nycthemeral_hours_lock:
+            self._lighting_hours_data = lighting_hours
+
+    @property
     def lighting_hours(self) -> gv.LightingHours:
-        # TODO: reduce the use of this
-        with self.lighting_hours_lock:
-            return self._lighting_hours
+        if self._lighting_hours_cache is None:
+            # Start by getting morning_start and evening_end
+            nycthemeral_span: gv.NycthemeralSpanConfig = self.nycthemeral_span_hours
+            lighting_hours = {
+                "morning_start": nycthemeral_span.day,
+                "evening_end": nycthemeral_span.night,
+            }
+            # Then fill in morning_end and evening_start
+            lighting_method: gv.LightingMethod = self.lighting_method
+            # Computation for 'fixed' lighting method
+            if lighting_method == gv.LightingMethod.fixed:
+                lighting_hours["morning_end"] = None
+                lighting_hours["evening_start"] = None
+
+            # Computation for 'elongate' lighting method
+            elif lighting_method == gv.LightingMethod.elongate:
+                home_sun_times = self.general.home_sun_times
+                sunrise: datetime = _to_dt(home_sun_times["sunrise"])
+                sunset: datetime = _to_dt(home_sun_times["sunset"])
+                civil_dawn: datetime = _to_dt(home_sun_times["civil_dawn"])
+                offset = sunrise - civil_dawn
+                lighting_hours["morning_end"] = (sunrise + offset).time()
+                lighting_hours["evening_start"] = (sunset - offset).time()
+
+            self._lighting_hours_cache = gv.LightingHours(**lighting_hours)
+        return self._lighting_hours_cache
 
     @lighting_hours.setter
     def lighting_hours(self, lighting_hours: gv.LightingHours) -> None:
         if not self.general.app_config.TESTING:
             raise AttributeError(
                 "'lighting_hours' can only be set when 'TESTING' is True.")
-        with self.lighting_hours_lock:
-            self._lighting_hours = lighting_hours
+        self._lighting_hours_cache = lighting_hours
+        # DO NOT USE THIS as it will overwrite the newly set value
+        # self.reset_nycthemeral_caches()
 
     def refresh_lighting_hours(self, send_info: bool = True) -> None:
-        self.reset_caches()
         self.logger.info("Refreshing lighting hours.")
+        self.reset_nycthemeral_caches()
         # Check we've got the info required
         # Then update info using lock as the whole dict should be transformed at the "same time"
 
@@ -1213,38 +1218,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.general.check_nycthemeral_method_validity(
             self.uid, self.nycthemeral_cycle["span"])
         # Raw nycthemeral span is silently replaced if needed
-        nycthemeral_span: gv.NycthemeralSpanConfig = self.nycthemeral_span
+        self.nycthemeral_span_method
+        self.nycthemeral_span_hours
 
         # Log warnings for issues with raw lighting method
         self.general.check_nycthemeral_method_validity(
             self.uid, self.nycthemeral_cycle["lighting"])
         # Raw lighting method span is silently replaced if needed
-        lighting_method: gv.LightingMethod = self.lighting_method
-
-        lighting_hours = {
-            "morning_start": nycthemeral_span.day,
-            "evening_end": nycthemeral_span.night,
-        }
-
-        # Computation for 'fixed' lighting method
-        if lighting_method == gv.LightingMethod.fixed:
-            lighting_hours["morning_end"] = None
-            lighting_hours["evening_start"] = None
-
-        # Computation for 'elongate' lighting method
-        elif lighting_method == gv.LightingMethod.elongate:
-            home_sun_times = self.general.home_sun_times
-            sunrise: datetime = _to_dt(home_sun_times["sunrise"])
-            sunset: datetime = _to_dt(home_sun_times["sunset"])
-            civil_dawn: datetime = _to_dt(home_sun_times["civil_dawn"])
-            offset = sunrise - civil_dawn
-            lighting_hours["morning_end"] = (sunrise + offset).time()
-            lighting_hours["evening_start"] = (sunset - offset).time()
-        else:
-            raise ValueError("'self.lighting_method' is not set to a valid value.")
-
-        with self.lighting_hours_lock:
-            self._lighting_hours = gv.LightingHours(**lighting_hours)
+        self.lighting_method
+        self.lighting_hours
 
         if (
                 send_info

@@ -83,14 +83,6 @@ def test_save_load(engine_config: EngineConfig):
     assert engine_config.private_config == private_config
 
 
-def test_refresh_suntimes_not_needed(engine_config: EngineConfig):
-    assert engine_config.home_sun_times is None
-    engine_config.refresh_sun_times()
-    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "No need to refresh sun times" in logs
-    assert engine_config.home_sun_times is None
-
-
 def test_refresh_suntimes_success(
         engine_config: EngineConfig,
         ecosystem_config: EcosystemConfig,
@@ -251,10 +243,10 @@ def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
 
 
 def test_ecosystem_time_parameters(ecosystem_config: EcosystemConfig):
-    assert ecosystem_config.nycthemeral_span == gv.NycthemeralSpanConfig()
+    assert ecosystem_config.nycthemeral_span_hours == gv.NycthemeralSpanConfig()
 
     with pytest.raises(ValueError):
-        ecosystem_config.set_nycthemeral_span({"wrong": "value"})
+        ecosystem_config.set_nycthemeral_span_hours({"wrong": "value"})
 
-    ecosystem_config.set_nycthemeral_span({"day": "4h21", "night": "22h00"})
-    assert ecosystem_config.nycthemeral_span.day == time(4, 21)
+    ecosystem_config.set_nycthemeral_span_hours({"day": "4h21", "night": "22h00"})
+    assert ecosystem_config.nycthemeral_span_hours.day == time(4, 21)
