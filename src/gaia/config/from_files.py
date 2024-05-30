@@ -711,12 +711,6 @@ class EngineConfig(metaclass=SingletonMeta):
         if sun_times is None or sun_times["last_update"] < today:
             new_sun_times = get_sun_times(coord.longitude, coord.latitude)
             # Handle high and low latitude specificities
-            specific_sun_times = (
-                ("sunrise", "sunset"),
-                ("civil_dawn", "civil_dusk"),
-                ("nautical_dawn", "nautical_dusk"),
-                ("astronomical_dawn", "astronomical_dusk"),
-            )
             if (
                     # Range of polar day in Northern hemisphere
                     3 < today.month <= 9 and coord.latitude > 0
@@ -726,19 +720,18 @@ class EngineConfig(metaclass=SingletonMeta):
                 day_night = "day"
             else:
                 day_night = "night"
-            for measures in specific_sun_times:
-                if new_sun_times[measures[0]] is None:  # new_sun_times[measures[0]] is None too
-                    self.logger.warning(
-                        f"Sun times of '{place}' has no {measures[0]} and "
-                        f"{measures[1]} (due to polar {day_night}). Replacing "
-                        f"values by 00:00:01 and 23:59:59."
-                    )
-                    if day_night == "day":
-                        new_sun_times[measures[0]] = time(0, 0, 0, 1)          # Sunrise
-                        new_sun_times[measures[1]] = time(23, 59, 59, 999999)  # Sunset
-                    else:
-                        new_sun_times[measures[0]] = time(0, 0, 0, 1)          # Sunrise
-                        new_sun_times[measures[1]] = time(0, 0, 0, 2)          # Sunset
+            if new_sun_times["sunrise"] is None:  # sunset is None too
+                self.logger.warning(
+                    f"Sun times of '{place}' has no sunrise and sunset (due to "
+                    f"polar {day_night}). Replacing values to allow coherent "
+                    f"lighting."
+                )
+                if day_night == "day":
+                    new_sun_times["sunrise"] = time(0, 0, 0, 1)          # Sunrise
+                    new_sun_times["sunset"] = time(23, 59, 59, 999999)  # Sunset
+                else:
+                    new_sun_times["sunrise"] = time(0, 0, 0, 1)          # Sunrise
+                    new_sun_times["sunset"] = time(0, 0, 0, 2)          # Sunset
             self.set_sun_times(place, new_sun_times)
         return self.sun_times[place]["data"]
 
