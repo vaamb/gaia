@@ -384,16 +384,16 @@ def get_sun_times(
     }
 
     hour_angles = {
-        get_hour_angle(angle): meaning for angle, meaning in sun_angles.items()
+        meaning: get_hour_angle(angle) for angle, meaning in sun_angles.items()
     }
 
     times = {
         "solar_noon": st,
     }
-    for ha, meaning in hour_angles.items():
+    for meaning, ha in hour_angles.items():
         if ha is None:
             times[meaning[0]] = None
-            times[meaning[0]] = None
+            times[meaning[1]] = None
         else:
             times[meaning[0]] = st - ha / 360
             times[meaning[1]] = st + ha / 360
