@@ -726,12 +726,14 @@ class EngineConfig(metaclass=SingletonMeta):
                     f"polar {day_night}). Replacing values to allow coherent "
                     f"lighting."
                 )
+                midnight = datetime.combine(today, time(hour=0))
+                msec = timedelta(milliseconds=1)
                 if day_night == "day":
-                    new_sun_times["sunrise"] = time(0, 0, 0, 1)          # Sunrise
-                    new_sun_times["sunset"] = time(23, 59, 59, 999999)  # Sunset
+                    new_sun_times["sunrise"] = midnight.time()          # Sunrise
+                    new_sun_times["sunset"] = (midnight - msec).time()  # Sunset
                 else:
-                    new_sun_times["sunrise"] = time(0, 0, 0, 1)          # Sunrise
-                    new_sun_times["sunset"] = time(0, 0, 0, 2)          # Sunset
+                    new_sun_times["sunrise"] = midnight.time()          # Sunrise
+                    new_sun_times["sunset"] = (midnight + msec).time()  # Sunset
             self.set_sun_times(place, new_sun_times)
         return self.sun_times[place]["data"]
 
