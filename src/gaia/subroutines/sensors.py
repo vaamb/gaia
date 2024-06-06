@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import Task
+from asyncio import Lock, Task
 from datetime import datetime, timezone
 from statistics import mean
 from time import monotonic
@@ -37,6 +37,8 @@ class Sensors(SubroutineTemplate):
         self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         #self._data_lock = Lock()
+        self._sending_data: bool = False
+        self._sending_data_lock: Lock = Lock()
         self._finish__init__()
 
     async def routine(self) -> None:
@@ -55,7 +57,7 @@ class Sensors(SubroutineTemplate):
                 f"Sensors data update finished in {update_time:.1f} s."
             )
         try:
-            await self.send_data()
+            await self.ecosystem.engine.scheduler.add_job(self.send_data)
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while sending sensors data and warnings. "
@@ -257,5 +259,12 @@ class Sensors(SubroutineTemplate):
     async def send_data(self) -> None:
         if not self.ecosystem.engine.use_message_broker:
             return
+        async with self._sending_data_lock:
+            if self._sending_data:
+                # We are already sending data. Don't saturate the broker
+                return
+            self._sending_data = True
         await self.ecosystem.engine.event_handler.send_payload_if_connected(
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
+        async with self._sending_data_lock:
+            self._sending_data = False
