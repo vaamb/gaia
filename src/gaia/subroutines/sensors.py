@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import Future, wait
 from datetime import datetime, timezone
 from statistics import mean
-from threading import Lock
+from threading import Lock, RLock
 from time import monotonic
 import typing as t
 from typing import cast, Literal
@@ -37,6 +37,8 @@ class Sensors(SubroutineTemplate):
         self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         self._data_lock = Lock()
+        self._sending_data: bool = False
+        self._sending_data_lock: RLock = RLock()
         self._finish__init__()
 
     def routine(self) -> None:
@@ -55,7 +57,7 @@ class Sensors(SubroutineTemplate):
                 f"Sensors data update finished in {update_time:.1f} s."
             )
         try:
-            self.send_data()
+            self.ecosystem.engine.scheduler.add_job(self.send_data)
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while sending sensors data and warnings. "
@@ -249,12 +251,20 @@ class Sensors(SubroutineTemplate):
         if (self.config.management_flag & alarms_flag == alarms_flag):
             cache = self._add_sensor_warnings(cache)
         if len(cache["records"]) > 0:
-            self.sensors_data = gv.SensorsData(**cache)
+            sensors_data = gv.SensorsData(**cache)
+            self.sensors_data = sensors_data
         else:
             self.sensors_data = gv.Empty()
 
     def send_data(self) -> None:
         if not self.ecosystem.engine.use_message_broker:
             return
+        with self._sending_data_lock:
+            # Do not
+            if self._sending_data:
+                return
+            self._sending_data = True
         self.ecosystem.engine.event_handler.send_payload_if_connected(
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
+        with self._sending_data_lock:
+            self._sending_data = False
