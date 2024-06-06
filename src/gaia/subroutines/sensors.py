@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from asyncio import Lock, Task
 from datetime import datetime, timezone
+from math import floor
 from statistics import mean
 from time import monotonic
 import typing as t
@@ -31,15 +32,23 @@ class Sensors(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = sensor_models
         self.hardware: dict[str, BaseSensor]
-        loop_timeout = float(
+        loop_period = float(
             self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
-        self._loop_timeout: float = max(loop_timeout, 10.0)
+        self._loop_period: float = max(loop_period, 10.0)
         self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         #self._data_lock = Lock()
         self._sending_data: bool = False
         self._sending_data_lock: Lock = Lock()
+        self._climate_routine_counter: int = 0
         self._finish__init__()
+
+    @property
+    def _climate_routine_ratio(self) -> int:
+        climate_loop_period: float = \
+            self.ecosystem.subroutines["climate"]._loop_period
+        return floor(max(
+            1.0, climate_loop_period / self._loop_period))
 
     async def routine(self) -> None:
         start_time = monotonic()
@@ -64,7 +73,7 @@ class Sensors(SubroutineTemplate):
                 f"ERROR msg: `{e.__class__.__name__} :{e}`."
             )
         loop_time = monotonic() - start_time
-        if loop_time > self._loop_timeout:  # pragma: no cover
+        if loop_time > self._loop_period:  # pragma: no cover
             self.logger.warning(
                 f"Sensors data routine took {loop_time:.1f}. This either "
                 f"indicates errors while data retrieval or the need to "
@@ -73,6 +82,8 @@ class Sensors(SubroutineTemplate):
         self.logger.debug(
             f"Sensors data routine finished in {loop_time:.1f} s."
         )
+        if self.ecosystem.get_subroutine_status("climate"):
+            await self.trigger_climate_routine()
 
     def _compute_if_manageable(self) -> bool:
         if self.config.get_IO_group_uids(gv.HardwareType.sensor):
@@ -84,12 +95,12 @@ class Sensors(SubroutineTemplate):
     async def _start(self) -> None:
         self.logger.info(
             f"Starting the sensors loop. It will run every "
-            f"{self._loop_timeout:.1f} s.")
+            f"{self._loop_period:.1f} s.")
         await self.ecosystem.engine.scheduler.add_schedule(
             func_or_task_id=self.routine,
             id=f"{self.ecosystem.uid}-sensors_routine",
-            trigger=IntervalTrigger(seconds=self._loop_timeout),
-            max_jitter=self._loop_timeout/10,
+            trigger=IntervalTrigger(seconds=self._loop_period),
+            max_jitter=self._loop_period / 10,
         )
         self.logger.debug(f"Sensors loop successfully started")
 
@@ -268,3 +279,10 @@ class Sensors(SubroutineTemplate):
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
         async with self._sending_data_lock:
             self._sending_data = False
+
+    async def trigger_climate_routine(self) -> None:
+        self._climate_routine_counter += 1
+        if self._climate_routine_counter % self._climate_routine_ratio == 0:
+            self._climate_routine_counter = 0
+            await self.ecosystem.engine.scheduler.add_job(
+                self.ecosystem.subroutines["climate"].routine)
