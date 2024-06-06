@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import Future, wait
 from datetime import datetime, timezone
 from statistics import mean
-from threading import Lock
+from threading import Lock, RLock
 from time import monotonic
 import typing as t
 from typing import cast, Literal
@@ -37,6 +37,13 @@ class Sensors(SubroutineTemplate):
         self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         self._data_lock = Lock()
+        self._sending_data: bool = False
+        self._sending_data_lock: RLock = RLock()
+        climate_loop_period = float(
+            self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
+        self._climate_routine_ratio: float = max(
+            1.0, climate_loop_period / loop_timeout)
+        self._climate_routine_counter: int = 0
         self._finish__init__()
 
     def routine(self) -> None:
@@ -55,7 +62,7 @@ class Sensors(SubroutineTemplate):
                 f"Sensors data update finished in {update_time:.1f} s."
             )
         try:
-            self.send_data()
+            self.ecosystem.engine.scheduler.add_job(self.send_data)
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while sending sensors data and warnings. "
@@ -71,6 +78,7 @@ class Sensors(SubroutineTemplate):
         self.logger.debug(
             f"Sensors data routine finished in {loop_time:.1f} s."
         )
+        self.trigger_climate_routine()
 
     def _compute_if_manageable(self) -> bool:
         if self.config.get_IO_group_uids(gv.HardwareType.sensor):
@@ -83,10 +91,11 @@ class Sensors(SubroutineTemplate):
         self.logger.info(
             f"Starting the sensors loop. It will run every "
             f"{self._loop_timeout:.1f} s.")
-        self.ecosystem.engine.scheduler.add_job(
-            func=self.routine,
+        self.ecosystem.engine.scheduler.add_schedule(
+            func_or_task_id=self.routine,
             id=f"{self.ecosystem.uid}-sensors_routine",
-            trigger=IntervalTrigger(seconds=self._loop_timeout, jitter=self._loop_timeout/10),
+            trigger=IntervalTrigger(seconds=self._loop_timeout),
+            max_jitter=self._loop_timeout/10,
         )
         self.logger.debug(f"Sensors loop successfully started")
 
@@ -94,7 +103,7 @@ class Sensors(SubroutineTemplate):
         self.logger.info(f"Stopping sensors loop")
         if self.ecosystem.get_subroutine_status("climate"):
             self.ecosystem.stop_subroutine("climate")
-        self.ecosystem.engine.scheduler.remove_job(
+        self.ecosystem.engine.scheduler.remove_schedule(
             f"{self.ecosystem.uid}-sensors_routine")
         self.hardware = {}
 
@@ -248,12 +257,28 @@ class Sensors(SubroutineTemplate):
         if (self.config.management_flag & alarms_flag == alarms_flag):
             cache = self._add_sensor_warnings(cache)
         if len(cache["records"]) > 0:
-            self.sensors_data = gv.SensorsData(**cache)
+            sensors_data = gv.SensorsData(**cache)
+            self.sensors_data = sensors_data
         else:
             self.sensors_data = gv.Empty()
 
     def send_data(self) -> None:
         if not self.ecosystem.engine.use_message_broker:
             return
+        with self._sending_data_lock:
+            # Do not
+            if self._sending_data:
+                return
+            self._sending_data = True
         self.ecosystem.engine.event_handler.send_payload_if_connected(
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
+        with self._sending_data_lock:
+            self._sending_data = False
+
+    def trigger_climate_routine(self) -> None:
+        if self._climate_routine_counter % self._climate_routine_ratio == 0:
+            self._climate_routine_counter = 0
+            if self.ecosystem.get_subroutine_status("climate"):
+                self.ecosystem.engine.scheduler.add_job(
+                    self.ecosystem.subroutines["climate"].routine)
+        self._climate_routine_counter += 1

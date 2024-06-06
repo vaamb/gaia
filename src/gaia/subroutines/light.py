@@ -79,16 +79,18 @@ class Light(SubroutineTemplate):
         self.logger.info(
             f"Starting the light loop. It will run every "
             f"{self._loop_period:.2f} s.")
-        self.ecosystem.engine.scheduler.add_job(
-            func=self.routine,
+        self.ecosystem.engine.scheduler.add_schedule(
+            func_or_task_id=self.routine,
             id=f"{self.ecosystem.uid}-light_routine",
-            trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/20),
+            trigger=IntervalTrigger(seconds=self._loop_period),
+            max_jitter=self._loop_period/20,
         )
         self.actuator_handler.activate()
 
     def _stop(self) -> None:
         self.logger.info("Stopping light loop")
-        self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.uid}-light_routine")
+        self.ecosystem.engine.scheduler.remove_schedule(
+            f"{self.ecosystem.uid}-light_routine")
         self.actuator_handler.deactivate()
 
     """API calls"""

@@ -9,8 +9,7 @@ from threading import Event, Thread
 from time import sleep
 import typing as t
 
-from apscheduler.executors.pool import BasePoolExecutor
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler import Scheduler
 from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
@@ -34,13 +33,6 @@ SIGNALS = (
 )
 
 
-class APSchedulerExecutor(BasePoolExecutor):
-    # Adapt the recipe from apscheduler.executors.pool.ThreadPoolExecutor to use
-    #  an existing concurrent.futures.ThreadPoolExecutor
-    def __init__(self, pool: ThreadPoolExecutor):
-        super().__init__(pool)
-
-
 class Engine(metaclass=SingletonMeta):
     """An Engine class that will coordinate several Ecosystem instances.
 
@@ -59,8 +51,7 @@ class Engine(metaclass=SingletonMeta):
         self._virtual_world: VirtualWorld | None = None
         self._executor: ThreadPoolExecutor = ThreadPoolExecutor(
                 thread_name_prefix=f"Engine_ThreadPoolExecutor", max_workers=15)
-        self._scheduler: BackgroundScheduler = BackgroundScheduler(
-            executors={"default": APSchedulerExecutor(self._executor)})
+        self._scheduler: Scheduler = Scheduler(default_job_executor="threadpool")
         if self.config.app_config.VIRTUALIZATION:
             self.logger.info("Using ecosystem virtualization.")
             virtual_cfg = self.config.app_config.VIRTUALIZATION_PARAMETERS
@@ -97,7 +88,7 @@ class Engine(metaclass=SingletonMeta):
         return self._executor
 
     @property
-    def scheduler(self) -> BackgroundScheduler:
+    def scheduler(self) -> Scheduler:
         return self._scheduler
 
     # ---------------------------------------------------------------------------
@@ -222,17 +213,18 @@ class Engine(metaclass=SingletonMeta):
             loop_period = self.config.app_config.SENSORS_LOOP_PERIOD
             seconds_offset = ceil(loop_period * 1.5)
             job_kwargs = {"scoped_session_": self.db.scoped_session, "engine": self}
-            self.scheduler.add_job(
-                func=routines.log_sensors_data, kwargs=job_kwargs,
+            self.scheduler.add_schedule(
+                func_or_task_id=routines.log_sensors_data, kwargs=job_kwargs,
                 id="log_sensors_data",
-                trigger=CronTrigger(minute=cron_minute, second=seconds_offset, jitter=1.5),
+                trigger=CronTrigger(minute=cron_minute, second=seconds_offset),
+                max_jitter=1.5,
                 misfire_grace_time=10,
             )
 
     def stop_database(self) -> None:
         self.logger.info("Stopping the database.")
         if self.config.app_config.SENSORS_LOGGING_PERIOD:
-            self.scheduler.remove_job("log_sensors_data")
+            self.scheduler.remove_schedule("log_sensors_data")
 
     @property
     def db(self) -> "SQLAlchemyWrapper":
@@ -293,26 +285,26 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     def start_background_tasks(self) -> None:
         self.logger.debug("Starting the background tasks.")
-        self.scheduler.add_job(
-            func=self.refresh_ecosystems_lighting_hours,
+        self.scheduler.add_schedule(
+            func_or_task_id=self.refresh_ecosystems_lighting_hours,
             id="refresh_sun_times",
             trigger=CronTrigger(hour="0", minute="1"),
             misfire_grace_time=15 * 60,
         )
-        self.scheduler.add_job(
-            func=self.update_chaos_time_window,
+        self.scheduler.add_schedule(
+            func_or_task_id=self.update_chaos_time_window,
             id="refresh_chaos",
             trigger=CronTrigger(hour="0", minute="5"),
             misfire_grace_time=15 * 60,
         )
-        self.scheduler.start()
+        self.scheduler.start_in_background()
 
     def stop_background_tasks(self) -> None:
         self.logger.debug("Stopping the background tasks.")
-        self.scheduler.remove_job("refresh_sun_times")
-        self.scheduler.remove_job("refresh_chaos")
-        self.scheduler.remove_all_jobs()  # To be 100% sure
-        self.scheduler.shutdown()
+        self.scheduler.remove_schedule("refresh_sun_times")
+        self.scheduler.remove_schedule("refresh_chaos")
+        #self.scheduler.remove_all_jobs()  # To be 100% sure
+        self.scheduler.stop()
 
     def _send_ecosystems_info(
             self,
@@ -667,7 +659,8 @@ class Engine(metaclass=SingletonMeta):
         if not self.running:
             raise RuntimeError("Cannot pause a non-started engine")
         self.logger.info("Pausing Gaia ...")
-        self.scheduler.pause()
+        for schedule in self.scheduler.get_schedules():
+            self.scheduler.unpause_schedule(schedule.id)
         # Set the events so the loop continues but doesn't update anything
         self._running_event.clear()
 
@@ -679,7 +672,8 @@ class Engine(metaclass=SingletonMeta):
         # Send a config signal so the loop unlocks and refreshed the ecosystems
         with self.config.new_config:
             self.config.new_config.notify_all()
-        self.scheduler.resume()
+        for schedule in self.scheduler.get_schedules():
+            self.scheduler.pause_schedule(schedule.id)
 
     def resume(self) -> None:
         if self.running:
