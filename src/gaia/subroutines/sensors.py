@@ -39,6 +39,11 @@ class Sensors(SubroutineTemplate):
         self._data_lock = Lock()
         self._sending_data: bool = False
         self._sending_data_lock: RLock = RLock()
+        climate_loop_period = float(
+            self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
+        self._climate_routine_ratio: float = max(
+            1.0, climate_loop_period / loop_timeout)
+        self._climate_routine_counter: int = 0
         self._finish__init__()
 
     def routine(self) -> None:
@@ -73,6 +78,7 @@ class Sensors(SubroutineTemplate):
         self.logger.debug(
             f"Sensors data routine finished in {loop_time:.1f} s."
         )
+        self.trigger_climate_routine()
 
     def _compute_if_manageable(self) -> bool:
         if self.config.get_IO_group_uids(gv.HardwareType.sensor):
@@ -268,3 +274,11 @@ class Sensors(SubroutineTemplate):
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
         with self._sending_data_lock:
             self._sending_data = False
+
+    def trigger_climate_routine(self) -> None:
+        if self._climate_routine_counter % self._climate_routine_ratio == 0:
+            self._climate_routine_counter = 0
+            if self.ecosystem.get_subroutine_status("climate"):
+                self.ecosystem.engine.scheduler.add_job(
+                    self.ecosystem.subroutines["climate"].routine)
+        self._climate_routine_counter += 1
