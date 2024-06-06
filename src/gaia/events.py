@@ -171,16 +171,16 @@ class Events(AsyncEventHandler):
             return
         await self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
-    def _schedule_jobs(self) -> None:
-        self.engine.scheduler.add_job(
-            func=self.ping,
+    async def _schedule_jobs(self) -> None:
+        await self.engine.scheduler.add_schedule(
+            func_or_task_id=self.ping,
             id="events-ping",
             trigger=IntervalTrigger(seconds=15),
         )
         self._jobs_scheduled = True
 
-    def _unschedule_jobs(self) -> None:
-        self.engine.scheduler.remove_job(job_id="events-ping")
+    async def _unschedule_jobs(self) -> None:
+        await self.engine.scheduler.remove_schedule("events-ping")
         self._jobs_scheduled = False
 
     async def ping(self) -> None:
@@ -235,7 +235,7 @@ class Events(AsyncEventHandler):
         else:
             self.logger.error("Failed to register engine.")
         if self._jobs_scheduled:
-            self._unschedule_jobs()
+            await self._unschedule_jobs()
 
     async def on_register(self) -> None:
         self.registered = False
@@ -263,7 +263,7 @@ class Events(AsyncEventHandler):
         self.registered = True
         sleep(0.75)
         if not self._jobs_scheduled:
-            self._schedule_jobs()
+            await self._schedule_jobs()
         await self.emit("initialized", ttl=15)
 
     async def on_initialized_ack(self, missing_data: list | None = None) -> None:

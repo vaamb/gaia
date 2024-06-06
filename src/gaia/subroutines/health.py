@@ -27,18 +27,21 @@ class Health(SubroutineTemplate):
         self._imageIO = io.BytesIO()
         self._finish__init__()
 
-    def _start_scheduler(self) -> None:
+    async def _start_scheduler(self) -> None:
         h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
-        self.ecosystem.engine.scheduler.add_job(
-            func=self.routine,
+        await self.ecosystem.engine.scheduler.add_schedule(
+            func_or_task_id=self.routine,
             id=f"{self.ecosystem.uid}-health_routine",
-            trigger=CronTrigger(hour=h, minute=m, jitter=5.0),
+            trigger=CronTrigger(hour=h, minute=m),
+            max_jitter=5.0,
             misfire_grace_time=15 * 60,
+            job_executor="processpool",
         )
 
-    def _stop_scheduler(self) -> None:
+    async def _stop_scheduler(self) -> None:
         self.logger.info("Closing the tasks scheduler")
-        self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.uid}-health_routine")
+        await self.ecosystem.engine.scheduler.remove_schedule(
+            f"{self.ecosystem.uid}-health_routine")
         self.logger.info("The tasks scheduler was closed properly")
 
     async def analyse_picture(self) -> None:
