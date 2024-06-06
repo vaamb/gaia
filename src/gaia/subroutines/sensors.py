@@ -49,6 +49,11 @@ class Sensors(SubroutineTemplate):
                 f"Encountered an error while updating sensors data. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`."
             )
+        finally:
+            update_time = monotonic() - start_time
+            self.logger.debug(
+                f"Sensors data update finished in {update_time:.1f} s."
+            )
         try:
             self.send_data()
         except Exception as e:
@@ -59,12 +64,12 @@ class Sensors(SubroutineTemplate):
         loop_time = monotonic() - start_time
         if loop_time > self._loop_timeout:  # pragma: no cover
             self.logger.warning(
-                f"Sensors data loop took {loop_time:.1f}. This either "
+                f"Sensors data routine took {loop_time:.1f}. This either "
                 f"indicates errors while data retrieval or the need to "
                 f"adapt 'SENSOR_LOOP_PERIOD'."
             )
         self.logger.debug(
-            f"Sensors data update finished in {loop_time:.1f} s."
+            f"Sensors data routine finished in {loop_time:.1f} s."
         )
 
     def _compute_if_manageable(self) -> bool:
