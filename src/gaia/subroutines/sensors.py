@@ -39,7 +39,7 @@ class Sensors(SubroutineTemplate):
         self._data_lock = Lock()
         self._finish__init__()
 
-    def _sensors_routine(self) -> None:
+    def routine(self) -> None:
         start_time = monotonic()
         self.logger.debug("Starting sensors data update routine ...")
         try:
@@ -79,7 +79,7 @@ class Sensors(SubroutineTemplate):
             f"Starting the sensors loop. It will run every "
             f"{self._loop_timeout:.1f} s.")
         self.ecosystem.engine.scheduler.add_job(
-            func=self._sensors_routine,
+            func=self.routine,
             id=f"{self.ecosystem.uid}-sensors_routine",
             trigger=IntervalTrigger(seconds=self._loop_timeout, jitter=self._loop_timeout/10),
         )

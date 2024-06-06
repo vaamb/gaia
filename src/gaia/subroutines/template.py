@@ -38,6 +38,12 @@ class SubroutineTemplate(ABC):
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
 
     @abstractmethod
+    def routine(self) -> None:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )
+
+    @abstractmethod
     def _compute_if_manageable(self) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
