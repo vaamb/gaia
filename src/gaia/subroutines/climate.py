@@ -179,7 +179,7 @@ class Climate(SubroutineTemplate):
             )
             self.stop()
 
-    def _climate_routine(self) -> None:
+    def routine(self) -> None:
         start_time = monotonic()
         try:
             self._update_climate_actuators()
@@ -215,7 +215,7 @@ class Climate(SubroutineTemplate):
             pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
             pid.reset()
         self.ecosystem.engine.scheduler.add_job(
-            func=self._climate_routine,
+            func=self.routine,
             id=f"{self.ecosystem.uid}-climate_routine",
             trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
         )

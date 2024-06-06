@@ -30,16 +30,16 @@ class Light(SubroutineTemplate):
         self._any_dimmable_light: bool | None = None
         self._finish__init__()
 
-    def _safe_light_routine(self) -> None:
+    def routine(self) -> None:
         try:
-            self._light_routine()
+            self._update_light_actuators()
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while running the light routine. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`."
             )
 
-    def _light_routine(self) -> None:
+    def _update_light_actuators(self) -> None:
         pid: HystericalPID = self.get_pid()
         target, hysteresis = self.compute_target()
         pid.target = target
@@ -80,7 +80,7 @@ class Light(SubroutineTemplate):
             f"Starting the light loop. It will run every "
             f"{self._loop_period:.2f} s.")
         self.ecosystem.engine.scheduler.add_job(
-            func=self._safe_light_routine,
+            func=self.routine,
             id=f"{self.ecosystem.uid}-light_routine",
             trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/20),
         )

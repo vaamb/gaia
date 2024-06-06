@@ -30,7 +30,7 @@ class Health(SubroutineTemplate):
     def _start_scheduler(self) -> None:
         h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
         self.ecosystem.engine.scheduler.add_job(
-            func=self._health_routine,
+            func=self.routine,
             id=f"{self.ecosystem.uid}-health_routine",
             trigger=CronTrigger(hour=h, minute=m, jitter=5.0),
             misfire_grace_time=15 * 60,
@@ -61,7 +61,16 @@ class Health(SubroutineTemplate):
             # TODO: change Exception
             raise Exception
 
-    def _health_routine(self) -> None:
+    def routine(self) -> None:
+        try:
+            self._update_health_data()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while running the health routine. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+            )
+
+    def _update_health_data(self) -> None:
         # If webcam: turn it off and restart after
         light_running = self.ecosystem.get_subroutine_status("light")
         if light_running:
