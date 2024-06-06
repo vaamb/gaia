@@ -13,7 +13,6 @@ from uuid import UUID
 import weakref
 
 from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.cron import CronTrigger
 from pydantic import ValidationError
 
 from dispatcher import EventHandler
@@ -173,15 +172,15 @@ class Events(EventHandler):
         self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
     def _schedule_jobs(self) -> None:
-        self.engine.scheduler.add_job(
-            func=self.ping,
+        self.engine.scheduler.add_schedule(
+            func_or_task_id=self.ping,
             id="events-ping",
             trigger=IntervalTrigger(seconds=15),
         )
         self._jobs_scheduled = True
 
     def _unschedule_jobs(self) -> None:
-        self.engine.scheduler.remove_job(job_id="events-ping")
+        self.engine.scheduler.remove_schedule("events-ping")
         self._jobs_scheduled = False
 
     def ping(self) -> None:
