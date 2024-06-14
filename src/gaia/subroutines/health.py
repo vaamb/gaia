@@ -41,7 +41,7 @@ class Health(SubroutineTemplate):
         self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.uid}-health_routine")
         self.logger.info("The tasks scheduler was closed properly")
 
-    def analyse_picture(self) -> None:
+    async def analyse_picture(self) -> None:
         self.logger.info(f"Starting analysis of {self._ecosystem} image")
         # If got an image, analyse it
         if self._imageIO.getbuffer().nbytes:
@@ -61,34 +61,34 @@ class Health(SubroutineTemplate):
             # TODO: change Exception
             raise Exception
 
-    def routine(self) -> None:
+    async def routine(self) -> None:
         try:
-            self._update_health_data()
+            await self._update_health_data()
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while running the health routine. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`."
             )
 
-    def _update_health_data(self) -> None:
+    async def _update_health_data(self) -> None:
         # If webcam: turn it off and restart after
         light_running = self.ecosystem.get_subroutine_status("light")
         if light_running:
             light_subroutine: "Light" = self.ecosystem.subroutines["light"]
             light_mode = light_subroutine.actuator_handler.mode
             light_status = light_subroutine.actuator_handler.status
-            light_subroutine.turn_light(gv.ActuatorModePayload.on)
+            await light_subroutine.turn_light(gv.ActuatorModePayload.on)
             self.take_picture()
             if light_mode is gv.ActuatorMode.automatic:
-                light_subroutine.turn_light(gv.ActuatorModePayload.automatic)
+                await light_subroutine.turn_light(gv.ActuatorModePayload.automatic)
             else:
                 if light_status:
-                    light_subroutine.turn_light(gv.ActuatorModePayload.on)
+                    await light_subroutine.turn_light(gv.ActuatorModePayload.on)
                 else:
-                    light_subroutine.turn_light(gv.ActuatorModePayload.off)
+                    await light_subroutine.turn_light(gv.ActuatorModePayload.off)
         else:
             self.take_picture()
-        self.analyse_picture()
+        await self.analyse_picture()
 
     def _compute_if_manageable(self) -> bool:
         cameras_uid = self.config.get_IO_group_uids(gv.HardwareType.camera)
@@ -101,7 +101,7 @@ class Health(SubroutineTemplate):
         self.logger.warning("No health camera detected.")
         return False
 
-    def _start(self) -> None:
+    async def _start(self) -> None:
         check_dependencies("camera")
         if not self.ecosystem.get_subroutine_status("light"):
             self.logger.warning(
@@ -110,7 +110,7 @@ class Health(SubroutineTemplate):
                 "taking the image."
             )
 
-    def _stop(self) -> None:
+    async def _stop(self) -> None:
         self.hardware = {}
 
     """API calls"""
