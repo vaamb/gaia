@@ -13,10 +13,9 @@ from uuid import UUID
 import weakref
 
 from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.cron import CronTrigger
 from pydantic import ValidationError
 
-from dispatcher import EventHandler
+from dispatcher import AsyncEventHandler
 import gaia_validators as gv
 
 from gaia import Ecosystem, EcosystemConfig, Engine
@@ -95,7 +94,7 @@ crud_links_dict: dict[CrudEventName, CrudLinks] = {
 }
 
 
-class Events(EventHandler):
+class Events(AsyncEventHandler):
     """A class holding all the events coming from event-dispatcher
 
     :param engine: an `Engine` instance
@@ -159,7 +158,7 @@ class Events(EventHandler):
             and monotonic() - self._last_heartbeat < 30.0
         )
 
-    def send_payload_if_connected(
+    async def send_payload_if_connected(
             self,
             payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None,
@@ -170,7 +169,7 @@ class Events(EventHandler):
                 f"Events handler not currently connected. Emission of event "
                 f"'{payload_name}' aborted.")
             return
-        self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
+        await self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
     def _schedule_jobs(self) -> None:
         self.engine.scheduler.add_job(
@@ -184,52 +183,52 @@ class Events(EventHandler):
         self.engine.scheduler.remove_job(job_id="events-ping")
         self._jobs_scheduled = False
 
-    def ping(self) -> None:
+    async def ping(self) -> None:
         if self._dispatcher.connected:
             ecosystems = [{
                 "uid": ecosystem.uid,
                 "status": ecosystem.started,
             } for ecosystem in self.ecosystems.values()]
             self.logger.debug("Sending 'ping'.")
-            self.emit("ping", data=ecosystems, ttl=20)
+            await self.emit("ping", data=ecosystems, ttl=20)
 
-    def on_pong(self) -> None:
+    async def on_pong(self) -> None:
         self.logger.debug("Received 'pong'.")
         self._last_heartbeat = monotonic()
 
-    def register(self) -> None:
+    async def register(self) -> None:
         data = gv.EnginePayload(
             engine_uid=self.engine.config.app_config.ENGINE_UID,
             address=local_ip_address(),
         ).model_dump()
-        result = self.emit("register_engine", data=data, ttl=15)
+        result = await self.emit("register_engine", data=data, ttl=15)
         if result:
             self.logger.debug("Registration request sent.")
         else:
             self.logger.warning("Registration request could not be sent.")
 
-    def send_ecosystems_info(
+    async def send_ecosystems_info(
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
-        self.send_payload("places_list")
+        await self.send_payload("places_list")
         uids = self.filter_uids(ecosystem_uids)
-        self.send_payload("base_info", uids)
-        self.send_payload("management", uids)
-        self.send_payload("environmental_parameters", uids)
-        self.send_payload("hardware", uids)
-        self.send_payload("actuator_data", uids)
-        self.send_payload("light_data", uids)
+        await self.send_payload("base_info", uids)
+        await self.send_payload("management", uids)
+        await self.send_payload("environmental_parameters", uids)
+        await self.send_payload("hardware", uids)
+        await self.send_payload("actuator_data", uids)
+        await self.send_payload("light_data", uids)
 
-    def on_connect(self, environment) -> None:  # noqa
+    async def on_connect(self, environment) -> None:  # noqa
         self.logger.info("Connection to message broker successful.")
         self.logger.info("Will try to register the engine to Ouranos.")
-        self.register()
+        await self.register()
 
-    def on_disconnect(self, *args) -> None:  # noqa
+    async def on_disconnect(self, *args) -> None:  # noqa
         if self.engine.stopping:
             self.logger.info("Engine requested to disconnect from the broker.")
-            return # The Engine takes care to shut down the scheduler and the jobs running
+            return  # The Engine takes care to shut down the scheduler and the jobs running
         elif self.registered:
             self.logger.warning("Dispatcher disconnected from the broker.")
         else:
@@ -237,30 +236,30 @@ class Events(EventHandler):
         if self._jobs_scheduled:
             self._unschedule_jobs()
 
-    def on_register(self) -> None:
+    async def on_register(self) -> None:
         self.registered = False
         self.logger.info("Received registration request from Ouranos.")
         sleep(0.25)
-        self.register()
+        await self.register()
 
-    def on_registration_ack(self, host_uid: str) -> None:
+    async def on_registration_ack(self, host_uid: str) -> None:
         if self._dispatcher.host_uid != UUID(host_uid):
             self.logger.warning(
                 "Received a registration acknowledgment for another dispatcher.")
             return
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info.")
-        self.send_ecosystems_info()
+        await self.send_ecosystems_info()
         self.logger.info("Initial ecosystems info sent.")
         if self.use_db:
-            self.send_buffered_data()
+            await self.send_buffered_data()
         self.registered = True
         sleep(0.75)
         if not self._jobs_scheduled:
             self._schedule_jobs()
-        self.emit("initialized", ttl=15)
+        await self.emit("initialized", ttl=15)
 
-    def on_initialized_ack(self, missing_data: list | None = None) -> None:
+    async def on_initialized_ack(self, missing_data: list | None = None) -> None:
         if missing_data is None:
             self.logger.info("Ouranos successfully received ecosystems info.")
         else:
@@ -333,7 +332,7 @@ class Events(EventHandler):
         payload_dict: gv.EcosystemPayloadDict = payload.model_dump()
         return payload_dict
 
-    def send_payload(
+    async def send_payload(
             self,
             payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None,
@@ -343,7 +342,7 @@ class Events(EventHandler):
         payload = self.get_payload(payload_name, ecosystem_uids)
         if payload:
             try:
-                result = self.emit(payload_name, data=payload, ttl=ttl)
+                result = await self.emit(payload_name, data=payload, ttl=ttl)
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while emitting event '{payload_name}'. "
@@ -359,11 +358,11 @@ class Events(EventHandler):
             self.logger.debug(f"No payload for event '{payload_name}' found.")
             return False
 
-    def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
+    async def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
         message["actuator"] = gv.HardwareType.light
-        self.on_turn_actuator(message)
+        await self.on_turn_actuator(message)
 
-    def on_turn_actuator(self, message: gv.TurnActuatorPayloadDict) -> None:
+    async def on_turn_actuator(self, message: gv.TurnActuatorPayloadDict) -> None:
         data: gv.TurnActuatorPayloadDict = self.validate_payload(
             message, gv.TurnActuatorPayload)
         ecosystem_uid: str = data["ecosystem_uid"]
@@ -376,7 +375,7 @@ class Events(EventHandler):
             )
 
     # TODO: use CRUD
-    def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
+    async def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
         data: gv.ManagementConfigPayloadDict = self.validate_payload(
             message, gv.ManagementConfigPayload)
         ecosystem_uid: str = data["uid"]
@@ -384,7 +383,7 @@ class Events(EventHandler):
             for management, status in data["data"].items():
                 self.ecosystems[ecosystem_uid].config.set_management(management, status)
             self.engine.config.save(ConfigType.ecosystems)
-            self.send_payload("management", ecosystem_uids=[ecosystem_uid])
+            await self.send_payload("management", ecosystem_uids=[ecosystem_uid])
 
     def _get_crud_function(
             self,
@@ -429,7 +428,7 @@ class Events(EventHandler):
 
             return get_function(base_obj, crud_link.func_or_attr_name)
 
-    def on_crud(self, message: gv.CrudPayloadDict) -> None:
+    async def on_crud(self, message: gv.CrudPayloadDict) -> None:
         # Validate the payload
         data: gv.CrudPayloadDict = self.validate_payload(message, gv.CrudPayload)
         # Verify it is the intended recipient
@@ -460,7 +459,7 @@ class Events(EventHandler):
             self.logger.error(
                 f"Encountered an error while treating CRUD request "
                 f"`{crud_uuid}`. ERROR msg: `{e.__class__.__name__}: {e}`.")
-            self.emit(
+            await self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
                     uuid=crud_uuid,
@@ -470,7 +469,7 @@ class Events(EventHandler):
             )
             return
         else:
-            self.emit(
+            await self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
                     uuid=crud_uuid,
@@ -488,9 +487,9 @@ class Events(EventHandler):
                 f"No CRUD payload linked to action '{action.name} {target}' "
                 f"was found. Updated data won't be sent to Ouranos.")
         payload_name = crud_link.payload_name
-        self.send_payload(payload_name=payload_name, ecosystem_uids=ecosystem_uid)
+        await self.send_payload(payload_name=payload_name, ecosystem_uids=ecosystem_uid)
 
-    def send_buffered_data(self) -> None:
+    async def send_buffered_data(self) -> None:
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
@@ -499,9 +498,9 @@ class Events(EventHandler):
         with self.db.scoped_session() as session:
             for payload in SensorBuffer.get_buffered_data(session):
                 payload_dict: gv.BufferedSensorsDataPayloadDict = payload.model_dump()
-                self.emit(event="buffered_sensors_data", data=payload_dict)
+                await self.emit(event="buffered_sensors_data", data=payload_dict)
 
-    def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
+    async def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "

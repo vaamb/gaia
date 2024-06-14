@@ -33,7 +33,6 @@ database = [
     "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git",
 ]
 dispatcher = [
-    "kombu~=5.3.1",
     "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git",
 ]
 test = [
