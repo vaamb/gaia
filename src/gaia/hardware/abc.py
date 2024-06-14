@@ -12,6 +12,8 @@ from typing import Any, Literal, Self, Type
 import weakref
 from weakref import WeakValueDictionary
 
+from anyio.to_thread import run_sync
+
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
@@ -450,12 +452,12 @@ class gpioHardware(Hardware):
 
 
 class Switch(Hardware):
-    def turn_on(self) -> None:
+    async def turn_on(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
-    def turn_off(self) -> None:
+    async def turn_off(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
@@ -472,7 +474,7 @@ class Dimmer(Hardware):
                 "being PWM-able"
             )
 
-    def set_pwm_level(self, level) -> None:
+    async def set_pwm_level(self, level) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
@@ -553,26 +555,26 @@ class BaseSensor(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class LightSensor(BaseSensor):
-    def get_lux(self) -> float | None:
+    async def get_lux(self) -> float | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
 
 class gpioSensor(BaseSensor, gpioHardware):
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -586,7 +588,7 @@ class i2cSensor(BaseSensor, i2cHardware):
                 kwargs["address"] = f"I2C_{hex(default_address)}"
         super().__init__(*args, **kwargs)
 
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -605,12 +607,12 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    def get_image(self) -> Image | None:
+    async def get_image(self) -> Image | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    def get_video(self) -> io.BytesIO | None:
+    async def get_video(self) -> io.BytesIO | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -624,10 +626,11 @@ class Camera(Hardware):
                 base_dir = self.subroutine.ecosystem.engine.config.base_dir
             self._camera_dir = base_dir/f"camera/{self.subroutine.ecosystem.name}"
             if not self._camera_dir.exists():
+                # TODO: maybe make non blocking ?
                 os.mkdir(self._camera_dir)
         return self._camera_dir
 
-    def save_image(
+    async def save_image(
             self,
             image: Image,
             name: str | None = None,
@@ -638,5 +641,5 @@ class Camera(Hardware):
                 timestamp = datetime.now(tz=timezone.utc)
             name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
         path = self.camera_dir/name
-        image.save(path)
+        await run_sync(image.save, path)
         return path
