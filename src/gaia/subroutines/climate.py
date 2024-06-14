@@ -109,14 +109,14 @@ class Climate(SubroutineTemplate):
             return regulated_parameters
         return regulated_parameters
 
-    def _update_climate_actuators(self) -> None:
+    async def _update_climate_actuators(self) -> None:
         if not self.ecosystem.get_subroutine_status("sensors"):
             if not self.config.get_management("sensors"):
                 self.logger.error(
                     "The climate subroutine requires sensors management in order to "
                     "work. Stopping the climate subroutine."
                 )
-                self.stop()
+                await self.stop()
                 return
             else:
                 self.logger.debug(
@@ -162,15 +162,15 @@ class Climate(SubroutineTemplate):
                 if not actuator_handler.get_linked_actuators():
                     # No actuator to act on, go next
                     continue
-                actuator_handler.check_countdown()
+                await actuator_handler.check_countdown()
                 expected_status = actuator_handler.compute_expected_status(
                     pid_output)
                 if expected_status:
-                    actuator_handler.turn_on()
-                    actuator_handler.set_level(abs(pid_output))
+                    await actuator_handler.turn_on()
+                    await actuator_handler.set_level(abs(pid_output))
                 else:
-                    actuator_handler.turn_off()
-                    actuator_handler.set_level(0.0)
+                    await actuator_handler.turn_off()
+                    await actuator_handler.set_level(0.0)
 
     def _check_misses(self) -> None:
         if self._sensor_miss >= MISSES_BEFORE_STOP:
@@ -180,10 +180,10 @@ class Climate(SubroutineTemplate):
             )
             self.stop()
 
-    def routine(self) -> None:
+    async def routine(self) -> None:
         start_time = monotonic()
         try:
-            self._update_climate_actuators()
+            await self._update_climate_actuators()
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while running the climate routine. "
@@ -207,7 +207,7 @@ class Climate(SubroutineTemplate):
         else:
             return True
 
-    def _start(self) -> None:
+    async def _start(self) -> None:
         # self.update_regulated_parameters()  # Done in _compute_if_manageable
         self.logger.info(
             f"Starting the climate loop. It will run every "
@@ -220,14 +220,13 @@ class Climate(SubroutineTemplate):
             id=f"{self.ecosystem.uid}-climate_routine",
             trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
         )
-        self._update_climate_actuators()
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
                 actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
                 actuator_handler.activate()
 
-    def _stop(self) -> None:
+    async def _stop(self) -> None:
         self.ecosystem.engine.scheduler.remove_job(
             f"{self.ecosystem.uid}-climate_routine")
         for parameter in self.regulated_parameters:
@@ -247,8 +246,8 @@ class Climate(SubroutineTemplate):
                 hardware_needed = hardware_needed | extra
         return hardware_needed
 
-    def refresh_hardware(self) -> None:
-        super().refresh_hardware()
+    async def refresh_hardware(self) -> None:
+        await super().refresh_hardware()
         for actuator_type in gv.HardwareType.climate_actuator:
             actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
             actuator_handler.reset_cached_actuators()
@@ -280,7 +279,7 @@ class Climate(SubroutineTemplate):
         hysteresis = parameter.hysteresis * chaos_factor
         return target, hysteresis
 
-    def turn_climate_actuator(
+    async def turn_climate_actuator(
             self,
             climate_actuator: gv.HardwareType.climate_actuator | str,
             turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
@@ -292,7 +291,7 @@ class Climate(SubroutineTemplate):
         if self._started:
             actuator_handler: ActuatorHandler = \
                 self.ecosystem.actuator_hub.get_handler(climate_actuator)
-            actuator_handler.turn_to(turn_to, countdown)
+            await actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
                 f"Climate subroutine is not started in ecosystem {self.ecosystem}")
