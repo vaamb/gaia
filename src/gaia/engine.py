@@ -9,8 +9,7 @@ from threading import Event, Thread
 from time import sleep
 import typing as t
 
-from apscheduler.executors.pool import BasePoolExecutor
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
@@ -34,13 +33,6 @@ SIGNALS = (
 )
 
 
-class APSchedulerExecutor(BasePoolExecutor):
-    # Adapt the recipe from apscheduler.executors.pool.ThreadPoolExecutor to use
-    #  an existing concurrent.futures.ThreadPoolExecutor
-    def __init__(self, pool: ThreadPoolExecutor):
-        super().__init__(pool)
-
-
 class Engine(metaclass=SingletonMeta):
     """An Engine class that will coordinate several Ecosystem instances.
 
@@ -59,8 +51,7 @@ class Engine(metaclass=SingletonMeta):
         self._virtual_world: VirtualWorld | None = None
         self._executor: ThreadPoolExecutor = ThreadPoolExecutor(
                 thread_name_prefix=f"Engine_ThreadPoolExecutor", max_workers=15)
-        self._scheduler: BackgroundScheduler = BackgroundScheduler(
-            executors={"default": APSchedulerExecutor(self._executor)})
+        self._scheduler: AsyncIOScheduler = AsyncIOScheduler()
         if self.config.app_config.VIRTUALIZATION:
             self.logger.info("Using ecosystem virtualization.")
             virtual_cfg = self.config.app_config.VIRTUALIZATION_PARAMETERS
@@ -97,7 +88,7 @@ class Engine(metaclass=SingletonMeta):
         return self._executor
 
     @property
-    def scheduler(self) -> BackgroundScheduler:
+    def scheduler(self) -> AsyncIOScheduler:
         return self._scheduler
 
     # ---------------------------------------------------------------------------
