@@ -162,6 +162,7 @@ class Climate(SubroutineTemplate):
                 if not actuator_handler.get_linked_actuators():
                     # No actuator to act on, go next
                     continue
+                actuator_handler.check_countdown()
                 expected_status = actuator_handler.compute_expected_status(
                     pid_output)
                 if expected_status:

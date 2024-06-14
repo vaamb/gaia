@@ -318,14 +318,14 @@ class ActuatorHandler:
     def mode(self) -> gv.ActuatorMode:
         return self._mode
 
-    def set_mode(self, value: gv.ActuatorMode) -> None:
+    async def set_mode(self, value: gv.ActuatorMode) -> None:
         self._set_mode_no_update(value)
         if self._mode != self._last_mode:
             # TODO: reset associated PID ?
             self.logger.info(
                 f"{self.type.name.capitalize()} has been set to "
                 f"'{self.mode.name}' mode")
-            self.send_actuators_state()
+            await self.send_actuators_state()
             self._last_mode = self._mode
 
     def _set_mode_no_update(self, value: gv.ActuatorMode) -> None:
@@ -340,22 +340,22 @@ class ActuatorHandler:
     def status(self) -> bool:
         return self._status
 
-    def set_status(self, value: bool) -> None:
-        self._set_status_no_update(value)
+    async def set_status(self, value: bool) -> None:
+        await self._set_status_no_update(value)
         if self._status != self._last_status:
             self.logger.info(
                 f"{self.type.name.capitalize()} has been turned "
                 f"{'on' if self.status else 'off'}")
-            self.send_actuators_state()
+            await self.send_actuators_state()
             self._last_status = self._status
 
-    def turn_on(self) -> None:
-        self.set_status(True)
+    async def turn_on(self) -> None:
+        await self.set_status(True)
 
-    def turn_off(self) -> None:
-        self.set_status(False)
+    async def turn_off(self) -> None:
+        await self.set_status(False)
 
-    def _set_status_no_update(self, value: bool) -> None:
+    async def _set_status_no_update(self, value: bool) -> None:
         self._status = value
         actuators_linked = self.get_linked_actuators()
         if not actuators_linked:
@@ -367,9 +367,9 @@ class ActuatorHandler:
         for actuator in actuators_linked:
             if isinstance(actuator, Switch):
                 if value:
-                    actuator.turn_on()
+                    await actuator.turn_on()
                 else:
-                    actuator.turn_off()
+                    await actuator.turn_off()
 
     @property
     def last_status(self) -> bool:
@@ -379,11 +379,11 @@ class ActuatorHandler:
     def level(self) -> float | None:
         return self._level
 
-    def set_level(self, pwm_level: float) -> None:
+    async def set_level(self, pwm_level: float) -> None:
         self._level = pwm_level
         for actuator in self.get_linked_actuators():
             if isinstance(actuator, Dimmer):
-                actuator.set_pwm_level(pwm_level)
+                await actuator.set_pwm_level(pwm_level)
 
     @property
     def countdown(self) -> float | None:
@@ -398,10 +398,10 @@ class ActuatorHandler:
         self._timer_on = False
         self._time_limit = 0.0
 
-    def check_countdown(self) -> None:
+    async def check_countdown(self) -> None:
         countdown = self.countdown
         if countdown is not None and countdown <= 0.1:
-            self.set_mode(gv.ActuatorMode.automatic)
+            await self.set_mode(gv.ActuatorMode.automatic)
             self.reset_countdown()
 
     def increase_countdown(self, delta_time: float) -> None:
@@ -421,7 +421,7 @@ class ActuatorHandler:
         else:
             raise AttributeError("No timer set, you cannot reduce the countdown")
 
-    def turn_to(
+    async def turn_to(
             self,
             turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
@@ -434,9 +434,9 @@ class ActuatorHandler:
         else:
             self._set_mode_no_update(gv.ActuatorMode.manual)
             if turn_to == gv.ActuatorModePayload.on:
-                self._set_status_no_update(True)
+                await self._set_status_no_update(True)
             else:  # turn_to == ActuatorModePayload.off
-                self._set_status_no_update(False)
+                await self._set_status_no_update(False)
             if countdown:
                 self._time_limit = 0.0
                 self.increase_countdown(countdown)
@@ -449,20 +449,19 @@ class ActuatorHandler:
             self.logger.info(
                 f"{self.type.name.capitalize()} has been turned "
                 f"{'on' if self.status else 'off'} with '{self.mode.name}' mode.")
-            self.send_actuators_state()
+            await self.send_actuators_state()
         self._last_mode = self.mode
         self._last_status = self.status
 
-    def send_actuators_state(self) -> None:
+    async def send_actuators_state(self) -> None:
         if (
                 self.ecosystem.engine.use_message_broker
                 and self.ecosystem.event_handler.registered
         ):
-            self.ecosystem.event_handler.send_payload_if_connected(
+            await self.ecosystem.event_handler.send_payload_if_connected(
                 "actuator_data", ecosystem_uids=[self.ecosystem.config.uid])
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
-        self.check_countdown()
         if self.mode == gv.ActuatorMode.automatic:
             if expected_level is None:
                 self.logger.error(
