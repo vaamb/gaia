@@ -38,7 +38,7 @@ class SubroutineTemplate(ABC):
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
 
     @abstractmethod
-    def routine(self) -> None:
+    async def routine(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -50,13 +50,13 @@ class SubroutineTemplate(ABC):
         )
 
     @abstractmethod
-    def _start(self) -> None:
+    async def _start(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
     @abstractmethod
-    def _stop(self) -> None:
+    async def _stop(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -102,7 +102,7 @@ class SubroutineTemplate(ABC):
     def executor(self) -> ThreadPoolExecutor:
         return self.ecosystem.engine.executor
 
-    def add_hardware(
+    async def add_hardware(
             self,
             hardware_config: gv.HardwareConfig,
     ) -> BaseSensor | Camera | Dimmer | Hardware | Switch | None:
@@ -117,9 +117,9 @@ class SubroutineTemplate(ABC):
             hardware_class: Type[Hardware] = self.hardware_choices[model]
             hardware = hardware_class.from_hardware_config(hardware_config, self)
             if isinstance(hardware, Switch):
-                hardware.turn_off()
+                await hardware.turn_off()
             if isinstance(hardware, Dimmer):
-                hardware.set_pwm_level(0)
+                await hardware.set_pwm_level(0)
             self.logger.debug(f"Hardware {hardware.name} has been set up.")
             self.hardware[hardware.uid] = hardware
             return hardware
@@ -130,7 +130,7 @@ class SubroutineTemplate(ABC):
                 f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
 
-    def remove_hardware(self, hardware_uid: str) -> None:
+    async def remove_hardware(self, hardware_uid: str) -> None:
         if not self.hardware.get(hardware_uid):
             error_msg =f"Hardware '{hardware_uid}' not found."
             self.logger.error(error_msg)
@@ -138,9 +138,9 @@ class SubroutineTemplate(ABC):
 
         hardware = self.hardware[hardware_uid]
         if isinstance(hardware, Switch):
-            hardware.turn_off()
+            await hardware.turn_off()
         if isinstance(hardware, Dimmer):
-            hardware.set_pwm_level(0)
+            await hardware.set_pwm_level(0)
         del self.hardware[hardware_uid]
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
@@ -150,16 +150,16 @@ class SubroutineTemplate(ABC):
             "This method must be implemented in a subclass."
         )
 
-    def refresh_hardware(self) -> None:
+    async def refresh_hardware(self) -> None:
         hardware_needed: set[str] = self.get_hardware_needed_uid()
         hardware_existing: set[str] = set(self.hardware)
         for hardware_uid in hardware_needed - hardware_existing:
             hardware_config = self.config.get_hardware_config(hardware_uid)
-            self.add_hardware(hardware_config)
+            await self.add_hardware(hardware_config)
         for hardware_uid in hardware_existing - hardware_needed:
-            self.remove_hardware(hardware_uid)
+            await self.remove_hardware(hardware_uid)
 
-    def start(self) -> None:
+    async def start(self) -> None:
         if self.started:
             raise RuntimeError("The subroutine is already running.")
         if not self.enabled:
@@ -168,8 +168,8 @@ class SubroutineTemplate(ABC):
             raise RuntimeError("The subroutine is not manageable.")
         self.logger.debug("Starting the subroutine.")
         try:
-            self.refresh_hardware()
-            self._start()
+            await self.refresh_hardware()
+            await self._start()
             self.logger.debug("Successfully started.")
             self._started = True
         except Exception as e:
@@ -180,14 +180,14 @@ class SubroutineTemplate(ABC):
             )
             raise e
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         if not self.started:
             raise RuntimeError("The subroutine is not running.")
         self.logger.debug(f"Stopping the subroutine.")
         try:
-            self._stop()
+            await self._stop()
             for hardware_uid in [*self.hardware.keys()]:
-                self.remove_hardware(hardware_uid)
+                await self.remove_hardware(hardware_uid)
             self.hardware = {}
             self._started = False
             self.logger.debug("Successfully stopped.")
