@@ -1,5 +1,4 @@
-from gaia.hardware.abc import gpioDimmer
-from gaia.hardware.actuators.GPIO import gpioSwitch
+from gaia.hardware.actuators.GPIO import gpioDimmer, gpioSwitch
 from gaia.hardware.virtual import virtualHardware
 
 
