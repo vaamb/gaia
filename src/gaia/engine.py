@@ -22,7 +22,7 @@ from gaia.virtual import VirtualWorld
 
 if t.TYPE_CHECKING:
     from dispatcher import AsyncDispatcher
-    from sqlalchemy_wrapper import SQLAlchemyWrapper
+    from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
     from gaia.events import Events
 
@@ -59,7 +59,7 @@ class Engine(metaclass=SingletonMeta):
             self._virtual_world = VirtualWorld(self, **virtual_world_cfg)
         self._message_broker: AsyncDispatcher | None = None
         self._event_handler: Events | None = None
-        self._db: SQLAlchemyWrapper | None = None
+        self._db: AsyncSQLAlchemyWrapper | None = None
         self.plugins_initialized: bool = False
         self._thread: Thread | None = None
         self._running_event = Event()
@@ -193,7 +193,7 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   DB
     # ---------------------------------------------------------------------------
-    def init_database(self) -> None:
+    async def init_database(self) -> None:
         if not self.config.app_config.USE_DATABASE:
             raise RuntimeError(
                 "Cannot initialize the database if the parameter 'USE_DATABASE' "
@@ -212,7 +212,7 @@ class Engine(metaclass=SingletonMeta):
             if key.isupper()
         }
         self.db.init(dict_cfg)
-        self.db.create_all()
+        await self.db.create_all()
 
     def start_database(self) -> None:
         self.logger.info("Starting the database.")
@@ -235,7 +235,7 @@ class Engine(metaclass=SingletonMeta):
             self.scheduler.remove_job("log_sensors_data")
 
     @property
-    def db(self) -> "SQLAlchemyWrapper":
+    def db(self) -> AsyncSQLAlchemyWrapper:
         if self._db is None:
             raise AttributeError(
                 "'db' is not valid as the database is currently not used. To use "
@@ -243,7 +243,7 @@ class Engine(metaclass=SingletonMeta):
         return self._db
 
     @db.setter
-    def db(self, value: "SQLAlchemyWrapper" | None) -> None:
+    def db(self, value: AsyncSQLAlchemyWrapper | None) -> None:
         self._db = value
 
     @property

@@ -30,6 +30,7 @@ camera = [
     "Pillow~=9.5.0",
 ]
 database = [
+    "aiosqlite~=0.20.0",
     "SQLAlchemy~=2.0.0",
     "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git",
 ]

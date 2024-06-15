@@ -31,7 +31,7 @@ class BaseConfig:
     def SQLALCHEMY_DATABASE_URI(self):
         return (
             os.environ.get("GAIA_DATABASE_URI") or
-            "sqlite:///" + os.path.join(self.DIR, "gaia_data.db")
+            "sqlite+aiosqlite:///" + os.path.join(self.DIR, "gaia_data.db")
         )
 
     COMMUNICATE_WITH_OURANOS = False

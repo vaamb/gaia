@@ -495,8 +495,8 @@ class Events(AsyncEventHandler):
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'.")
         SensorBuffer = self.sensor_buffer_cls  # noqa
-        with self.db.scoped_session() as session:
-            for payload in SensorBuffer.get_buffered_data(session):
+        async with self.db.scoped_session() as session:
+            async for payload in SensorBuffer.get_buffered_data(session):
                 payload_dict: gv.BufferedSensorsDataPayloadDict = payload.model_dump()
                 await self.emit(event="buffered_sensors_data", data=payload_dict)
 
@@ -508,8 +508,8 @@ class Events(AsyncEventHandler):
         data: gv.RequestResultDict = self.validate_payload(
             message, gv.RequestResult)
         SensorBuffer = self.sensor_buffer_cls  # noqa
-        with self.db.scoped_session() as session:
+        async with self.db.scoped_session() as session:
             if data["status"] == gv.Result.success:
-                SensorBuffer.clear_buffer(session, data["uuid"])
+                await SensorBuffer.clear_buffer(session, data["uuid"])
             else:
-                SensorBuffer.clear_uuid(session, data["uuid"])
+                await SensorBuffer.clear_uuid(session, data["uuid"])
