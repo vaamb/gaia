@@ -56,7 +56,6 @@ class Ecosystem:
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
         for subroutine_name in subroutine_names:
             self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
-        self.config.update_chaos_time_window()
         self._started: bool = False
         self.logger.debug(f"Ecosystem initialization successful")
 
@@ -111,15 +110,15 @@ class Ecosystem:
     def lighting_method(self) -> gv.LightMethod:
         return self.config.lighting_method
 
-    def set_lighting_method(
+    async def set_lighting_method(
             self,
             value: gv.LightMethod,
             send_info: bool = True
     ) -> None:
-        self.config.set_lighting_method(value)
+        await self.config.set_lighting_method(value)
         if send_info and self.engine.use_message_broker:
             try:
-                self.engine.event_handler.send_payload_if_connected(
+                await self.engine.event_handler.send_payload_if_connected(
                     "light_data", ecosystem_uids=[self.uid])
             except Exception as e:
                 self.logger.error(
@@ -171,7 +170,7 @@ class Ecosystem:
     def virtualized(self) -> bool:
         return self._virtual_self is not None
 
-    def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
+    async def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
 
         This will mark the subroutine as managed in the configuration file.
@@ -183,9 +182,9 @@ class Ecosystem:
         except KeyError:
             raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
         else:
-            self.config.save()
+            await self.config.save()
 
-    def disable_subroutine(self, subroutine_name: SubroutineNames) -> None:
+    async def disable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Disable a Subroutine
 
         This will mark the subroutine as not managed in the configuration file.
@@ -197,25 +196,25 @@ class Ecosystem:
         except KeyError:
             raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
         else:
-            self.config.save()
+            await self.config.save()
 
-    def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
+    async def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Start a Subroutine
 
         :param subroutine_name: The name of the Subroutine to start
         """
         try:
-            self.subroutines[subroutine_name].start()
+            await self.subroutines[subroutine_name].start()
         except KeyError:
             raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
-    def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
+    async def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutine
 
         :param subroutine_name: The name of the Subroutine to stop
         """
         try:
-            self.subroutines[subroutine_name].stop()
+            await self.subroutines[subroutine_name].stop()
         except KeyError:
             raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
@@ -225,7 +224,7 @@ class Ecosystem:
         except KeyError:
             raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
 
-    def refresh_subroutines(self) -> None:
+    async def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
         # Need to start sensors and lights before other subroutines
@@ -240,7 +239,7 @@ class Ecosystem:
         for subroutine in to_stop:
             self.logger.debug(f"Stopping the subroutine '{subroutine}'.")
             try:
-                self.stop_subroutine(subroutine)
+                await self.stop_subroutine(subroutine)
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while stopping the subroutine "
@@ -249,7 +248,7 @@ class Ecosystem:
         # Then update the already running subroutines
         for subroutine in self.subroutines_started:
             try:
-                self.subroutines[subroutine].refresh_hardware()
+                await self.subroutines[subroutine].refresh_hardware()
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while refreshing the hardware of "
@@ -263,14 +262,14 @@ class Ecosystem:
                 continue
             self.logger.debug(f"Starting the subroutine '{subroutine}'.")
             try:
-                self.start_subroutine(subroutine)
+                await self.start_subroutine(subroutine)
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while starting the subroutine "
                     f"'{subroutine}'. ERROR msg: `{e.__class__.__name__} :{e}`."
                 )
 
-    def start(self):
+    async def start(self):
         """Start the Ecosystem
 
         When started, the Ecosystem will automatically start and stop the
@@ -278,17 +277,18 @@ class Ecosystem:
         """
         if self.started:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
-        self.refresh_lighting_hours()
+        await self.config.update_chaos_time_window()
+        await self.refresh_lighting_hours()
         self.logger.info("Starting the ecosystem")
         if self.virtualized:
             self.virtual_self.start()
-        self.refresh_subroutines()
+        await self.refresh_subroutines()
         if self.engine.use_message_broker and self.event_handler.registered:
-            self.event_handler.send_ecosystems_info(self.uid)
+            await self.event_handler.send_ecosystems_info(self.uid)
         self.logger.debug(f"Ecosystem successfully started")
         self._started = True
 
-    def stop(self):
+    async def stop(self):
         """Stop the Ecosystem"""
         if not self.started:
             raise RuntimeError("Cannot stop an ecosystem that hasn't started")
@@ -296,7 +296,7 @@ class Ecosystem:
         subroutines_to_stop: list[SubroutineNames] = subroutine_names
         for subroutine in reversed(subroutines_to_stop):
             if self.subroutines[subroutine].started:
-                self.subroutines[subroutine].stop()
+                await self.subroutines[subroutine].stop()
         if not any([self.subroutines[subroutine].started
                     for subroutine in self.subroutines]):
             self.logger.debug("Ecosystem successfully stopped")
@@ -315,7 +315,7 @@ class Ecosystem:
     def actuator_data(self) -> gv.ActuatorsDataDict:
         return self.actuator_hub.as_dict()
 
-    def turn_actuator(
+    async def turn_actuator(
             self,
             actuator: gv.HardwareType.actuator | gv.HardwareTypeNames,
             mode: gv.ActuatorModePayload | str = gv.ActuatorModePayload.automatic,
@@ -338,14 +338,14 @@ class Ecosystem:
             if validated_actuator == gv.HardwareType.light:
                 if self.get_subroutine_status("light"):
                     light_subroutine: Light = self.subroutines["light"]
-                    light_subroutine.turn_light(
+                    await light_subroutine.turn_light(
                         turn_to=validated_mode, countdown=countdown)
                 else:
                     raise ValueError("Light subroutine is not running")
             elif validated_actuator in gv.HardwareType.climate_actuator:
                 if self.get_subroutine_status("climate"):
                     climate_subroutine: Climate = self.subroutines["climate"]
-                    climate_subroutine.turn_climate_actuator(
+                    await climate_subroutine.turn_climate_actuator(
                         climate_actuator=validated_actuator, turn_to=validated_mode,
                         countdown=countdown)
                 else:
@@ -362,7 +362,7 @@ class Ecosystem:
         else:
             if self.engine.use_message_broker and self.event_handler.registered:
                 try:
-                    self.event_handler.send_payload_if_connected(
+                    await self.event_handler.send_payload_if_connected(
                         "actuator_data", ecosystem_uids=[self._uid])
                 except Exception as e:
                     msg = e.args[1] if len(e.args) > 1 else e.args[0]
@@ -388,8 +388,8 @@ class Ecosystem:
         return gv.Empty()
 
     # Light
-    def refresh_lighting_hours(self, send_info: bool = True) -> None:
-        self.config.refresh_lighting_hours(send_info=send_info)
+    async def refresh_lighting_hours(self, send_info: bool = True) -> None:
+        await self.config.refresh_lighting_hours(send_info=send_info)
 
     # Health
     @property
