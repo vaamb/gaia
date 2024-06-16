@@ -453,7 +453,9 @@ class Events(AsyncEventHandler):
         # Treat the CRUD request
         try:
             crud_function = self._get_crud_function(action, target, ecosystem_uid)
-            crud_function(**data["data"])
+            result = crud_function(**data["data"])
+            if inspect.isawaitable(result):
+                result = await result
             await self.engine.config.save(ConfigType.ecosystems)
         except Exception as e:
             self.logger.error(
