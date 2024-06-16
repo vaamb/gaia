@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TypedDict
 
-from dispatcher import Dispatcher
+from dispatcher import AsyncDispatcher
 
 
 class EmitDict(TypedDict):
@@ -23,12 +23,12 @@ def get_logs_content(logger_path: Path):
         logger_handle.truncate(0)
 
 
-class MockDispatcher(Dispatcher):
+class MockDispatcher(AsyncDispatcher):
     def __init__(self, namespace: str):
         super().__init__(namespace)
         self.emit_store: list[EmitDict] = []
 
-    def emit(
+    async def emit(
             self,
             event: str,
             data: dict | list | str | tuple | None = None,
@@ -48,5 +48,5 @@ class MockDispatcher(Dispatcher):
     def clear_store(self):
         self.emit_store.clear()
 
-    def start(self, *args, **kwargs) -> None:
+    async def start(self, *args, **kwargs) -> None:
         pass
