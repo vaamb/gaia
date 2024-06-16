@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 import logging
 import math
-from threading import Lock
 from time import monotonic
 import typing
 
@@ -63,7 +62,6 @@ class VirtualWorld(metaclass=SingletonMeta):
         self._temperature: float = avg_temperature
         self._humidity: float = avg_humidity
         self._light: float = avg_midday_light
-        self.lock: Lock = Lock()
         self._dt: datetime | None = None
         self._last_update: float | None = None
 
@@ -298,13 +296,12 @@ class VirtualEcosystem:
             raise RuntimeError("The virtualEcosystem needs to be started "
                                "before computing measures")
         now = monotonic() or now
-        with self.virtual_world.lock:
-            if (
-                self._last_update is None
-                or (now - self._last_update) > self.time_between_measures
-            ):
-                self._measure(now)
-                self._last_update = now
+        if (
+            self._last_update is None
+            or (now - self._last_update) > self.time_between_measures
+        ):
+            self._measure(now)
+            self._last_update = now
 
     def _measure(self, now: float) -> None:
         if not self._start_time:
