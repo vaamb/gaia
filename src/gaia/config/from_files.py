@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+import asyncio
+from asyncio import Condition, Event, Lock, sleep, Task
+from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
 import hashlib
@@ -10,12 +12,12 @@ from math import pi, sin
 from pathlib import Path
 import random
 import string
-from threading import Condition, Event, Lock, RLock, Thread
 import typing as t
 from typing import cast, Type, TypedDict, TypeVar
 import weakref
 from weakref import WeakValueDictionary
 
+from anyio.to_thread import run_sync
 import pydantic
 from pydantic import Field, field_validator
 
@@ -198,7 +200,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._app_config = GaiaConfigHelper.get_config()
         configure_logging(self.app_config)
         self._dirs: dict[str, Path] = {}
-        self._engine: "Engine" | None = None
+        self._engine: Engine | None = None
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         self._sun_times: [str, SunTimesCacheData] = {}
@@ -208,7 +210,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._config_files_lock = Lock()
         self.new_config = Condition()
         self._stop_event = Event()
-        self._thread: Thread | None = None
+        self._task: Task | None = None
         self.configs_loaded: bool = False
 
     def __repr__(self) -> str:
@@ -216,17 +218,17 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def started(self) -> bool:
-        return self._thread is not None
+        return self._task is not None
 
     @property
-    def thread(self) -> Thread:
-        if self._thread is None:
+    def task(self) -> Task:
+        if self._task is None:
             raise AttributeError("'thread' has not been set up")
-        return self._thread
+        return self._task
 
-    @thread.setter
-    def thread(self, thread: Thread | None) -> None:
-        self._thread = thread
+    @task.setter
+    def task(self, thread: Task | None) -> None:
+        self._task = thread
 
     @property
     def engine(self) -> "Engine":
@@ -306,35 +308,35 @@ class EngineConfig(metaclass=SingletonMeta):
         if cfg_type == ConfigType.ecosystems:
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
-                try:
-                    validated: dict[str, EcosystemConfigDict] = \
-                        RootEcosystemsConfigValidator(
-                            **{"config": unvalidated}
-                        ).model_dump()["config"]
-                except pydantic.ValidationError as e:
-                    self.logger.error(
-                        f"Could not validate ecosystems configuration file. "
-                        f"ERROR msg(s): `{format_pydantic_error(e)}`."
-                    )
-                    raise e
-                else:
-                    self._ecosystems_config_dict = self._validate_IO_dict(validated)
-                    self._dump_config(cfg_type)
+            try:
+                validated: dict[str, EcosystemConfigDict] = \
+                    RootEcosystemsConfigValidator(
+                        **{"config": unvalidated}
+                    ).model_dump()["config"]
+            except pydantic.ValidationError as e:
+                self.logger.error(
+                    f"Could not validate ecosystems configuration file. "
+                    f"ERROR msg(s): `{format_pydantic_error(e)}`."
+                )
+                raise e
+            else:
+                self._ecosystems_config_dict = self._validate_IO_dict(validated)
+                self._dump_config(cfg_type)
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
-                try:
-                    validated = PrivateConfigValidator(
-                        **unvalidated
-                    ).model_dump()
-                except pydantic.ValidationError as e:
-                    self.logger.error(
-                        f"Could not validate private configuration file. "
-                        f"ERROR msg(s): `{format_pydantic_error(e)}`."
-                    )
-                    raise e
-                else:
-                    self._private_config = validated
+            try:
+                validated = PrivateConfigValidator(
+                    **unvalidated
+                ).model_dump()
+            except pydantic.ValidationError as e:
+                self.logger.error(
+                    f"Could not validate private configuration file. "
+                    f"ERROR msg(s): `{format_pydantic_error(e)}`."
+                )
+                raise e
+            else:
+                self._private_config = validated
 
     @staticmethod
     def _validate_IO_dict(
@@ -369,37 +371,38 @@ class EngineConfig(metaclass=SingletonMeta):
                 cfg = self._private_config
             yaml.dump(cfg, file)
 
-    def _create_ecosystems_config_file(self):
+    async def _create_ecosystems_config_file(self):
         self._ecosystems_config_dict = {}
         self._create_ecosystem("Default Ecosystem")
-        self._dump_config(ConfigType.ecosystems)
+        await run_sync(self._dump_config, ConfigType.ecosystems)
 
-    def _create_private_config_file(self):
+    async def _create_private_config_file(self):
         self._private_config: PrivateConfigDict = \
             PrivateConfigValidator().model_dump()
-        self._dump_config(ConfigType.private)
+        await run_sync(self._dump_config, ConfigType.private)
 
-    def initialize_configs(self) -> None:
+    async def initialize_configs(self) -> None:
         # This steps needs to remain separate and explicits as it loads files
-        with self.config_files_lock():
+        async with self.config_files_lock():
             for cfg_type in ConfigType:
                 try:
-                    self._load_config(cfg_type)
+                    await run_sync(self._load_config, cfg_type)
                 except OSError:
                     if cfg_type == ConfigType.ecosystems:
                         self.logger.warning(
                             "No custom `ecosystems.cfg` configuration file "
                             "detected. Creating a default file.")
-                        self._create_ecosystems_config_file()
+                        await self._create_ecosystems_config_file()
                     elif cfg_type == ConfigType.private:
                         self.logger.warning(
                             "No custom `private.cfg` configuration file "
                             "detected. Creating a default file.")
-                        self._create_private_config_file()
+                        await self._create_private_config_file()
                 finally:
                     file_path = self.get_file_path(cfg_type)
-                    self._config_files_checksum[file_path] = _file_checksum(file_path)
-        self.load(CacheType.chaos)
+                    file_checksum = await run_sync(_file_checksum, file_path)
+                    self._config_files_checksum[file_path] = file_checksum
+        await self.load(CacheType.chaos)
         for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items():
             eco_nyct_cfg = eco_cfg_dict["environment"]["nycthemeral_cycle"]
             ecosystem_name = self.get_IDs(ecosystem_uid).name
@@ -414,42 +417,42 @@ class EngineConfig(metaclass=SingletonMeta):
             self.check_nycthemeral_method_validity(ecosystem_uid, span_method)
         self.configs_loaded = True
 
-    def save(self, cfg_type: ConfigType | CacheType) -> None:
+    async def save(self, cfg_type: ConfigType | CacheType) -> None:
         if self.app_config.TESTING:
             return
         if isinstance(cfg_type, ConfigType):
-            with self.config_files_lock():
+            async with self.config_files_lock():
                 self.logger.debug(f"Updating {cfg_type.name} configuration file(s).")
-                self._dump_config(cfg_type)
+                await run_sync(self._dump_config, cfg_type)
         else:
             if cfg_type == CacheType.chaos:
-                self._dump_chaos_memory()
+                await run_sync(self._dump_chaos_memory)
 
-    def load(self, cfg_type: ConfigType | CacheType) -> None:
+    async def load(self, cfg_type: ConfigType | CacheType) -> None:
         if isinstance(cfg_type, ConfigType):
-            with self.config_files_lock():
+            async with self.config_files_lock():
                 self.logger.debug(f"Loading {cfg_type.name} configuration file(s).")
-                self._load_config(cfg_type)
+                await run_sync(self._load_config, cfg_type)
         else:
             if cfg_type == CacheType.chaos:
-                self._load_chaos_memory()
+                await run_sync(self._load_chaos_memory)
 
     # File watchdog
-    def _get_changed_config_files(self) -> set[ConfigType]:
+    async def _get_changed_config_files(self) -> set[ConfigType]:
         config_files_checksum: dict[Path, H] = {}
         changed: set[ConfigType] = set()
         for file_path, file_modif in self._config_files_checksum.items():
-            modif = _file_checksum(file_path)
+            modif = await run_sync(_file_checksum, file_path)
             if modif != file_modif:
                 changed.add(ConfigType(file_path.name))
             config_files_checksum[file_path] = modif
         self._config_files_checksum = config_files_checksum
         return changed
 
-    def _watchdog_routine(self) -> None:
+    async def _watchdog_routine(self) -> None:
         # Fill config files modification dict
-        with self.config_files_lock_no_reset():
-            changed_configs = self._get_changed_config_files()
+        async with self.config_files_lock_no_reset():
+            changed_configs = await self._get_changed_config_files()
             if changed_configs:
                 for config_type in changed_configs:
                     self.logger.info(
@@ -465,20 +468,20 @@ class EngineConfig(metaclass=SingletonMeta):
                     #  ecosystems, update sun times, ecosystem lighting hours
                     #  and send the data if it is connected.
 
-    def _watchdog_loop(self) -> None:
+    async def _watchdog_loop(self) -> None:
         sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
         self.logger.info(
             f"Starting the configuration file watchdog loop. It will run every "
             f"{sleep_period:.3f} s.")
         while not self._stop_event.is_set():
             try:
-                self._watchdog_routine()
+                await self._watchdog_routine()
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while running the watchdog routine. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`."
                 )
-            self._stop_event.wait(sleep_period)
+            await sleep(sleep_period)
 
     def start_watchdog(self) -> None:
         if not self.configs_loaded:  # pragma: no cover
@@ -492,12 +495,10 @@ class EngineConfig(metaclass=SingletonMeta):
             raise RuntimeError("Configuration files watchdog is already running")
 
         self.logger.info("Starting the configuration files watchdog")
-        self.thread = Thread(
-            target=self._watchdog_loop,
+        self.task = asyncio.create_task(
+            self._watchdog_loop(),
             name="Config_WatchdogLoopThread",
-            daemon=True,
         )
-        self.thread.start()
         self.logger.debug("Configuration files watchdog successfully started")
 
     def stop_watchdog(self) -> None:
@@ -506,24 +507,23 @@ class EngineConfig(metaclass=SingletonMeta):
 
         self.logger.info("Stopping the configuration files watchdog")
         self._stop_event.set()
-        self.thread.join()
-        self.thread = None
+        self.task = None
         self.logger.debug("Configuration files watchdog successfully stopped")
 
-    @contextmanager
-    def config_files_lock_no_reset(self):
-        with self._config_files_lock:
+    @asynccontextmanager
+    async def config_files_lock_no_reset(self):
+        async with self._config_files_lock:
             yield
 
-    @contextmanager
-    def config_files_lock(self):
+    @asynccontextmanager
+    async def config_files_lock(self):
         """A context manager that makes sure only one process access file
         content at the time"""
-        with self.config_files_lock_no_reset():
+        async with self.config_files_lock_no_reset():
             try:
                 yield
             finally:
-                self._get_changed_config_files()
+                await self._get_changed_config_files()
 
     # API
     def _create_new_ecosystem_uid(self) -> str:
@@ -928,7 +928,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
-        self._nycthemeral_hours_lock = RLock()
+        #self._nycthemeral_hours_lock = Lock()  #TODO: was an RLock, check if ok
         self._nycthemeral_span_method_cache: gv.NycthemeralSpanMethod | None = None
         self._nycthemeral_span_hours_data: gv.NycthemeralSpanConfig | None = None
         self._lighting_method_cache: gv.LightingMethod | None = None
@@ -945,8 +945,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def as_dict(self) -> EcosystemConfigDict:
         return self.__dict
 
-    def save(self) -> None:
-        self._engine_config.save(ConfigType.ecosystems)
+    async def save(self) -> None:
+        await self._engine_config.save(ConfigType.ecosystems)
 
     def reset_nycthemeral_caches(self) -> None:
         self._nycthemeral_span_method_cache = None
@@ -1047,7 +1047,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def nycthemeral_span_target(self) -> str | None:
         return self.nycthemeral_cycle["target"]
 
-    def set_nycthemeral_span_target(self, target: str | None) -> None:
+    async def set_nycthemeral_span_target(self, target: str | None) -> None:
         place = self.general.get_place(target)
         if place is None:
             raise ValueError(
@@ -1056,7 +1056,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         self.nycthemeral_cycle["target"] = target
         self.reset_nycthemeral_caches()
-        self.refresh_lighting_hours(send_info=True)
+        await self.refresh_lighting_hours(send_info=True)
 
     @property
     def nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
@@ -1078,7 +1078,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.mimic
         return self._nycthemeral_span_method_cache
 
-    def set_nycthemeral_span_method(self, method: gv.NycthemeralSpanMethod) -> None:
+    async def set_nycthemeral_span_method(self, method: gv.NycthemeralSpanMethod) -> None:
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
         method_is_valid = self.general.check_nycthemeral_method_validity(self.uid, method)
         if not method_is_valid:
@@ -1088,20 +1088,20 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 )
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        self.refresh_lighting_hours(send_info=True)
+        await self.refresh_lighting_hours(send_info=True)
 
     @property
     def _nycthemeral_span_hours_cache(self) -> gv.NycthemeralSpanConfig | None:
-        with self._nycthemeral_hours_lock:
-            return self._nycthemeral_span_hours_data
+        #with self._nycthemeral_hours_lock:
+        return self._nycthemeral_span_hours_data
 
     @_nycthemeral_span_hours_cache.setter
     def _nycthemeral_span_hours_cache(
             self,
             span_hours: gv.NycthemeralSpanConfig | None,
     ) -> None:
-        with self._nycthemeral_hours_lock:
-            self._nycthemeral_span_hours_data = span_hours
+        #with self._nycthemeral_hours:
+        self._nycthemeral_span_hours_data = span_hours
 
     @property
     def nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
@@ -1120,7 +1120,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         return self._nycthemeral_span_hours_cache
 
-    def set_nycthemeral_span_hours(self, value: gv.NycthemeralSpanConfigDict) -> None:
+    async def set_nycthemeral_span_hours(self, value: gv.NycthemeralSpanConfigDict) -> None:
         """Set time parameters
 
         :param value: A dict in the form {'day': '8h00', 'night': '22h00'}
@@ -1134,7 +1134,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         self.environment["nycthemeral_cycle"].update(validated_value)
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        self.refresh_lighting_hours(send_info=True)
+        await self.refresh_lighting_hours(send_info=True)
 
     @property
     def period_of_day(self) -> gv.PeriodOfDay:
@@ -1173,7 +1173,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.nycthemeral_cycle["lighting"] = light_method
         self._lighting_method_cache = None
 
-    def set_lighting_method(self, method: gv.LightingMethod) -> None:
+    async def set_lighting_method(self, method: gv.LightingMethod) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
         method_is_valid = self.general.check_nycthemeral_method_validity(self.uid, method)
         if not method_is_valid:
@@ -1183,17 +1183,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 )
         self.nycthemeral_cycle["lighting"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        self.refresh_lighting_hours(send_info=True)
+        await self.refresh_lighting_hours(send_info=True)
 
     @property
     def _lighting_hours_cache(self) -> gv.LightingHours | None:
-        with self._nycthemeral_hours_lock:
-            return self._lighting_hours_data
+        #with self._nycthemeral_hours_lock:
+        return self._lighting_hours_data
 
     @_lighting_hours_cache.setter
     def _lighting_hours_cache(self, lighting_hours: gv.LightingHours | None) -> None:
-        with self._nycthemeral_hours_lock:
-            self._lighting_hours_data = lighting_hours
+        #with self._nycthemeral_hours_lock:
+        self._lighting_hours_data = lighting_hours
 
     @property
     def lighting_hours(self) -> gv.LightingHours:
@@ -1253,7 +1253,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # DO NOT USE THIS as it will overwrite the newly set value
         # self.reset_nycthemeral_caches()
 
-    def refresh_lighting_hours(self, send_info: bool = True) -> None:
+    async def refresh_lighting_hours(self, send_info: bool = True) -> None:
         self.logger.info("Refreshing lighting hours.")
         self.reset_nycthemeral_caches()
         # Check we've got the info required
@@ -1279,7 +1279,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 and self.general.engine.use_message_broker
         ):
             try:
-                self.general.engine.event_handler.send_payload_if_connected(
+                await self.general.engine.event_handler.send_payload_if_connected(
                     "light_data", ecosystem_uids=[self.uid])
             except Exception as e:
                 self.logger.error(
@@ -1309,26 +1309,26 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def chaos_time_window(self) -> gv.TimeWindow:
-        chaos_memory = self.general.get_chaos_memory(self.uid)
-        if chaos_memory["last_update"] < date.today():
-            self._update_chaos_time_window()
+        #chaos_memory = self.general.get_chaos_memory(self.uid)
+        #if chaos_memory["last_update"] < date.today():
+        #    await self._update_chaos_time_window()
         return self.general.get_chaos_memory(self.uid)["time_window"]
 
-    def update_chaos_time_window(self, send_info: bool = True) -> None:
+    async def update_chaos_time_window(self, send_info: bool = True) -> None:
         self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
-            self._update_chaos_time_window()
+            await self._update_chaos_time_window()
             if (
                     send_info
                     and self.general.engine_set_up
                     and self.general.engine.use_message_broker
             ):
-                self.general.engine.event_handler.send_payload_if_connected(
+                await self.general.engine.event_handler.send_payload_if_connected(
                     "chaos_parameters")
         else:
             self.logger.debug("Chaos time window is already up to date.")
 
-    def _update_chaos_time_window(self) -> None:
+    async def _update_chaos_time_window(self) -> None:
         chaos_memory = self.general.get_chaos_memory(self.uid)
         beginning = chaos_memory["time_window"]["beginning"]
         end = chaos_memory["time_window"]["end"]
@@ -1349,7 +1349,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         chaos_memory["time_window"]["beginning"] = beginning
         chaos_memory["time_window"]["end"] = end
         chaos_memory["last_update"] = date.today()
-        self.general.save(CacheType.chaos)
+        await self.general.save(CacheType.chaos)
 
     def get_chaos_factor(self, now: datetime | None = None) -> float:
         beginning = self.chaos_time_window["beginning"]

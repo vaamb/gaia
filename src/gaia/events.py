@@ -382,7 +382,7 @@ class Events(AsyncEventHandler):
         if ecosystem_uid in self.ecosystems:
             for management, status in data["data"].items():
                 self.ecosystems[ecosystem_uid].config.set_management(management, status)
-            self.engine.config.save(ConfigType.ecosystems)
+            await self.engine.config.save(ConfigType.ecosystems)
             await self.send_payload("management", ecosystem_uids=[ecosystem_uid])
 
     def _get_crud_function(
@@ -454,7 +454,7 @@ class Events(AsyncEventHandler):
         try:
             crud_function = self._get_crud_function(action, target, ecosystem_uid)
             crud_function(**data["data"])
-            self.engine.config.save(ConfigType.ecosystems)
+            await self.engine.config.save(ConfigType.ecosystems)
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while treating CRUD request "
