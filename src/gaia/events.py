@@ -480,7 +480,7 @@ class Events(AsyncEventHandler):
                 f"CRUD request '{crud_uuid}' was successfully treated.")
 
         # Send back the updated info
-        self.engine.refresh_ecosystems(send_info=False)
+        await self.engine.refresh_ecosystems(send_info=False)
         crud_link = crud_links_dict[event_name]
         if not crud_link.payload_name:
             self.logger.warning(
