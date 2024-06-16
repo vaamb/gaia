@@ -1,6 +1,7 @@
 import asyncio
 
 import click
+import uvloop
 
 
 async def _main(
@@ -37,6 +38,7 @@ async def _main(
 def main(
         use_green_threads: bool,
 ) -> None:
+    uvloop.install()
     asyncio.run(_main(use_green_threads))
 
 
