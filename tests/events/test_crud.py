@@ -1,5 +1,7 @@
 from datetime import time
 
+import pytest
+
 import gaia_validators as gv
 
 from gaia.events import Events
@@ -16,7 +18,8 @@ def assert_success(events_handler: Events, expected_events_emitted: int = 2):
     assert emitted_msg["status"] == gv.Result.success
 
 
-def test_wrong_engine_uid(events_handler: Events):
+@pytest.mark.asyncio
+async def test_wrong_engine_uid(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": "wrong_uid", "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -24,13 +27,14 @@ def test_wrong_engine_uid(events_handler: Events):
         data={},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         assert "Received a CRUD request intended to engine" in logs
 
 
-def test_missing_ecosystem_uid(events_handler: Events):
+@pytest.mark.asyncio
+async def test_missing_ecosystem_uid(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.create,
@@ -38,7 +42,7 @@ def test_missing_ecosystem_uid(events_handler: Events):
         data={},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     error_msg = "Create hardware requires the 'ecosystem_uid' field to be set."
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
@@ -48,7 +52,8 @@ def test_missing_ecosystem_uid(events_handler: Events):
     assert error_msg in emitted_msg["message"]
 
 
-def test_success(events_handler: Events):
+@pytest.mark.asyncio
+async def test_success(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -56,12 +61,13 @@ def test_success(events_handler: Events):
         data={"ecosystem_name": "TestCrud"},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
 
-def test_create_ecosystem(events_handler: Events):
+@pytest.mark.asyncio
+async def test_create_ecosystem(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -69,7 +75,7 @@ def test_create_ecosystem(events_handler: Events):
         data={"ecosystem_name": "TestCrud"},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -80,7 +86,8 @@ def test_create_ecosystem(events_handler: Events):
     assert "TestCrud" in [ecosystem.name for ecosystem in events_handler.ecosystems.values()]
 
 
-def test_update_ecosystem_failure(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_ecosystem_failure(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.update,
@@ -88,14 +95,15 @@ def test_update_ecosystem_failure(events_handler: Events):
         data={"ecosystem_id": "does_not_exists", "name": "NewName"},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "Ecosystem with id 'does_not_exists' not found" in result_msg["message"]
 
 
-def test_update_ecosystem(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_ecosystem(events_handler: Events):
     new_name = "NewName"
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
@@ -104,7 +112,7 @@ def test_update_ecosystem(events_handler: Events):
         data={"ecosystem_id": ecosystem_uid, "name": new_name},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -112,7 +120,8 @@ def test_update_ecosystem(events_handler: Events):
     assert ecosystem_config["name"] == new_name
 
 
-def test_delete_ecosystem_failure(events_handler: Events):
+@pytest.mark.asyncio
+async def test_delete_ecosystem_failure(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.delete,
@@ -120,14 +129,15 @@ def test_delete_ecosystem_failure(events_handler: Events):
         data={"ecosystem_id": "does_not_exists"},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "Ecosystem with id 'does_not_exists' not found" in result_msg["message"]
 
 
-def test_delete_ecosystem(events_handler: Events):
+@pytest.mark.asyncio
+async def test_delete_ecosystem(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
@@ -135,7 +145,7 @@ def test_delete_ecosystem(events_handler: Events):
         data={"ecosystem_id": ecosystem_uid},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler, 1)
 
@@ -144,7 +154,8 @@ def test_delete_ecosystem(events_handler: Events):
     assert len(events_handler.engine.config.ecosystems_config_dict) == 0
 
 
-def test_create_place(events_handler: Events):
+@pytest.mark.asyncio
+async def test_create_place(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -152,7 +163,7 @@ def test_create_place(events_handler: Events):
         data={"place": "home", "coordinates": (0, 0)},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -164,7 +175,8 @@ def test_create_place(events_handler: Events):
     assert coordinates.latitude == 0
 
 
-def test_update_place_failure(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_place_failure(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.update,
@@ -172,14 +184,15 @@ def test_update_place_failure(events_handler: Events):
         data={"place": "home", "coordinates": (4, 2)},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "No location named 'home' was found" in result_msg["message"]
 
 
-def test_update_place(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_place(events_handler: Events):
     events_handler.engine.config.set_place("home", (0, 0))
 
     message = gv.CrudPayloadDict = gv.CrudPayload(
@@ -189,7 +202,7 @@ def test_update_place(events_handler: Events):
         data={"place": "home", "coordinates": (4, 2)},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -201,7 +214,8 @@ def test_update_place(events_handler: Events):
     assert coordinates.longitude == 2
 
 
-def test_delete_place_failure(events_handler: Events):
+@pytest.mark.asyncio
+async def test_delete_place_failure(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
@@ -209,14 +223,15 @@ def test_delete_place_failure(events_handler: Events):
         data={"place": "home"},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "No location named 'home' was found" in result_msg["message"]
 
 
-def test_delete_place(events_handler: Events):
+@pytest.mark.asyncio
+async def test_delete_place(events_handler: Events):
     events_handler.engine.config.set_place("home", (0, 0))
 
     message = gv.CrudPayloadDict = gv.CrudPayload(
@@ -226,7 +241,7 @@ def test_delete_place(events_handler: Events):
         data={"place": "home"},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -237,7 +252,8 @@ def test_delete_place(events_handler: Events):
     assert coordinates is None
 
 
-def test_update_chaos(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_chaos(events_handler: Events):
     frequency = 10
     duration = 5
     intensity = 1.10
@@ -248,7 +264,7 @@ def test_update_chaos(events_handler: Events):
         data={"frequency": frequency, "duration": duration, "intensity": intensity},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -259,7 +275,8 @@ def test_update_chaos(events_handler: Events):
     assert verified.data.intensity == intensity
 
 
-def test_update_management(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_management(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
@@ -267,7 +284,7 @@ def test_update_management(events_handler: Events):
         data={"light": True},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -276,7 +293,8 @@ def test_update_management(events_handler: Events):
     assert verified.data.light is True
 
 
-def test_update_time_parameters(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_time_parameters(events_handler: Events):
     day = time(8, 0)
     night = time(20, 0)
     message = gv.CrudPayloadDict = gv.CrudPayload(
@@ -286,7 +304,7 @@ def test_update_time_parameters(events_handler: Events):
         data={"day": day, "night": night},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -298,7 +316,8 @@ def test_update_time_parameters(events_handler: Events):
     assert events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.night == night
 
 
-def test_update_light_method(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_light_method(events_handler: Events):
     method = gv.LightMethod.elongate
     events_handler.engine.config.set_place("home", (0, 0))
     message = gv.CrudPayloadDict = gv.CrudPayload(
@@ -308,7 +327,7 @@ def test_update_light_method(events_handler: Events):
         data={"method": method},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -318,7 +337,8 @@ def test_update_light_method(events_handler: Events):
     assert events_handler.ecosystems[ecosystem_uid].lighting_method == method
 
 
-def test_create_environment_parameter(events_handler: Events):
+@pytest.mark.asyncio
+async def test_create_environment_parameter(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     day = 10.0
     night = 15.0
@@ -330,7 +350,7 @@ def test_create_environment_parameter(events_handler: Events):
         data={"parameter": parameter, "day": day, "night": night, "hysteresis": hysteresis},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -343,7 +363,8 @@ def test_create_environment_parameter(events_handler: Events):
     assert environment_parameter.hysteresis == hysteresis
 
 
-def test_update_environment_parameter_failure(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_environment_parameter_failure(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     day = 10.0
     night = 15.0
@@ -355,14 +376,15 @@ def test_update_environment_parameter_failure(events_handler: Events):
         data={"parameter": parameter, "day": day, "night": night, "hysteresis": hysteresis},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "No climate parameter temperature was found" in result_msg["message"]
 
 
-def test_update_environment_parameter(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_environment_parameter(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
         parameter=parameter,
@@ -381,7 +403,7 @@ def test_update_environment_parameter(events_handler: Events):
         data={"parameter": parameter, "day": day, "night": night, "hysteresis": hysteresis},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -394,7 +416,8 @@ def test_update_environment_parameter(events_handler: Events):
     assert environment_parameter.hysteresis == hysteresis
 
 
-def test_delete_environment_parameter_failure(events_handler: Events):
+@pytest.mark.asyncio
+async def test_delete_environment_parameter_failure(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
@@ -403,14 +426,15 @@ def test_delete_environment_parameter_failure(events_handler: Events):
         data={"parameter": parameter},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "No climate parameter temperature was found" in result_msg["message"]
 
 
-def test_delete_environment_parameter(events_handler: Events):
+@pytest.mark.asyncio
+async def test_delete_environment_parameter(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
         parameter=parameter,
@@ -426,7 +450,7 @@ def test_delete_environment_parameter(events_handler: Events):
         data={"parameter": parameter},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -435,7 +459,8 @@ def test_delete_environment_parameter(events_handler: Events):
     assert len(verified.data.climate) == 0
 
 
-def test_create_hardware(events_handler: Events):
+@pytest.mark.asyncio
+async def test_create_hardware(events_handler: Events):
     events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]["IO"] = {}
     valid_hardware_info = {
         **hardware_info,
@@ -449,7 +474,7 @@ def test_create_hardware(events_handler: Events):
         data=valid_hardware_info,
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -462,7 +487,8 @@ def test_create_hardware(events_handler: Events):
     assert hardware.level == valid_hardware_info["level"]
 
 
-def test_update_hardware_failure(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_hardware_failure(events_handler: Events):
     invalid_hardware_info = {
         "uid": "invalid_uid",
         "model": "gpioSwitch",
@@ -475,14 +501,15 @@ def test_update_hardware_failure(events_handler: Events):
         data=invalid_hardware_info,
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "No hardware with uid 'invalid_uid' found" in result_msg["message"]
 
 
-def test_update_hardware(events_handler: Events):
+@pytest.mark.asyncio
+async def test_update_hardware(events_handler: Events):
     valid_hardware_info = {
         "uid": hardware_uid,
         "model": "gpioSwitch",
@@ -495,7 +522,7 @@ def test_update_hardware(events_handler: Events):
         data=valid_hardware_info,
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
@@ -506,7 +533,8 @@ def test_update_hardware(events_handler: Events):
     assert hardware.model == valid_hardware_info["model"]
 
 
-def test_delete_hardware_failure(events_handler: Events):
+@pytest.mark.asyncio
+async def test_delete_hardware_failure(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
@@ -514,14 +542,15 @@ def test_delete_hardware_failure(events_handler: Events):
         data={"uid": "invalid_uid"},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
     assert "No hardware with uid 'invalid_uid' found" in result_msg["message"]
 
 
-def test_delete_hardware(events_handler: Events):
+@pytest.mark.asyncio
+async def test_delete_hardware(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
@@ -529,7 +558,7 @@ def test_delete_hardware(events_handler: Events):
         data={"uid": hardware_uid},
     ).model_dump()
 
-    events_handler.on_crud(message)
+    await events_handler.on_crud(message)
 
     assert_success(events_handler)
 

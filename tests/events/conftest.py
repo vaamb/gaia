@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 
 from gaia import Ecosystem, Engine
 from gaia.events import Events
@@ -12,8 +13,8 @@ def mock_dispatcher():
     return mock_dispatcher
 
 
-@pytest.fixture(scope="function")
-def events_handler(
+@pytest_asyncio.fixture(scope="function")
+async def events_handler(
         mock_dispatcher: MockDispatcher,
         engine: Engine,
         ecosystem: Ecosystem,
