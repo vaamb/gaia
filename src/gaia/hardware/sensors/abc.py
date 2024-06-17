@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from anyio.to_thread import run_sync
+
 import gaia_validators as gv
 
 from gaia.hardware.abc import BaseSensor, Measure, Unit
@@ -20,8 +22,8 @@ class TempHumSensor(BaseSensor):
             "This method must be implemented in a subclass"
         )
 
-    def get_data(self) -> list[gv.SensorRecord]:
-        raw_humidity, raw_temperature = self._get_raw_data()
+    async def get_data(self) -> list[gv.SensorRecord]:
+        raw_humidity, raw_temperature = await run_sync(self._get_raw_data)
         data = []
         if Measure.humidity in self.measures:
             data.append(gv.SensorRecord(

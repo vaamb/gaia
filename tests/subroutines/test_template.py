@@ -15,13 +15,14 @@ hardware_info = sensor_info
 hardware_uid = sensor_uid
 
 
-def test_states(dummy_subroutine: Dummy, engine_config: EngineConfig):
+@pytest.mark.asyncio
+async def test_states(dummy_subroutine: Dummy, engine_config: EngineConfig):
     dummy_subroutine.manageable_state = False
 
     with pytest.raises(RuntimeError, match=r"The subroutine is not enabled."):
-        dummy_subroutine.start()
+        await dummy_subroutine.start()
     with pytest.raises(RuntimeError, match=r"The subroutine is not running."):
-        dummy_subroutine.stop()
+        await dummy_subroutine.stop()
     assert not dummy_subroutine.enabled
 
     dummy_subroutine.enable()
@@ -29,16 +30,16 @@ def test_states(dummy_subroutine: Dummy, engine_config: EngineConfig):
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Enabling the subroutine." in logs
     with pytest.raises(RuntimeError, match=r"The subroutine is not manageable."):
-        dummy_subroutine.start()
+        await dummy_subroutine.start()
 
     dummy_subroutine.manageable_state = True
-    dummy_subroutine.start()
+    await dummy_subroutine.start()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Starting the subroutine." in logs
     with pytest.raises(RuntimeError, match=r"The subroutine is already running."):
-        dummy_subroutine.start()
+        await dummy_subroutine.start()
 
-    dummy_subroutine.stop()
+    await dummy_subroutine.stop()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Stopping the subroutine." in logs
 
@@ -57,23 +58,24 @@ def test_properties(dummy_subroutine: Dummy, ecosystem: Ecosystem):
     assert dummy_subroutine.ecosystem.__dict__ is ecosystem.__dict__
 
 
-def test_hardware(dummy_subroutine: Dummy, engine_config: EngineConfig):
+@pytest.mark.asyncio
+async def test_hardware(dummy_subroutine: Dummy, engine_config: EngineConfig):
     assert dummy_subroutine.hardware_choices == {}
 
     hardware_config = gv.HardwareConfig(uid=hardware_uid, **hardware_info)
 
     with pytest.raises(RuntimeError, match=r"No 'hardware_choices' available."):
-        dummy_subroutine.add_hardware(hardware_config)
+        await dummy_subroutine.add_hardware(hardware_config)
 
     dummy_subroutine.hardware_choices = {virtualDHT22.__name__: virtualDHT22}
 
-    dummy_subroutine.add_hardware(hardware_config)
+    await dummy_subroutine.add_hardware(hardware_config)
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert f"Hardware {hardware_config.name} has been set up." in logs
 
-    dummy_subroutine.remove_hardware(hardware_uid)
+    await dummy_subroutine.remove_hardware(hardware_uid)
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert f"Hardware {hardware_config.name} has been dismounted." in logs
 
     with pytest.raises(HardwareNotFound, match=f"Hardware '{hardware_uid}' not found."):
-        dummy_subroutine.remove_hardware(hardware_uid)
+        await dummy_subroutine.remove_hardware(hardware_uid)

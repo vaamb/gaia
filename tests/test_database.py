@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Type
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 
 import gaia_validators as gv
-from sqlalchemy_wrapper import SQLAlchemyWrapper
+from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
 from gaia import EngineConfig
 from gaia.database import db as gaia_db
@@ -26,39 +26,42 @@ def generate_sensor_data(timestamp: datetime | None = None) -> dict:
     }
 
 
-@pytest.fixture(scope="session")
-def db(engine_config_master: EngineConfig) -> SQLAlchemyWrapper:
+@pytest_asyncio.fixture(scope="session")
+async def db(engine_config_master: EngineConfig) -> AsyncSQLAlchemyWrapper:
     dict_cfg = {
         key: getattr(engine_config_master.app_config, key)
         for key in dir(engine_config_master.app_config)
         if key.isupper()
     }
     gaia_db.init(dict_cfg)
-    gaia_db.create_all()
+    await gaia_db.create_all()
 
     yield gaia_db
 
 
-def test_record(db: SQLAlchemyWrapper):
-    with db.scoped_session() as session:
+@pytest.mark.asyncio
+async def test_record(db: AsyncSQLAlchemyWrapper):
+    async with db.scoped_session() as session:
         sensor_record = SensorRecord(**generate_sensor_data())
         session.add(sensor_record)
-        session.commit()
+        await session.commit()
         stmt = select(SensorRecord)
-        from_db = session.execute(stmt).scalars().first()
+        result = await session.execute(stmt)
+        from_db = result.scalars().first()
         assert from_db.dict_repr == sensor_record.dict_repr
 
 
-def test_buffer(db: SQLAlchemyWrapper):
+@pytest.mark.asyncio
+async def test_buffer(db: AsyncSQLAlchemyWrapper):
     timestamp = datetime.now().astimezone(timezone.utc)
-    with db.scoped_session() as session:
+    async with db.scoped_session() as session:
         buffer_1 = SensorBuffer(**generate_sensor_data(timestamp - timedelta(minutes=5)))
         session.add(buffer_1)
         buffer_2 = SensorBuffer(**generate_sensor_data(timestamp))
         session.add(buffer_2)
         session.commit()
         uuid = None
-        for buffered_data in SensorBuffer.get_buffered_data(session):
+        async for buffered_data in SensorBuffer.get_buffered_data(session):
             uuid = buffered_data.uuid
             data_1 = buffered_data.data[0]
             data_2 = buffered_data.data[1]
@@ -71,9 +74,9 @@ def test_buffer(db: SQLAlchemyWrapper):
                 assert buffer.timestamp == data.timestamp
                 assert buffer.value == data.value
 
-        SensorBuffer.clear_buffer(session, uuid)
+        await SensorBuffer.clear_buffer(session, uuid)
         empty = True
-        for _ in SensorBuffer.get_buffered_data(session):
+        async for _ in SensorBuffer.get_buffered_data(session):
             empty = False
             break
         assert empty

@@ -1,10 +1,13 @@
+import asyncio
 from copy import deepcopy
 import os
 import shutil
+import sys
 import tempfile
 from typing import Generator, TypeVar
 
 import pytest
+import pytest_asyncio
 
 import gaia_validators as gv
 
@@ -26,6 +29,18 @@ from .utils import get_logs_content
 T = TypeVar("T")
 
 YieldFixture = Generator[T, None, None]
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    if sys.platform.startswith("win") and sys.version_info[:2] >= (3, 8):
+        # Avoid "RuntimeError: Event loop is closed" on Windows when tearing down tests
+        # https://github.com/encode/httpx/issues/914
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
 
 
 @pytest.fixture(scope="session")
@@ -90,16 +105,16 @@ def testing_cfg(temp_dir) -> None:
     GaiaConfigHelper.set_config(Config)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
     engine_config = EngineConfig()
-    engine_config.initialize_configs()
+    await engine_config.initialize_configs()
 
     yield engine_config
 
 
-@pytest.fixture(scope="function", autouse=True)
-def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConfig]:
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConfig]:
     app_config = deepcopy(engine_config_master.app_config)
     ecosystem_config = deepcopy(engine_config_master.ecosystems_config_dict)
     private_config = deepcopy(engine_config_master.private_config)
@@ -120,8 +135,8 @@ def engine_config(engine_config_master: EngineConfig) -> YieldFixture[EngineConf
             engine_config_master.stop_watchdog()
 
 
-@pytest.fixture(scope="function", autouse=True)
-def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     engine = Engine(engine_config=engine_config)
     with get_logs_content(engine_config.logs_dir / "gaia.log"):
         pass  # Clear logs
@@ -135,8 +150,8 @@ def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
         del engine
 
 
-@pytest.fixture(scope="function")
-def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfig]:
+@pytest_asyncio.fixture(scope="function")
+async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfig]:
     ecosystem_config = engine_config.get_ecosystem_config(ecosystem_name)
     with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log"):
         pass  # Clear logs
@@ -148,8 +163,8 @@ def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfi
         del ecosystem_config
 
 
-@pytest.fixture(scope="function")
-def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
+@pytest_asyncio.fixture(scope="function")
+async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     ecosystem = engine.get_ecosystem(ecosystem_name)
     with get_logs_content(engine.config.logs_dir / "gaia.log"):
         pass  # Clear logs
@@ -158,17 +173,17 @@ def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
         yield ecosystem
     finally:
         if ecosystem.started:
-            ecosystem.stop()
+            await ecosystem.stop()
         del ecosystem
 
 
-@pytest.fixture(scope="function")
-def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
+@pytest_asyncio.fixture(scope="function")
+async def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
     climate_subroutine: Climate = ecosystem.subroutines["climate"]
 
     # Sensors subroutine is required ...
-    ecosystem.enable_subroutine("sensors")
-    ecosystem.start_subroutine("sensors")
+    await ecosystem.enable_subroutine("sensors")
+    await ecosystem.start_subroutine("sensors")
 
     # ... as well as a climate parameter
     ecosystem.config.set_climate_parameter(
@@ -180,49 +195,49 @@ def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
         yield climate_subroutine
     finally:
         if ecosystem.get_subroutine_status("sensors"):
-            ecosystem.stop_subroutine("sensors")
+            await ecosystem.stop_subroutine("sensors")
         if climate_subroutine.started:
-            climate_subroutine.stop()
+            await climate_subroutine.stop()
 
 
-@pytest.fixture(scope="function")
-def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
+@pytest_asyncio.fixture(scope="function")
+async def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
     light_subroutine: Light = ecosystem.subroutines["light"]
 
     try:
         yield light_subroutine
     finally:
         if light_subroutine.started:
-            light_subroutine.stop()
+            await light_subroutine.stop()
 
 
-@pytest.fixture(scope="function")
-def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
+@pytest_asyncio.fixture(scope="function")
+async def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
     sensor_subroutine: Sensors = ecosystem.subroutines["sensors"]
 
     try:
         yield sensor_subroutine
     finally:
         if sensor_subroutine.started:
-            sensor_subroutine.stop()
+            await sensor_subroutine.stop()
 
 
-@pytest.fixture(scope="function")
-def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
+@pytest_asyncio.fixture(scope="function")
+async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
     dummy_subroutine: Sensors = ecosystem.subroutines["dummy"]
 
     try:
         yield dummy_subroutine
     finally:
         if dummy_subroutine.started:
-            dummy_subroutine.stop()
+            await dummy_subroutine.stop()
 
 
-@pytest.fixture(scope="function")
-def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
+@pytest_asyncio.fixture(scope="function")
+async def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
     hardware_config = gv.HardwareConfig(uid=light_uid, **light_info)
     light_subroutine = ecosystem.subroutines["light"]
-    light_subroutine.add_hardware(hardware_config)
+    await light_subroutine.add_hardware(hardware_config)
 
     light_handler: ActuatorHandler = ecosystem.get_actuator_handler("light")
 

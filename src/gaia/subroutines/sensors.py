@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from concurrent.futures import Future, wait
+import asyncio
+from asyncio import Task
 from datetime import datetime, timezone
 from statistics import mean
-from threading import Lock
 from time import monotonic
 import typing as t
 from typing import cast, Literal
@@ -22,7 +22,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.light import Light
 
 
-class _SensorFuture(Future):
+class _SensorFuture(Task):
     hardware_uid: str
 
 
@@ -36,14 +36,14 @@ class Sensors(SubroutineTemplate):
         self._loop_timeout: float = max(loop_timeout, 10.0)
         self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
-        self._data_lock = Lock()
+        #self._data_lock = Lock()
         self._finish__init__()
 
-    def routine(self) -> None:
+    async def routine(self) -> None:
         start_time = monotonic()
         self.logger.debug("Starting sensors data update routine ...")
         try:
-            self.update_sensors_data()
+            await self.update_sensors_data()
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while updating sensors data. "
@@ -55,7 +55,7 @@ class Sensors(SubroutineTemplate):
                 f"Sensors data update finished in {update_time:.1f} s."
             )
         try:
-            self.send_data()
+            await self.send_data()
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while sending sensors data and warnings. "
@@ -79,7 +79,7 @@ class Sensors(SubroutineTemplate):
             self.logger.warning("No sensor detected.")
             return False
 
-    def _start(self) -> None:
+    async def _start(self) -> None:
         self.logger.info(
             f"Starting the sensors loop. It will run every "
             f"{self._loop_timeout:.1f} s.")
@@ -90,28 +90,28 @@ class Sensors(SubroutineTemplate):
         )
         self.logger.debug(f"Sensors loop successfully started")
 
-    def _stop(self) -> None:
+    async def _stop(self) -> None:
         self.logger.info(f"Stopping sensors loop")
         if self.ecosystem.get_subroutine_status("climate"):
-            self.ecosystem.stop_subroutine("climate")
+            await self.ecosystem.stop_subroutine("climate")
         self.ecosystem.engine.scheduler.remove_job(
             f"{self.ecosystem.uid}-sensors_routine")
         self.hardware = {}
 
     """API calls"""
-    def add_hardware(self, hardware_config: gv.HardwareConfig) -> BaseSensor:
+    async def add_hardware(self, hardware_config: gv.HardwareConfig) -> BaseSensor:
         model = hardware_config.model
         if self.ecosystem.engine.config.app_config.VIRTUALIZATION:
             if not model.startswith("virtual"):
                 hardware_config.model = f"virtual{model}"
-        hardware = super().add_hardware(hardware_config)
+        hardware = await super().add_hardware(hardware_config)
         if self.ecosystem.get_subroutine_status("light"):
             light_subroutine: Light = self.ecosystem.subroutines["light"]
             light_subroutine.reset_light_sensors()
         return hardware
 
-    def remove_hardware(self, hardware_uid: str) -> None:
-        super().remove_hardware(hardware_uid)
+    async def remove_hardware(self, hardware_uid: str) -> None:
+        await super().remove_hardware(hardware_uid)
         if self.ecosystem.get_subroutine_status("light"):
             light_subroutine: Light = self.ecosystem.subroutines["light"]
             light_subroutine.reset_light_sensors()
@@ -119,23 +119,23 @@ class Sensors(SubroutineTemplate):
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids(gv.HardwareType.sensor))
 
-    def refresh_hardware(self) -> None:
-        super().refresh_hardware()
+    async def refresh_hardware(self) -> None:
+        await super().refresh_hardware()
         if self.ecosystem.get_subroutine_status("climate"):
             climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
-            climate_subroutine.refresh_hardware()
+            await climate_subroutine.refresh_hardware()
 
     @property
     def sensors_data(self) -> gv.SensorsData | gv.Empty:
-        with self._data_lock:
-            return self._sensors_data
+        #async with self._data_lock:
+        return self._sensors_data
 
     @sensors_data.setter
     def sensors_data(self, data: gv.SensorsData | gv.Empty) -> None:
-        with self._data_lock:
-            self._sensors_data = data
+        #async with self._data_lock:
+        self._sensors_data = data
 
-    def _add_sensor_records(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
+    async def _add_sensor_records(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
         slow_sensors: list[str] = [
             future.hardware_uid for future in self._slow_sensor_futures]
         futures: list[_SensorFuture] = []
@@ -143,23 +143,24 @@ class Sensors(SubroutineTemplate):
             # Do not try to get data from sensors still trying to get their measures
             if hardware.uid in slow_sensors:
                 continue
-            future = cast(_SensorFuture, self.executor.submit(hardware.get_data))
+            future = asyncio.create_task(hardware.get_data())
+            future = cast(_SensorFuture, future)
             future.hardware_uid = hardware.uid
             futures.append(future)
         # Try to get data from sensors that took too long during last loop
         futures.extend(self._slow_sensor_futures)
         # Wait for 5 secs for sensors to get data. This allows GPIO sensors to fail once
-        waited_futures = wait(futures, timeout=5)
-        new_slow_futures = waited_futures.not_done - self._slow_sensor_futures
+        done, pending = await asyncio.wait(futures, timeout=5)
+        new_slow_futures = pending - self._slow_sensor_futures
         # Log the sensors that took too long
         for future in new_slow_futures:
             self.logger.warning(
                 f"Sensor with uid '{future.hardware_uid}' took too long to "
                 f"fetch data. Will try to gather data during next routine.")
-        self._slow_sensor_futures = waited_futures.not_done
+        self._slow_sensor_futures = pending
         # Gather the data
         sensors_data: list[list[gv.SensorRecord]] = \
-            [future.result() for future in waited_futures.done]
+            [future.result() for future in done]
         for sensor_data in sensors_data:
             cache["records"].extend(
                 sensor_record for sensor_record in sensor_data
@@ -228,7 +229,7 @@ class Sensors(SubroutineTemplate):
         cache["alarms"] = sensor_warnings
         return cache
 
-    def update_sensors_data(self) -> None:
+    async def update_sensors_data(self) -> None:
         """
         Loops through all the sensors and stores the value in self._data
         """
@@ -242,7 +243,7 @@ class Sensors(SubroutineTemplate):
             "average": [],
             "alarms": [],
         }
-        cache = self._add_sensor_records(cache)
+        cache = await self._add_sensor_records(cache)
         cache = self._add_sensor_averages(cache)
         alarms_flag = gv.ManagementFlags.alarms
         if (self.config.management_flag & alarms_flag == alarms_flag):
@@ -252,8 +253,8 @@ class Sensors(SubroutineTemplate):
         else:
             self.sensors_data = gv.Empty()
 
-    def send_data(self) -> None:
+    async def send_data(self) -> None:
         if not self.ecosystem.engine.use_message_broker:
             return
-        self.ecosystem.engine.event_handler.send_payload_if_connected(
+        await self.ecosystem.engine.event_handler.send_payload_if_connected(
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])

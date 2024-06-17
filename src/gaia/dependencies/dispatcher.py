@@ -2,23 +2,13 @@ import typing as t
 
 _uninstalled_dependencies = False
 
-try:
-    import kombu
-except ImportError:
-    kombu = None
-    _uninstalled_dependencies = True
+# AMQP and Redis are taken care of by dispatcher
 
 try:
     import dispatcher
 except ImportError:
     dispatcher = None
     _uninstalled_dependencies = True
-
-
-if t.TYPE_CHECKING:
-    import kombu
-
-    import dispatcher
 
 
 def check_dependencies() -> None:

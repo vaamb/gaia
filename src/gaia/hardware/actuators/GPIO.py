@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing as t
 
+from anyio.to_thread import run_sync
+
 from gaia.hardware.abc import AddressType, Dimmer, gpioHardware, Switch
 from gaia.hardware.utils import is_raspi
 
@@ -19,11 +21,17 @@ class gpioSwitch(gpioHardware, Switch):
         super().__init__(*args, **kwargs)
         self.pin.init(mode=self.OUT)
 
-    def turn_on(self) -> None:
+    def _turn_on(self) -> None:
         self.pin.value(val=1)
 
-    def turn_off(self) -> None:
+    async def turn_on(self) -> None:
+        await run_sync(self._turn_on)
+
+    def _turn_off(self) -> None:
         self.pin.value(val=0)
+
+    async def turn_off(self) -> None:
+        await run_sync(self._turn_off)
 
 
 class gpioDimmer(gpioHardware, Dimmer):
@@ -50,9 +58,12 @@ class gpioDimmer(gpioHardware, Dimmer):
             from gaia.hardware._compatibility import pwmio
         return pwmio.PWMOut(self.pwm_pin, frequency=100, duty_cycle=0)
 
-    def set_pwm_level(self, duty_cycle_in_percent: float | int) -> None:
+    def _set_pwm_level(self, duty_cycle_in_percent: float | int) -> None:
         duty_cycle_in_16_bit = duty_cycle_in_percent / 100 * (2**16 - 1)
         self.dimmer.duty_cycle = duty_cycle_in_16_bit
+
+    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> None:
+        await run_sync(self._set_pwm_level, duty_cycle_in_percent)
 
     @property
     def pwm_pin(self) -> "Pin":

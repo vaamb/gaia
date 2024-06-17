@@ -30,34 +30,35 @@ class Light(SubroutineTemplate):
         self._any_dimmable_light: bool | None = None
         self._finish__init__()
 
-    def routine(self) -> None:
+    async def routine(self) -> None:
         try:
-            self._update_light_actuators()
+            await self._update_light_actuators()
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while running the light routine. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`."
             )
 
-    def _update_light_actuators(self) -> None:
+    async def _update_light_actuators(self) -> None:
         pid: HystericalPID = self.get_pid()
         target, hysteresis = self.compute_target()
         pid.target = target
         pid.hysteresis = hysteresis
 
-        current_value: float | None = self.get_ambient_light_level()
+        current_value: float | None = await self.get_ambient_light_level()
         if current_value is None:
             current_value = 0.0
 
         pid_output = pid.update_pid(current_value)
+        await self.actuator_handler.check_countdown()
         expected_status = self.actuator_handler.compute_expected_status(pid_output)
 
         if expected_status:
-            self.actuator_handler.turn_on()
-            self.actuator_handler.set_level(pid_output)
+            await self.actuator_handler.turn_on()
+            await self.actuator_handler.set_level(pid_output)
         else:
-            self.actuator_handler.turn_off()
-            self.actuator_handler.set_level(0.0)
+            await self.actuator_handler.turn_off()
+            await self.actuator_handler.set_level(0.0)
 
     """Functions to switch the light on/off either manually or automatically"""
     def _compute_if_manageable(self) -> bool:
@@ -73,7 +74,7 @@ class Light(SubroutineTemplate):
             )
             return False
 
-    def _start(self) -> None:
+    async def _start(self) -> None:
         pid = self.get_pid()
         pid.reset()
         self.logger.info(
@@ -86,26 +87,26 @@ class Light(SubroutineTemplate):
         )
         self.actuator_handler.activate()
 
-    def _stop(self) -> None:
+    async def _stop(self) -> None:
         self.logger.info("Stopping light loop")
         self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.uid}-light_routine")
         self.actuator_handler.deactivate()
 
     """API calls"""
-    def add_hardware(self, hardware_config: gv.HardwareConfig) -> Switch | Dimmer:
-        hardware = super().add_hardware(hardware_config)
+    async def add_hardware(self, hardware_config: gv.HardwareConfig) -> Switch | Dimmer:
+        hardware = await super().add_hardware(hardware_config)
         self.reset_any_dimmable_light()
         return hardware
 
-    def remove_hardware(self, hardware_uid: str) -> None:
-        super().remove_hardware(hardware_uid)
+    async def remove_hardware(self, hardware_uid: str) -> None:
+        await super().remove_hardware(hardware_uid)
         self.reset_any_dimmable_light()
 
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids(gv.HardwareType.light))
 
-    def refresh_hardware(self) -> None:
-        super().refresh_hardware()
+    async def refresh_hardware(self) -> None:
+        await super().refresh_hardware()
         actuator_handler = self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
         actuator_handler.reset_cached_actuators()
 
@@ -135,6 +136,7 @@ class Light(SubroutineTemplate):
             for hardware in self.hardware.values():
                 if isinstance(hardware, Dimmer):
                     self._any_dimmable_light = True
+                    break
             if self._any_dimmable_light is None:
                 self._any_dimmable_light = False
         return self._any_dimmable_light
@@ -142,14 +144,14 @@ class Light(SubroutineTemplate):
     def reset_any_dimmable_light(self) -> None:
         self._any_dimmable_light = None
 
-    def get_ambient_light_level(self) -> float | None:
+    async def get_ambient_light_level(self) -> float | None:
         # If there isn't any light sensors we cannot get the info
         # If there isn't any dimmable light, the info cannot be properly used
         if not self.light_sensors or not self.any_dimmable_light:
             return None
         light_level: list[float] = []
         for light_sensor in self.light_sensors:
-            light = light_sensor.get_lux()
+            light = await light_sensor.get_lux()
             if light is not None:
                 light_level.append(light)
         if not light_level:
@@ -189,13 +191,13 @@ class Light(SubroutineTemplate):
         level = self.compute_level(now)
         return level, None
 
-    def turn_light(
+    async def turn_light(
             self,
             turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
         if self._started:
-            self.actuator_handler.turn_to(turn_to, countdown)
+            await self.actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
                 f"Light subroutine is not started in ecosystem {self.ecosystem}")

@@ -10,6 +10,7 @@ license = {file = "LICENSE"}
 dynamic = ["version"]
 dependencies = [
     "adafruit-blinka~=8.20.0",
+    "anyio~=4.4.0",
     "apscheduler~=3.10.0",
     "click~=8.1.7",
     "cryptography~=40.0.1",
@@ -18,6 +19,7 @@ dependencies = [
     "pydantic",
     "ruamel.yaml~=0.17.21",
     "setproctitle~=1.3.1",
+    "uvloop~=0.19.0",
 
     # From git
     "gaia-validators @ git+https://github.com/vaamb/gaia-validators.git",
@@ -29,15 +31,16 @@ camera = [
     "Pillow~=9.5.0",
 ]
 database = [
+    "aiosqlite~=0.20.0",
     "SQLAlchemy~=2.0.0",
     "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git",
 ]
 dispatcher = [
-    "kombu~=5.3.1",
     "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git",
 ]
 test = [
     "pytest~=7.1.2",
+    "pytest-asyncio~=0.23.0",
     "pytest-timeout~=2.2.0",
 ]
 

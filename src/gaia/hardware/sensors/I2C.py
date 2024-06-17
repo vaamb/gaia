@@ -4,6 +4,8 @@ from time import sleep
 import typing as t
 from typing import Type
 
+from anyio.to_thread import run_sync
+
 import gaia_validators as gv
 
 from gaia.hardware.abc import (
@@ -108,10 +110,10 @@ class ENS160(i2cSensor):
         self.device.temperature_compensation = temperature
         self.device.humidity_compensation = humidity
 
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         # TODO: access temperature and humidity data to compensate
         data = []
-        AQI, eCO2, TVOC = self._get_raw_data()
+        AQI, eCO2, TVOC = await run_sync(self._get_raw_data)
         if Measure.aqi in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
@@ -157,9 +159,13 @@ class VEML7700(i2cSensor, LightSensor):
         return _VEML7700(self._get_i2c(), self._address_book.primary.main)
 
     # To catch data fast from light routine
-    def get_lux(self) -> float | None:
+    def _get_lux(self) -> float:
+        return self.device.lux
+
+    async def get_lux(self) -> float | None:
         try:
-            return round(self.device.lux, 2)
+            lux = await run_sync(self._get_lux)
+            return round(lux, 2)
         except Exception as e:
             hardware_logger.error(
                 f"Sensor {self._name} encountered an error. "
@@ -167,13 +173,13 @@ class VEML7700(i2cSensor, LightSensor):
             )
             return None
 
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         data = []
         if Measure.light in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
-                value=self.get_lux()
+                value=await self.get_lux()
             ))
         return data
 
@@ -200,9 +206,13 @@ class VCNL4040(i2cSensor, LightSensor):
         return _VCNL4040(self._get_i2c(), self._address_book.primary.main)
 
     # To catch data fast from light routine
-    def get_lux(self) -> float | None:
+    def _get_lux(self) -> float:
+        return self.device.lux
+
+    async def get_lux(self) -> float | None:
         try:
-            return round(self.device.lux, 2)
+            lux = await run_sync(self._get_lux)
+            return round(lux, 2)
         except Exception as e:
             hardware_logger.error(
                 f"Sensor {self._name} encountered an error. "
@@ -210,13 +220,13 @@ class VCNL4040(i2cSensor, LightSensor):
             )
             return None
 
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         data = []
         if Measure.light in self.measures:
             data.append(gv.SensorRecord(
                 sensor_uid=self.uid,
                 measure="light",
-                value=self.get_lux()
+                value=await self.get_lux()
             ))
         return data
 
@@ -242,7 +252,7 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self._address_book.primary.main)
 
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -279,9 +289,9 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                 break
         return moisture, temperature
 
-    def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[gv.SensorRecord]:
         try:
-            moisture, raw_temperature = self._get_raw_data()
+            moisture, raw_temperature = await run_sync(self._get_raw_data)
         except RuntimeError:
             moisture = raw_temperature = None
         data = []

@@ -5,6 +5,8 @@ from time import sleep
 import typing as t
 from typing import Type, Generator
 
+from anyio.to_thread import run_sync
+
 from gaia.hardware.abc import Camera, hardware_logger, Image
 from gaia.hardware.utils import is_raspi
 
@@ -30,7 +32,10 @@ class PiCamera(Camera):
             from gaia.hardware._compatibility import PiCamera as _PiCamera, Preview
         return _PiCamera()
 
-    def get_image(self) -> Image | None:
+    async def get_image(self) -> Image | None:
+        return await run_sync(self._get_image)
+
+    def _get_image(self) -> Image | None:
         camera_config = self.device.create_still_configuration()
         self.device.configure(camera_config)
         self.device.start_preview(Preview.QTGL)
@@ -48,7 +53,7 @@ class PiCamera(Camera):
                     f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
             else:
-                return Image(array=array, timestamp=now)
+                return Image.from_array(array=array, metadata={"timestamp": now})
         return None
 
     def get_timelapse(

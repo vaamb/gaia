@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Generator, Sequence
+from typing import AsyncGenerator, Sequence
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from sqlalchemy import delete, select, update
-from sqlalchemy.orm import Mapped, mapped_column, Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Mapped, mapped_column
 
 import gaia_validators as gv
-from sqlalchemy_wrapper import SQLAlchemyWrapper
+from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
 from gaia.utils import json
 
 
-db = SQLAlchemyWrapper(
+db = AsyncSQLAlchemyWrapper(
     engine_options={
         "json_serializer": json.dumps,
         "json_deserializer": json.loads,
@@ -60,11 +61,11 @@ class SensorBuffer(BaseSensorRecord):
     exchange_uuid: Mapped[UUID | None] = mapped_column()
 
     @classmethod
-    def get_buffered_data(
+    async def get_buffered_data(
             cls,
-            session: Session,
+            session: AsyncSession,
             per_page: int = 50
-    ) -> Generator[gv.BufferedSensorsDataPayload]:
+    ) -> AsyncGenerator[gv.BufferedSensorsDataPayload]:
         page: int = 0
         try:
             while True:
@@ -74,7 +75,7 @@ class SensorBuffer(BaseSensorRecord):
                     .offset(per_page * page)
                     .limit(per_page)
                 )
-                result = session.execute(stmt)
+                result = await session.execute(stmt)
                 buffered_data: Sequence[SensorBuffer] = result.scalars().all()
                 if not buffered_data:
                     break
@@ -98,21 +99,21 @@ class SensorBuffer(BaseSensorRecord):
                 )
                 page += 1
         finally:
-            session.commit()
+            await session.commit()
 
     @classmethod
-    def clear_buffer(cls, session: Session, uuid: UUID | str) -> None:
+    async def clear_buffer(cls, session: AsyncSession, uuid: UUID | str) -> None:
         stmt = (
             delete(cls)
             .where(cls.exchange_uuid == uuid)
         )
-        session.execute(stmt)
+        await session.execute(stmt)
 
     @classmethod
-    def clear_uuid(cls, session: Session, uuid: UUID | str) -> None:
+    async def clear_uuid(cls, session: AsyncSession, uuid: UUID | str) -> None:
         stmt = (
             update(cls)
             .where(cls.exchange_uuid == uuid)
             .values(exchange_uuid=None)
         )
-        session.execute(stmt)
+        await session.execute(stmt)
