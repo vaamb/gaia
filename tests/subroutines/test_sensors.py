@@ -22,26 +22,28 @@ def test_hardware_needed(sensors_subroutine: Sensors):
     assert uids == {sensor_uid}
 
 
-def test_add_hardware(sensors_subroutine: Sensors, engine_config: EngineConfig):
-    sensors_subroutine.add_hardware(gv.HardwareConfig(uid=sensor_uid, **sensor_info))
+@pytest.mark.asyncio
+async def test_add_hardware(sensors_subroutine: Sensors, engine_config: EngineConfig):
+    await sensors_subroutine.add_hardware(gv.HardwareConfig(uid=sensor_uid, **sensor_info))
 
-    sensors_subroutine.add_hardware(gv.HardwareConfig(uid=heater_uid, **heater_info))
+    await sensors_subroutine.add_hardware(gv.HardwareConfig(uid=heater_uid, **heater_info))
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "not in the list of the hardware available." in logs
 
 
-def test_update_sensors_data(sensors_subroutine: Sensors):
+@pytest.mark.asyncio
+async def test_update_sensors_data(sensors_subroutine: Sensors):
     # Rely on the correct implementation of virtualDHT22
     with pytest.raises(RuntimeError, match="Sensors subroutine has to be started"):
-        sensors_subroutine.update_sensors_data()
+        await sensors_subroutine.update_sensors_data()
 
     sensors_subroutine.enable()
     sensors_subroutine._started = True
-    sensors_subroutine.refresh_hardware()
+    await sensors_subroutine.refresh_hardware()
 
     assert sensors_subroutine.sensors_data == gv.Empty()
 
-    sensors_subroutine.update_sensors_data()
+    await sensors_subroutine.update_sensors_data()
 
     assert isinstance(sensors_subroutine.sensors_data, gv.SensorsData)
 
