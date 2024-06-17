@@ -368,7 +368,7 @@ class Events(AsyncEventHandler):
         ecosystem_uid: str = data["ecosystem_uid"]
         if ecosystem_uid in self.ecosystems:
             self.logger.debug("Received turn_actuator event")
-            self.ecosystems[ecosystem_uid].turn_actuator(
+            await self.ecosystems[ecosystem_uid].turn_actuator(
                 actuator=data["actuator"],
                 mode=data["mode"],
                 countdown=message.get("countdown", 0.0)
