@@ -1,5 +1,5 @@
+from asyncio import sleep
 from datetime import date, datetime, time, timedelta, timezone
-from time import sleep
 
 import pytest
 
@@ -35,7 +35,8 @@ def test_ecosystem_config_creation_deletion(engine_config: EngineConfig):
         engine_config.delete_ecosystem("Already fading away")
 
 
-def test_config_files_watchdog(engine_config: EngineConfig):
+@pytest.mark.asyncio
+async def test_config_files_watchdog(engine_config: EngineConfig):
     # Start watchdog and make sure it can only be started once
     engine_config.start_watchdog()
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
@@ -47,7 +48,7 @@ def test_config_files_watchdog(engine_config: EngineConfig):
     engine_config.create_ecosystem("Already fading away")
     with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
         yaml.dump(engine_config.ecosystems_config_dict, cfg)
-    sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
+    await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Updating ecosystems configuration" in logs
 
@@ -55,7 +56,7 @@ def test_config_files_watchdog(engine_config: EngineConfig):
     engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
     with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
         yaml.dump(engine_config.private_config, cfg)
-    sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
+    await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "Updating private configuration" in logs
 
@@ -73,12 +74,13 @@ def test_config_files_watchdog(engine_config: EngineConfig):
         yaml.dump({}, cfg)
 
 
-def test_save_load(engine_config: EngineConfig):
+@pytest.mark.asyncio
+async def test_save_load(engine_config: EngineConfig):
     ecosystems_cfg = engine_config.ecosystems_config
     private_config = engine_config.private_config
     for cfg_type in ConfigType:
-        engine_config.save(cfg_type)
-        engine_config.load(cfg_type)
+        await engine_config.save(cfg_type)
+        await engine_config.load(cfg_type)
     assert engine_config.ecosystems_config == ecosystems_cfg
     assert engine_config.private_config == private_config
 
@@ -161,7 +163,8 @@ def test_ecosystem_config_managed_subroutines(ecosystem_config: EcosystemConfig)
     assert managed_subroutines == subroutines_list
 
 
-def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
+@pytest.mark.asyncio
+async def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
     today = datetime.now(timezone.utc).replace(
         hour=14, minute=0, second=0, microsecond=0)
 
@@ -185,12 +188,12 @@ def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
     # Update the time window. It will automatically update as the frequency is 1
     chaos_memory = ecosystem_config.general.get_chaos_memory(ecosystem_config.uid)
     chaos_memory["last_update"] = date(2000, 1, 1)  # Allow to update
-    ecosystem_config.update_chaos_time_window()
+    await ecosystem_config.update_chaos_time_window()
     chaos_time_window = ecosystem_config.chaos_time_window
     assert chaos_time_window["beginning"] == today
     assert chaos_time_window["end"] == today + timedelta(days=duration)
 
-    ecosystem_config.update_chaos_time_window()
+    await ecosystem_config.update_chaos_time_window()
     with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log") as logs:
         assert "Chaos time window is already up to date." in logs
 
@@ -199,15 +202,16 @@ def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
     assert chaos_factor == max_intensity
 
 
-def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
+@pytest.mark.asyncio
+async def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
     assert ecosystem_config.lighting_method is gv.LightMethod.fixed
     new_method = gv.LightMethod.elongate
 
     with pytest.raises(ValueError):
-        ecosystem_config.set_lighting_method(new_method)
+        await ecosystem_config.set_lighting_method(new_method)
 
     ecosystem_config.general.home_coordinates = (0, 0)
-    ecosystem_config.set_lighting_method(new_method)
+    await ecosystem_config.set_lighting_method(new_method)
 
     # Should not happen
     del ecosystem_config.general.places["home"]
@@ -242,11 +246,12 @@ def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
         ecosystem_config.delete_climate_parameter("temperature")
 
 
-def test_ecosystem_time_parameters(ecosystem_config: EcosystemConfig):
+@pytest.mark.asyncio
+async def test_ecosystem_time_parameters(ecosystem_config: EcosystemConfig):
     assert ecosystem_config.nycthemeral_span_hours == gv.NycthemeralSpanConfig()
 
     with pytest.raises(ValueError):
-        ecosystem_config.set_nycthemeral_span_hours({"wrong": "value"})
+        await ecosystem_config.set_nycthemeral_span_hours({"wrong": "value"})
 
-    ecosystem_config.set_nycthemeral_span_hours({"day": "4h21", "night": "22h00"})
+    await ecosystem_config.set_nycthemeral_span_hours({"day": "4h21", "night": "22h00"})
     assert ecosystem_config.nycthemeral_span_hours.day == time(4, 21)
