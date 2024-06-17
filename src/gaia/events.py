@@ -4,6 +4,8 @@ from gaia.dependencies import check_dependencies
 
 check_dependencies("dispatcher")
 
+import asyncio
+from asyncio import Task
 import inspect
 import logging
 from time import monotonic, sleep
@@ -12,7 +14,6 @@ from typing import Any, Callable, cast, Literal, NamedTuple, Type
 from uuid import UUID
 import weakref
 
-from apscheduler.triggers.interval import IntervalTrigger
 from pydantic import ValidationError
 
 from dispatcher import AsyncEventHandler
@@ -107,6 +108,7 @@ class Events(AsyncEventHandler):
         self.registered = False
         self._sensor_buffer_cls: SensorBuffer | None = None
         self._last_heartbeat: float = monotonic()
+        self._task: Task | None = None
         self._jobs_scheduled: bool = False
         self.logger = logging.getLogger(f"gaia.engine.events_handler")
 
@@ -172,25 +174,38 @@ class Events(AsyncEventHandler):
         await self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
     def _schedule_jobs(self) -> None:
-        self.engine.scheduler.add_job(
-            func=self.ping,
-            id="events-ping",
-            trigger=IntervalTrigger(seconds=15),
-        )
+        self._task = asyncio.create_task(self.ping_task())
         self._jobs_scheduled = True
 
     def _unschedule_jobs(self) -> None:
-        self.engine.scheduler.remove_job(job_id="events-ping")
+        self._task.cancel()
+        self._task = None
         self._jobs_scheduled = False
 
     async def ping(self) -> None:
         if self._dispatcher.connected:
-            ecosystems = [{
-                "uid": ecosystem.uid,
-                "status": ecosystem.started,
-            } for ecosystem in self.ecosystems.values()]
-            self.logger.debug("Sending 'ping'.")
-            await self.emit("ping", data=ecosystems, ttl=20)
+            try:
+                ecosystems = [{
+                    "uid": ecosystem.uid,
+                    "status": ecosystem.started,
+                } for ecosystem in self.ecosystems.values()]
+                self.logger.debug("Sending 'ping'.")
+                await self.emit("ping", data=ecosystems, ttl=20)
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while running the ping routine. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
+
+    async def ping_task(self) -> None:
+        while True:
+            start = monotonic()
+            await self.ping()
+            time_taken = monotonic() - start
+            sleep_time = 15 - time_taken
+            if sleep_time < 0:
+                sleep_time = 0.01
+            await asyncio.sleep(sleep_time)
 
     async def on_pong(self) -> None:
         self.logger.debug("Received 'pong'.")
