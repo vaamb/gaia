@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+from asyncio import Task
 from datetime import datetime, time
 from statistics import mean
+from time import monotonic
 import typing
-
-from apscheduler.triggers.interval import IntervalTrigger
 
 import gaia_validators as gv
 
@@ -26,18 +27,26 @@ class Light(SubroutineTemplate):
         self.hardware: dict[str, "Switch"]
         self._loop_period: float = float(
             self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
+        self._task: Task | None = None
         self._light_sensors: list[LightSensor] | None = None
         self._any_dimmable_light: bool | None = None
         self._finish__init__()
 
     async def routine(self) -> None:
-        try:
-            await self._update_light_actuators()
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an error while running the light routine. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`."
-            )
+        while True:
+            start = monotonic()
+            try:
+                await self._update_light_actuators()
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while running the light routine. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
+            time_taken = monotonic() - start
+            sleep_time = self._loop_period - time_taken
+            if sleep_time < 0:
+                sleep_time = 0.01
+            await asyncio.sleep(sleep_time)
 
     async def _update_light_actuators(self) -> None:
         pid: HystericalPID = self.get_pid()
@@ -80,16 +89,13 @@ class Light(SubroutineTemplate):
         self.logger.info(
             f"Starting the light loop. It will run every "
             f"{self._loop_period:.2f} s.")
-        self.ecosystem.engine.scheduler.add_job(
-            func=self.routine,
-            id=f"{self.ecosystem.uid}-light_routine",
-            trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/20),
-        )
+        self._task = asyncio.create_task(self.routine())
         self.actuator_handler.activate()
 
     async def _stop(self) -> None:
         self.logger.info("Stopping light loop")
-        self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.uid}-light_routine")
+        self._task.cancel()
+        self._task = None
         self.actuator_handler.deactivate()
 
     """API calls"""
