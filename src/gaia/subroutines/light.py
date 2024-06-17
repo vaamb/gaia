@@ -33,15 +33,18 @@ class Light(SubroutineTemplate):
         self._finish__init__()
 
     async def routine(self) -> None:
+        try:
+            await self._update_light_actuators()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while running the light routine. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+            )
+
+    async def routine_task(self) -> None:
         while True:
             start = monotonic()
-            try:
-                await self._update_light_actuators()
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while running the light routine. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
-                )
+            await self.routine()
             time_taken = monotonic() - start
             sleep_time = self._loop_period - time_taken
             if sleep_time < 0:
@@ -89,7 +92,7 @@ class Light(SubroutineTemplate):
         self.logger.info(
             f"Starting the light loop. It will run every "
             f"{self._loop_period:.2f} s.")
-        self._task = asyncio.create_task(self.routine())
+        self._task = asyncio.create_task(self.routine_task())
         self.actuator_handler.activate()
 
     async def _stop(self) -> None:
