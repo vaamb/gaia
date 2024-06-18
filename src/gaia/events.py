@@ -226,6 +226,7 @@ class Events(AsyncEventHandler):
         await self.register()
 
     async def on_disconnect(self, *args) -> None:  # noqa
+        self.logger.debug("Received a disconnection request.")
         if self.engine.stopping:
             self.logger.info("Engine requested to disconnect from the broker.")
             return  # The Engine takes care to shut down the scheduler and the jobs running
@@ -243,7 +244,13 @@ class Events(AsyncEventHandler):
         await self.register()
 
     async def on_registration_ack(self, host_uid: str) -> None:
-        if self._dispatcher.host_uid != UUID(host_uid):
+        try:
+            uuid = UUID(host_uid)
+        except ValueError:
+            self.logger.warning(
+                "Received a wrongly formatted registration acknowledgment.")
+            return
+        if self._dispatcher.host_uid != uuid:
             self.logger.warning(
                 "Received a registration acknowledgment for another dispatcher.")
             return
@@ -366,8 +373,10 @@ class Events(AsyncEventHandler):
         data: gv.TurnActuatorPayloadDict = self.validate_payload(
             message, gv.TurnActuatorPayload)
         ecosystem_uid: str = data["ecosystem_uid"]
+        self.logger.debug(
+            f"Received 'turn_actuator' event to turn ecosystem '{ecosystem_uid}'"
+            f"'s '{data['actuator'].name}' to mode '{data['mode'].name}'")
         if ecosystem_uid in self.ecosystems:
-            self.logger.debug("Received turn_actuator event")
             await self.ecosystems[ecosystem_uid].turn_actuator(
                 actuator=data["actuator"],
                 mode=data["mode"],

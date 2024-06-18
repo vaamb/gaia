@@ -4,10 +4,14 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia.events import Events
+from gaia.events import Events as Events_
 
 from ..data import ecosystem_uid, engine_uid, hardware_info, hardware_uid
-from ..utils import get_logs_content
+from ..utils import get_logs_content, MockDispatcher
+
+
+class Events(Events_):
+    _dispatcher: MockDispatcher
 
 
 def assert_success(events_handler: Events, expected_events_emitted: int = 2):

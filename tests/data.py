@@ -3,6 +3,11 @@ from datetime import time
 import gaia_validators as gv
 
 
+place_name = "home"
+place_longitude = 42.0
+place_latitude = 7.0
+
+
 engine_uid = "engine_uid"
 
 ecosystem_uid = "Rfrg5Kiv"
@@ -60,8 +65,9 @@ sun_times = {
     "twilight_end": time(20, 45),
 }
 
-lighting_start = time(8,00)
+lighting_start = time(8, 00)
 lighting_stop = time(20, 00)
+lighting_method = gv.LightingMethod.fixed
 
 
 ecosystem_info = {
@@ -84,10 +90,10 @@ ecosystem_info = {
                 "duration": 0,
                 "intensity": 0.0,
             },
-            "sky": {
+            "nycthemeral_cycle": {
                 "day": lighting_start,
                 "night": lighting_stop,
-                "lighting": gv.LightMethod.fixed,
+                "lighting": lighting_method,
             },
             "climate": {},
         },
