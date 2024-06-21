@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Event, sleep, Task
-from concurrent.futures import ThreadPoolExecutor
 import logging
 import logging.config
 from math import ceil
@@ -51,8 +50,6 @@ class Engine(metaclass=SingletonMeta):
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = self.config.app_config.ENGINE_UID
         self._virtual_world: VirtualWorld | None = None
-        self._executor: ThreadPoolExecutor = ThreadPoolExecutor(
-                thread_name_prefix=f"Engine_ThreadPoolExecutor", max_workers=15)
         self._scheduler: AsyncIOScheduler = AsyncIOScheduler()
         if self.config.app_config.VIRTUALIZATION:
             self.logger.info("Using ecosystem virtualization.")
@@ -84,10 +81,6 @@ class Engine(metaclass=SingletonMeta):
             raise AttributeError(
                 "'VIRTUALIZATION' needs to be set in GaiaConfig to use virtualization.")
         return self._virtual_world
-
-    @property
-    def executor(self) -> ThreadPoolExecutor:
-        return self._executor
 
     @property
     def scheduler(self) -> AsyncIOScheduler:
@@ -727,7 +720,6 @@ class Engine(metaclass=SingletonMeta):
             await self.stop_plugins()
         self.config.stop_watchdog()
         self.stop_background_tasks()
-        self.executor.shutdown()
         self._shut_down = True
         self.logger.info("Gaia has shut down")
 
