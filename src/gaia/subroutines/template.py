@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor
 import logging
 import typing as t
 from typing import Type
@@ -97,10 +96,6 @@ class SubroutineTemplate(ABC):
     @hardware_choices.setter
     def hardware_choices(self, choices: dict[str, Type[Hardware]]) -> None:
         self._hardware_choices = choices
-
-    @property
-    def executor(self) -> ThreadPoolExecutor:
-        return self.ecosystem.engine.executor
 
     async def add_hardware(
             self,
