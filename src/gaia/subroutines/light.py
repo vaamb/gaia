@@ -45,10 +45,7 @@ class Light(SubroutineTemplate):
         while True:
             start = monotonic()
             await self.routine()
-            time_taken = monotonic() - start
-            sleep_time = self._loop_period - time_taken
-            if sleep_time < 0:
-                sleep_time = 0.01
+            sleep_time = min(self._loop_period - (monotonic() - start), 0.01)
             await asyncio.sleep(sleep_time)
 
     async def _update_light_actuators(self) -> None:
