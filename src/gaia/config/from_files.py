@@ -496,9 +496,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
         self.logger.info("Starting the configuration files watchdog")
         self.task = asyncio.create_task(
-            self._watchdog_loop(),
-            name="Config_WatchdogLoopThread",
-        )
+            self._watchdog_loop(), name="config-watchdog_loop")
         self.logger.debug("Configuration files watchdog successfully started")
 
     def stop_watchdog(self) -> None:

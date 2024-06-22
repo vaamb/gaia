@@ -645,9 +645,7 @@ class Engine(metaclass=SingletonMeta):
             await self.start_plugins()
         # Start the engine thread
         self.task = asyncio.create_task(
-            self._loop(),
-            name="Engine_LoopThread",
-        )
+            self._loop(), name="engine-loop")
         # Refresh ecosystems a first time
         await sleep(0)  # Allow _loop() to start
         await self._resume()
