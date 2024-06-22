@@ -174,7 +174,8 @@ class Events(AsyncEventHandler):
         await self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
 
     def _schedule_jobs(self) -> None:
-        self._task = asyncio.create_task(self.ping_task())
+        self._task = asyncio.create_task(
+            self.ping_task(), name="events-ping")
         self._jobs_scheduled = True
 
     def _unschedule_jobs(self) -> None:

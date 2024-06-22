@@ -145,7 +145,10 @@ class Sensors(SubroutineTemplate):
             # Do not try to get data from sensors still trying to get their measures
             if hardware.uid in slow_sensors:
                 continue
-            future = asyncio.create_task(hardware.get_data())
+            future = asyncio.create_task(
+                hardware.get_data(),
+                name=f"{self.ecosystem.uid}-sensors-{hardware.uid}-get_data"
+            )
             future = cast(_SensorFuture, future)
             future.hardware_uid = hardware.uid
             futures.append(future)

@@ -89,7 +89,8 @@ class Light(SubroutineTemplate):
         self.logger.info(
             f"Starting the light loop. It will run every "
             f"{self._loop_period:.2f} s.")
-        self._task = asyncio.create_task(self.routine_task())
+        self._task = asyncio.create_task(
+            self.routine_task(), name=f"{self.ecosystem.uid}-light-routine")
         self.actuator_handler.activate()
 
     async def _stop(self) -> None:
