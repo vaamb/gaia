@@ -37,6 +37,7 @@ class Sensors(SubroutineTemplate):
         self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         #self._data_lock = Lock()
+        self._sending_data_task: Task | None = None
         self._finish__init__()
 
     async def routine(self) -> None:
@@ -55,7 +56,7 @@ class Sensors(SubroutineTemplate):
                 f"Sensors data update finished in {update_time:.1f} s."
             )
         try:
-            await self.send_data()
+            await self.send_data_if_needed()
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while sending sensors data and warnings. "
@@ -96,6 +97,7 @@ class Sensors(SubroutineTemplate):
             await self.ecosystem.stop_subroutine("climate")
         self.ecosystem.engine.scheduler.remove_job(
             f"{self.ecosystem.uid}-sensors_routine")
+        self._sending_data_task = None
         self.hardware = {}
 
     """API calls"""
@@ -254,7 +256,13 @@ class Sensors(SubroutineTemplate):
             self.sensors_data = gv.Empty()
 
     async def send_data(self) -> None:
-        if not self.ecosystem.engine.use_message_broker:
-            return
         await self.ecosystem.engine.event_handler.send_payload_if_connected(
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
+
+    async def send_data_if_needed(self) -> None:
+        if (
+                self._sending_data_task is None
+                or self._sending_data_task.done()
+        ) and self.ecosystem.engine.use_message_broker:
+            self._sending_data_task = asyncio.create_task(
+                self.send_data(), name=f"{self.ecosystem.uid}-sensors-send_data")
