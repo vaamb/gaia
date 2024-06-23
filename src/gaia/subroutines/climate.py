@@ -4,8 +4,6 @@ from datetime import datetime, time
 from time import monotonic
 import typing as t
 
-from apscheduler.triggers.interval import IntervalTrigger
-
 import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorCouple, actuator_couples, HystericalPID
@@ -28,8 +26,9 @@ class Climate(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self.hardware: dict[str, Dimmer | Switch]
-        self._loop_period: float = float(
+        loop_period = float(
             self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
+        self._loop_period: float = max(loop_period, 10.0)
         self._sensor_miss: int = 0
         self._regulated_parameters: dict[gv.ClimateParameter: bool] = {
             gv.ClimateParameter.temperature: False,
@@ -110,23 +109,6 @@ class Climate(SubroutineTemplate):
         return regulated_parameters
 
     async def _update_climate_actuators(self) -> None:
-        if not self.ecosystem.get_subroutine_status("sensors"):
-            if not self.config.get_management("sensors"):
-                self.logger.error(
-                    "The climate subroutine requires sensors management in order to "
-                    "work. Stopping the climate subroutine."
-                )
-                await self.stop()
-                return
-            else:
-                self.logger.debug(
-                    f"Could not reach Sensors subroutine, climate subroutine will "
-                    f"try again {5 - self._sensor_miss} times before stopping."
-                )
-                self._sensor_miss += 1
-                self._check_misses()
-                return
-
         sensors_subroutine: Sensors = self.ecosystem.subroutines["sensors"]
         sensors_data = sensors_subroutine.sensors_data
         if isinstance(sensors_data, gv.Empty):
@@ -139,6 +121,7 @@ class Climate(SubroutineTemplate):
             self._check_misses()
             return
 
+        self._sensor_miss = 0
         sensors_average: dict[str, float] = {
             data.measure: data.value for data in sensors_data.average
         }
@@ -215,11 +198,11 @@ class Climate(SubroutineTemplate):
         for climate_parameter in self._regulated_parameters:
             pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
             pid.reset()
-        self.ecosystem.engine.scheduler.add_job(
-            func=self.routine,
-            id=f"{self.ecosystem.uid}-climate_routine",
-            trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
-        )
+        #self.ecosystem.engine.scheduler.add_job(
+        #    func=self.routine,
+        #    id=f"{self.ecosystem.uid}-climate_routine",
+        #    trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
+        #)
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
@@ -227,8 +210,8 @@ class Climate(SubroutineTemplate):
                 actuator_handler.activate()
 
     async def _stop(self) -> None:
-        self.ecosystem.engine.scheduler.remove_job(
-            f"{self.ecosystem.uid}-climate_routine")
+        #self.ecosystem.engine.scheduler.remove_job(
+        #    f"{self.ecosystem.uid}-climate_routine")
         for parameter in self.regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
