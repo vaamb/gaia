@@ -202,7 +202,7 @@ class Events(AsyncEventHandler):
         while True:
             start = monotonic()
             await self.ping()
-            sleep_time = min(15 - (monotonic() - start), 0.01)
+            sleep_time = max(15 - (monotonic() - start), 0.01)
             await asyncio.sleep(sleep_time)
 
     async def on_pong(self) -> None:
