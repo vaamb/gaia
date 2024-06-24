@@ -13,7 +13,7 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler
 from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHelper
-from gaia.config.from_files import _MetaEcosystemConfig, PrivateConfigValidator
+from gaia.config.from_files import _MetaEcosystemConfig
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.subroutines import (
@@ -110,15 +110,6 @@ def testing_cfg(temp_dir) -> None:
 async def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
     engine_config = EngineConfig()
     await engine_config.initialize_configs()
-
-    engine_config._private_config = PrivateConfigValidator(**{
-        "places": {
-            place_name: gv.Coordinates(
-                latitude=place_latitude,
-                longitude=place_longitude,
-            ),
-        },
-    }).model_dump()
 
     yield engine_config
 
