@@ -6,7 +6,8 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia import Ecosystem
+from gaia import Ecosystem, EngineConfig
+from gaia.config.from_files import PrivateConfigValidator
 from gaia.events import Events as Events_
 
 from ..data import (
@@ -76,7 +77,19 @@ async def test_on_registration_ack_wrong_uuid(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_on_registration_ack(events_handler: Events):
+async def test_on_registration_ack(
+        engine_config: EngineConfig,
+        events_handler: Events
+):
+    engine_config._private_config = PrivateConfigValidator(**{
+        "places": {
+            place_name: gv.Coordinates(
+                latitude=place_latitude,
+                longitude=place_longitude,
+            ),
+        },
+    }).model_dump()
+
     host_uid = events_handler._dispatcher.host_uid.__str__()
     await events_handler.on_registration_ack(host_uid)
 
