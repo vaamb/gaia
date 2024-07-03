@@ -520,7 +520,8 @@ class Events(AsyncEventHandler):
                 "parameter 'USE_DATABASE' to 'True'.")
         SensorBuffer = self.sensor_buffer_cls  # noqa
         async with self.db.scoped_session() as session:
-            async for payload in SensorBuffer.get_buffered_data(session):
+            buffer_data_iterator = await SensorBuffer.get_buffered_data(session)
+            async for payload in buffer_data_iterator:
                 payload_dict: gv.BufferedSensorsDataPayloadDict = payload.model_dump()
                 await self.emit(event="buffered_sensors_data", data=payload_dict)
 

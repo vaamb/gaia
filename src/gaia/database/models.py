@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import AsyncGenerator, Sequence
+from typing import AsyncGenerator, NamedTuple, Sequence, Type, TypeVar
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -15,6 +15,9 @@ from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 from gaia.utils import json
 
 
+BT = TypeVar("BT", bound=gv.BufferedDataPayload)
+
+
 db = AsyncSQLAlchemyWrapper(
     engine_options={
         "json_serializer": json.dumps,
@@ -24,39 +27,8 @@ db = AsyncSQLAlchemyWrapper(
 Base = db.Model
 
 
-class BaseSensorRecord(Base):
+class DataBufferMixin(Base):
     __abstract__ = True
-
-    id: Mapped[int] = mapped_column(nullable=False, primary_key=True)
-    sensor_uid: Mapped[str] = mapped_column(sa.String(length=16), nullable=False)
-    ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8), nullable=False)
-    measure: Mapped[str] = mapped_column(sa.String(length=16), nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(nullable=False)
-    value: Mapped[float] = mapped_column(sa.Float(precision=2), nullable=False)
-
-    __table_args__ = (
-        sa.schema.UniqueConstraint(
-            "measure", "timestamp", "value", "ecosystem_uid", "sensor_uid",
-            name="_no_repost_constraint"),
-    )
-
-    @property
-    def dict_repr(self) -> dict:
-        return {
-            "sensor_uid": self.sensor_uid,
-            "ecosystem_uid": self.ecosystem_uid,
-            "measure": self.measure,
-            "timestamp": self.timestamp,
-            "value": self.value,
-        }
-
-
-class SensorRecord(BaseSensorRecord):
-    __tablename__ = "sensor_records"
-
-
-class SensorBuffer(BaseSensorRecord):
-    __tablename__ = "sensor_buffers"
 
     exchange_uuid: Mapped[UUID | None] = mapped_column()
 
@@ -64,8 +36,20 @@ class SensorBuffer(BaseSensorRecord):
     async def get_buffered_data(
             cls,
             session: AsyncSession,
-            per_page: int = 50
-    ) -> AsyncGenerator[gv.BufferedSensorsDataPayload]:
+            per_page: int = 50,
+    ) -> AsyncGenerator[gv.BufferedDataPayload]:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )  # pragma: no cover
+
+    @classmethod
+    async def _get_buffered_data(
+            cls,
+            buffered_record_class: Type[NamedTuple],
+            buffered_payload_model: Type[BT],
+            session: AsyncSession,
+            per_page: int = 50,
+    ) -> AsyncGenerator[BT]:
         page: int = 0
         try:
             while True:
@@ -80,20 +64,17 @@ class SensorBuffer(BaseSensorRecord):
                 if not buffered_data:
                     break
                 uuid = uuid4()
-                rv: list[gv.BufferedSensorRecord] = []
+                rv: list[NamedTuple] = []
                 for data in buffered_data:
                     data.exchange_uuid = uuid
                     rv.append(
-                        gv.BufferedSensorRecord(
-                            ecosystem_uid=data.ecosystem_uid,
-                            sensor_uid=data.sensor_uid,
-                            measure=data.measure,
-                            value=data.value,
-                            timestamp=data.timestamp
-                        )
+                        gv.BufferedSensorRecord(**{
+                            data_field: getattr(data, data_field)
+                            for data_field in buffered_record_class._fields
+                        })
                     )
 
-                yield gv.BufferedSensorsDataPayload(
+                yield buffered_payload_model(
                     data=rv,
                     uuid=uuid,
                 )
@@ -117,3 +98,110 @@ class SensorBuffer(BaseSensorRecord):
             .values(exchange_uuid=None)
         )
         await session.execute(stmt)
+
+
+class BaseSensorRecord(Base):
+    __abstract__ = True
+
+    id: Mapped[int] = mapped_column(nullable=False, primary_key=True)
+    ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
+    sensor_uid: Mapped[str] = mapped_column(sa.String(length=16))
+    measure: Mapped[str] = mapped_column(sa.String(length=16))
+    timestamp: Mapped[datetime] = mapped_column()
+    value: Mapped[float] = mapped_column(sa.Float(precision=2))
+
+    __table_args__ = (
+        sa.schema.UniqueConstraint(
+            "measure", "timestamp", "value", "ecosystem_uid", "sensor_uid",
+            name="_no_repost_constraint"),
+    )
+
+    @property
+    def dict_repr(self) -> dict:
+        return {
+            "sensor_uid": self.sensor_uid,
+            "ecosystem_uid": self.ecosystem_uid,
+            "measure": self.measure,
+            "timestamp": self.timestamp,
+            "value": self.value,
+        }
+
+
+class SensorRecord(BaseSensorRecord):
+    __tablename__ = "sensor_records"
+
+
+class SensorBuffer(BaseSensorRecord, DataBufferMixin):
+    __tablename__ = "sensor_buffers"
+
+    @classmethod
+    async def get_buffered_data(
+            cls,
+            session: AsyncSession,
+            per_page: int = 50
+    ) -> AsyncGenerator[gv.BufferedSensorsDataPayload]:
+        return cls._get_buffered_data(
+            buffered_record_class=gv.BufferedSensorRecord,
+            buffered_payload_model=gv.BufferedSensorsDataPayload,
+            session=session,
+            per_page=per_page,
+        )
+
+    @classmethod
+    async def clear_buffer(cls, session: AsyncSession, uuid: UUID | str) -> None:
+        stmt = (
+            delete(cls)
+            .where(cls.exchange_uuid == uuid)
+        )
+        await session.execute(stmt)
+
+    @classmethod
+    async def clear_uuid(cls, session: AsyncSession, uuid: UUID | str) -> None:
+        stmt = (
+            update(cls)
+            .where(cls.exchange_uuid == uuid)
+            .values(exchange_uuid=None)
+        )
+        await session.execute(stmt)
+
+
+class BaseActuatorRecord(Base):
+    __abstract__ = True
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
+    type: Mapped[gv.HardwareType] = mapped_column()
+    timestamp: Mapped[datetime] = mapped_column()
+    active: Mapped[bool] = mapped_column()
+    mode: Mapped[gv.ActuatorMode] = mapped_column(default=gv.ActuatorMode.automatic)
+    status: Mapped[bool] = mapped_column()
+    level: Mapped[float | None] = mapped_column(default=None)
+
+    __table_args__ = (
+        sa.schema.UniqueConstraint(
+            "type", "ecosystem_uid", "timestamp", "mode", "status",
+            name="_no_repost_constraint"),
+    )
+
+
+class ActuatorRecord(BaseActuatorRecord):
+    __tablename__ = "actuator_records"
+
+
+class ActuatorBuffer(BaseActuatorRecord, DataBufferMixin):
+    __tablename__ = "actuator_buffers"
+
+    exchange_uuid: Mapped[UUID | None] = mapped_column()
+
+    @classmethod
+    async def get_buffered_data(
+            cls,
+            session: AsyncSession,
+            per_page: int = 50
+    ) -> AsyncGenerator[gv.BufferedActuatorsStatePayload]:
+        return cls._get_buffered_data(
+            buffered_record_class=gv.BufferedActuatorRecord,
+            buffered_payload_model=gv.BufferedActuatorsStatePayload,
+            session=session,
+            per_page=per_page,
+        )
