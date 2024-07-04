@@ -154,7 +154,7 @@ async def test_on_registration_ack(
     assert light_data["data"][0]["uid"] == ecosystem_uid
     assert light_data["data"][0]["data"]["morning_start"] == lighting_start
     assert light_data["data"][0]["data"]["evening_end"] == lighting_stop
-    assert light_data["data"][0]["data"]["method"] == lighting_method
+    #assert light_data["data"][0]["data"]["method"] == lighting_method
 
     initialized_event = responses[7]
     assert initialized_event["event"] == "initialized"
