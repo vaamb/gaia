@@ -338,7 +338,7 @@ class ActuatorHandler:
                     await self.send_actuators_state_if_possible()
                 self._updating = False
 
-    def _check_status_update_transaction(self) -> None:
+    def _check_update_status_transaction(self) -> None:
         if not self._updating:
             raise RuntimeError(
                 "This method should be used in a 'update_status' `async with` "
@@ -346,7 +346,7 @@ class ActuatorHandler:
             )
 
     async def set_mode(self, value: gv.ActuatorMode) -> None:
-        self._check_status_update_transaction()
+        self._check_update_status_transaction()
         self._set_mode(value)
         if self._mode != self._last_mode:
             # TODO: reset associated PID ?
@@ -369,7 +369,7 @@ class ActuatorHandler:
         return self._status
 
     async def set_status(self, value: bool) -> None:
-        self._check_status_update_transaction()
+        self._check_update_status_transaction()
         await self._set_status(value)
         if self._status != self._last_status:
             self._any_status_change = True
@@ -409,7 +409,7 @@ class ActuatorHandler:
         return self._level
 
     async def set_level(self, pwm_level: float) -> None:
-        self._check_status_update_transaction()
+        self._check_update_status_transaction()
         self._level = pwm_level
         #self._any_status_change = True
         for actuator in self.get_linked_actuators():
@@ -426,20 +426,20 @@ class ActuatorHandler:
         return None
 
     def reset_countdown(self) -> None:
-        self._check_status_update_transaction()
+        self._check_update_status_transaction()
         self._timer_on = False
         self._time_limit = 0.0
         self._any_status_change = True
 
     async def check_countdown(self) -> None:
-        self._check_status_update_transaction()
+        self._check_update_status_transaction()
         countdown = self.countdown
         if countdown is not None and countdown <= 0.1:
             await self.set_mode(gv.ActuatorMode.automatic)
             self.reset_countdown()
 
     def increase_countdown(self, delta_time: float) -> None:
-        self._check_status_update_transaction()
+        self._check_update_status_transaction()
         if self._time_limit:
             self.logger.info(f"Increasing timer by {delta_time} seconds")
             self._time_limit += delta_time
@@ -449,7 +449,7 @@ class ActuatorHandler:
         self._any_status_change = True
 
     def decrease_countdown(self, delta_time: float) -> None:
-        self._check_status_update_transaction()
+        self._check_update_status_transaction()
         if self._time_limit:
             self.logger.info(f"Decreasing timer by {delta_time} seconds")
             self._time_limit -= delta_time
