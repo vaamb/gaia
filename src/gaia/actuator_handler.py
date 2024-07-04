@@ -332,6 +332,7 @@ class ActuatorHandler:
             try:
                 self._updating = True
                 self._any_status_change = False
+                await self.check_countdown()
                 yield
             finally:
                 if self._any_status_change:

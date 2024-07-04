@@ -146,7 +146,6 @@ class Climate(SubroutineTemplate):
                     # No actuator to act on, go next
                     continue
                 async with actuator_handler.update_status_transaction():
-                    await actuator_handler.check_countdown()
                     expected_status = actuator_handler.compute_expected_status(
                         pid_output)
                     if expected_status:

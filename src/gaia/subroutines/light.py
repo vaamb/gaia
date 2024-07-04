@@ -60,7 +60,6 @@ class Light(SubroutineTemplate):
 
         pid_output = pid.update_pid(current_value)
         async with self.actuator_handler.update_status_transaction():
-            await self.actuator_handler.check_countdown()
             expected_status = self.actuator_handler.compute_expected_status(pid_output)
 
             if expected_status:
