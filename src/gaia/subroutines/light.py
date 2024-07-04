@@ -59,15 +59,16 @@ class Light(SubroutineTemplate):
             current_value = 0.0
 
         pid_output = pid.update_pid(current_value)
-        await self.actuator_handler.check_countdown()
-        expected_status = self.actuator_handler.compute_expected_status(pid_output)
+        async with self.actuator_handler.update_status_transaction():
+            await self.actuator_handler.check_countdown()
+            expected_status = self.actuator_handler.compute_expected_status(pid_output)
 
-        if expected_status:
-            await self.actuator_handler.turn_on()
-            await self.actuator_handler.set_level(pid_output)
-        else:
-            await self.actuator_handler.turn_off()
-            await self.actuator_handler.set_level(0.0)
+            if expected_status:
+                await self.actuator_handler.turn_on()
+                await self.actuator_handler.set_level(pid_output)
+            else:
+                await self.actuator_handler.turn_off()
+                await self.actuator_handler.set_level(0.0)
 
     """Functions to switch the light on/off either manually or automatically"""
     def _compute_if_manageable(self) -> bool:

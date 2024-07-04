@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+from asyncio import Lock, Task
+from contextlib import asynccontextmanager
 import enum
 import dataclasses
 import logging
@@ -245,7 +248,8 @@ class ActuatorHandler:
     __slots__ = (
         "_active", "_actuators", "_level", "_last_mode", "_last_status",
         "_mode", "_status", "_time_limit", "_timer_on", "actuator_hub",
-        "direction", "ecosystem", "logger", "type"
+        "direction", "ecosystem", "logger", "type", "_update_lock",
+        "_updating", "_any_status_change", "_sending_data_task",
     )
 
     def __init__(
@@ -272,6 +276,10 @@ class ActuatorHandler:
         self._last_status: bool = self.status
         self._last_mode: gv.ActuatorMode = self.mode
         self._actuators: list[Switch | Dimmer] | None = None
+        self._update_lock: Lock = Lock()
+        self._updating: bool = False
+        self._any_status_change: bool = False
+        self._sending_data_task: Task | None = None
 
     def __repr__(self) -> str:
         uid = self.actuator_hub.ecosystem.uid
@@ -318,17 +326,37 @@ class ActuatorHandler:
     def mode(self) -> gv.ActuatorMode:
         return self._mode
 
+    @asynccontextmanager
+    async def update_status_transaction(self):
+        async with self._update_lock:
+            try:
+                self._updating = True
+                self._any_status_change = False
+                yield
+            finally:
+                if self._any_status_change:
+                    await self.send_actuators_state_if_possible()
+                self._updating = False
+
+    def _check_status_update_transaction(self) -> None:
+        if not self._updating:
+            raise RuntimeError(
+                "This method should be used in a 'update_status' `async with` "
+                "block."
+            )
+
     async def set_mode(self, value: gv.ActuatorMode) -> None:
-        self._set_mode_no_update(value)
+        self._check_status_update_transaction()
+        self._set_mode(value)
         if self._mode != self._last_mode:
             # TODO: reset associated PID ?
+            self._any_status_change = True
             self.logger.info(
                 f"{self.type.name.capitalize()} has been set to "
                 f"'{self.mode.name}' mode")
-            await self.send_actuators_state()
             self._last_mode = self._mode
 
-    def _set_mode_no_update(self, value: gv.ActuatorMode) -> None:
+    def _set_mode(self, value: gv.ActuatorMode) -> None:
         validated_value = gv.safe_enum_from_name(gv.ActuatorMode, value)
         self._mode = validated_value
 
@@ -341,21 +369,16 @@ class ActuatorHandler:
         return self._status
 
     async def set_status(self, value: bool) -> None:
-        await self._set_status_no_update(value)
+        self._check_status_update_transaction()
+        await self._set_status(value)
         if self._status != self._last_status:
+            self._any_status_change = True
             self.logger.info(
                 f"{self.type.name.capitalize()} has been turned "
                 f"{'on' if self.status else 'off'}")
-            await self.send_actuators_state()
             self._last_status = self._status
 
-    async def turn_on(self) -> None:
-        await self.set_status(True)
-
-    async def turn_off(self) -> None:
-        await self.set_status(False)
-
-    async def _set_status_no_update(self, value: bool) -> None:
+    async def _set_status(self, value: bool) -> None:
         self._status = value
         actuators_linked = self.get_linked_actuators()
         if not actuators_linked:
@@ -371,6 +394,12 @@ class ActuatorHandler:
                 else:
                     await actuator.turn_off()
 
+    async def turn_on(self) -> None:
+        await self.set_status(True)
+
+    async def turn_off(self) -> None:
+        await self.set_status(False)
+
     @property
     def last_status(self) -> bool:
         return self._last_status
@@ -380,7 +409,9 @@ class ActuatorHandler:
         return self._level
 
     async def set_level(self, pwm_level: float) -> None:
+        self._check_status_update_transaction()
         self._level = pwm_level
+        #self._any_status_change = True
         for actuator in self.get_linked_actuators():
             if isinstance(actuator, Dimmer):
                 await actuator.set_pwm_level(pwm_level)
@@ -395,29 +426,36 @@ class ActuatorHandler:
         return None
 
     def reset_countdown(self) -> None:
+        self._check_status_update_transaction()
         self._timer_on = False
         self._time_limit = 0.0
+        self._any_status_change = True
 
     async def check_countdown(self) -> None:
+        self._check_status_update_transaction()
         countdown = self.countdown
         if countdown is not None and countdown <= 0.1:
             await self.set_mode(gv.ActuatorMode.automatic)
             self.reset_countdown()
 
     def increase_countdown(self, delta_time: float) -> None:
+        self._check_status_update_transaction()
         if self._time_limit:
             self.logger.info(f"Increasing timer by {delta_time} seconds")
             self._time_limit += delta_time
         else:
             self._time_limit = time.monotonic() + delta_time
         self._timer_on = True
+        self._any_status_change = True
 
     def decrease_countdown(self, delta_time: float) -> None:
+        self._check_status_update_transaction()
         if self._time_limit:
             self.logger.info(f"Decreasing timer by {delta_time} seconds")
             self._time_limit -= delta_time
             if self._time_limit <= 0:
                 self._time_limit = 0.0
+            self._any_status_change = True
         else:
             raise AttributeError("No timer set, you cannot reduce the countdown")
 
@@ -429,37 +467,52 @@ class ActuatorHandler:
         turn_to: gv.ActuatorModePayload = gv.safe_enum_from_name(
             gv.ActuatorModePayload, turn_to)
         additional_message = ""
-        if turn_to == gv.ActuatorModePayload.automatic:
-            self._set_mode_no_update(gv.ActuatorMode.automatic)
-        else:
-            self._set_mode_no_update(gv.ActuatorMode.manual)
-            if turn_to == gv.ActuatorModePayload.on:
-                await self._set_status_no_update(True)
-            else:  # turn_to == ActuatorModePayload.off
-                await self._set_status_no_update(False)
+        async with self.update_status_transaction():
+            if turn_to == gv.ActuatorModePayload.automatic:
+                await self.set_mode(gv.ActuatorMode.automatic)
+            else:
+                await self.set_mode(gv.ActuatorMode.manual)
+                if turn_to == gv.ActuatorModePayload.on:
+                    await self.set_status(True)
+                else:  # turn_to == ActuatorModePayload.off
+                    await self.set_status(False)
             if countdown:
                 self._time_limit = 0.0
                 self.increase_countdown(countdown)
                 additional_message = f" for {countdown} seconds"
                 # TODO: use a callback ?
-        self.logger.info(
-            f"{self.type.name} has been manually turned to '{turn_to.name}'"
-            f"{additional_message}.")
-        if self._status != self._last_status or self._mode != self._last_mode:
-            self.logger.info(
-                f"{self.type.name.capitalize()} has been turned "
-                f"{'on' if self.status else 'off'} with '{self.mode.name}' mode.")
-            await self.send_actuators_state()
-        self._last_mode = self.mode
-        self._last_status = self.status
+            if self._any_status_change:
+                self.logger.info(
+                    f"{self.type.name.capitalize()} has been manually turned to "
+                    f"'{turn_to.name}'{additional_message}.")
+                self.logger.info(
+                    f"{self.type.name.capitalize()} has been turned "
+                    f"{'on' if self.status else 'off'} with '{self.mode.name}' "
+                    f"mode.")
 
     async def send_actuators_state(self) -> None:
-        if (
+        if not (
                 self.ecosystem.engine.use_message_broker
                 and self.ecosystem.event_handler.registered
         ):
-            await self.ecosystem.event_handler.send_payload_if_connected(
-                "actuator_data", ecosystem_uids=[self.ecosystem.config.uid])
+            return
+        if not self.ecosystem.event_handler.is_connected():
+            self.logger.debug(
+                f"Events handler not currently connected. Emission of event "
+                f"'actuator_data' aborted.")
+            return
+        await self.ecosystem.event_handler.send_payload_if_connected(
+            "actuator_data", ecosystem_uids=[self.ecosystem.config.uid])
+
+    async def send_actuators_state_if_possible(self) -> None:
+        if (
+                self._sending_data_task is None
+                or self._sending_data_task.done()
+        ):
+            self._sending_data_task = asyncio.create_task(
+                self.send_actuators_state(),
+                name=f"{self.ecosystem.uid}-sensors-send_actuators_state"
+            )
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
         if self.mode == gv.ActuatorMode.automatic:
