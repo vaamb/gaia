@@ -485,34 +485,23 @@ class ActuatorHandler:
                 self.logger.info(
                     f"{self.type.name.capitalize()} has been manually turned to "
                     f"'{turn_to.name}'{additional_message}.")
-                self.logger.info(
-                    f"{self.type.name.capitalize()} has been turned "
-                    f"{'on' if self.status else 'off'} with '{self.mode.name}' "
-                    f"mode.")
 
     async def send_actuators_state(self) -> None:
-        if not (
+        if (
                 self.ecosystem.engine.use_message_broker
                 and self.ecosystem.event_handler.registered
         ):
-            return
-        if not self.ecosystem.event_handler.is_connected():
-            self.logger.debug(
-                f"Events handler not currently connected. Emission of event "
-                f"'actuator_data' aborted.")
-            return
-        await self.ecosystem.event_handler.send_payload_if_connected(
-            "actuator_data", ecosystem_uids=[self.ecosystem.config.uid])
+            await self.ecosystem.event_handler.send_payload_if_connected(
+                "actuator_data", ecosystem_uids=[self.ecosystem.config.uid])
 
     async def send_actuators_state_if_possible(self) -> None:
         if (
                 self._sending_data_task is None
                 or self._sending_data_task.done()
         ):
+            task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_actuators_state"
             self._sending_data_task = asyncio.create_task(
-                self.send_actuators_state(),
-                name=f"{self.ecosystem.uid}-sensors-send_actuators_state"
-            )
+                self.send_actuators_state(), name=task_name)
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
         if self.mode == gv.ActuatorMode.automatic:
