@@ -5,6 +5,7 @@ from asyncio import Lock, Task
 from contextlib import asynccontextmanager
 import enum
 import dataclasses
+from datetime import datetime, timezone
 import logging
 import time
 import typing
@@ -248,7 +249,7 @@ class ActuatorHandler:
     __slots__ = (
         "_active", "_actuators", "_any_status_change", "_level", "_mode",
         "_status", "_sending_data_task", "_time_limit", "_timer_on",
-        "_update_lock", "_updating", "actuator_hub",
+        "_update_lock", "_updated_data", "_updating", "actuator_hub",
         "direction", "ecosystem", "logger", "type",
     )
 
@@ -276,6 +277,7 @@ class ActuatorHandler:
         self._actuators: list[Switch | Dimmer] | None = None
         self._update_lock: Lock = Lock()
         self._updating: bool = False
+        self._updated_data: gv.ActuatorStateRecord | None = None
         self._any_status_change: bool = False
         self._sending_data_task: Task | None = None
 
@@ -309,6 +311,16 @@ class ActuatorHandler:
             "level": self._level,
             "mode": self._mode,
         }
+
+    def as_record(self, timestamp: datetime | None = None) -> gv.ActuatorStateRecord:
+        return gv.ActuatorStateRecord(
+            type=self.type,
+            active=self.active,
+            mode=self.mode,
+            status=self.status,
+            level=self._level,
+            timestamp=timestamp
+        )
 
     @property
     def active(self) -> bool:
@@ -344,12 +356,15 @@ class ActuatorHandler:
             try:
                 self._updating = True
                 self._any_status_change = False
+                self._updated_data = None
                 if not activation:
                     self._check_active()
                     await self.check_countdown()
                 yield
             finally:
                 if self._any_status_change:
+                    self._updated_data = self.as_record(datetime.now(timezone.utc))
+                    await self.log_actuator_state()
                     await self.send_actuators_state_if_possible()
                 self._updating = False
 
@@ -505,6 +520,26 @@ class ActuatorHandler:
                 self.logger.info(
                     f"{self.type.name.capitalize()} has been manually turned to "
                     f"'{turn_to.name}'{additional_message}.")
+
+    async def log_actuator_state(self) -> None:
+        if not self.ecosystem.engine.use_db:
+            return
+        data = self._updated_data
+        if data is None:
+            return  # Should not happen
+        from gaia.database.models import ActuatorRecord
+        async with self.ecosystem.engine.db.scoped_session() as session:
+            actuator_record = ActuatorRecord(
+                ecosystem_uid=self.ecosystem.uid,
+                type=data.type,
+                timestamp=data.timestamp,
+                active=data.active,
+                mode=data.mode,
+                status=data.status,
+                level=None,
+            )
+            session.add(actuator_record)
+            await session.commit()
 
     async def send_actuators_state(self) -> None:
         if (
