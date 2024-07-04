@@ -145,15 +145,15 @@ class Climate(SubroutineTemplate):
                 if not actuator_handler.get_linked_actuators():
                     # No actuator to act on, go next
                     continue
-                await actuator_handler.check_countdown()
-                expected_status = actuator_handler.compute_expected_status(
-                    pid_output)
-                if expected_status:
-                    await actuator_handler.turn_on()
-                    await actuator_handler.set_level(abs(pid_output))
-                else:
-                    await actuator_handler.turn_off()
-                    await actuator_handler.set_level(0.0)
+                async with actuator_handler.update_status_transaction():
+                    expected_status = actuator_handler.compute_expected_status(
+                        pid_output)
+                    if expected_status:
+                        await actuator_handler.turn_on()
+                        await actuator_handler.set_level(abs(pid_output))
+                    else:
+                        await actuator_handler.turn_off()
+                        await actuator_handler.set_level(0.0)
 
     def _check_misses(self) -> None:
         if self._sensor_miss >= MISSES_BEFORE_STOP:
