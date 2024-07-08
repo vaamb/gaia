@@ -312,8 +312,8 @@ class Ecosystem:
 
     # Actuator
     @property
-    def actuator_data(self) -> gv.ActuatorsDataDict:
-        return self.actuator_hub.as_dict()
+    def actuator_data(self) -> list[gv.ActuatorStateRecord]:
+        return self.actuator_hub.as_records()
 
     async def turn_actuator(
             self,

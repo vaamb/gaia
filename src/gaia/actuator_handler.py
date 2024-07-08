@@ -365,7 +365,7 @@ class ActuatorHandler:
                 if self._any_status_change:
                     self._updated_data = self.as_record(datetime.now(timezone.utc))
                     await self.log_actuator_state()
-                    await self.send_actuators_state_if_possible()
+                    await self.send_actuator_state_if_possible()
                 self._updating = False
 
     def _check_update_status_transaction(self) -> None:
@@ -541,22 +541,47 @@ class ActuatorHandler:
             session.add(actuator_record)
             await session.commit()
 
-    async def send_actuators_state(self) -> None:
-        if (
+    async def send_actuator_state(self) -> None:
+        # Check if we use the message broker and if the engine is registered
+        if not (
                 self.ecosystem.engine.use_message_broker
                 and self.ecosystem.event_handler.registered
         ):
-            await self.ecosystem.event_handler.send_payload_if_connected(
-                "actuator_data", ecosystem_uids=[self.ecosystem.config.uid])
+            return
+        # Send the actuator data
+        data = self._updated_data
+        if data is None:
+            return  # Should not happen
+        payload = gv.ActuatorsDataPayload(
+            uid=self.ecosystem.uid,
+            data=[data],
+        ).model_dump()
+        sent = await self.ecosystem.event_handler.emit("actuator_data", data=[payload])
+        # If not sent, and the db is enabled, save the change in the db buffer
+        if sent or not self.ecosystem.engine.use_db:
+            return
+        from gaia.database.models import ActuatorBuffer
+        async with self.ecosystem.engine.db.scoped_session() as session:
+            actuator_buffer = ActuatorBuffer(
+                ecosystem_uid=self.ecosystem.uid,
+                type=data.type,
+                timestamp=data.timestamp,
+                active=data.active,
+                mode=data.mode,
+                status=data.status,
+                level=None,
+            )
+            session.add(actuator_buffer)
+            await session.commit()
 
-    async def send_actuators_state_if_possible(self) -> None:
+    async def send_actuator_state_if_possible(self) -> None:
         if (
                 self._sending_data_task is None
                 or self._sending_data_task.done()
         ):
-            task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_actuators_state"
+            task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_actuator_state"
             self._sending_data_task = asyncio.create_task(
-                self.send_actuators_state(), name=task_name)
+                self.send_actuator_state(), name=task_name)
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
         if self.mode == gv.ActuatorMode.automatic:
@@ -624,3 +649,9 @@ class ActuatorHub:
             actuator_type.name: handler.as_dict()
             for actuator_type, handler in self._actuator_handlers.items()
         }
+
+    def as_records(self) -> list[gv.ActuatorStateRecord]:
+        return [
+            handler.as_record()
+            for handler in self._actuator_handlers.values()
+        ]
