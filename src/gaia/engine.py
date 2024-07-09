@@ -211,6 +211,14 @@ class Engine(metaclass=SingletonMeta):
 
     async def start_database(self) -> None:
         self.logger.info("Starting the database.")
+        # Reset buffered data's "exchange_uuid"
+        from gaia.database.models import (
+            ActuatorBuffer, DataBufferMixin, SensorBuffer)
+        async with self.db.scoped_session() as session:
+            for db_model in (ActuatorBuffer, SensorBuffer):
+                db_model: DataBufferMixin
+                await db_model.reset_exchange_uuids(session)
+        # Set up logging routines
         from gaia.database import routines
         if self.config.app_config.SENSORS_LOGGING_PERIOD is not None:
             cron_minute: str = self.config.app_config.SENSORS_LOGGING_PERIOD

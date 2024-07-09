@@ -99,6 +99,14 @@ class DataBufferMixin(Base):
         )
         await session.execute(stmt)
 
+    @classmethod
+    async def reset_exchange_uuids(cls, session: AsyncSession) -> None:
+        stmt = (
+            update(cls)
+            .values(exchange_uuid=None)
+        )
+        await session.execute(stmt)
+
 
 class BaseSensorRecord(Base):
     __abstract__ = True
