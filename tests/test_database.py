@@ -61,7 +61,8 @@ async def test_buffer(db: AsyncSQLAlchemyWrapper):
         session.add(buffer_2)
         session.commit()
         uuid = None
-        async for buffered_data in SensorBuffer.get_buffered_data(session):
+        sensor_buffer = await SensorBuffer.get_buffered_data(session)
+        async for buffered_data in sensor_buffer:
             uuid = buffered_data.uuid
             data_1 = buffered_data.data[0]
             data_2 = buffered_data.data[1]
@@ -76,7 +77,8 @@ async def test_buffer(db: AsyncSQLAlchemyWrapper):
 
         await SensorBuffer.clear_buffer(session, uuid)
         empty = True
-        async for _ in SensorBuffer.get_buffered_data(session):
+        sensor_buffer = await SensorBuffer.get_buffered_data(session)
+        async for _ in sensor_buffer:
             empty = False
             break
         assert empty

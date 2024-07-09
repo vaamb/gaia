@@ -132,6 +132,7 @@ async def test_on_registration_ack(
     assert hardware["event"] == "hardware"
     assert hardware["data"][0]["uid"] == ecosystem_uid
     for h in hardware["data"][0]["data"]:
+        h: gv.HardwareConfig
         assert h["uid"] in (heater_uid, light_uid, sensor_uid)
         assert h["name"] in get_h_info_list("name")
         assert h["address"] in get_h_info_list("address")
@@ -142,12 +143,13 @@ async def test_on_registration_ack(
     actuator_data = responses[5]
     assert actuator_data["event"] == "actuator_data"
     assert actuator_data["data"][0]["uid"] == ecosystem_uid
-    for actuator_name, actuator in actuator_data["data"][0]["data"].items():
-        actuator_type = gv.HardwareType[actuator_name]
+    for actuator_record in actuator_data["data"][0]["data"]:
+        actuator_record: gv.ActuatorStateRecord
+        actuator_type = gv.HardwareType(actuator_record[0])
         assert actuator_type & gv.HardwareType.actuator
-        assert actuator["active"] is False
-        assert actuator["status"] is False
-        assert actuator["mode"] == gv.ActuatorMode.automatic
+        assert actuator_record[1] is False
+        assert actuator_record[2] == gv.ActuatorMode.automatic
+        assert actuator_record[3] is False
 
     light_data = responses[6]
     assert light_data["event"] == "light_data"

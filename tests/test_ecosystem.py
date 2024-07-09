@@ -59,7 +59,7 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
 
 
 def test_actuator_data(ecosystem: "Ecosystem"):
-    actuator_states = ecosystem.actuator_data
+    actuator_states = ecosystem.actuator_hub.as_dict()
     for actuator in actuator_states.values():
         assert not actuator["active"]
         assert not actuator["status"]
