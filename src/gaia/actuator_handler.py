@@ -529,16 +529,17 @@ class ActuatorHandler:
             return  # Should not happen
         from gaia.database.models import ActuatorRecord
         async with self.ecosystem.engine.db.scoped_session() as session:
-            actuator_record = ActuatorRecord(
-                ecosystem_uid=self.ecosystem.uid,
-                type=data.type,
-                timestamp=data.timestamp,
-                active=data.active,
-                mode=data.mode,
-                status=data.status,
-                level=None,
+            session.add(
+                    ActuatorRecord(
+                    ecosystem_uid=self.ecosystem.uid,
+                    type=data.type,
+                    timestamp=data.timestamp,
+                    active=data.active,
+                    mode=data.mode,
+                    status=data.status,
+                    level=None,
+                )
             )
-            session.add(actuator_record)
             await session.commit()
 
     async def send_actuator_state(self) -> None:
@@ -562,16 +563,17 @@ class ActuatorHandler:
             return
         from gaia.database.models import ActuatorBuffer
         async with self.ecosystem.engine.db.scoped_session() as session:
-            actuator_buffer = ActuatorBuffer(
-                ecosystem_uid=self.ecosystem.uid,
-                type=data.type,
-                timestamp=data.timestamp,
-                active=data.active,
-                mode=data.mode,
-                status=data.status,
-                level=None,
+            session.add(
+                    ActuatorBuffer(
+                    ecosystem_uid=self.ecosystem.uid,
+                    type=data.type,
+                    timestamp=data.timestamp,
+                    active=data.active,
+                    mode=data.mode,
+                    status=data.status,
+                    level=None,
+                )
             )
-            session.add(actuator_buffer)
             await session.commit()
 
     async def send_actuator_state_if_possible(self) -> None:
