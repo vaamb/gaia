@@ -315,18 +315,28 @@ class ActuatorHandler:
         return self._active > 0
 
     def activate(self) -> None:
+        if self._active == 0:
+            self._any_status_change = True
         self._active += 1
 
     def deactivate(self) -> None:
         self._active -= 1
+        if self._active == 0:
+            self._any_status_change = True
+
+    def _check_active(self) -> None:
+        if self._active == 0:
+            raise RuntimeError("This actuator is not active.")
 
     @asynccontextmanager
-    async def update_status_transaction(self):
+    async def update_status_transaction(self, activation=False):
         async with self._update_lock:
             try:
                 self._updating = True
                 self._any_status_change = False
-                await self.check_countdown()
+                if not activation:
+                    self._check_active()
+                    await self.check_countdown()
                 yield
             finally:
                 if self._any_status_change:
@@ -408,7 +418,7 @@ class ActuatorHandler:
         await self._set_level(pwm_level)
         #self._any_status_change = True
         self.logger.debug(
-            f"{self.type.name.capitalize()}'level has been set to {pwm_level}%.")
+            f"{self.type.name.capitalize()}'s level has been set to {pwm_level}%.")
 
     async def _set_level(self, pwm_level: float) -> None:
         self._level = pwm_level

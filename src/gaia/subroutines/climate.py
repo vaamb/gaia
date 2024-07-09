@@ -203,11 +203,12 @@ class Climate(SubroutineTemplate):
         #    id=f"{self.ecosystem.uid}-climate_routine",
         #    trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
         #)
-        for parameter in self.regulated_parameters:
+        for parameter in self._regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
                 actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-                actuator_handler.activate()
+                async with actuator_handler.update_status_transaction(activation=True):
+                    actuator_handler.activate()
 
     async def _stop(self) -> None:
         #self.ecosystem.engine.scheduler.remove_job(
@@ -216,7 +217,8 @@ class Climate(SubroutineTemplate):
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
                 actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-                actuator_handler.deactivate()
+                async with actuator_handler.update_status_transaction(activation=True):
+                    actuator_handler.deactivate()
 
     """API calls"""
     def get_hardware_needed_uid(self) -> set[str]:
