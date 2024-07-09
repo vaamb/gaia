@@ -246,10 +246,10 @@ class HystericalPID:
 
 class ActuatorHandler:
     __slots__ = (
-        "_active", "_actuators", "_level", "_last_mode", "_last_status",
-        "_mode", "_status", "_time_limit", "_timer_on", "actuator_hub",
-        "direction", "ecosystem", "logger", "type", "_update_lock",
-        "_updating", "_any_status_change", "_sending_data_task",
+        "_active", "_actuators", "_any_status_change", "_level", "_mode",
+        "_status", "_sending_data_task", "_time_limit", "_timer_on",
+        "_update_lock", "_updating", "actuator_hub",
+        "direction", "ecosystem", "logger", "type",
     )
 
     def __init__(
@@ -273,8 +273,6 @@ class ActuatorHandler:
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         self._timer_on: bool = False
         self._time_limit: float = 0.0
-        self._last_status: bool = self.status
-        self._last_mode: gv.ActuatorMode = self.mode
         self._actuators: list[Switch | Dimmer] | None = None
         self._update_lock: Lock = Lock()
         self._updating: bool = False
@@ -322,10 +320,6 @@ class ActuatorHandler:
     def deactivate(self) -> None:
         self._active -= 1
 
-    @property
-    def mode(self) -> gv.ActuatorMode:
-        return self._mode
-
     @asynccontextmanager
     async def update_status_transaction(self):
         async with self._update_lock:
@@ -346,24 +340,25 @@ class ActuatorHandler:
                 "block."
             )
 
+    @property
+    def mode(self) -> gv.ActuatorMode:
+        return self._mode
+
     async def set_mode(self, value: gv.ActuatorMode) -> None:
         self._check_update_status_transaction()
-        self._set_mode(value)
-        if self._mode != self._last_mode:
-            # TODO: reset associated PID ?
-            self._any_status_change = True
-            self.logger.info(
-                f"{self.type.name.capitalize()} has been set to "
-                f"'{self.mode.name}' mode")
-            self._last_mode = self._mode
+        validated_value = gv.safe_enum_from_name(gv.ActuatorMode, value)
+        if self._mode == validated_value:
+            # No need to update
+            return
+        self._set_mode(validated_value)
+        self._any_status_change = True
+        self.logger.info(
+            f"{self.type.name.capitalize()} has been set to "
+            f"'{self.mode.name}' mode")
 
     def _set_mode(self, value: gv.ActuatorMode) -> None:
-        validated_value = gv.safe_enum_from_name(gv.ActuatorMode, value)
-        self._mode = validated_value
-
-    @property
-    def last_mode(self) -> gv.ActuatorMode:
-        return self._last_mode
+        self._mode = value
+        # TODO: reset associated PID ?
 
     @property
     def status(self) -> bool:
@@ -371,13 +366,14 @@ class ActuatorHandler:
 
     async def set_status(self, value: bool) -> None:
         self._check_update_status_transaction()
+        if self._status == value:
+            # No need to update
+            return
         await self._set_status(value)
-        if self._status != self._last_status:
-            self._any_status_change = True
-            self.logger.info(
-                f"{self.type.name.capitalize()} has been turned "
-                f"{'on' if self.status else 'off'}")
-            self._last_status = self._status
+        self._any_status_change = True
+        self.logger.info(
+            f"{self.type.name.capitalize()} has been turned "
+            f"{'on' if self.status else 'off'}")
 
     async def _set_status(self, value: bool) -> None:
         self._status = value
@@ -402,17 +398,20 @@ class ActuatorHandler:
         await self.set_status(False)
 
     @property
-    def last_status(self) -> bool:
-        return self._last_status
-
-    @property
     def level(self) -> float | None:
         return self._level
 
     async def set_level(self, pwm_level: float) -> None:
         self._check_update_status_transaction()
-        self._level = pwm_level
+        if self._level == pwm_level:
+            return
+        await self._set_level(pwm_level)
         #self._any_status_change = True
+        self.logger.debug(
+            f"{self.type.name.capitalize()}'level has been set to {pwm_level}%.")
+
+    async def _set_level(self, pwm_level: float) -> None:
+        self._level = pwm_level
         for actuator in self.get_linked_actuators():
             if isinstance(actuator, Dimmer):
                 await actuator.set_pwm_level(pwm_level)
@@ -565,7 +564,7 @@ class ActuatorHub:
         assert actuator_type in gv.HardwareType.actuator
         return self._actuator_handlers[actuator_type]
 
-    def as_dict(self) -> gv.ActuatorsDataDict:
+    def as_dict(self) -> dict[gv.HardwareType.actuator, gv.ActuatorStateDict]:
         return {
             actuator_type.name: handler.as_dict()
             for actuator_type, handler in self._actuator_handlers.items()
