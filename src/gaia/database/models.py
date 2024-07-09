@@ -147,23 +147,6 @@ class SensorBuffer(BaseSensorRecord, DataBufferMixin):
             per_page=per_page,
         )
 
-    @classmethod
-    async def clear_buffer(cls, session: AsyncSession, uuid: UUID | str) -> None:
-        stmt = (
-            delete(cls)
-            .where(cls.exchange_uuid == uuid)
-        )
-        await session.execute(stmt)
-
-    @classmethod
-    async def clear_uuid(cls, session: AsyncSession, uuid: UUID | str) -> None:
-        stmt = (
-            update(cls)
-            .where(cls.exchange_uuid == uuid)
-            .values(exchange_uuid=None)
-        )
-        await session.execute(stmt)
-
 
 class BaseActuatorRecord(Base):
     __abstract__ = True
