@@ -312,7 +312,7 @@ class Ecosystem:
 
     # Actuator
     @property
-    def actuator_data(self) -> list[gv.ActuatorStateRecord]:
+    def actuators_data(self) -> list[gv.ActuatorStateRecord]:
         return self.actuator_hub.as_records()
 
     async def turn_actuator(
@@ -363,7 +363,7 @@ class Ecosystem:
             if self.engine.use_message_broker and self.event_handler.registered:
                 try:
                     await self.event_handler.send_payload_if_connected(
-                        "actuator_data", ecosystem_uids=[self._uid])
+                        "actuators_data", ecosystem_uids=[self._uid])
                 except Exception as e:
                     msg = e.args[1] if len(e.args) > 1 else e.args[0]
                     if "is not a connected namespace" in msg:

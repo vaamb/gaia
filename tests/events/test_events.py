@@ -140,10 +140,10 @@ async def test_on_registration_ack(
         assert h["type"] in get_h_info_list("type")
         assert h["level"] in get_h_info_list("level")
 
-    actuator_data = responses[5]
-    assert actuator_data["event"] == "actuator_data"
-    assert actuator_data["data"][0]["uid"] == ecosystem_uid
-    for actuator_record in actuator_data["data"][0]["data"]:
+    actuators_data = responses[5]
+    assert actuators_data["event"] == "actuators_data"
+    assert actuators_data["data"][0]["uid"] == ecosystem_uid
+    for actuator_record in actuators_data["data"][0]["data"]:
         actuator_record: gv.ActuatorStateRecord
         actuator_type = gv.HardwareType(actuator_record[0])
         assert actuator_type & gv.HardwareType.actuator

@@ -58,7 +58,7 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
         await ecosystem.enable_subroutine("WrongSubroutine")
 
 
-def test_actuator_data(ecosystem: "Ecosystem"):
+def test_actuators_data(ecosystem: "Ecosystem"):
     actuator_states = ecosystem.actuator_hub.as_dict()
     for actuator in actuator_states.values():
         assert not actuator["active"]

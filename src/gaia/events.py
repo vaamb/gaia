@@ -30,7 +30,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 PayloadName = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
-    "sensors_data", "health_data", "light_data", "actuator_data",
+    "sensors_data", "health_data", "light_data", "actuators_data",
     "chaos_parameters", "places_list",
 ]
 
@@ -43,7 +43,7 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "sensors_data": gv.SensorsDataPayload,
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
-    "actuator_data": gv.ActuatorsDataPayload,
+    "actuators_data": gv.ActuatorsDataPayload,
     "chaos_parameters": gv.ChaosParametersPayload,
     "places_list": gv.PlacesPayload,
 }
@@ -216,7 +216,7 @@ class Events(AsyncEventHandler):
         await self.send_payload("management", uids)
         await self.send_payload("environmental_parameters", uids)
         await self.send_payload("hardware", uids)
-        await self.send_payload("actuator_data", uids)
+        await self.send_payload("actuators_data", uids)
         await self.send_payload("light_data", uids)
 
     async def on_connect(self, environment) -> None:  # noqa
