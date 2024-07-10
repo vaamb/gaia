@@ -89,15 +89,17 @@ class Light(SubroutineTemplate):
         self.logger.info(
             f"Starting the light loop. It will run every "
             f"{self._loop_period:.2f} s.")
+        async with self.actuator_handler.update_status_transaction(activation=True):
+            self.actuator_handler.activate()
         self._task = asyncio.create_task(
             self.routine_task(), name=f"{self.ecosystem.uid}-light-routine")
-        self.actuator_handler.activate()
 
     async def _stop(self) -> None:
         self.logger.info("Stopping light loop")
         self._task.cancel()
         self._task = None
-        self.actuator_handler.deactivate()
+        async with self.actuator_handler.update_status_transaction(activation=True):
+            self.actuator_handler.deactivate()
 
     """API calls"""
     async def add_hardware(self, hardware_config: gv.HardwareConfig) -> Switch | Dimmer:
