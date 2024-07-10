@@ -34,6 +34,7 @@ class Climate(SubroutineTemplate):
             gv.ClimateParameter.temperature: False,
             gv.ClimateParameter.humidity: False,
         }
+        self._activated_actuator_types: set[gv.HardwareType.actuator] = set()
         self._finish__init__()
 
     @staticmethod
@@ -93,12 +94,12 @@ class Climate(SubroutineTemplate):
         for climate_param, regulated in regulated_parameters.items():
             if not regulated:
                 continue
-            regulator_couple: ActuatorCouple = actuator_couples[climate_param]
+            actuator_couple: ActuatorCouple = actuator_couples[climate_param]
             any_regulator = False
-            for regulator in regulator_couple:
-                if regulator is None:
+            for actuator_type in actuator_couple:
+                if actuator_type is None:
                     continue
-                if self.config.get_IO_group_uids(regulator):
+                if self.config.get_IO_group_uids(actuator_type):
                     any_regulator = True
                     break
             if not any_regulator:
@@ -203,22 +204,27 @@ class Climate(SubroutineTemplate):
         #    id=f"{self.ecosystem.uid}-climate_routine",
         #    trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
         #)
+        activated_actuator_types: set[gv.HardwareType] = set()
         for parameter in self._regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[parameter]
             for actuator_type in actuator_couple:
+                # Check if we have at least one actuator available
+                if not self.config.get_IO_group_uids(actuator_type):
+                    continue
                 actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
                 async with actuator_handler.update_status_transaction(activation=True):
                     actuator_handler.activate()
+                activated_actuator_types.add(actuator_type)
+        self._activated_actuator_types = activated_actuator_types
 
     async def _stop(self) -> None:
         #self.ecosystem.engine.scheduler.remove_job(
         #    f"{self.ecosystem.uid}-climate_routine")
-        for parameter in self.regulated_parameters:
-            actuator_couple: ActuatorCouple = actuator_couples[parameter]
-            for actuator_type in actuator_couple:
-                actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-                async with actuator_handler.update_status_transaction(activation=True):
-                    actuator_handler.deactivate()
+        for actuator_type in self._activated_actuator_types:
+            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            async with actuator_handler.update_status_transaction(activation=True):
+                actuator_handler.deactivate()
+        self._activated_actuator_types = set()
 
     """API calls"""
     def get_hardware_needed_uid(self) -> set[str]:
