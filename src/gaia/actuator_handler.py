@@ -530,7 +530,7 @@ class ActuatorHandler:
         from gaia.database.models import ActuatorRecord
         async with self.ecosystem.engine.db.scoped_session() as session:
             session.add(
-                    ActuatorRecord(
+                ActuatorRecord(
                     ecosystem_uid=self.ecosystem.uid,
                     type=data.type,
                     timestamp=data.timestamp,
@@ -564,7 +564,7 @@ class ActuatorHandler:
         from gaia.database.models import ActuatorBuffer
         async with self.ecosystem.engine.db.scoped_session() as session:
             session.add(
-                    ActuatorBuffer(
+                ActuatorBuffer(
                     ecosystem_uid=self.ecosystem.uid,
                     type=data.type,
                     timestamp=data.timestamp,
