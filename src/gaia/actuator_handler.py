@@ -315,6 +315,7 @@ class ActuatorHandler:
         return self._active > 0
 
     def activate(self) -> None:
+        self._check_actuator_available()
         if self._active == 0:
             self._any_status_change = True
         self._active += 1
@@ -323,6 +324,15 @@ class ActuatorHandler:
         self._active -= 1
         if self._active == 0:
             self._any_status_change = True
+        if self._active < 0:
+            raise RuntimeError(
+                "Cannot deactivate an actuator more times than it has been "
+                "activated.")
+
+    def _check_actuator_available(self) -> None:
+        if not self.ecosystem.config.get_IO_group_uids(self.type):
+            raise RuntimeError(
+                f"No actuator '{self.type.name}' available in the config file.")
 
     def _check_active(self) -> None:
         if self._active == 0:
