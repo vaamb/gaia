@@ -557,7 +557,9 @@ class ActuatorHandler:
             uid=self.ecosystem.uid,
             data=[data],
         ).model_dump()
-        sent = await self.ecosystem.event_handler.emit("actuators_data", data=[payload])
+        sent = False
+        if self.ecosystem.event_handler.is_connected():
+            sent = await self.ecosystem.event_handler.emit("actuators_data", data=[payload])
         # If not sent, and the db is enabled, save the change in the db buffer
         if sent or not self.ecosystem.engine.use_db:
             return
