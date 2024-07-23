@@ -60,7 +60,7 @@ class DataBufferMixin(Base):
                     .limit(per_page)
                 )
                 result = await session.execute(stmt)
-                buffered_data: Sequence[SensorBuffer] = result.scalars().all()
+                buffered_data: Sequence[DataBufferMixin] = result.scalars().all()
                 if not buffered_data:
                     break
                 uuid = uuid4()
@@ -68,7 +68,7 @@ class DataBufferMixin(Base):
                 for data in buffered_data:
                     data.exchange_uuid = uuid
                     rv.append(
-                        gv.BufferedSensorRecord(**{
+                        buffered_record_class(**{
                             data_field: getattr(data, data_field)
                             for data_field in buffered_record_class._fields
                         })
