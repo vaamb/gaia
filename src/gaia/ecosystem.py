@@ -312,8 +312,8 @@ class Ecosystem:
 
     # Actuator
     @property
-    def actuator_data(self) -> gv.ActuatorsDataDict:
-        return self.actuator_hub.as_dict()
+    def actuators_data(self) -> list[gv.ActuatorStateRecord]:
+        return self.actuator_hub.as_records()
 
     async def turn_actuator(
             self,
@@ -359,19 +359,6 @@ class Ecosystem:
                 f"Cannot turn {validated_actuator} to {validated_mode} as the subroutine managing it "
                 f"is not currently running"
             )
-        else:
-            if self.engine.use_message_broker and self.event_handler.registered:
-                try:
-                    await self.event_handler.send_payload_if_connected(
-                        "actuator_data", ecosystem_uids=[self._uid])
-                except Exception as e:
-                    msg = e.args[1] if len(e.args) > 1 else e.args[0]
-                    if "is not a connected namespace" in msg:
-                        return
-                    self.logger.error(
-                        f"Encountered an error while sending actuator data. "
-                        f"ERROR msg: `{e.__class__.__name__} :{e}`"
-                    )
 
     def get_actuator_handler(
             self,

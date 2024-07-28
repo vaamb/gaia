@@ -27,12 +27,10 @@ from gaia.utils import humanize_list, local_ip_address
 if t.TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
-    from gaia.database.models import SensorBuffer
-
 
 PayloadName = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
-    "sensors_data", "health_data", "light_data", "actuator_data",
+    "sensors_data", "health_data", "light_data", "actuators_data",
     "chaos_parameters", "places_list",
 ]
 
@@ -45,7 +43,7 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "sensors_data": gv.SensorsDataPayload,
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
-    "actuator_data": gv.ActuatorsDataPayload,
+    "actuators_data": gv.ActuatorsDataPayload,
     "chaos_parameters": gv.ChaosParametersPayload,
     "places_list": gv.PlacesPayload,
 }
@@ -106,7 +104,6 @@ class Events(AsyncEventHandler):
         self.engine: Engine = weakref.proxy(engine)
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
-        self._sensor_buffer_cls: SensorBuffer | None = None
         self._last_heartbeat: float = monotonic()
         self._task: Task | None = None
         self._jobs_scheduled: bool = False
@@ -119,17 +116,6 @@ class Events(AsyncEventHandler):
     @property
     def db(self) -> SQLAlchemyWrapper:
         return self.engine.db
-
-    @property
-    def sensor_buffer_cls(self) -> SensorBuffer:
-        if self._sensor_buffer_cls is None:
-            if not self.use_db:
-                raise AttributeError(
-                    "'SensorBuffer' is not a valid attribute when the database is "
-                    "not used")
-            from gaia.database.models import SensorBuffer
-            self._sensor_buffer_cls = SensorBuffer
-        return self._sensor_buffer_cls
 
     def validate_payload(
             self,
@@ -230,7 +216,7 @@ class Events(AsyncEventHandler):
         await self.send_payload("management", uids)
         await self.send_payload("environmental_parameters", uids)
         await self.send_payload("hardware", uids)
-        await self.send_payload("actuator_data", uids)
+        await self.send_payload("actuators_data", uids)
         await self.send_payload("light_data", uids)
 
     async def on_connect(self, environment) -> None:  # noqa
@@ -518,11 +504,16 @@ class Events(AsyncEventHandler):
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'.")
-        SensorBuffer = self.sensor_buffer_cls  # noqa
+        from gaia.database.models import ActuatorBuffer, SensorBuffer
         async with self.db.scoped_session() as session:
-            async for payload in SensorBuffer.get_buffered_data(session):
+            sensor_buffer_iterator = await SensorBuffer.get_buffered_data(session)
+            async for payload in sensor_buffer_iterator:
                 payload_dict: gv.BufferedSensorsDataPayloadDict = payload.model_dump()
                 await self.emit(event="buffered_sensors_data", data=payload_dict)
+            actuator_buffer_iterator = await ActuatorBuffer.get_buffered_data(session)
+            async for payload in actuator_buffer_iterator:
+                payload_dict: gv.BufferedActuatorsStatePayloadDict = payload.model_dump()
+                await self.emit(event="buffered_actuators_data", data=payload_dict)
 
     async def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
         if not self.use_db:
@@ -531,9 +522,12 @@ class Events(AsyncEventHandler):
                 "parameter 'USE_DATABASE' to 'True'.")
         data: gv.RequestResultDict = self.validate_payload(
             message, gv.RequestResult)
-        SensorBuffer = self.sensor_buffer_cls  # noqa
+        from gaia.database.models import (
+            ActuatorBuffer, DataBufferMixin, SensorBuffer)
         async with self.db.scoped_session() as session:
-            if data["status"] == gv.Result.success:
-                await SensorBuffer.clear_buffer(session, data["uuid"])
-            else:
-                await SensorBuffer.clear_uuid(session, data["uuid"])
+            for db_model in (ActuatorBuffer, SensorBuffer):
+                db_model: DataBufferMixin
+                if data["status"] == gv.Result.success:
+                    await db_model.clear_buffer(session, data["uuid"])
+                else:
+                    await db_model.clear_uuid(session, data["uuid"])
