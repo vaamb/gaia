@@ -241,5 +241,6 @@ async def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
     await light_subroutine.add_hardware(hardware_config)
 
     light_handler: ActuatorHandler = ecosystem.get_actuator_handler("light")
+    light_handler.activate()
 
     yield light_handler

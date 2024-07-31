@@ -61,6 +61,8 @@ async def test_turn_actuator(climate_subroutine: Climate):
 
     climate_subroutine.enable()
     await climate_subroutine.start()
+    handler = climate_subroutine.ecosystem.actuator_hub.get_handler(gv.HardwareType.heater)
+    handler.activate()
 
     await climate_subroutine.turn_climate_actuator(
         gv.HardwareType.heater, gv.ActuatorModePayload.on)
@@ -69,11 +71,11 @@ async def test_turn_actuator(climate_subroutine: Climate):
     await climate_subroutine.turn_climate_actuator(
         gv.HardwareType.heater, gv.ActuatorModePayload.automatic)
 
-    with pytest.raises(RuntimeError, match=r"no actuator linked to it"):
+    with pytest.raises(RuntimeError, match=r"This actuator is not active"):
         await climate_subroutine.turn_climate_actuator(
             gv.HardwareType.cooler, gv.ActuatorModePayload.on)
 
-    with pytest.raises(RuntimeError, match=r"no actuator linked to it"):
+    with pytest.raises(RuntimeError, match=r"This actuator is not active"):
         await climate_subroutine.turn_climate_actuator(
             gv.HardwareType.cooler, gv.ActuatorModePayload.off)
 
