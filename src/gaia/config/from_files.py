@@ -462,7 +462,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 if ConfigType.ecosystems in changed_configs:
                     for ecosystem_config in self.ecosystems_config.values():
                         ecosystem_config.reset_caches()
-                with self.new_config:
+                async with self.new_config:
                     self.new_config.notify_all()
                     # This unblocks the engine loop. It will then refresh
                     #  ecosystems, update sun times, ecosystem lighting hours
