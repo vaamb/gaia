@@ -104,6 +104,7 @@ class Events(AsyncEventHandler):
         self.engine: Engine = weakref.proxy(engine)
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
+        self._resent_initialization_data: bool = False
         self._last_heartbeat: float = monotonic()
         self._task: Task | None = None
         self._jobs_scheduled: bool = False
@@ -308,6 +309,7 @@ class Events(AsyncEventHandler):
     #   Events for connection and initial handshake
     # ---------------------------------------------------------------------------
     async def register(self) -> None:
+        self._resent_initialization_data = False
         data = gv.EnginePayload(
             engine_uid=self.engine.config.app_config.ENGINE_UID,
             address=local_ip_address(),
@@ -355,6 +357,9 @@ class Events(AsyncEventHandler):
             return
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info.")
+        await self.send_initialization_data()
+
+    async def send_initialization_data(self) -> None:
         await self.send_ecosystems_info()
         self.logger.info("Initial ecosystems info sent.")
         await sleep(1.0)  # Allow Ouranos to handle all the initialization data
@@ -372,7 +377,11 @@ class Events(AsyncEventHandler):
             self.logger.warning(
                 f"Ouranos did not receive all the initial ecosystems info. "
                 f"Non-received info: {humanize_list(missing_data)}.")
-            # TODO: resend ?
+            if not self._resent_initialization_data:
+                await self.send_initialization_data()
+                self._resent_initialization_data = True
+            else:
+                await self.on_disconnect()
 
     # ---------------------------------------------------------------------------
     #   Events to modify managements and actuators state
