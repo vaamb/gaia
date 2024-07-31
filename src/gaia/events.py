@@ -5,10 +5,10 @@ from gaia.dependencies import check_dependencies
 check_dependencies("dispatcher")
 
 import asyncio
-from asyncio import Task
+from asyncio import sleep, Task
 import inspect
 import logging
-from time import monotonic, sleep
+from time import monotonic
 import typing as t
 from typing import Any, Callable, cast, Literal, NamedTuple, Type
 from uuid import UUID
@@ -164,7 +164,7 @@ class Events(AsyncEventHandler):
             start = monotonic()
             await self.ping()
             sleep_time = max(15 - (monotonic() - start), 0.01)
-            await asyncio.sleep(sleep_time)
+            await sleep(sleep_time)
 
     async def ping(self) -> None:
         if self._dispatcher.connected:
@@ -319,8 +319,9 @@ class Events(AsyncEventHandler):
             self.logger.warning("Registration request could not be sent.")
 
     async def on_connect(self, environment) -> None:  # noqa
-        self.logger.info("Connection to message broker successful.")
-        self.logger.info("Will try to register the engine to Ouranos.")
+        self.logger.info(
+            "Connection to the message broker successful. Will try to register "
+            "the engine to Ouranos.")
         await self.register()
 
     async def on_disconnect(self, *args) -> None:  # noqa
@@ -338,7 +339,7 @@ class Events(AsyncEventHandler):
     async def on_register(self) -> None:
         self.registered = False
         self.logger.info("Received registration request from Ouranos.")
-        sleep(0.25)
+        await sleep(0.25)  # Allow to finish engine initialization in some cases
         await self.register()
 
     async def on_registration_ack(self, host_uid: str) -> None:
@@ -356,17 +357,17 @@ class Events(AsyncEventHandler):
             "Engine registration successful, sending initial ecosystems info.")
         await self.send_ecosystems_info()
         self.logger.info("Initial ecosystems info sent.")
-        if self.use_db:
-            await self.send_buffered_data()
-        self.registered = True
-        sleep(0.75)
-        if not self._jobs_scheduled:
-            self._schedule_jobs()
-        await self.emit("initialized", ttl=15)
+        await sleep(1.0)  # Allow Ouranos to handle all the initialization data
+        await self.emit("initialization_data_sent")
 
-    async def on_initialized_ack(self, missing_data: list | None = None) -> None:
+    async def on_initialization_ack(self, missing_data: list | None = None) -> None:
         if missing_data is None:
+            self.registered = True
+            if not self._jobs_scheduled:
+                self._schedule_jobs()
             self.logger.info("Ouranos successfully received ecosystems info.")
+            if self.use_db:
+                await self.send_buffered_data()
         else:
             self.logger.warning(
                 f"Ouranos did not receive all the initial ecosystems info. "
