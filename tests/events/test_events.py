@@ -33,7 +33,7 @@ async def test_on_connect(events_handler: Events):
     await events_handler.on_connect(None)
 
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
-        assert "Connection to message broker successful" in logs
+        assert "Connection to the message broker successful" in logs
 
     response = events_handler._dispatcher.emit_store[0]
 
@@ -159,17 +159,17 @@ async def test_on_registration_ack(
     #assert light_data["data"][0]["data"]["method"] == lighting_method
 
     initialized_event = responses[7]
-    assert initialized_event["event"] == "initialized"
+    assert initialized_event["event"] == "initialization_data_sent"
 
 
 @pytest.mark.asyncio
 async def test_on_initialized_ack(events_handler: Events):
-    await events_handler.on_initialized_ack(None)
+    await events_handler.on_initialization_ack(None)
 
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         assert "Ouranos successfully received ecosystems info" in logs
 
-    await events_handler.on_initialized_ack(["base_info"])
+    await events_handler.on_initialization_ack(["base_info"])
 
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         assert "Non-received info: base_info" in logs

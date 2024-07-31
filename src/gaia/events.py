@@ -5,10 +5,10 @@ from gaia.dependencies import check_dependencies
 check_dependencies("dispatcher")
 
 import asyncio
-from asyncio import Task
+from asyncio import sleep, Task
 import inspect
 import logging
-from time import monotonic, sleep
+from time import monotonic
 import typing as t
 from typing import Any, Callable, cast, Literal, NamedTuple, Type
 from uuid import UUID
@@ -104,6 +104,7 @@ class Events(AsyncEventHandler):
         self.engine: Engine = weakref.proxy(engine)
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
+        self._resent_initialization_data: bool = False
         self._last_heartbeat: float = monotonic()
         self._task: Task | None = None
         self._jobs_scheduled: bool = False
@@ -116,6 +117,12 @@ class Events(AsyncEventHandler):
     @property
     def db(self) -> SQLAlchemyWrapper:
         return self.engine.db
+
+    def is_connected(self) -> bool:
+        return (
+            self._dispatcher.connected
+            and monotonic() - self._last_heartbeat < 30.0
+        )
 
     def validate_payload(
             self,
@@ -140,25 +147,9 @@ class Events(AsyncEventHandler):
             )
             raise
 
-    def is_connected(self) -> bool:
-        return (
-            self._dispatcher.connected
-            and monotonic() - self._last_heartbeat < 30.0
-        )
-
-    async def send_payload_if_connected(
-            self,
-            payload_name: PayloadName,
-            ecosystem_uids: str | list[str] | None = None,
-            ttl: int | None = None
-    ) -> None:
-        if not self.is_connected():
-            self.logger.debug(
-                f"Events handler not currently connected. Emission of event "
-                f"'{payload_name}' aborted.")
-            return
-        await self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
-
+    # ---------------------------------------------------------------------------
+    #   Background jobs
+    # ---------------------------------------------------------------------------
     def _schedule_jobs(self) -> None:
         self._task = asyncio.create_task(
             self.ping_task(), name="events-ping")
@@ -168,6 +159,13 @@ class Events(AsyncEventHandler):
         self._task.cancel()
         self._task = None
         self._jobs_scheduled = False
+
+    async def ping_task(self) -> None:
+        while True:
+            start = monotonic()
+            await self.ping()
+            sleep_time = max(15 - (monotonic() - start), 0.01)
+            await sleep(sleep_time)
 
     async def ping(self) -> None:
         if self._dispatcher.connected:
@@ -184,96 +182,13 @@ class Events(AsyncEventHandler):
                     f"ERROR msg: `{e.__class__.__name__} :{e}`."
                 )
 
-    async def ping_task(self) -> None:
-        while True:
-            start = monotonic()
-            await self.ping()
-            sleep_time = max(15 - (monotonic() - start), 0.01)
-            await asyncio.sleep(sleep_time)
-
     async def on_pong(self) -> None:
         self.logger.debug("Received 'pong'.")
         self._last_heartbeat = monotonic()
 
-    async def register(self) -> None:
-        data = gv.EnginePayload(
-            engine_uid=self.engine.config.app_config.ENGINE_UID,
-            address=local_ip_address(),
-        ).model_dump()
-        result = await self.emit("register_engine", data=data, ttl=15)
-        if result:
-            self.logger.debug("Registration request sent.")
-        else:
-            self.logger.warning("Registration request could not be sent.")
-
-    async def send_ecosystems_info(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> None:
-        await self.send_payload("places_list")
-        uids = self.filter_uids(ecosystem_uids)
-        await self.send_payload("base_info", uids)
-        await self.send_payload("management", uids)
-        await self.send_payload("environmental_parameters", uids)
-        await self.send_payload("hardware", uids)
-        await self.send_payload("actuators_data", uids)
-        await self.send_payload("light_data", uids)
-
-    async def on_connect(self, environment) -> None:  # noqa
-        self.logger.info("Connection to message broker successful.")
-        self.logger.info("Will try to register the engine to Ouranos.")
-        await self.register()
-
-    async def on_disconnect(self, *args) -> None:  # noqa
-        self.logger.debug("Received a disconnection request.")
-        if self.engine.stopping:
-            self.logger.info("Engine requested to disconnect from the broker.")
-            return  # The Engine takes care to shut down the scheduler and the jobs running
-        elif self.registered:
-            self.logger.warning("Dispatcher disconnected from the broker.")
-        else:
-            self.logger.error("Failed to register engine.")
-        if self._jobs_scheduled:
-            self._unschedule_jobs()
-
-    async def on_register(self) -> None:
-        self.registered = False
-        self.logger.info("Received registration request from Ouranos.")
-        sleep(0.25)
-        await self.register()
-
-    async def on_registration_ack(self, host_uid: str) -> None:
-        try:
-            uuid = UUID(host_uid)
-        except ValueError:
-            self.logger.warning(
-                "Received a wrongly formatted registration acknowledgment.")
-            return
-        if self._dispatcher.host_uid != uuid:
-            self.logger.warning(
-                "Received a registration acknowledgment for another dispatcher.")
-            return
-        self.logger.info(
-            "Engine registration successful, sending initial ecosystems info.")
-        await self.send_ecosystems_info()
-        self.logger.info("Initial ecosystems info sent.")
-        if self.use_db:
-            await self.send_buffered_data()
-        self.registered = True
-        sleep(0.75)
-        if not self._jobs_scheduled:
-            self._schedule_jobs()
-        await self.emit("initialized", ttl=15)
-
-    async def on_initialized_ack(self, missing_data: list | None = None) -> None:
-        if missing_data is None:
-            self.logger.info("Ouranos successfully received ecosystems info.")
-        else:
-            self.logger.warning(
-                f"Ouranos did not receive all the initial ecosystems info. "
-                f"Non-received info: {humanize_list(missing_data)}.")
-            # TODO: resend ?
-
+    # ---------------------------------------------------------------------------
+    #   Data payloads retrieval and sending
+    # ---------------------------------------------------------------------------
     def filter_uids(
             self,
             ecosystem_uids: str | list[str] | None = None
@@ -364,6 +279,113 @@ class Events(AsyncEventHandler):
             self.logger.debug(f"No payload for event '{payload_name}' found.")
             return False
 
+    async def send_payload_if_connected(
+            self,
+            payload_name: PayloadName,
+            ecosystem_uids: str | list[str] | None = None,
+            ttl: int | None = None
+    ) -> None:
+        if not self.is_connected():
+            self.logger.debug(
+                f"Events handler not currently connected. Emission of event "
+                f"'{payload_name}' aborted.")
+            return
+        await self.send_payload(payload_name, ecosystem_uids=ecosystem_uids, ttl=ttl)
+
+    async def send_ecosystems_info(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> None:
+        await self.send_payload("places_list")
+        uids = self.filter_uids(ecosystem_uids)
+        await self.send_payload("base_info", uids)
+        await self.send_payload("management", uids)
+        await self.send_payload("environmental_parameters", uids)
+        await self.send_payload("hardware", uids)
+        await self.send_payload("actuators_data", uids)
+        await self.send_payload("light_data", uids)
+
+    # ---------------------------------------------------------------------------
+    #   Events for connection and initial handshake
+    # ---------------------------------------------------------------------------
+    async def register(self) -> None:
+        self._resent_initialization_data = False
+        data = gv.EnginePayload(
+            engine_uid=self.engine.config.app_config.ENGINE_UID,
+            address=local_ip_address(),
+        ).model_dump()
+        result = await self.emit("register_engine", data=data, ttl=15)
+        if result:
+            self.logger.debug("Registration request sent.")
+        else:
+            self.logger.warning("Registration request could not be sent.")
+
+    async def on_connect(self, environment) -> None:  # noqa
+        self.logger.info(
+            "Connection to the message broker successful. Will try to register "
+            "the engine to Ouranos.")
+        await self.register()
+
+    async def on_disconnect(self, *args) -> None:  # noqa
+        self.logger.debug("Received a disconnection request.")
+        if self.engine.stopping:
+            self.logger.info("Engine requested to disconnect from the broker.")
+            return  # The Engine takes care to shut down the scheduler and the jobs running
+        elif self.registered:
+            self.logger.warning("Dispatcher disconnected from the broker.")
+        else:
+            self.logger.error("Failed to register engine.")
+        if self._jobs_scheduled:
+            self._unschedule_jobs()
+
+    async def on_register(self) -> None:
+        self.registered = False
+        self.logger.info("Received registration request from Ouranos.")
+        await sleep(0.25)  # Allow to finish engine initialization in some cases
+        await self.register()
+
+    async def on_registration_ack(self, host_uid: str) -> None:
+        try:
+            uuid = UUID(host_uid)
+        except ValueError:
+            self.logger.warning(
+                "Received a wrongly formatted registration acknowledgment.")
+            return
+        if self._dispatcher.host_uid != uuid:
+            self.logger.warning(
+                "Received a registration acknowledgment for another dispatcher.")
+            return
+        self.logger.info(
+            "Engine registration successful, sending initial ecosystems info.")
+        await self.send_initialization_data()
+
+    async def send_initialization_data(self) -> None:
+        await self.send_ecosystems_info()
+        self.logger.info("Initial ecosystems info sent.")
+        await sleep(1.0)  # Allow Ouranos to handle all the initialization data
+        await self.emit("initialization_data_sent")
+
+    async def on_initialization_ack(self, missing_data: list | None = None) -> None:
+        if missing_data is None:
+            self.registered = True
+            if not self._jobs_scheduled:
+                self._schedule_jobs()
+            self.logger.info("Ouranos successfully received ecosystems info.")
+            if self.use_db:
+                await self.send_buffered_data()
+        else:
+            self.logger.warning(
+                f"Ouranos did not receive all the initial ecosystems info. "
+                f"Non-received info: {humanize_list(missing_data)}.")
+            if not self._resent_initialization_data:
+                await self.send_initialization_data()
+                self._resent_initialization_data = True
+            else:
+                await self.on_disconnect()
+
+    # ---------------------------------------------------------------------------
+    #   Events to modify managements and actuators state
+    # ---------------------------------------------------------------------------
     async def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
         message["actuator"] = gv.HardwareType.light
         await self.on_turn_actuator(message)
@@ -382,7 +404,6 @@ class Events(AsyncEventHandler):
                 countdown=message.get("countdown", 0.0)
             )
 
-    # TODO: use CRUD
     async def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
         data: gv.ManagementConfigPayloadDict = self.validate_payload(
             message, gv.ManagementConfigPayload)
@@ -393,6 +414,9 @@ class Events(AsyncEventHandler):
             await self.engine.config.save(ConfigType.ecosystems)
             await self.send_payload("management", ecosystem_uids=[ecosystem_uid])
 
+    # ---------------------------------------------------------------------------
+    #   Events for CRUD requests
+    # ---------------------------------------------------------------------------
     def _get_crud_function(
             self,
             action: gv.CrudAction,
@@ -499,6 +523,9 @@ class Events(AsyncEventHandler):
         payload_name = crud_link.payload_name
         await self.send_payload(payload_name=payload_name, ecosystem_uids=ecosystem_uid)
 
+    # ---------------------------------------------------------------------------
+    #   Events for buffered data
+    # ---------------------------------------------------------------------------
     async def send_buffered_data(self) -> None:
         if not self.use_db:
             raise RuntimeError(
