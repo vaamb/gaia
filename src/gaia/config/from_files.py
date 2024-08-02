@@ -31,7 +31,8 @@ from gaia.exceptions import (
 from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
-    get_sun_times, humanize_list, is_time_between, json, SingletonMeta, yaml)
+    create_uid, get_sun_times, humanize_list, is_time_between, json,
+    SingletonMeta, yaml)
 
 
 if t.TYPE_CHECKING:
@@ -525,15 +526,11 @@ class EngineConfig(metaclass=SingletonMeta):
 
     # API
     def _create_new_ecosystem_uid(self) -> str:
-        length = 8
         used_ids = self.ecosystems_uid
         while True:
-            x = random.choice(string.ascii_letters) + "".join(
-                random.choices(string.ascii_letters + string.digits,
-                               k=length-1))
-            if x not in used_ids:
-                break
-        return x
+            uid = create_uid(uid_length=8)
+            if uid not in used_ids:
+                return uid
 
     def _create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
@@ -1454,15 +1451,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 and self.IO_dict[uid]["level"] in level]
 
     def _create_new_IO_uid(self) -> str:
-        length = 16
         used_ids = set(self.IO_dict.keys())
         while True:
-            x = random.choice(string.ascii_letters) + "".join(
-                random.choices(string.ascii_letters + string.digits,
-                               k=length - 1))
-            if x not in used_ids:
-                break
-        return x
+            uid = create_uid(uid_length=16)
+            if uid not in used_ids:
+                return uid
 
     def _used_addresses(self):
         return [self.IO_dict[hardware]["address"]
