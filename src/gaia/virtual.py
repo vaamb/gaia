@@ -128,7 +128,7 @@ class VirtualWorld(metaclass=SingletonMeta):
         )
         self._humidity = round(humidity, 2)
 
-        self.logger.info(
+        self.logger.debug(
             f"Temperature: {self.temperature:2.2f} - humidity: {self.humidity:3.2f} - "
             f"light: {self.light:.1f}"
         )
@@ -355,7 +355,7 @@ class VirtualEcosystem:
         if self.get_actuator_status(gv.HardwareType.light):
             self._light += self._max_light_output
         self._last_update = now
-        self.logger.info(
+        self.logger.debug(
             f"Temperature: {self.temperature:2.2f} - humidity: {self.humidity:3.2f} - "
             f"light: {self.light:.1f}"
         )
