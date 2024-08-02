@@ -275,7 +275,7 @@ class Hardware(metaclass=_MetaHardware):
             model: str,
             name: str | None = None,
             measures: list[str] | None = None,
-            plants: list[str] or None = None,
+            plants: list[str] | None = None,
             multiplexer_model: str | None = None,
     ) -> Self:
         name: str = name or uid
