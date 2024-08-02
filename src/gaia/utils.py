@@ -6,7 +6,9 @@ from datetime import date, datetime, time, timedelta, timezone
 from math import acos, asin, cos, log, e, pi, sin
 import os
 import platform
+import random
 import socket
+import string
 from typing import Any
 from weakref import WeakValueDictionary
 
@@ -428,6 +430,13 @@ def is_time_between(
     except TypeError:
         # one of times is a none
         return False
+
+
+def create_uid(uid_length) -> str:
+    return (
+        random.choice(string.ascii_letters)
+        + "".join(random.choices(string.ascii_letters + string.digits, k=uid_length-1))
+    )
 
 
 def is_connected() -> bool:
