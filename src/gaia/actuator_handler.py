@@ -312,7 +312,7 @@ class ActuatorHandler:
             "mode": self._mode,
         }
 
-    def as_record(self, timestamp: datetime | None = None) -> gv.ActuatorStateRecord:
+    def as_record(self, timestamp: datetime) -> gv.ActuatorStateRecord:
         return gv.ActuatorStateRecord(
             type=self.type,
             active=self.active,
@@ -655,7 +655,8 @@ class ActuatorHub:
         }
 
     def as_records(self) -> list[gv.ActuatorStateRecord]:
+        now = datetime.now(timezone.utc)
         return [
-            handler.as_record()
+            handler.as_record(now)
             for handler in self._actuator_handlers.values()
         ]
