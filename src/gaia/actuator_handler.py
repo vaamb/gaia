@@ -533,7 +533,7 @@ class ActuatorHandler:
                 ActuatorRecord(
                     ecosystem_uid=self.ecosystem.uid,
                     type=data.type,
-                    timestamp=data.timestamp,
+                    timestamp=data.timestamp.astimezone(timezone.utc),
                     active=data.active,
                     mode=data.mode,
                     status=data.status,
@@ -569,7 +569,7 @@ class ActuatorHandler:
                 ActuatorBuffer(
                     ecosystem_uid=self.ecosystem.uid,
                     type=data.type,
-                    timestamp=data.timestamp,
+                    timestamp=data.timestamp.astimezone(timezone.utc),
                     active=data.active,
                     mode=data.mode,
                     status=data.status,
