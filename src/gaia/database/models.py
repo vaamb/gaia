@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncGenerator, NamedTuple, Sequence, Type, TypeVar
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import DateTime, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column
 
 import gaia_validators as gv
@@ -25,6 +26,19 @@ db = AsyncSQLAlchemyWrapper(
     },
 )
 Base = db.Model
+
+
+class UtcDateTime(TypeDecorator):
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if isinstance(value, datetime):
+            return value.astimezone(timezone.utc)
+
+    def process_result_value(self, value, dialect):
+        if isinstance(value, datetime):
+            return value.replace(tzinfo=timezone.utc)
 
 
 class DataBufferMixin(Base):
@@ -115,7 +129,7 @@ class BaseSensorRecord(Base):
     ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
     sensor_uid: Mapped[str] = mapped_column(sa.String(length=16))
     measure: Mapped[str] = mapped_column(sa.String(length=16))
-    timestamp: Mapped[datetime] = mapped_column()
+    timestamp: Mapped[datetime] = mapped_column(UtcDateTime)
     value: Mapped[float] = mapped_column(sa.Float(precision=2))
 
     __table_args__ = (
@@ -162,7 +176,7 @@ class BaseActuatorRecord(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
     type: Mapped[gv.HardwareType] = mapped_column()
-    timestamp: Mapped[datetime] = mapped_column()
+    timestamp: Mapped[datetime] = mapped_column(UtcDateTime)
     active: Mapped[bool] = mapped_column()
     mode: Mapped[gv.ActuatorMode] = mapped_column(default=gv.ActuatorMode.automatic)
     status: Mapped[bool] = mapped_column()
