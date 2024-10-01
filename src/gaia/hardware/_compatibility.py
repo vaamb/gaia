@@ -179,7 +179,7 @@ class ENS160(CompatibilityDevice):
         }
 
 
-class PiCamera:
+class Picamera2:
     def create_preview_configuration(self) -> None:
         pass
 
