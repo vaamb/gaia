@@ -54,6 +54,18 @@ heater_info = {
 }
 
 
+camera_uid = "aVxKrtCOQHeu8GpN"
+camera_info = {
+    "name": "Camera",
+    "address": "PICAMERA",
+    "model": "PiCamera",
+    "type": gv.HardwareType.camera,
+    "level": gv.HardwareLevel.environment,
+    "measures": [],
+    "plants": [],
+}
+
+
 hardware_uid = sensor_uid
 hardware_info = sensor_info
 
@@ -101,6 +113,7 @@ ecosystem_info = {
             light_uid: light_info,
             heater_uid: heater_info,
             sensor_uid: sensor_info,
+            camera_uid: camera_info,
         },
     },
 }

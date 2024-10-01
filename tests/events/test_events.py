@@ -11,9 +11,23 @@ from gaia.config.from_files import PrivateConfigValidator
 from gaia.events import Events as Events_
 
 from ..data import (
-    ecosystem_name, ecosystem_uid, engine_uid, heater_info, heater_uid,
-    light_info, light_uid, lighting_method, lighting_start, lighting_stop,
-    place_latitude, place_longitude, place_name, sensor_info, sensor_uid)
+    camera_uid,
+    camera_info,
+    ecosystem_name,
+    ecosystem_uid,
+    engine_uid,
+    heater_info,
+    heater_uid,
+    light_info,
+    light_uid,
+    lighting_start,
+    lighting_stop,
+    place_latitude,
+    place_longitude,
+    place_name,
+    sensor_info,
+    sensor_uid
+)
 from ..utils import get_logs_content, MockDispatcher
 
 
@@ -125,7 +139,7 @@ async def test_on_registration_ack(
     def get_h_info_list(info_name: str):
         return [
             h[info_name]
-            for h in (heater_info, light_info, sensor_info)
+            for h in (heater_info, light_info, sensor_info, camera_info)
         ]
 
     hardware = responses[4]
@@ -133,7 +147,7 @@ async def test_on_registration_ack(
     assert hardware["data"][0]["uid"] == ecosystem_uid
     for h in hardware["data"][0]["data"]:
         h: gv.HardwareConfig
-        assert h["uid"] in (heater_uid, light_uid, sensor_uid)
+        assert h["uid"] in (heater_uid, light_uid, sensor_uid, camera_uid)
         assert h["name"] in get_h_info_list("name")
         assert h["address"] in get_h_info_list("address")
         assert h["model"] in get_h_info_list("model")

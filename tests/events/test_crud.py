@@ -568,5 +568,5 @@ async def test_delete_hardware(events_handler: Events):
 
     data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
-    assert len(verified.data) == 2
+    assert len(verified.data) == 3
     assert hardware_uid not in [hardware.uid for hardware in verified.data]
