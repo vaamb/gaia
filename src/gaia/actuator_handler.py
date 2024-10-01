@@ -350,7 +350,7 @@ class ActuatorHandler:
             raise RuntimeError("This actuator is not active.")
 
     @asynccontextmanager
-    async def update_status_transaction(self, activation=False):
+    async def update_status_transaction(self, activation: bool = False):
         async with self._update_lock:
             try:
                 self._updating = True
