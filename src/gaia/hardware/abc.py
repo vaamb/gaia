@@ -634,16 +634,20 @@ class Camera(Hardware):
                 os.mkdir(self._camera_dir)
         return self._camera_dir
 
+    async def load_image(self, image_path: Path) -> PIL_image.Image:
+        image = await run_sync(PIL_image.open, str(image_path))
+        return image
+
     async def save_image(
             self,
             image: PIL_image.Image,
-            name: str | None = None,
+            image_path: Path | None = None,
     ) -> Path:
-        if name is None:
+        if image_path is None:
             timestamp: datetime | None = image.info.get("timestamp")
             if timestamp is None:
                 timestamp = datetime.now(tz=timezone.utc)
-            name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
-        path = self.camera_dir/name
-        await run_sync(image.save, path)
-        return path
+            image_path = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
+            image_path = self.camera_dir/image_path
+        await run_sync(image.save, image_path)
+        return image_path
