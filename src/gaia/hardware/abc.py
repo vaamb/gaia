@@ -609,12 +609,12 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    async def get_image(self) -> PIL_image.Image | None:
+    async def get_image(self) -> PIL_image.Image:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    #async def get_video(self) -> io.BytesIO | None:
+    #async def get_video(self) -> io.BytesIO:
     #    raise NotImplementedError(
     #        "This method must be implemented in a subclass"
     #    )

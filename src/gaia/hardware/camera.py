@@ -33,10 +33,10 @@ class PiCamera(Camera):
             from gaia.hardware._compatibility import Picamera2 as _PiCamera
         return _PiCamera()
 
-    async def get_image(self) -> PIL_image.Image | None:
+    async def get_image(self) -> PIL_image.Image:
         return await run_sync(self._get_image)
 
-    def _get_image(self) -> PIL_image.Image | None:
+    def _get_image(self) -> PIL_image.Image:
         camera_config = self.device.create_still_configuration()
         self.device.configure(camera_config)
         self.device.start()
@@ -56,7 +56,7 @@ class PiCamera(Camera):
                 image: PIL_image.Image = PIL_image.fromarray(array)
                 image.info["timestamp"] = now
                 return image
-        return None
+        raise RuntimeError("There was an error while taking the picture.")
 
 
 camera_models: dict[str, Type[Camera]] = {
