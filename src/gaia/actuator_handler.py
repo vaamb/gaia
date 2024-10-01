@@ -391,7 +391,8 @@ class ActuatorHandler:
 
     def _set_mode(self, value: gv.ActuatorMode) -> None:
         self._mode = value
-        # TODO: reset associated PID ?
+        pid: HystericalPID = self.get_associated_pid()
+        pid.reset()
 
     @property
     def status(self) -> bool:
