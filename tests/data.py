@@ -33,7 +33,7 @@ sensor_info = {
 light_uid = "cpgCZFJGGYlIXlLL"
 light_info = {
     "name": "VirtualLight",
-    "address": "GPIO_5:GPIO_13",
+    "address": "GPIO_5&GPIO_13",
     "model": "gpioDimmable",
     "type": gv.HardwareType.light,
     "level": gv.HardwareLevel.environment,
@@ -45,7 +45,7 @@ light_info = {
 heater_uid = "A0oZpCJ50D0ajfJs"
 heater_info = {
     "name": "VirtualHeater",
-    "address": "GPIO_26:GPIO_12",
+    "address": "GPIO_26&GPIO_12",
     "model": "gpioDimmable",
     "type": gv.HardwareType.heater,
     "level": gv.HardwareLevel.environment,
