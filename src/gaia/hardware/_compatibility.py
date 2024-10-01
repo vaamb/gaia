@@ -191,12 +191,14 @@ class Picamera2:
 
     def capture_array(self, *args) -> Any:
         import numpy as np
-        return np.zeros((42, 42))
+        side = 421
+        r = np.random.binomial(255, 0.133, (side, side))
+        g = np.random.binomial(255, 0.420, (side, side))
+        b = np.random.binomial(255, 0.639, (side, side))
+        array = np.stack((r, g ,b), axis=2)
+        return array.astype("uint8")
 
     def configure(self, camera_config) -> Any:
-        pass
-
-    def start_preview(self, preview: Preview) -> None:
         pass
 
     def start(self) -> None:
