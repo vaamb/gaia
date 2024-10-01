@@ -249,7 +249,7 @@ class Hardware(metaclass=_MetaHardware):
         self._type: gv.HardwareType = type
         self._model: str = model
         self._name: str = name
-        address_list: list = address.split(":")
+        address_list: list = address.split("&")
         self._address_book: AddressBook = AddressBook(
             primary=Address(address_list[0]),
             secondary=Address(address_list[1]) if len(address_list) == 2 else None
