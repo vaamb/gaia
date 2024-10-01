@@ -607,10 +607,10 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    async def get_video(self) -> io.BytesIO | None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+    #async def get_video(self) -> io.BytesIO | None:
+    #    raise NotImplementedError(
+    #        "This method must be implemented in a subclass"
+    #    )
 
     @property
     def camera_dir(self) -> Path:
