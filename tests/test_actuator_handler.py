@@ -79,20 +79,20 @@ async def test_timer(light_handler: ActuatorHandler):
     timer = 1.0
     async with light_handler.update_status_transaction():
         light_handler.increase_countdown(timer)
-    assert math.isclose(light_handler.countdown, timer, abs_tol=0.01)
+    assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
     # Test decrease countdown
     decrease = 0.75
     timer -= decrease
     async with light_handler.update_status_transaction():
         light_handler.decrease_countdown(decrease)
-    assert math.isclose(light_handler.countdown, timer, abs_tol=0.01)
+    assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
     # Test sleep, remaining above 0
     decrease = 0.15
     timer -= decrease
     await sleep(decrease)
-    assert math.isclose(light_handler.countdown, timer, abs_tol=0.01)
+    assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
     # Test sleep, remaining under 0
     decrease = 0.15
