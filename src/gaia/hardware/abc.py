@@ -74,23 +74,71 @@ def str_to_hex(address: str) -> int:
 class Address:
     __slots__ = ("type", "main", "multiplexer_address", "multiplexer_channel")
 
+    type: AddressType
+    main: int
+    multiplexer_address: int | None
+    multiplexer_channel: int | None
+
     def __init__(self, address_string: str) -> None:
         """
         :param address_string: properly written address. cf the _hint method
                                to see different address formats possible
+
+        If any error arises while trying to create an Address, use `Address._hint()`
         """
         address_components = address_string.split("_", maxsplit=2)
         if len(address_components) != 2:
             raise ValueError(self._hint())
+        address_type = address_components[0]
+        address_number = address_components[1]
 
-        address_data = self._extract_address_data(
-            type_str=address_components[0],
-            numbers_str=address_components[1]
-        )
-        self.type: AddressType = address_data[0]
-        self.main: int = address_data[1]
-        self.multiplexer_address: int = address_data[2]
-        self.multiplexer_channel: int = address_data[3]
+        # The hardware is using a standard GPIO pin
+        if address_type.lower() in ("board", "bcm", "gpio"):
+            # Get the pin number in the proper format and make sure it is valid
+            pin_number = int(address_number)
+            if address_type.lower() == "board":
+                # Translate the pin number from "board" to "BCM" format
+                if pin_number not in pin_board_to_bcm:  # pragma: no cover
+                    raise PinNumberError("The pin is not a valid GPIO pin")
+                pin_number = pin_translation(pin_number, "to_BCM")
+            else:
+                if pin_number not in pin_bcm_to_board:  # pragma: no cover
+                    raise PinNumberError("The pin is not a valid GPIO pin")
+            # Init the data
+            self.type = AddressType.GPIO
+            self.main = pin_number
+            self.multiplexer_address = None  # No multiplexing possible with gpio
+            self.multiplexer_channel = None  # No multiplexing possible with gpio
+
+        # The hardware is using the I2C protocol
+        elif address_type.lower() == "i2c":
+            i2c_components = address_number.split("_")
+            if len(i2c_components) == 1:
+                # The hardware does not use a multiplexer; format "I2C_0x10"
+                main = str_to_hex(i2c_components[0])
+                multiplexer_address = None
+                multiplexer_channel = None
+            elif len(i2c_components) == 2:
+                # The hardware is using a multiplexer; format "I2C_0x70#1_0x10"
+                main = str_to_hex(i2c_components[1])
+                multiplexer_components = i2c_components[0].split("#")
+                multiplexer_address = str_to_hex(multiplexer_components[0])
+                multiplexer_channel = int(multiplexer_components[1])
+            else:
+                raise ValueError(self._hint())
+            self.type = AddressType.I2C
+            self.main = main
+            self.multiplexer_address = multiplexer_address
+            self.multiplexer_channel = multiplexer_channel
+
+        # The hardware is using the SPI protocol
+        elif address_type.lower() == "spi":
+            raise ValueError("SPI address is not currently supported.")
+
+        # The address is not valid
+        else:
+            raise ValueError("Address type is not valid.")
+
 
     def __repr__(self) -> str:
         if self.type == AddressType.GPIO:
@@ -133,62 +181,9 @@ class Address:
         """
         return textwrap.dedent(msg)
 
-    def _extract_address_data(
-            self,
-            type_str: str,
-            numbers_str: str
-    ) -> tuple[AddressType, int, int, int]:
-        # Extract type
-        address_type: AddressType
-        if type_str.lower() in ("board", "bcm", "gpio"):
-            address_type = AddressType.GPIO
-        elif type_str.lower() == "i2c":
-            address_type = AddressType.I2C
-        elif type_str.lower() == "spi":
-            address_type = AddressType.SPI
-        else:
-            raise ValueError("Address type is not supported")
-
-        # Extract numbers
-        main: int = 0
-        multiplexer_address: int = 0
-        multiplexer_channel: int = 0
-        # GPIO-type address
-        if address_type == AddressType.GPIO:
-            try:
-                number = int(numbers_str)
-            except ValueError:
-                raise ValueError(self._hint())
-            if type_str.lower() == "board":
-                if number not in pin_board_to_bcm:  # pragma: no cover
-                    raise PinNumberError("The pin is not a valid GPIO pin")
-                main = pin_translation(number, "to_BCM")
-            else:
-                if number not in pin_bcm_to_board:  # pragma: no cover
-                    raise PinNumberError("The pin is not a valid GPIO pin")
-                main = number
-        # I2C type address
-        elif address_type == AddressType.I2C:
-            i2c_components = numbers_str.split("_")
-            try:
-                if len(i2c_components) == 1:
-                    main = str_to_hex(i2c_components[0])
-                elif len(i2c_components) == 2:
-                    multiplexer_components = i2c_components[0].split("#")
-                    multiplexer_address = str_to_hex(multiplexer_components[0])
-                    multiplexer_channel = int(multiplexer_components[1])
-                    main = str_to_hex(i2c_components[1])
-                else:
-                    raise ValueError
-            except ValueError:
-                raise ValueError(self._hint())
-        elif address_type == AddressType.SPI:
-            raise ValueError("SPI address is not currently supported.")
-        return address_type, main, multiplexer_address, multiplexer_channel
-
     @property
     def is_multiplexed(self) -> bool:
-        return self.multiplexer_address != 0
+        return self.multiplexer_address is not None
 
 
 class _MetaHardware(type):
