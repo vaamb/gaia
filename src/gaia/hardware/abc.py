@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-import io
 import os
 from pathlib import Path
 import textwrap
@@ -17,7 +16,7 @@ from anyio.to_thread import run_sync
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
-from gaia.dependencies.camera import check_dependencies, Image
+from gaia.dependencies.camera import check_dependencies, PIL_image
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import (
@@ -610,7 +609,7 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    async def get_image(self) -> Image | None:
+    async def get_image(self) -> PIL_image.Image | None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -635,11 +634,11 @@ class Camera(Hardware):
 
     async def save_image(
             self,
-            image: Image,
+            image: PIL_image.Image,
             name: str | None = None,
     ) -> Path:
         if name is None:
-            timestamp: datetime | None = image.metadata.get("timestamp")
+            timestamp: datetime | None = image.info.get("timestamp")
             if timestamp is None:
                 timestamp = datetime.now(tz=timezone.utc)
             name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"

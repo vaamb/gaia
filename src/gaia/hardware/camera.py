@@ -7,7 +7,8 @@ from typing import Type
 
 from anyio.to_thread import run_sync
 
-from gaia.hardware.abc import Camera, hardware_logger, Image
+from gaia.dependencies.camera import PIL_image
+from gaia.hardware.abc import Camera, hardware_logger
 from gaia.hardware.utils import is_raspi
 
 
@@ -32,10 +33,10 @@ class PiCamera(Camera):
             from gaia.hardware._compatibility import Picamera2 as _PiCamera
         return _PiCamera()
 
-    async def get_image(self) -> Image | None:
+    async def get_image(self) -> PIL_image.Image | None:
         return await run_sync(self._get_image)
 
-    def _get_image(self) -> Image | None:
+    def _get_image(self) -> PIL_image.Image | None:
         camera_config = self.device.create_still_configuration()
         self.device.configure(camera_config)
         self.device.start()
@@ -52,7 +53,9 @@ class PiCamera(Camera):
                     f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
             else:
-                return Image.from_array(array=array, metadata={"timestamp": now})
+                image: PIL_image.Image = PIL_image.fromarray(array)
+                image.info["timestamp"] = now
+                return image
         return None
 
 

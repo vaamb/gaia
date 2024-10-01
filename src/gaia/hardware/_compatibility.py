@@ -190,7 +190,8 @@ class Picamera2:
         pass
 
     def capture_array(self, *args) -> Any:
-        pass
+        import numpy as np
+        return np.zeros((42, 42))
 
     def configure(self, camera_config) -> Any:
         pass
