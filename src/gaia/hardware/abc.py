@@ -63,6 +63,7 @@ class AddressType(Enum):
     GPIO = "GPIO"
     I2C = "I2C"
     SPI = "SPI"
+    PICAMERA = "PICAMERA"
 
 
 def str_to_hex(address: str) -> int:
@@ -75,7 +76,7 @@ class Address:
     __slots__ = ("type", "main", "multiplexer_address", "multiplexer_channel")
 
     type: AddressType
-    main: int
+    main: int | None
     multiplexer_address: int | None
     multiplexer_channel: int | None
 
@@ -87,10 +88,11 @@ class Address:
         If any error arises while trying to create an Address, use `Address._hint()`
         """
         address_components = address_string.split("_", maxsplit=2)
-        if len(address_components) != 2:
-            raise ValueError(self._hint())
         address_type = address_components[0]
-        address_number = address_components[1]
+        try:
+            address_number = address_components[1]
+        except IndexError:
+            address_number = None
 
         # The hardware is using a standard GPIO pin
         if address_type.lower() in ("board", "bcm", "gpio"):
@@ -134,6 +136,12 @@ class Address:
         # The hardware is using the SPI protocol
         elif address_type.lower() == "spi":
             raise ValueError("SPI address is not currently supported.")
+
+        elif address_type.lower() == "picamera":
+            self.type = AddressType.PICAMERA
+            self.main = None
+            self.multiplexer_address = None
+            self.multiplexer_channel = None
 
         # The address is not valid
         else:
