@@ -27,8 +27,8 @@ dependencies = [
 
 [project.optional-dependencies]
 camera = [
-    "numpy~=1.25.0",
-    "Pillow~=9.5.0",
+    "numpy~=2.1.0",
+    "pillow~=10.4.0",
 ]
 database = [
     "aiosqlite~=0.20.0",

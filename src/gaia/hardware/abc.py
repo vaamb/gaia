@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-import io
 import os
 from pathlib import Path
 import textwrap
@@ -17,7 +16,7 @@ from anyio.to_thread import run_sync
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
-from gaia.dependencies.camera import check_dependencies, Image
+from gaia.dependencies.camera import check_dependencies, PIL_image
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import (
@@ -63,6 +62,7 @@ class AddressType(Enum):
     GPIO = "GPIO"
     I2C = "I2C"
     SPI = "SPI"
+    PICAMERA = "PICAMERA"
 
 
 def str_to_hex(address: str) -> int:
@@ -75,7 +75,7 @@ class Address:
     __slots__ = ("type", "main", "multiplexer_address", "multiplexer_channel")
 
     type: AddressType
-    main: int
+    main: int | None
     multiplexer_address: int | None
     multiplexer_channel: int | None
 
@@ -87,10 +87,11 @@ class Address:
         If any error arises while trying to create an Address, use `Address._hint()`
         """
         address_components = address_string.split("_", maxsplit=2)
-        if len(address_components) != 2:
-            raise ValueError(self._hint())
         address_type = address_components[0]
-        address_number = address_components[1]
+        try:
+            address_number = address_components[1]
+        except IndexError:
+            address_number = None
 
         # The hardware is using a standard GPIO pin
         if address_type.lower() in ("board", "bcm", "gpio"):
@@ -135,13 +136,21 @@ class Address:
         elif address_type.lower() == "spi":
             raise ValueError("SPI address is not currently supported.")
 
+        elif address_type.lower() == "picamera":
+            self.type = AddressType.PICAMERA
+            self.main = None
+            self.multiplexer_address = None
+            self.multiplexer_channel = None
+
         # The address is not valid
         else:
             raise ValueError("Address type is not valid.")
 
 
     def __repr__(self) -> str:
-        if self.type == AddressType.GPIO:
+        if self.type == AddressType.PICAMERA:
+            return f"{self.type.value}"
+        elif self.type == AddressType.GPIO:
             rep_f = int
         elif self.type == AddressType.I2C:
             rep_f = hex
@@ -602,15 +611,15 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )
 
-    async def get_image(self) -> Image | None:
+    async def get_image(self) -> PIL_image.Image:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
 
-    async def get_video(self) -> io.BytesIO | None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+    #async def get_video(self) -> io.BytesIO:
+    #    raise NotImplementedError(
+    #        "This method must be implemented in a subclass"
+    #    )
 
     @property
     def camera_dir(self) -> Path:
@@ -627,11 +636,11 @@ class Camera(Hardware):
 
     async def save_image(
             self,
-            image: Image,
+            image: PIL_image.Image,
             name: str | None = None,
     ) -> Path:
         if name is None:
-            timestamp: datetime | None = image.metadata.get("timestamp")
+            timestamp: datetime | None = image.info.get("timestamp")
             if timestamp is None:
                 timestamp = datetime.now(tz=timezone.utc)
             name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"

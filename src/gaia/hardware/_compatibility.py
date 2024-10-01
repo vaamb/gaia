@@ -179,7 +179,7 @@ class ENS160(CompatibilityDevice):
         }
 
 
-class PiCamera:
+class Picamera2:
     def create_preview_configuration(self) -> None:
         pass
 
@@ -190,7 +190,8 @@ class PiCamera:
         pass
 
     def capture_array(self, *args) -> Any:
-        pass
+        import numpy as np
+        return np.zeros((42, 42))
 
     def configure(self, camera_config) -> Any:
         pass
@@ -206,7 +207,3 @@ class PiCamera:
 
     def capture_file(self, name: str, format: str = "jpg") -> None:
         pass
-
-
-class Preview:
-    QTGL = None

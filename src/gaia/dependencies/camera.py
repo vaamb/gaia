@@ -10,21 +10,21 @@ except ImportError:
 
 try:
     import PIL
-except ImportError:
-    PIL = None
-    _uninstalled_dependencies = True
+    from PIL import Image as PIL_image
 
-try:
-    from gaia_validators.image import Image
 except ImportError:
-    Image = None
+    class _Image:
+        Image = None
+
+    PIL = None
+    PIL_image = _Image()
+    _uninstalled_dependencies = True
 
 
 if t.TYPE_CHECKING:
     import numpy as np
     import PIL
-
-    from gaia_validators.image import Image
+    from PIL import Image as PIL_image
 
 
 def check_dependencies() -> None:
