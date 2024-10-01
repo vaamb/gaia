@@ -364,7 +364,7 @@ class Hardware(metaclass=_MetaHardware):
     def address_repr(self) -> str:
         sec = self._address_book.secondary is not None
         if sec:
-            return f"{self._address_book.primary}:{self._address_book.secondary}"
+            return f"{self._address_book.primary}&{self._address_book.secondary}"
         else:
             return str(self._address_book.primary)
 
