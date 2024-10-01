@@ -206,7 +206,3 @@ class Picamera2:
 
     def capture_file(self, name: str, format: str = "jpg") -> None:
         pass
-
-
-class Preview:
-    QTGL = None
