@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from time import sleep
 import typing as t
-from typing import Type, Generator
+from typing import Type
 
 from anyio.to_thread import run_sync
 
@@ -55,26 +55,6 @@ class PiCamera(Camera):
             else:
                 return Image.from_array(array=array, metadata={"timestamp": now})
         return None
-
-    def get_timelapse(
-            self,
-            frequency: int | float = 0.5
-    ) -> Generator[Image, None, None]:
-        if frequency > 2.0:
-            frequency = 2.0
-        camera_config = self.device.create_still_configuration()
-        self.device.configure(camera_config)
-        self.device.start_preview(Preview.QTGL)
-        self.device.start()
-        sleep(2)
-        try:
-            while True:
-                now = datetime.now().astimezone()
-                array = self.device.capture_array("main")
-                yield Image(array=array, timestamp=now)
-                sleep(1/frequency)
-        finally:
-            self.device.stop()
 
 
 camera_models: dict[str, Type[Camera]] = {
