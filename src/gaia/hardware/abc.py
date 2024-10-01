@@ -148,7 +148,9 @@ class Address:
 
 
     def __repr__(self) -> str:
-        if self.type == AddressType.GPIO:
+        if self.type == AddressType.PICAMERA:
+            return f"{self.type.value}"
+        elif self.type == AddressType.GPIO:
             rep_f = int
         elif self.type == AddressType.I2C:
             rep_f = hex
