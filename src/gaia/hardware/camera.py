@@ -33,11 +33,14 @@ class PiCamera(Camera):
             from gaia.hardware._compatibility import Picamera2 as _PiCamera
         return _PiCamera()
 
-    async def get_image(self) -> PIL_image.Image:
-        return await run_sync(self._get_image)
+    async def get_image(self, size: tuple | None = None) -> PIL_image.Image:
+        return await run_sync(self._get_image, size)
 
-    def _get_image(self) -> PIL_image.Image:
-        camera_config = self.device.create_still_configuration()
+    def _get_image(self, size: tuple | None) -> PIL_image.Image:
+        if size is not None:
+            camera_config = self.device.create_still_configuration(main={"size": size})
+        else:
+            camera_config = self.device.create_still_configuration()
         self.device.configure(camera_config)
         self.device.start()
         # need at least 2 sec sleep for the camera to adapt to light level
