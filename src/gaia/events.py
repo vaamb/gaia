@@ -31,7 +31,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 PayloadName = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
     "sensors_data", "health_data", "light_data", "actuators_data",
-    "chaos_parameters", "places_list",
+    "chaos_parameters", "places_list", "picture_arrays",
 ]
 
 
@@ -44,6 +44,7 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
     "actuators_data": gv.ActuatorsDataPayload,
+    "picture_arrays": gv.PictureArrayPayload,
     "chaos_parameters": gv.ChaosParametersPayload,
     "places_list": gv.PlacesPayload,
 }
@@ -259,6 +260,9 @@ class Events(AsyncEventHandler):
             ecosystem_uids: str | list[str] | None = None,
             ttl: int | None = None,
     ) -> bool:
+        if payload_name == "picture_arrays":
+            raise ValueError(
+                "'picture_arrays' need to be sent via a specific method.")
         self.logger.debug(f"Requested to emit event '{payload_name}'.")
         payload = self.get_payload(payload_name, ecosystem_uids)
         if payload:
@@ -558,3 +562,13 @@ class Events(AsyncEventHandler):
                     await db_model.clear_buffer(session, data["uuid"])
                 else:
                     await db_model.clear_uuid(session, data["uuid"])
+
+    # ---------------------------------------------------------------------------
+    #   Pictures
+    # ---------------------------------------------------------------------------
+    async def send_pictures(
+            self,
+            ecosystem_uids: str | list[str] | None = None
+    ) -> None:
+        payload = self.get_payload("picture_arrays", ecosystem_uids)
+        await self.emit("pictures", data=payload, namespace="aggregator-stream")
