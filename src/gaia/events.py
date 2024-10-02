@@ -566,9 +566,9 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     #   Pictures
     # ---------------------------------------------------------------------------
-    async def send_pictures(
+    async def send_picture_arrays(
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
         payload = self.get_payload("picture_arrays", ecosystem_uids)
-        await self.emit("pictures", data=payload, namespace="aggregator-stream")
+        await self.emit("picture_arrays", data=payload, namespace="aggregator-stream")
