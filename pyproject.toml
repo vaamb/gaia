@@ -29,6 +29,7 @@ dependencies = [
 camera = [
     "numpy~=2.1.0",
     "pillow~=10.4.0",
+    "scikit-image~=0.24.0",
 ]
 database = [
     "aiosqlite~=0.20.0",
