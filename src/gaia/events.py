@@ -32,7 +32,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 PayloadName = Literal[
     "base_info", "management", "environmental_parameters", "hardware",
     "sensors_data", "health_data", "light_data", "actuators_data",
-    "chaos_parameters", "places_list", "picture_arrays",
+    "chaos_parameters", "places_list",
 ]
 
 
@@ -45,7 +45,6 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
     "actuators_data": gv.ActuatorsDataPayload,
-    "picture_arrays": gv.PictureArrayPayload,
     "chaos_parameters": gv.ChaosParametersPayload,
     "places_list": gv.PlacesPayload,
 }
