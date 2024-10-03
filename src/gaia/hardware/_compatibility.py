@@ -195,10 +195,10 @@ class Picamera2:
     def capture_array(self, name="main") -> Any:
         import numpy as np
 
-        size = self._cfg["size"]
-        r = np.random.binomial(255, 0.133, size)
-        g = np.random.binomial(255, 0.420, size)
-        b = np.random.binomial(255, 0.639, size)
+        width, height = self._cfg["size"]
+        r = np.random.binomial(255, 0.133, (height, width))
+        g = np.random.binomial(255, 0.420, (height, width))
+        b = np.random.binomial(255, 0.639, (height, width))
         array = np.stack((r, g ,b), axis=2)
         return array.astype("uint8")
 
