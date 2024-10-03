@@ -131,7 +131,7 @@ class Pictures(SubroutineTemplate):
                     )
                 finally:
                     self._sending_counter = 0
-                    self._sending_counter += 1
+        self._sending_counter += 1
         loop_time = monotonic() - start_time
         if loop_time > self._loop_period:  # pragma: no cover
             self.logger.warning(
