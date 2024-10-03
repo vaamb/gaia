@@ -120,7 +120,6 @@ class Pictures(SubroutineTemplate):
             update_time = monotonic() - start_time
             self.logger.debug(
                 f"Picture scored array update finished in {update_time:.1f} s.")
-        self._sending_counter += 1
         if self._sending_counter % self._sending_ratio == 0:
             if self.ecosystem.engine.use_message_broker:
                 try:
@@ -132,10 +131,11 @@ class Pictures(SubroutineTemplate):
                     )
                 finally:
                     self._sending_counter = 0
+                    self._sending_counter += 1
         loop_time = monotonic() - start_time
         if loop_time > self._loop_period:  # pragma: no cover
             self.logger.warning(
-                f"Picture routine took {loop_time:.1f}. This either "
+                f"Picture routine took {loop_time:.1f} s. This either "
                 f"indicates errors while getting pictures and computing mse or "
                 f"that the computing power requested to analyse the pictures is "
                 f"too big. You might need to adapt 'PICTURE_TAKING_PERIOD' or "
