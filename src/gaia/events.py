@@ -21,6 +21,7 @@ import gaia_validators as gv
 
 from gaia import Ecosystem, EcosystemConfig, Engine
 from gaia.config.from_files import ConfigType
+from gaia.dependencies.camera import SerializableImage, SerializableImagePayload
 from gaia.utils import humanize_list, local_ip_address
 
 
@@ -570,5 +571,17 @@ class Events(AsyncEventHandler):
             self,
             ecosystem_uids: str | list[str] | None = None
     ) -> None:
-        payload = self.get_payload("picture_arrays", ecosystem_uids)
-        await self.emit("picture_arrays", data=payload, namespace="aggregator-stream")
+        uids = self.filter_uids(ecosystem_uids)
+        self.logger.debug(
+            f"Getting 'picture_arrays' for {humanize_list(uids)}.")
+
+        for uid in uids:
+            picture_arrays: SerializableImage = self.ecosystems[uid].picture_arrays
+            if isinstance(picture_arrays, gv.Empty):
+                continue
+            ecosystem_payload = SerializableImagePayload(
+                uid=uid,
+                data=picture_arrays,
+            )
+            await self.emit(
+                "picture_arrays", data=ecosystem_payload.encode(), namespace="aggregator-stream")
