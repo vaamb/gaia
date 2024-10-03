@@ -121,6 +121,7 @@ class Pictures(SubroutineTemplate):
             self.logger.debug(
                 f"Picture scored array update finished in {update_time:.1f} s.")
         if self._sending_counter % self._sending_ratio == 0:
+            # Send data
             if self.ecosystem.engine.use_message_broker:
                 try:
                     await self.send_pictures_if_possible()
@@ -131,6 +132,9 @@ class Pictures(SubroutineTemplate):
                     )
                 finally:
                     self._sending_counter = 0
+            # Reset scores
+            for scored_array in self._scored_arrays.values():
+                scored_array["score"] = -1.0
         self._sending_counter += 1
         loop_time = monotonic() - start_time
         if loop_time > self._loop_period:  # pragma: no cover
