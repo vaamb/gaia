@@ -158,15 +158,15 @@ class Pictures(SubroutineTemplate):
         self.logger.info(
             f"Starting the picture loop. It will run every "
             f"{self._loop_period:.1f} s and send picture every "
-            f"{self._sending_ratio} iterations.")
-        self.logger.info("Loading background image(s)")
+            f"{self._sending_ratio} iteration(s).")
+        self.logger.info("Loading background image(s).")
         await self._load_background_arrays()
         self.ecosystem.engine.scheduler.add_job(
             func=self.routine,
             id=f"{self.ecosystem.uid}-picture_routine",
             trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period / 10),
         )
-        self.logger.debug(f"Picture loop successfully started")
+        self.logger.debug(f"Picture loop successfully started.")
 
     async def _stop(self) -> None:
         self.logger.info(f"Stopping picture loop")
@@ -211,5 +211,5 @@ class Pictures(SubroutineTemplate):
             except RuntimeError:
                 self.logger.error(
                     f"Could not reset background image for the camera with the "
-                    f"uid '{camera_uid}'")
+                    f"uid '{camera_uid}'.")
                 raise
