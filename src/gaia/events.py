@@ -107,7 +107,7 @@ class Events(AsyncEventHandler):
         self.registered = False
         self._resent_initialization_data: bool = False
         self._last_heartbeat: float = monotonic()
-        self._task: Task | None = None
+        self._ping_task: Task | None = None
         self._jobs_scheduled: bool = False
         self.logger = logging.getLogger(f"gaia.engine.events_handler")
 
@@ -152,16 +152,16 @@ class Events(AsyncEventHandler):
     #   Background jobs
     # ---------------------------------------------------------------------------
     def _schedule_jobs(self) -> None:
-        self._task = asyncio.create_task(
-            self.ping_task(), name="events-ping")
         self._jobs_scheduled = True
 
     def _unschedule_jobs(self) -> None:
-        self._task.cancel()
-        self._task = None
         self._jobs_scheduled = False
 
-    async def ping_task(self) -> None:
+    def _start_ping_task(self) -> None:
+        self._ping_task = asyncio.create_task(
+            self._ping_loop(), name="events-ping")
+
+    async def _ping_loop(self) -> None:
         while True:
             start = monotonic()
             await self.ping()
@@ -176,7 +176,7 @@ class Events(AsyncEventHandler):
                     "status": ecosystem.started,
                 } for ecosystem in self.ecosystems.values()]
                 self.logger.debug("Sending 'ping'.")
-                await self.emit("ping", data=ecosystems, ttl=20)
+                await self.emit("ping", data=ecosystems, namespace="aggregator-stream")
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while running the ping routine. "
@@ -328,6 +328,7 @@ class Events(AsyncEventHandler):
         self.logger.info(
             "Connection to the message broker successful. Will try to register "
             "the engine to Ouranos.")
+        self._start_ping_task()
         await self.register()
 
     async def on_disconnect(self, *args) -> None:  # noqa
