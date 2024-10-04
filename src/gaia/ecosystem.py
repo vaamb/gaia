@@ -8,9 +8,10 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
-from gaia.exceptions import NonValidSubroutine, UndefinedParameter
+from gaia.dependencies.camera import SerializableImage
+from gaia.exceptions import NonValidSubroutine
 from gaia.subroutines import (
-    Climate, Health, Light, Sensors, subroutine_dict, SubroutineDict,
+    Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
 from gaia.virtual import VirtualEcosystem
 
@@ -394,3 +395,13 @@ class Ecosystem:
             climate_subroutine: Climate = self.subroutines["climate"]
             return set(climate_subroutine.regulated_parameters)
         return set()
+
+    # Picture
+    @property
+    def picture_arrays(self) -> list[SerializableImage] | gv.Empty:
+        if self.get_subroutine_status("pictures"):
+            picture_subroutine: Pictures = self.subroutines["pictures"]
+            arrays = picture_subroutine.picture_arrays
+            if arrays:
+                return arrays
+        return gv.Empty()

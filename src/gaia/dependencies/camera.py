@@ -20,11 +20,28 @@ except ImportError:
     PIL_image = _Image()
     _uninstalled_dependencies = True
 
+try:
+    import skimage
+except ImportError:
+    skimage = None
+    _uninstalled_dependencies = True
+
+
+try:
+    from gaia_validators.image import SerializableImage, SerializableImagePayload
+except ImportError:
+    SerializableImage = None
+    SerializableImagePayload = None
+    _uninstalled_dependencies = True
+
 
 if t.TYPE_CHECKING:
     import numpy as np
     import PIL
     from PIL import Image as PIL_image
+    import skimage
+
+    from gaia_validators.image import SerializableImage, SerializableImagePayload
 
 
 def check_dependencies() -> None:

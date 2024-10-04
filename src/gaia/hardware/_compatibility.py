@@ -180,24 +180,31 @@ class ENS160(CompatibilityDevice):
 
 
 class Picamera2:
-    def create_preview_configuration(self) -> None:
-        pass
+    def __init__(self):
+        self._cfg: dict = {"size": (800, 600)}
 
-    def create_still_configuration(self) -> None:
-        pass
+    def create_preview_configuration(self, main={}, *args, **kwargs) -> dict:
+        return {"size": (800, 600), **main}
 
-    def create_video_configuration(self) -> None:
-        pass
+    def create_still_configuration(self, main={}, *args, **kwargs) -> dict:
+        return {"size": (800, 600), **main}
 
-    def capture_array(self, *args) -> Any:
+    def create_video_configuration(self, main={}, *args, **kwargs) -> dict:
+        return {"size": (800, 600), **main}
+
+    def capture_array(self, name="main") -> Any:
         import numpy as np
-        return np.zeros((42, 42))
 
-    def configure(self, camera_config) -> Any:
-        pass
+        width, height = self._cfg["size"]
+        r = np.random.binomial(255, 0.133, (height, width))
+        g = np.random.binomial(255, 0.420, (height, width))
+        b = np.random.binomial(255, 0.639, (height, width))
+        array = np.stack((r, g ,b), axis=2)
+        return array.astype("uint8")
 
-    def start_preview(self, preview: Preview) -> None:
-        pass
+    def configure(self, camera_config: dict | str) -> None:
+        if isinstance(camera_config, dict):
+            self._cfg.update(camera_config)
 
     def start(self) -> None:
         pass
