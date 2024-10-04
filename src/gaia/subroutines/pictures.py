@@ -88,6 +88,10 @@ class Pictures(SubroutineTemplate):
         }
 
     async def update_scored_arrays(self) -> None:
+        if not self.started:
+            raise RuntimeError(
+                "Picture subroutine has to be started to update the scored arrays"
+            )
         for camera in self.hardware.values():
             new_scored_array = await self._get_scored_array(camera)
             old_scored_array = self._scored_arrays.get(camera.uid, _null_scored_array)
@@ -112,7 +116,7 @@ class Pictures(SubroutineTemplate):
         self.logger.debug("Starting picture routine ...")
         try:
             await self.update_scored_arrays()
-        except Exception as e:
+        except ValueError as e:
             self.logger.error(
                 f"Encountered an error while updating scored arrays. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`.")
