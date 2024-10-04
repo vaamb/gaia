@@ -4,11 +4,13 @@ from gaia.dependencies.camera import check_dependencies, np, skimage
 
 
 def load_picture_array(path: Path) -> np.ndarray:
+    check_dependencies()
     with path.open("rb") as handler:
         return np.load(handler)
 
 
 def dump_picture_array(array: np.ndarray, path: Path) -> None:
+    check_dependencies()
     with path.open("wb") as handler:
         np.save(handler, array)
 
