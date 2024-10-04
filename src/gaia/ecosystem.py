@@ -8,7 +8,7 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
-from gaia.dependencies.camera import np, SerializableImage
+from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import NonValidSubroutine
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,

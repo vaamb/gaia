@@ -568,7 +568,7 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     async def send_picture_arrays(
             self,
-            ecosystem_uids: str | list[str] | None = None
+            ecosystem_uids: str | list[str] | None = None,
     ) -> None:
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(
