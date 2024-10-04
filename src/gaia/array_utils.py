@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 from gaia.dependencies.camera import check_dependencies, np, skimage
@@ -23,3 +25,8 @@ def resize(array: np.ndarray, size: tuple[int, int]) -> np.array:
 def compute_mse(array0: np.ndarray, array1: np.ndarray) -> float:
     check_dependencies()
     return skimage.metrics.mean_squared_error(array0, array1)
+
+
+def rgb_to_gray(array: np.ndarray) -> np.ndarray:
+    check_dependencies()
+    return skimage.color.rgb2gray(array)
