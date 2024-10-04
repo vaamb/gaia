@@ -7,7 +7,6 @@ from math import ceil
 from time import monotonic
 from typing import TypedDict
 
-import skimage.color
 # from anyio.to_process import run_sync as run_sync_in_process  # Crashes somehow
 from anyio.to_thread import run_sync
 from apscheduler.triggers.interval import IntervalTrigger
@@ -17,7 +16,8 @@ import gaia_validators as gv
 from gaia.dependencies.camera import np, SerializableImage
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
-from gaia.array_utils import compute_mse, dump_picture_array, load_picture_array
+from gaia.array_utils import (
+    compute_mse, dump_picture_array, load_picture_array, rgb_to_gray)
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -67,17 +67,18 @@ class Pictures(SubroutineTemplate):
                 camera: Camera = self.hardware[camera_uid]
                 image = await camera.get_image(size=self._picture_size)
                 array = np.array(image)
-                array = skimage.color.rgb2gray(array)
+                if self._sending_ratio > 1:
+                    array = rgb_to_gray(array)
                 await run_sync(dump_picture_array, array, array_path)
             self._background_arrays[camera_uid] = array
 
     async def _get_scored_array(self, camera: Camera) -> ScoredArray:
         image = await camera.get_image(size=self._picture_size)
         array = np.array(image)
-        gray_array = skimage.color.rgb2gray(array)
         timestamp: datetime = image.info.get("timestamp")
         background_array: np.ndarray = self._background_arrays[camera.uid]
         if self._sending_ratio > 1:
+            gray_array = rgb_to_gray(array)
             mse = await run_sync(compute_mse, background_array, gray_array)
         else:
             mse = 1.0  # No need to compute it, the picture will be sent anyway
