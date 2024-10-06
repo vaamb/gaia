@@ -14,24 +14,28 @@ from gaia.hardware.utils import is_raspi
 
 if t.TYPE_CHECKING:
     if is_raspi():  # pragma: no cover
-        from picamera2 import Picamera2 as _PiCamera
+        from picamera2 import Picamera2
     else:
-        from gaia.hardware._compatibility import Picamera2 as _PiCamera
+        from gaia.hardware._compatibility import Picamera2
 
 
 class PiCamera(Camera):
-    def _get_device(self) -> "_PiCamera":
+    def __del__(self) -> None:
+        if hasattr(self, "device"):
+            self.device.close()
+
+    def _get_device(self) -> Picamera2:
         if is_raspi():  # pragma: no cover
             try:
-                from picamera2 import Picamera2 as _PiCamera
+                from picamera2 import Picamera2
             except ImportError:
                 raise RuntimeError(
                     "picamera package is required. Run `pip install "
                     "picamera` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import Picamera2 as _PiCamera
-        return _PiCamera()
+            from gaia.hardware._compatibility import Picamera2
+        return Picamera2()
 
     async def get_image(self, size: tuple | None = None) -> PIL_image.Image:
         return await run_sync(self._get_image, size)
