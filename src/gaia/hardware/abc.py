@@ -528,7 +528,18 @@ class BaseSensor(Hardware):
                 f"as entries.")
         kwargs["type"] = gv.HardwareType.sensor
         super().__init__(*args, **kwargs)
-        self.device: Any = self._get_device()
+        self._device: Any | None = None
+
+    @property
+    def device(self) -> Any:
+        if self._device is None:
+            self._device = self._get_device()
+        return self._device
+
+    def _get_device(self) -> Any:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )  # pragma: no cover
 
     def _format_measures(
             self,
@@ -607,9 +618,7 @@ class Camera(Hardware):
                 "disabled or not work properly."
             )
         super().__init__(*args, **kwargs)
-        self.device: Any = self._get_device()
         self._camera_dir: Path | None = None
-        self.running: bool = False
 
     def _get_device(self) -> Any:
         raise NotImplementedError(
