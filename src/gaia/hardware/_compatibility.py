@@ -214,3 +214,6 @@ class Picamera2:
 
     def capture_file(self, name: str, format: str = "jpg") -> None:
         pass
+
+    def close(self) -> None:
+        pass
