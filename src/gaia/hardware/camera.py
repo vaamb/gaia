@@ -21,8 +21,8 @@ if t.TYPE_CHECKING:
 
 class PiCamera(Camera):
     def __del__(self) -> None:
-        if hasattr(self, "device"):
-            self.device.close()
+        if hasattr(self, "_device") and self._device is not None:
+            self._device.close()
 
     def _get_device(self) -> Picamera2:
         if is_raspi():  # pragma: no cover
