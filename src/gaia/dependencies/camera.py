@@ -24,7 +24,7 @@ try:
     import skimage
 except ImportError:
     skimage = None
-    _uninstalled_dependencies = True
+#    _uninstalled_dependencies = True
 
 
 try:
@@ -44,10 +44,18 @@ if t.TYPE_CHECKING:
     from gaia_validators.image import SerializableImage, SerializableImagePayload
 
 
-def check_dependencies() -> None:
-    if _uninstalled_dependencies is True:
-        raise RuntimeError(
-            "All the dependencies required to use the camera have not been "
-            "installed. Run 'pip install . [camera]' in your virtual "
-            "environment to install them."
-        )
+def check_dependencies(check_skimage: bool = True) -> None:
+    if check_skimage:
+        if _uninstalled_dependencies is True or skimage is None:
+            raise RuntimeError(
+                "All the dependencies required to use the camera have not been "
+                "installed. Run 'pip install . [camera]' in your virtual "
+                "environment to install them."
+            )
+    else:
+        if _uninstalled_dependencies is True:
+            raise RuntimeError(
+                "All the dependencies required to use the camera have not been "
+                "installed. Run 'pip install . [camera]' in your virtual "
+                "environment to install them."
+            )
