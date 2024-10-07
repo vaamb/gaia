@@ -251,7 +251,8 @@ class Hardware(metaclass=_MetaHardware):
         if subroutine is None:
             self._subroutine = None
         else:
-            self._subroutine = weakref.proxy(subroutine)
+            # TODO: use weakref again ?
+            self._subroutine = subroutine  # weakref.proxy(subroutine)
         self._uid: str = uid
         self._name: str = name
         self._level: gv.HardwareLevel = level
