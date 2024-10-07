@@ -576,7 +576,7 @@ class Events(AsyncEventHandler):
             f"Getting 'picture_arrays' for {humanize_list(uids)}.")
 
         for uid in uids:
-            picture_arrays: SerializableImage = self.ecosystems[uid].picture_arrays
+            picture_arrays = self.ecosystems[uid].picture_arrays
             if isinstance(picture_arrays, gv.Empty):
                 continue
             ecosystem_payload = SerializableImagePayload(

@@ -5,7 +5,7 @@ from asyncio import Task
 from datetime import datetime
 from math import ceil
 from time import monotonic
-from typing import TypedDict
+from typing import Any, TypedDict
 
 # from anyio.to_process import run_sync as run_sync_in_process  # Crashes somehow
 from anyio.to_thread import run_sync
@@ -19,6 +19,20 @@ from gaia.hardware.abc import Camera
 from gaia.array_utils import (
     compute_mse, dump_picture_array, load_picture_array, rgb_to_gray)
 from gaia.subroutines.template import SubroutineTemplate
+
+try:
+    import orjson
+except ImportError:
+    orjson = None
+else:
+    class _Serializer:
+
+        def dumps(*args, **kwargs) -> bytes:
+            return orjson.dumps(*args, **kwargs)
+
+        @staticmethod
+        def loads(*args, **kwargs) -> Any:
+            return orjson.loads(*args, **kwargs)
 
 
 class ScoredArray(TypedDict):
@@ -56,6 +70,8 @@ class Pictures(SubroutineTemplate):
         self._sending_data_task: Task | None = None
         self._background_arrays: dict[str, np.ndarray] = {}
         self._scored_arrays: dict[str, ScoredArray] = {}
+        if orjson is not None:
+            SerializableImage._serializer = _Serializer
         self._finish__init__()
 
     async def _load_background_arrays(self) -> None:
