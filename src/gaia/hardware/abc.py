@@ -565,11 +565,6 @@ class BaseSensor(Hardware):
                 raise ValueError(err)
         return formatted_measures
 
-    def _get_device(self) -> Any:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
-
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
@@ -618,12 +613,19 @@ class Camera(Hardware):
                 "disabled or not work properly."
             )
         super().__init__(*args, **kwargs)
+        self._device: Any | None = None
         self._camera_dir: Path | None = None
+
+    @property
+    def device(self) -> Any:
+        if self._device is None:
+            self._device = self._get_device()
+        return self._device
 
     def _get_device(self) -> Any:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
-        )
+        )  # pragma: no cover
 
     async def get_image(self, size: tuple | None = None) -> PIL_image.Image:
         raise NotImplementedError(
