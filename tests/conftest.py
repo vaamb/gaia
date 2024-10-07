@@ -119,8 +119,6 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
     app_config = deepcopy(engine_config_master.app_config)
     ecosystem_config = deepcopy(engine_config_master.ecosystems_config_dict)
     private_config = deepcopy(engine_config_master.private_config)
-    for files in engine_config_master.cache_dir.iterdir():
-        files.unlink()
     with get_logs_content(engine_config_master.logs_dir / "gaia.log"):
         pass  # Clear logs
 
@@ -134,6 +132,9 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
         engine_config_master.sun_times = {}
         if engine_config_master.started:
             engine_config_master.stop_watchdog()
+        #if engine_config_master.cache_dir.iterdir():
+        #    shutil.rmtree(engine_config_master.cache_dir)
+        #    engine_config_master._dirs.pop("CACHE_DIR")
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
