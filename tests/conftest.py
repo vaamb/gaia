@@ -1,8 +1,6 @@
-import asyncio
 from copy import deepcopy
 import os
 import shutil
-import sys
 import tempfile
 from typing import Generator, TypeVar
 
@@ -21,8 +19,7 @@ from gaia.subroutines import (
 from gaia.utils import SingletonMeta, yaml
 
 from .data import (
-    ecosystem_info, ecosystem_name, engine_uid, light_info, light_uid,
-    place_latitude, place_longitude, place_name)
+    ecosystem_info, ecosystem_name, engine_uid, light_info, light_uid)
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content
 
