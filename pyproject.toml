@@ -4,7 +4,7 @@ description = "An app to manage greenhouses, terrariums and aquariums"
 authors = [
     {name = "Valentin Ambroise", email = "valentin.ambroise@outlook.com"}
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 readme = "README.md"
 license = {file = "LICENSE"}
 dynamic = ["version"]
@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 camera = [
-    "numpy>=2.1.0",
+    "numpy~=2.1",
     "pillow~=10.4.0",
     "scikit-image~=0.24",
 ]
