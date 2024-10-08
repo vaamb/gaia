@@ -59,7 +59,7 @@ async def test_buffer(db: AsyncSQLAlchemyWrapper):
         session.add(buffer_1)
         buffer_2 = SensorBuffer(**generate_sensor_data(timestamp))
         session.add(buffer_2)
-        session.commit()
+        await session.commit()
         uuid = None
         sensor_buffer = await SensorBuffer.get_buffered_data(session)
         async for buffered_data in sensor_buffer:

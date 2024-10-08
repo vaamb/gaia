@@ -1,8 +1,6 @@
-import asyncio
 from copy import deepcopy
 import os
 import shutil
-import sys
 import tempfile
 from typing import Generator, TypeVar
 
@@ -21,8 +19,7 @@ from gaia.subroutines import (
 from gaia.utils import SingletonMeta, yaml
 
 from .data import (
-    ecosystem_info, ecosystem_name, engine_uid, light_info, light_uid,
-    place_latitude, place_longitude, place_name)
+    ecosystem_info, ecosystem_name, engine_uid, light_info, light_uid)
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content
 
@@ -32,16 +29,16 @@ T = TypeVar("T")
 YieldFixture = Generator[T, None, None]
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    if sys.platform.startswith("win") and sys.version_info[:2] >= (3, 8):
-        # Avoid "RuntimeError: Event loop is closed" on Windows when tearing down tests
-        # https://github.com/encode/httpx/issues/914
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+#@pytest.fixture(scope="session")
+#def event_loop():
+#    if sys.platform.startswith("win") and sys.version_info[:2] >= (3, 8):
+#        # Avoid "RuntimeError: Event loop is closed" on Windows when tearing down tests
+#        # https://github.com/encode/httpx/issues/914
+#        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+#
+#    loop = asyncio.new_event_loop()
+#    yield loop
+#    loop.close()
 
 
 @pytest.fixture(scope="session")

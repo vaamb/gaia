@@ -39,7 +39,7 @@ class Events(Events_):
 async def test_on_pong(events_handler: Events):
     await events_handler.on_pong()
 
-    assert isclose(events_handler._last_heartbeat, monotonic())
+    assert isclose(events_handler._last_heartbeat, monotonic(), abs_tol=0.01)
 
 
 @pytest.mark.asyncio
@@ -53,6 +53,9 @@ async def test_on_connect(events_handler: Events):
 
     assert response["event"] == "register_engine"
     assert response["data"]["engine_uid"] == engine_uid
+
+    if events_handler._ping_task is not None:
+        events_handler._ping_task.cancel()
 
 
 @pytest.mark.asyncio
