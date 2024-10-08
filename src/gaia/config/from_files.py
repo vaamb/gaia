@@ -79,7 +79,7 @@ def _file_checksum(file_path: Path, _buffer_size: int=4096) -> H:
                     break  # EOF
                 digest_obj.update(view[:size])
             return digest_obj.digest()
-    except FileNotFoundError:
+    except FileNotFoundError:  # pragma: no cover
         return b"\x00"
 
 
@@ -314,7 +314,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     RootEcosystemsConfigValidator(
                         **{"config": unvalidated}
                     ).model_dump()["config"]
-            except pydantic.ValidationError as e:
+            except pydantic.ValidationError as e:  # pragma: no cover
                 self.logger.error(
                     f"Could not validate ecosystems configuration file. "
                     f"ERROR msg(s): `{format_pydantic_error(e)}`."
@@ -330,7 +330,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 validated = PrivateConfigValidator(
                     **unvalidated
                 ).model_dump()
-            except pydantic.ValidationError as e:
+            except pydantic.ValidationError as e:  # pragma: no cover
                 self.logger.error(
                     f"Could not validate private configuration file. "
                     f"ERROR msg(s): `{format_pydantic_error(e)}`."
@@ -477,7 +477,7 @@ class EngineConfig(metaclass=SingletonMeta):
         while not self._stop_event.is_set():
             try:
                 await self._watchdog_routine()
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 self.logger.error(
                     f"Encountered an error while running the watchdog routine. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`."
@@ -636,7 +636,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def get_place(self, place: str) -> gv.Coordinates | None:
         try:
             return gv.Coordinates(*self.places[place])
-        except KeyError:
+        except KeyError:  # pragma: no cover
             return None
 
     def set_place(
@@ -671,7 +671,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def delete_place(self, place: str) -> None:
         try:
             del self.places[place]
-        except KeyError:
+        except KeyError:  # pragma: no cover
             raise UndefinedParameter(
                 f"No location named '{place}' was found in the private "
                 f"configuration file.")
@@ -846,7 +846,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     validated = ChaosMemoryRootValidator(
                         root=unvalidated
                     ).model_dump()["root"]
-                except pydantic.ValidationError:
+                except pydantic.ValidationError:  # pragma: no cover
                     self.logger.error("Error while loading chaos.")
                     raise
         except (FileNotFoundError, JSONDecodeError):
@@ -895,7 +895,7 @@ class _MetaEcosystemConfig(type):
         except KeyError:
             try:
                 ecosystem_id = args[0]
-            except IndexError:
+            except IndexError:  # pragma: no cover
                 raise TypeError(
                     "EcosystemConfig() missing 1 required argument: 'ecosystem_id'"
                 )
@@ -1029,7 +1029,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             return self.__dict["environment"]
-        except KeyError:
+        except KeyError:  # pragma: no cover
             self.__dict["environment"] = EnvironmentConfigValidator().model_dump()
             return self.__dict["environment"]
 
@@ -1040,7 +1040,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             return self.environment["nycthemeral_cycle"]
-        except KeyError:
+        except KeyError:  # pragma: no cover
             self.environment["nycthemeral_cycle"] = gv.NycthemeralCycleConfig().model_dump()
             return self.environment["nycthemeral_cycle"]
 
@@ -1282,7 +1282,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             try:
                 await self.general.engine.event_handler.send_payload_if_connected(
                     "light_data", ecosystem_uids=[self.uid])
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 self.logger.error(
                     f"Encountered an error while sending light data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
@@ -1301,7 +1301,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             validated_values = gv.ChaosConfig(**values).model_dump()
-        except pydantic.ValidationError as e:
+        except pydantic.ValidationError as e:  # pragma: no cover
             raise ValueError(
                 f"Invalid chaos parameters provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
@@ -1378,7 +1378,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             return self.environment["climate"]
-        except KeyError:
+        except KeyError:  # pragma: no cover
             self.environment["climate"] = {}
             return self.environment["climate"]
 
@@ -1442,7 +1442,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             return self.__dict["IO"]
-        except KeyError:
+        except KeyError:  # pragma: no cover 
             self.__dict["IO"] = {}
             return self.__dict["IO"]
 
