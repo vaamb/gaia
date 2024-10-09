@@ -338,7 +338,7 @@ def test_hardware_update_fail_level(ecosystem_config: EcosystemConfig):
 
 def test_hardware_update_success(ecosystem_config: EcosystemConfig):
     ecosystem_config.update_hardware(
-        sensor_uid, model="gpioSwitch", address="GPIO_11")
+        sensor_uid, model="gpioSwitch", address="BOARD_37")
 
 
 def test_hardware_delete_fail_not_found(ecosystem_config: EcosystemConfig):

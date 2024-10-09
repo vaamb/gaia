@@ -65,7 +65,7 @@ class Pictures(SubroutineTemplate):
         app_cache_dir = self.ecosystem.engine.config.cache_dir
         self._cache_dir = app_cache_dir / f"camera/{self.ecosystem.name}"
         if not self._cache_dir.exists():
-            self._cache_dir.mkdir(parents=True, exist_ok=True)
+            self._cache_dir.mkdir(parents=True)
         # Pictures
         self._sending_data_task: Task | None = None
         self._background_arrays: dict[str, np.ndarray] = {}

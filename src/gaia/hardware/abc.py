@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-import os
 from pathlib import Path
 import textwrap
 import typing as t
@@ -653,13 +652,19 @@ class Camera(Hardware):
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
             if self.subroutine is None:
-                base_dir = Path(os.getcwd())
+                from gaia.config import GaiaConfigHelper
+
+                config_cls = GaiaConfigHelper.get_config()
+                base_dir = Path(config_cls.DIR)
+                self._camera_dir = base_dir / "camera/orphan_camera"
             else:
                 base_dir = self.subroutine.ecosystem.engine.config.base_dir
-            self._camera_dir = base_dir/f"camera/{self.subroutine.ecosystem.name}"
+                self._camera_dir = base_dir / f"camera/{self.subroutine.ecosystem.name}"
             if not self._camera_dir.exists():
-                # TODO: maybe make non blocking ?
-                os.mkdir(self._camera_dir)
+                def make_dir():
+                    self._camera_dir.mkdir(parents=True)
+
+                await run_sync(make_dir)
         return self._camera_dir
 
     async def load_image(self, image_path: Path) -> PIL_image.Image:
