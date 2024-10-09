@@ -806,7 +806,7 @@ class EngineConfig(metaclass=SingletonMeta):
         if place is None:
             self.logger.warning(
                 f"{m} method for ecosystem {ecosystem_name} cannot be "
-                f"'{method.name}' as the coordinates of '{target}' is "
+                f"'{method.name}' as the coordinates of '{target}' are "
                 f"not provided in the private configuration file. Will fall "
                 f"back to 'fixed'."
             )
