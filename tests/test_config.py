@@ -11,7 +11,8 @@ from gaia.subroutines import subroutine_names
 from gaia.utils import yaml
 
 from .data import (
-    ecosystem_info, ecosystem_name, sensor_info, sensor_uid, sun_times)
+    ecosystem_info, ecosystem_name, lighting_method, sensor_info, sensor_uid,
+    sun_times)
 from .utils import get_logs_content
 
 
@@ -205,11 +206,13 @@ async def test_ecosystem_chaos(ecosystem_config: EcosystemConfig):
 
 @pytest.mark.asyncio
 async def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
-    assert ecosystem_config.lighting_method is gv.LightMethod.fixed
+    assert ecosystem_config.lighting_method is lighting_method
     new_method = gv.LightMethod.elongate
 
     with pytest.raises(ValueError):
         await ecosystem_config.set_lighting_method(new_method)
+        with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log") as logs:
+            assert "the coordinates of 'home' are not provided" in logs
 
     ecosystem_config.general.home_coordinates = (0, 0)
     await ecosystem_config.set_lighting_method(new_method)

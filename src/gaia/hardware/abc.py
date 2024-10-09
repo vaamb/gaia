@@ -316,7 +316,7 @@ class Hardware(metaclass=_MetaHardware):
     def from_hardware_config(
             cls,
             hardware_config: gv.HardwareConfig,
-            subroutine: "SubroutineTemplate" | None
+            subroutine: "SubroutineTemplate" | None,
     ) -> Self:
         return cls(
             subroutine=subroutine,
@@ -489,7 +489,7 @@ class Dimmer(Hardware):
         if self._address_book.secondary is None:  # pragma: no cover
             raise ValueError(
                 "dimmable hardware address should be of form "
-                "'addressType1_addressNum1:addressType2_addressNum2' with"
+                "'addressType1_addressNum1&addressType2_addressNum2' with "
                 "address 1 being for the main (on/off) switch and address 2 "
                 "being PWM-able"
             )
