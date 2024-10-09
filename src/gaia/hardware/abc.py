@@ -86,7 +86,7 @@ class Address:
 
         If any error arises while trying to create an Address, use `Address._hint()`
         """
-        address_components = address_string.split("_", maxsplit=2)
+        address_components = address_string.split("_", maxsplit=1)
         address_type = address_components[0]
         try:
             address_number = address_components[1]
@@ -113,7 +113,7 @@ class Address:
 
         # The hardware is using the I2C protocol
         elif address_type.lower() == "i2c":
-            i2c_components = address_number.split("_")
+            i2c_components = address_number.split("@")
             if len(i2c_components) == 1:
                 # The hardware does not use a multiplexer; format "I2C_0x10"
                 main = str_to_hex(i2c_components[0])
@@ -161,7 +161,7 @@ class Address:
         if self.multiplexer_address:
             return (
                 f"{self.type.value}_{rep_f(self.multiplexer_address)}#"
-                f"{self.multiplexer_channel}.{rep_f(self.main)}"
+                f"{self.multiplexer_channel}@{rep_f(self.main)}"
             )
         else:
             return f"{self.type.value}_{rep_f(self.main)}"
@@ -181,7 +181,7 @@ class Address:
         I2C:
             Without a multiplexer: "I2C_0x10"
                     where "0x10" is the address of the hardware in hexadecimal
-            With a multiplexer: "I2C_0x70#1_0x10"
+            With a multiplexer: "I2C_0x70@1_0x10"
                     where "0x70" is the address of the multiplexer in hexadecimal,
                     "1" the channel used and "0x10" the address of the hardware
                     in hexadecimal

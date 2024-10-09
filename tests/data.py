@@ -15,7 +15,7 @@ ecosystem_name = "Testing ecosystem"
 
 hardware_address = "GPIO_19"
 i2c_address = "I2C_default"
-gpio_address = "GPIO_4:BOARD_12"
+gpio_address = "GPIO_4&BOARD_12"
 
 
 sensor_uid = "tKstp8EYJx27eQuK"
