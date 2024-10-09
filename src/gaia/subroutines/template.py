@@ -25,13 +25,13 @@ class SubroutineTemplate(ABC):
         eco_name = self._ecosystem.name.replace(" ", "_")
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{eco_name}.{self.name}")
-        self.logger.debug("Initializing")
+        self.logger.debug("Initializing ...")
         self.hardware: dict[str, Hardware] = {}
         self._hardware_choices: dict[str, Type[Hardware]] = {}
         self._started: bool = False
 
     def _finish__init__(self) -> None:
-        self.logger.debug("Initialization successfully")
+        self.logger.debug("Initialization successfully.")
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"

@@ -472,7 +472,7 @@ class EngineConfig(metaclass=SingletonMeta):
     async def _watchdog_loop(self) -> None:
         sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
         self.logger.info(
-            f"Starting the configuration file watchdog loop. It will run every "
+            f"Starting the configuration files watchdog loop. It will run every "
             f"{sleep_period:.3f} s.")
         while not self._stop_event.is_set():
             try:
@@ -488,26 +488,26 @@ class EngineConfig(metaclass=SingletonMeta):
         if not self.configs_loaded:  # pragma: no cover
             raise RuntimeError(
                 "Configuration files need to be loaded in order to start "
-                "the config file watchdog. To do so, use the "
+                "the config files watchdog. To do so, use the "
                 "`EngineConfig().initialize_configs()` method."
             )
 
         if self.started:  # pragma: no cover
             raise RuntimeError("Configuration files watchdog is already running")
 
-        self.logger.info("Starting the configuration files watchdog")
+        self.logger.info("Starting the configuration files watchdog.")
         self.task = asyncio.create_task(
             self._watchdog_loop(), name="config-watchdog_loop")
-        self.logger.debug("Configuration files watchdog successfully started")
+        self.logger.debug("Configuration files watchdog successfully started.")
 
     def stop_watchdog(self) -> None:
         if not self.started:  # pragma: no cover
             raise RuntimeError("Configuration files watchdog is not running")
 
-        self.logger.info("Stopping the configuration files watchdog")
+        self.logger.info("Stopping the configuration files watchdog.")
         self._stop_event.set()
         self.task = None
-        self.logger.debug("Configuration files watchdog successfully stopped")
+        self.logger.debug("Configuration files watchdog successfully stopped.")
 
     @asynccontextmanager
     async def config_files_lock_no_reset(self):
@@ -599,12 +599,18 @@ class EngineConfig(metaclass=SingletonMeta):
             for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
         }
 
-    def get_ecosystems_expected_to_run(self) -> set:
+    def get_ecosystems_expected_to_run(self) -> set[str]:
         return set([
             ecosystem_uid
             for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
             if eco_cfg_dict["status"]
         ])
+
+    def get_ecosystem_name(self, ecosystem_uid: str) -> str:
+        try:
+            return self.ecosystems_config_dict[ecosystem_uid]["name"]
+        except KeyError:
+            return f"uid:{ecosystem_uid}"
 
     def get_IDs(self, ecosystem_id: str) -> gv.IDs:
         if ecosystem_id in self.ecosystems_uid:

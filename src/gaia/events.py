@@ -144,7 +144,7 @@ class Events(AsyncEventHandler):
             msg_list = [f"{error['loc'][0]}: {error['msg']}" for error in e.errors()]
             self.logger.error(
                 f"Encountered an error while validating '{event}' data. Error "
-                f"msg: {', '.join(msg_list)}"
+                f"msg: {', '.join(msg_list)}."
             )
             raise
 
@@ -401,7 +401,7 @@ class Events(AsyncEventHandler):
         ecosystem_uid: str = data["ecosystem_uid"]
         self.logger.debug(
             f"Received 'turn_actuator' event to turn ecosystem '{ecosystem_uid}'"
-            f"'s '{data['actuator'].name}' to mode '{data['mode'].name}'")
+            f"'s '{data['actuator'].name}' to mode '{data['mode'].name}'.")
         if ecosystem_uid in self.ecosystems:
             await self.ecosystems[ecosystem_uid].turn_actuator(
                 actuator=data["actuator"],

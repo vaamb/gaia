@@ -169,7 +169,7 @@ class VEML7700(i2cSensor, LightSensor):
         except Exception as e:
             hardware_logger.error(
                 f"Sensor {self._name} encountered an error. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
             return None
 
@@ -216,7 +216,7 @@ class VCNL4040(i2cSensor, LightSensor):
         except Exception as e:
             hardware_logger.error(
                 f"Sensor {self._name} encountered an error. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
             return None
 
@@ -282,7 +282,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
             except Exception as e:
                 hardware_logger.error(
                     f"Sensor {self._name} encountered an error. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
                 break
             else:

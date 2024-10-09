@@ -10,7 +10,7 @@ from gaia.virtual import VirtualEcosystem
 
 
 hardware_logger.warning(
-    "The platform used is not a Raspberry Pi, using compatibility modules")
+    "The platform used is not a Raspberry Pi, using compatibility modules.")
 
 
 _BASE_TEMPERATURE = 25

@@ -37,12 +37,12 @@ class Health(SubroutineTemplate):
         )
 
     def _stop_scheduler(self) -> None:
-        self.logger.info("Closing the tasks scheduler")
+        self.logger.info("Closing the tasks scheduler.")
         self.ecosystem.engine.scheduler.remove_job(f"{self.ecosystem.uid}-health_routine")
-        self.logger.info("The tasks scheduler was closed properly")
+        self.logger.info("The tasks scheduler was closed properly.")
 
     async def analyse_picture(self) -> None:
-        self.logger.info(f"Starting analysis of {self._ecosystem} image")
+        self.logger.info(f"Starting analysis of {self._ecosystem} image.")
         # If got an image, analyse it
         if self._imageIO.getbuffer().nbytes:
             import random
@@ -56,7 +56,7 @@ class Health(SubroutineTemplate):
                 index=round(health_index, 2),
             )
             self.logger.info(f"{self._ecosystem} picture successfully analysed, "
-                             f"indexes computed")
+                             f"indexes computed.")
         else:
             # TODO: change Exception
             raise Exception

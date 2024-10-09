@@ -45,7 +45,7 @@ class Ecosystem:
         self._name: str = self.config.name
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{self._name.replace(' ', '_')}")
-        self.logger.info("Initializing the ecosystem")
+        self.logger.info("Initializing the ecosystem.")
         self._virtual_self: VirtualEcosystem | None = None
         if self.engine.config.app_config.VIRTUALIZATION:
             virtual_cfg = self.engine.config.app_config.VIRTUALIZATION_PARAMETERS
@@ -58,7 +58,7 @@ class Ecosystem:
         for subroutine_name in subroutine_names:
             self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
         self._started: bool = False
-        self.logger.debug(f"Ecosystem initialization successful")
+        self.logger.debug(f"Ecosystem initialization successful.")
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
@@ -280,29 +280,29 @@ class Ecosystem:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
         await self.config.update_chaos_time_window()
         await self.refresh_lighting_hours()
-        self.logger.info("Starting the ecosystem")
+        self.logger.info("Starting the ecosystem.")
         if self.virtualized:
             self.virtual_self.start()
         await self.refresh_subroutines()
         if self.engine.use_message_broker and self.event_handler.registered:
             await self.event_handler.send_ecosystems_info(self.uid)
-        self.logger.debug(f"Ecosystem successfully started")
+        self.logger.debug(f"Ecosystem successfully started.")
         self._started = True
 
     async def stop(self):
         """Stop the Ecosystem"""
         if not self.started:
             raise RuntimeError("Cannot stop an ecosystem that hasn't started")
-        self.logger.info("Shutting down the ecosystem")
+        self.logger.info("Shutting down the ecosystem.")
         subroutines_to_stop: list[SubroutineNames] = subroutine_names
         for subroutine in reversed(subroutines_to_stop):
             if self.subroutines[subroutine].started:
                 await self.subroutines[subroutine].stop()
         if not any([self.subroutines[subroutine].started
                     for subroutine in self.subroutines]):
-            self.logger.debug("Ecosystem successfully stopped")
+            self.logger.debug("Ecosystem successfully stopped.")
         else:
-            self.logger.error("Failed to stop the ecosystem")
+            self.logger.error("Failed to stop the ecosystem.")
             raise Exception(f"Failed to stop ecosystem {self.name}")
         self._started = False
 
@@ -353,12 +353,13 @@ class Ecosystem:
                     raise ValueError("Climate subroutine is not running")
             else:
                 raise ValueError(
-                    f"Actuator '{validated_actuator.value}' is not currently supported"
+                    f"Actuator '{validated_actuator.value}' is not currently "
+                    f"supported"
                 )
         except RuntimeError:
             self.logger.error(
-                f"Cannot turn {validated_actuator} to {validated_mode} as the subroutine managing it "
-                f"is not currently running"
+                f"Cannot turn {validated_actuator} to {validated_mode} as the "
+                f"subroutine managing it is not currently running."
             )
 
     def get_actuator_handler(

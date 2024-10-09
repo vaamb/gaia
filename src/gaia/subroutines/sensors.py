@@ -102,10 +102,10 @@ class Sensors(SubroutineTemplate):
             id=f"{self.ecosystem.uid}-sensors_routine",
             trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
         )
-        self.logger.debug(f"Sensors loop successfully started")
+        self.logger.debug(f"Sensors loop successfully started.")
 
     async def _stop(self) -> None:
-        self.logger.info(f"Stopping sensors loop")
+        self.logger.info(f"Stopping sensors loop.")
         if self.ecosystem.get_subroutine_status("climate"):
             await self.ecosystem.stop_subroutine("climate")
         self.ecosystem.engine.scheduler.remove_job(
