@@ -34,7 +34,7 @@ class SubroutineTemplate(ABC):
     def _finish__init__(self) -> None:
         self.logger.debug("Initialization successfully.")
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
 
     @abstractmethod

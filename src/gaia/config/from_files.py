@@ -214,7 +214,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._task: Task | None = None
         self.configs_loaded: bool = False
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"EngineConfig(watchdog={self.started})"
 
     @property
@@ -935,7 +935,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self._lighting_method_cache: gv.LightingMethod | None = None
         self._lighting_hours_data: gv.LightingHours | None = None
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"engine_config={self._engine_config})"
 

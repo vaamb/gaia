@@ -60,7 +60,7 @@ class Ecosystem:
         self._started: bool = False
         self.logger.debug(f"Ecosystem initialization successful.")
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"status={self.started}, engine={self._engine})"
 

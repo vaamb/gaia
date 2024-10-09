@@ -65,7 +65,7 @@ class Engine(metaclass=SingletonMeta):
         self._stop_event = Event()
         self._shut_down: bool = False
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
 
     @property

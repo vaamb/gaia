@@ -147,7 +147,7 @@ class Address:
             raise ValueError("Address type is not valid.")
 
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         if self.type == AddressType.PICAMERA:
             return f"{self.type.value}"
         elif self.type == AddressType.GPIO:
