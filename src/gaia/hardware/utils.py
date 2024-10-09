@@ -6,7 +6,7 @@ import typing as t
 from adafruit_platformdetect import Board, Detector
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from busio import I2C
 
 

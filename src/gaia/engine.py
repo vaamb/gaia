@@ -21,7 +21,7 @@ from gaia.utils import humanize_list, SingletonMeta
 from gaia.virtual import VirtualWorld
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from dispatcher import AsyncDispatcher
     from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 

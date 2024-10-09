@@ -12,7 +12,7 @@ from gaia.hardware.abc import Camera, hardware_logger
 from gaia.hardware.utils import is_raspi
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     if is_raspi():  # pragma: no cover
         from picamera2 import Picamera2
     else:
