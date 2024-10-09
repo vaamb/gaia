@@ -122,7 +122,7 @@ class HystericalPID:
         self._last_input: float | None = None
         self._last_output: float = 0.0
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
         return f"{self.__class__.__name__}({uid}, parameter={self.climate_parameter})"
 
