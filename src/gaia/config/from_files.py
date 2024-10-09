@@ -607,7 +607,10 @@ class EngineConfig(metaclass=SingletonMeta):
         ])
 
     def get_ecosystem_name(self, ecosystem_uid: str) -> str:
-        return self.ecosystems_config_dict[ecosystem_uid]["name"]
+        try:
+            return self.ecosystems_config_dict[ecosystem_uid]["name"]
+        except KeyError:
+            return f"uid:{ecosystem_uid}"
 
     def get_IDs(self, ecosystem_id: str) -> gv.IDs:
         if ecosystem_id in self.ecosystems_uid:
