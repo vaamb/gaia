@@ -11,7 +11,7 @@ from gaia.database.models import SensorBuffer, SensorRecord
 from gaia.utils import humanize_list
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
 
 

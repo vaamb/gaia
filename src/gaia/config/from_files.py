@@ -35,7 +35,7 @@ from gaia.utils import (
     SingletonMeta, yaml)
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
 
 

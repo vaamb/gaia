@@ -35,7 +35,7 @@ except ImportError:
     _uninstalled_dependencies = True
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     import numpy as np
     import PIL
     from PIL import Image as PIL_image

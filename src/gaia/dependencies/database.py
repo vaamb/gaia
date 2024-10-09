@@ -15,7 +15,7 @@ except ImportError:
     _uninstalled_dependencies = True
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     import sqlalchemy
 
     import sqlalchemy_wrapper
