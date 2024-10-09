@@ -165,6 +165,7 @@ async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[Ecosyste
 @pytest_asyncio.fixture(scope="function")
 async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     ecosystem = engine.get_ecosystem(ecosystem_name)
+    ecosystem.virtual_self.start()
     with get_logs_content(engine.config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
