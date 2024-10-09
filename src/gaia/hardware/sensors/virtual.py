@@ -2,10 +2,11 @@ import typing as t
 from typing import Type
 
 from gaia.hardware.abc import BaseSensor
-from gaia.hardware.virtual import virtualHardware
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, ENS160, VCNL4040, VEML7700)
+from gaia.hardware.utils import hardware_logger
+from gaia.hardware.virtual import virtualHardware
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -25,50 +26,65 @@ class virtualDHT(DHTSensor, virtualSensor):
 class virtualDHT11(virtualDHT):
     def _get_device(self) -> "_DHT11":
         from gaia.hardware._compatibility import DHT11 as _DHT11
-        if self.subroutine:
-            return _DHT11(ecosystem_uid=self.subroutine.ecosystem.uid)
+        if not self.subroutine:
+            hardware_logger.warning(
+                f"'{self}' did not receive any subroutine, Virtualization disabled.")
+        return _DHT11(subroutine=self.subroutine)
 
 
 class virtualDHT22(virtualDHT):
     def _get_device(self) -> "_DHT22":
         from gaia.hardware._compatibility import DHT22 as _DHT22
-        if self.subroutine:
-            return _DHT22(ecosystem_uid=self.subroutine.ecosystem.uid)
+        if not self.subroutine:
+            hardware_logger.warning(
+                f"'{self}' did not receive any subroutine, Virtualization disabled.")
+        return _DHT22(subroutine=self.subroutine)
 
 
 class virtualAHT20(AHT20, virtualSensor):
     def _get_device(self) -> "AHTx0":
         from gaia.hardware._compatibility import AHTx0
-        if self.subroutine:
-            return AHTx0(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        if not self.subroutine:
+            hardware_logger.warning(
+                f"'{self}' did not receive any subroutine, Virtualization disabled.")
+        return AHTx0(subroutine=self.subroutine)
 
 
 class virtualVCNL4040(VCNL4040, virtualSensor):
     def _get_device(self) -> "_VCNL4040":
         from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
-        if self.subroutine:
-            return _VCNL4040(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        if not self.subroutine:
+            hardware_logger.warning(
+                f"'{self}' did not receive any subroutine, Virtualization disabled.")
+        return _VCNL4040(subroutine=self.subroutine)
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
     def _get_device(self) -> "_VEML7700":
         from gaia.hardware._compatibility import VEML7700 as _VEML7700
-        if self.subroutine:
-            return _VEML7700(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        if not self.subroutine:
+            hardware_logger.warning(
+                f"'{self}' did not receive any subroutine, Virtualization disabled.")
+        return _VEML7700(subroutine=self.subroutine)
 
 
 class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
     def _get_device(self) -> "Seesaw":
-        from gaia.hardware._compatibility import Seesaw
-        if self.subroutine:
-            return Seesaw(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        from gaia.hardware._compatibility import Seesaw as _Seesaw
+        if not self.subroutine:
+            hardware_logger.warning(
+                f"'{self}' did not receive any subroutine, Virtualization disabled.")
+        return _Seesaw(subroutine=self.subroutine)
 
 
 class virtualENS160(ENS160, virtualSensor):
     def _get_device(self) -> "_ENS160":
         from gaia.hardware._compatibility import ENS160 as _ENS160
-        if self.subroutine:
-            return _ENS160(virtual_ecosystem=self.subroutine.ecosystem.virtual_self)
+        if not self.subroutine:
+            hardware_logger.warning(
+                f"'{self}' did not receive any subroutine, Virtualization disabled.")
+        return _ENS160(subroutine=self.subroutine)
+
 
 
 virtual_sensor_models:  dict[str, Type[virtualSensor]]= {

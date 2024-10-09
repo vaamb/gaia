@@ -6,6 +6,7 @@ from typing import Any
 
 from gaia.config import GaiaConfigHelper
 from gaia.hardware.utils import hardware_logger
+from gaia.subroutines.template import SubroutineTemplate
 from gaia.virtual import VirtualEcosystem
 
 
@@ -105,10 +106,14 @@ class CompatibilityDevice:
     def __init__(
             self,
             *args,
-            virtual_ecosystem: VirtualEcosystem | None = None,
+            subroutine: SubroutineTemplate | None = None,
             **kwargs
     ) -> None:
-        self.virtual_ecosystem: VirtualEcosystem | None = virtual_ecosystem
+        self.virtual_ecosystem: VirtualEcosystem | None
+        if subroutine is not None:
+            self.virtual_ecosystem = subroutine.ecosystem.virtual_self
+        else:
+            self.virtual_ecosystem = None
 
 
 class LightCompatibility(CompatibilityDevice):
