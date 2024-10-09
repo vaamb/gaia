@@ -17,7 +17,7 @@ import gaia_validators as gv
 
 from gaia.config.from_files import CacheType, EngineConfig
 from gaia.ecosystem import Ecosystem
-from gaia.utils import SingletonMeta
+from gaia.utils import humanize_list, SingletonMeta
 from gaia.virtual import VirtualWorld
 
 
@@ -559,39 +559,84 @@ class Engine(metaclass=SingletonMeta):
             ecosystem = self.init_ecosystem(ecosystem_uid)
         return ecosystem
 
+    def _humanize_eco_set(self, ecosystem_uid_set: set[str]) -> str:
+        return humanize_list(
+            [
+                f"'{self.config.get_ecosystem_name(ecosystem_uid)}'"
+                for ecosystem_uid in ecosystem_uid_set
+            ],
+        )
+
     async def refresh_ecosystems(self, send_info: bool = True):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file.
 
         :param send_info: If `True`, will try to send the ecosystem info to
           Ouranos if possible.
         """
-        expected_started = set(self.config.get_ecosystems_expected_to_run())
-        to_delete = set(self.ecosystems.keys())
-        for ecosystem_uid in self.config.ecosystems_uid:
-            # create the Ecosystem if it doesn't exist
-            if ecosystem_uid not in self.ecosystems:
+        self.logger.info("Refreshing the ecosystems ...")
+        expected_to_run = set(self.config.get_ecosystems_expected_to_run())
+        # Initialize the ecosystems found in the config file but not yet initialized
+        self.logger.debug(
+            "Looking for ecosystems present in the config file but not yet initialized.")
+        to_initialize = set(self.config.ecosystems_uid) - set(self.ecosystems.keys())
+        if to_initialize:
+            self.logger.info(
+                f"Need to initialize {len(to_initialize)} ecosystem(s): "
+                f"{self._humanize_eco_set(to_initialize)}.")
+            for ecosystem_uid in to_initialize:
                 self.init_ecosystem(ecosystem_uid)
-            # remove the Ecosystem from the to_delete set
-            try:
-                to_delete.remove(ecosystem_uid)
-            except KeyError:
-                pass
-        # start Ecosystems which are expected to run and are not running
-        to_start = expected_started - self.ecosystems_started
-        for ecosystem_uid in to_start:
-            await self.start_ecosystem(ecosystem_uid, send_info=False)
-        # stop Ecosystems which are not expected to run and are currently
+        else:
+            self.logger.debug("No need to initialize any new ecosystem.")
+        # Start the ecosystems which are expected to run and are not running
+        self.logger.debug(
+            "Looking for ecosystems expected to be running but not yet started.")
+        to_start = expected_to_run - self.ecosystems_started
+        if to_start:
+            self.logger.info(
+                f"Need to start {len(to_start)} ecosystem(s): "
+                f"{self._humanize_eco_set(to_start)}.")
+            for ecosystem_uid in to_start:
+                await self.start_ecosystem(ecosystem_uid, send_info=False)
+        else:
+            self.logger.debug("No need to start any ecosystem.")
+        # Stop the ecosystems which are not expected to run and are currently
         # running
-        to_stop = self.ecosystems_started - expected_started
-        for ecosystem_uid in to_stop:
-            await self.stop_ecosystem(ecosystem_uid, send_info=False)
-        # refresh Ecosystems that were already running and did not stop
+        self.logger.debug(
+            "Looking for ecosystems expected to be stopped but currently running.")
+        to_stop = self.ecosystems_started - expected_to_run
+        if to_stop:
+            self.logger.info(
+                f"Need to stop {len(to_stop)} ecosystem(s): "
+                f"{self._humanize_eco_set(to_stop)}.")
+            for ecosystem_uid in to_stop:
+                await self.stop_ecosystem(ecosystem_uid, send_info=False)
+        else:
+            self.logger.debug("No need to stop any ecosystem.")
+        # Refresh the ecosystems that were already running and did not stop
+        self.logger.debug(
+            "Looking for already running ecosystems that need to continue to run.")
         started_before = self.ecosystems_started - to_start
+        if started_before:
+            self.logger.info(
+                f"Need to refresh {len(started_before)} ecosystem(s): "
+                f"{self._humanize_eco_set(started_before)}.")
+        else:
+            self.logger.debug("No need to refresh any ecosystem.")
         for ecosystem_uid in started_before:
             await self.ecosystems[ecosystem_uid].refresh_subroutines()
             await self.ecosystems[ecosystem_uid].refresh_lighting_hours(send_info=False)
-        # delete Ecosystems which were created and are no longer on the
-        # config file
+        # Delete the ecosystems which were created and are no longer on the
+        #  config file
+        self.logger.debug(
+            "Looking for ecosystems that are initialized but no longer in the "
+            "config file.")
+        to_delete = set(self.ecosystems.keys()) - set(self.config.ecosystems_uid)
+        if to_delete:
+            self.logger.info(
+                f"Need to remove {len(to_delete)} ecosystem(s): "
+                f"{self._humanize_eco_set(to_delete)}.")
+        else:
+            self.logger.debug("No extraneous ecosystem detected.")
         for ecosystem_uid in to_delete:
             if self.ecosystems[ecosystem_uid].started:
                 await self.stop_ecosystem(ecosystem_uid, send_info=False)

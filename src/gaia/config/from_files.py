@@ -599,12 +599,15 @@ class EngineConfig(metaclass=SingletonMeta):
             for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
         }
 
-    def get_ecosystems_expected_to_run(self) -> set:
+    def get_ecosystems_expected_to_run(self) -> set[str]:
         return set([
             ecosystem_uid
             for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
             if eco_cfg_dict["status"]
         ])
+
+    def get_ecosystem_name(self, ecosystem_uid: str) -> str:
+        return self.ecosystems_config_dict[ecosystem_uid]["name"]
 
     def get_IDs(self, ecosystem_id: str) -> gv.IDs:
         if ecosystem_id in self.ecosystems_uid:
