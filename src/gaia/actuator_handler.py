@@ -37,10 +37,6 @@ class ActuatorCouple:
     def items(self) -> typing.ItemsView[str, gv.HardwareType | None]:
         return self.__dict__.items()
 
-    @staticmethod
-    def directions() -> tuple[str, str]:
-        return "increase", "decrease"
-
 
 actuator_couples: dict[gv.ClimateParameter: ActuatorCouple] = {
     gv.ClimateParameter.temperature: ActuatorCouple(
@@ -174,14 +170,14 @@ class HystericalPID:
         self._last_output = output
         if output > 0 and not self.direction | Direction.increase:
             self.actuator_hub.logger.debug(
-                f"PID output for {self.climate_parameter.name} is > 0 but "
+                f"PID output for {self.climate_parameter.name} is > 0 but no"
                 f"actuator able to increase {self.climate_parameter.name} "
                 f"has been detected. {self.climate_parameter.name.capitalize()} "
                 f"may remain under the targeted value."
             )
         if output < 0 and not self.direction | Direction.decrease:
             self.actuator_hub.logger.debug(
-                f"PID output for {self.climate_parameter.name} is < 0 but "
+                f"PID output for {self.climate_parameter.name} is < 0 but no"
                 f"actuator able to decrease {self.climate_parameter.name} "
                 f"has been detected. {self.climate_parameter.name.capitalize()} "
                 f"may remain above the targeted value."
@@ -280,7 +276,7 @@ class ActuatorHandler:
         self._any_status_change: bool = False
         self._sending_data_task: Task | None = None
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
         return f"ActuatorHandler({uid}, actuator_type={self.type.name})"
 
