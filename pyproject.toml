@@ -41,6 +41,7 @@ dispatcher = [
     "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git",
 ]
 test = [
+    "coverage~=7.6",
     "pytest~=7.1.2",
     "pytest-asyncio~=0.23.0",
     "pytest-timeout~=2.2.0",

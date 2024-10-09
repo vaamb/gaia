@@ -24,6 +24,9 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install -e .[camera,database,dispatcher,test]
-    - name: Test with pytest
+    - name: Run tests with coverage
       run: |
-        pytest -v
+        coverage run -m pytest -v
+    - name: Display coverage
+      run: |
+        coverage report
