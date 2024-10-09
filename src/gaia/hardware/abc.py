@@ -513,9 +513,9 @@ class PlantLevelHardware(Hardware):
         kwargs["level"] = gv.HardwareLevel.plants
         super().__init__(*args, **kwargs)
         if not self.plants:  # pragma: no cover
-            hardware_logger.warning(
+            raise ValueError(
                 "Plants-level hardware should be provided a plant name "
-                "as kwarg with the key name 'plants'"
+                "as kwarg with the key name 'plants'."
             )
 
 

@@ -53,7 +53,7 @@ class Climate(SubroutineTemplate):
         if not self.ecosystem.get_subroutine_status("sensors"):
             self.logger.warning(
                 "Climate subroutine requires a running sensors subroutine in "
-                "order to work"
+                "order to work."
             )
             for climate_param in regulated_parameters.keys():
                 regulated_parameters[climate_param] = False

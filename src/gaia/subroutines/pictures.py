@@ -194,7 +194,7 @@ class Pictures(SubroutineTemplate):
         self.logger.debug(f"Picture loop successfully started.")
 
     async def _stop(self) -> None:
-        self.logger.info(f"Stopping picture loop")
+        self.logger.info(f"Stopping picture loop.")
         self.ecosystem.engine.scheduler.remove_job(
             f"{self.ecosystem.uid}-picture_routine")
         self._sending_data_task = None

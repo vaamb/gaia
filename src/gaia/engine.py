@@ -115,7 +115,7 @@ class Engine(metaclass=SingletonMeta):
             brokers_available.append("memory")
         if broker_type not in brokers_available:
             raise ValueError(f"{broker_type} is not supported")
-        self.logger.info("Initialising the event dispatcher")
+        self.logger.info("Initialising the event dispatcher.")
         if broker_type == "amqp":
             from dispatcher import AsyncAMQPDispatcher
             if broker_url == "amqp://":
@@ -434,18 +434,15 @@ class Engine(metaclass=SingletonMeta):
             ecosystem = Ecosystem(ecosystem_uid, self)
             self.ecosystems[ecosystem_uid] = ecosystem
             self.logger.debug(
-                f"Ecosystem {ecosystem_id} has been created"
-            )
+                f"Ecosystem {ecosystem_id} has been created.")
             if start:
                 warnings.warn(
                     "The 'start' parameter is deprecated, please use "
-                    "'start_ecosystem' instead.", DeprecationWarning
-                )
+                    "'start_ecosystem' instead.", DeprecationWarning)
             #    await self.start_ecosystem(ecosystem_uid)
             return ecosystem
         raise RuntimeError(
-            f"Ecosystem {ecosystem_id} already exists"
-        )
+            f"Ecosystem {ecosystem_id} already exists")
 
     async def start_ecosystem(self, ecosystem_id: str, send_info: bool = False) -> None:
         """Start an Ecosystem.
@@ -460,19 +457,16 @@ class Engine(metaclass=SingletonMeta):
             if ecosystem_uid not in self.ecosystems_started:
                 ecosystem: Ecosystem = self.ecosystems[ecosystem_uid]
                 self.logger.debug(
-                    f"Starting ecosystem {ecosystem_id}"
-                )
+                    f"Starting ecosystem {ecosystem_id}.")
                 await ecosystem.start()
                 if send_info:
                     await self._send_ecosystems_info([ecosystem_uid])
             else:
                 raise RuntimeError(
-                    f"Ecosystem {ecosystem_id} is already running"
-                )
+                    f"Ecosystem {ecosystem_id} is already running")
         else:
             raise RuntimeError(
-                f"Need to initialise Ecosystem {ecosystem_id} first"
-            )
+                f"Need to initialise Ecosystem {ecosystem_id} first")
 
     async def stop_ecosystem(
             self,
@@ -702,15 +696,15 @@ class Engine(metaclass=SingletonMeta):
         # Refresh ecosystems a first time
         await sleep(0)  # Allow _loop() to start
         await self._resume()
-        self.logger.info("Gaia started")
+        self.logger.info("Gaia started.")
 
     async def wait(self):
         if self.running:
-            self.logger.info("Running")
+            self.logger.info("Running ...")
             while self.running:
                 await sleep(0.5)
         else:
-            raise RuntimeError("Gaia needs to be started in order to wait")
+            raise RuntimeError("Gaia needs to be started in order to wait.")
 
     def pause(self) -> None:
         if not self.running:

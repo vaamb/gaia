@@ -42,7 +42,7 @@ class DHTSensor(TempHumSensor, gpioHardware):
             except Exception as e:
                 hardware_logger.error(
                     f"Sensor {self._name} encountered an error. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
                 sleep(0.5)
 

@@ -387,7 +387,7 @@ class ActuatorHandler:
         self._any_status_change = True
         self.logger.info(
             f"{self.type.name.capitalize()} has been set to "
-            f"'{self.mode.name}' mode")
+            f"'{self.mode.name}' mode.")
 
     def _set_mode(self, value: gv.ActuatorMode) -> None:
         self._mode = value
@@ -407,7 +407,7 @@ class ActuatorHandler:
         self._any_status_change = True
         self.logger.info(
             f"{self.type.name.capitalize()} has been turned "
-            f"{'on' if self.status else 'off'}")
+            f"{'on' if self.status else 'off'}.")
 
     async def _set_status(self, value: bool) -> None:
         self._status = value
@@ -475,7 +475,7 @@ class ActuatorHandler:
     def increase_countdown(self, delta_time: float) -> None:
         self._check_update_status_transaction()
         if self._time_limit:
-            self.logger.info(f"Increasing timer by {delta_time} seconds")
+            self.logger.info(f"Increasing timer by {delta_time} seconds.")
             self._time_limit += delta_time
         else:
             self._time_limit = time.monotonic() + delta_time
@@ -485,13 +485,13 @@ class ActuatorHandler:
     def decrease_countdown(self, delta_time: float) -> None:
         self._check_update_status_transaction()
         if self._time_limit:
-            self.logger.info(f"Decreasing timer by {delta_time} seconds")
+            self.logger.info(f"Decreasing timer by {delta_time} seconds.")
             self._time_limit -= delta_time
             if self._time_limit <= 0:
                 self._time_limit = 0.0
             self._any_status_change = True
         else:
-            raise AttributeError("No timer set, you cannot reduce the countdown")
+            raise AttributeError("No timer set, you cannot reduce the countdown.")
 
     async def turn_to(
             self,

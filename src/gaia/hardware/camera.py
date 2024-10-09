@@ -57,7 +57,7 @@ class PiCamera(Camera):
             except Exception as e:
                 hardware_logger.error(
                     f"Camera {self._name} encountered an error. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
             else:
                 image: PIL_image.Image = PIL_image.fromarray(array)

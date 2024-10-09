@@ -95,7 +95,7 @@ class Light(SubroutineTemplate):
             self.routine_task(), name=f"{self.ecosystem.uid}-light-routine")
 
     async def _stop(self) -> None:
-        self.logger.info("Stopping light loop")
+        self.logger.info("Stopping light loop.")
         self._task.cancel()
         self._task = None
         async with self.actuator_handler.update_status_transaction(activation=True):

@@ -163,7 +163,7 @@ def configure_logging(config_class: GaiaConfig) -> None:
     logging_config["handlers"]["file_handler"]["filename"] = str(log_dir / file_handler_filename)
 
     if config_class.DEBUG or config_class.TESTING:
-        debug_fmt = "%(asctime)s %(levelname)-7.7s: [%(filename)-20.20s:%(lineno)3d] %(name)-35.35s: %(message)s"
+        debug_fmt = "%(asctime)s %(levelname)-7.7s: [%(filename)-20.20s:%(lineno)4d] %(name)-35.35s: %(message)s"
         logging_config["formatters"]["base_formatter"]["format"] = debug_fmt
         logging_config["handlers"]["stream_handler"]["level"] = 'DEBUG'
         logging_config["handlers"]["file_handler"]["level"] = 'DEBUG'
