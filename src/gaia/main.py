@@ -1,19 +1,10 @@
-import asyncio
-
 import click
 import uvloop
 
 
-async def _main(
-        use_green_threads: bool,
-):
+async def _main():
     """Launch Gaia
     """
-    if use_green_threads:
-        from gevent.monkey import patch_all
-
-        patch_all()
-
     from setproctitle import setproctitle
 
     setproctitle("gaia")
@@ -27,19 +18,8 @@ async def _main(
 
 
 @click.command()
-@click.option(
-    "--use-green-threads", "-gt",
-    type=bool,
-    is_flag=True,
-    default=False,
-    help="Monkey patch Gaia with gevent to use green threads",
-    show_default=True,
-)
-def main(
-        use_green_threads: bool,
-) -> None:
-    uvloop.install()
-    asyncio.run(_main(use_green_threads))
+def main() -> None:
+    uvloop.run(_main())
 
 
 if __name__ == "__main__":

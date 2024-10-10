@@ -14,7 +14,6 @@ dependencies = [
     "apscheduler~=3.10.0",
     "click~=8.1.7",
     "cryptography~=40.0",
-    "gevent~=23.9",
     "orjson~=3.8",
     "pydantic~=2.4",
     "ruamel.yaml~=0.17",
