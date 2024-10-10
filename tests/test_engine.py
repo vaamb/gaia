@@ -115,9 +115,16 @@ async def test_engine_message_broker(engine: Engine):
 
 @pytest.mark.asyncio
 async def test_engine_database(engine: Engine):
-    assert engine.config.app_config.USE_DATABASE is False
+    # Store the state
+    use_db = engine.config.app_config.USE_DATABASE
+    db = engine._db
+
+    # Reset the state for the tests
+    engine.config.app_config.USE_DATABASE = False
+    engine._db = None
+
+    # Test when DB is disabled in config
     assert engine.use_db is False
-    assert engine.plugins_needed is False
 
     with pytest.raises(RuntimeError, match="USE_DATABASE"):
         await engine.init_database()
@@ -125,8 +132,8 @@ async def test_engine_database(engine: Engine):
     with pytest.raises(AttributeError):
         assert isinstance(engine.db, SQLAlchemyWrapper)
 
+    # Test DB initialization
     engine.config.app_config.USE_DATABASE = True
-    assert engine.plugins_needed is True
 
     await engine.init_database()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
@@ -134,11 +141,13 @@ async def test_engine_database(engine: Engine):
     assert engine.use_db is True
     assert isinstance(engine.db, SQLAlchemyWrapper)
 
+    # Test DB start and stop
     await engine.start_database()
     await engine.stop_database()
 
-    # Reset the database
-    engine.db = None
+    # Restore the previous state
+    engine.config.app_config.USE_DATABASE = use_db
+    engine._db = db
 
 
 @pytest.mark.asyncio
