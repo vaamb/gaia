@@ -3,7 +3,7 @@ import pytest
 from gaia.config import EcosystemConfig
 from gaia.exceptions import HardwareNotFound
 
-from .data import hardware_address, sensor_info, sensor_uid
+from .data import sensor_info, sensor_uid
 
 
 hardware_info = sensor_info
@@ -63,6 +63,7 @@ def test_hardware_update_fail_not_found(ecosystem_config: EcosystemConfig):
 
 def test_hardware_update_fail_address(ecosystem_config: EcosystemConfig):
     with pytest.raises(ValueError, match=r"Address .* already used"):
+        hardware_address = sensor_info["address"]
         ecosystem_config.update_hardware(hardware_uid, address=hardware_address)
 
 

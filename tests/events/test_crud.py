@@ -6,7 +6,8 @@ import gaia_validators as gv
 
 from gaia.events import Events as Events_
 
-from ..data import ecosystem_uid, engine_uid, hardware_info, hardware_uid
+from ..data import (
+    ecosystem_uid, engine_uid, hardware_info, hardware_uid, IO_dict)
 from ..utils import get_logs_content, MockDispatcher
 
 
@@ -568,5 +569,5 @@ async def test_delete_hardware(events_handler: Events):
 
     data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
-    assert len(verified.data) == 3
+    assert len(verified.data) == len(IO_dict) - 1
     assert hardware_uid not in [hardware.uid for hardware in verified.data]
