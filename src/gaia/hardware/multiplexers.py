@@ -11,14 +11,14 @@ from gaia.hardware.utils import get_i2c, is_raspi
 
 if t.TYPE_CHECKING:  # pragma: no cover
     if is_raspi():
-        from adafruit_tca9548a import TCA9548A as tca
+        from adafruit_tca9548a import TCA9548A as _TCA9548A
 
 
 class _MetaMultiplexer(type):
     instances: WeakValueDictionary[str, "Multiplexer"] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> "Multiplexer":
-        address: int = kwargs["address"]
+        address: int = kwargs["i2c_address"]
         str_address = str(address)
         try:
             return cls.instances[str_address]
@@ -30,7 +30,7 @@ class _MetaMultiplexer(type):
 
 
 class Multiplexer(metaclass=_MetaMultiplexer):
-    def __init__(self, i2c_address: int, i2c: None | busio.I2C=None) -> None:
+    def __init__(self, i2c_address: int, i2c: None | busio.I2C = None) -> None:
         if i2c is None:
             self._i2c = get_i2c()
         else:
@@ -54,13 +54,13 @@ class Multiplexer(metaclass=_MetaMultiplexer):
 
 
 class TCA9548A(Multiplexer):
-    def __init__(self, i2c=None, i2c_address=0x70):
-        super(TCA9548A, self).__init__(i2c_address, i2c)
+    def __init__(self, i2c_address=0x70, i2c: None | busio.I2C = None):
+        super().__init__(i2c_address, i2c)
 
-    def _get_device(self) -> "tca":
+    def _get_device(self) -> _TCA9548A:
         if is_raspi():
             try:
-                from adafruit_tca9548a import TCA9548A as tca
+                from adafruit_tca9548a import TCA9548A as _TCA9548A
             except ImportError:
                 raise RuntimeError(
                     "Adafruit tca9548a and busdevice packages are required. "
@@ -69,16 +69,14 @@ class TCA9548A(Multiplexer):
                     "in your virtual env."
                 )
         else:
-            raise RuntimeError(
-                "TCA9548A has not been implemented for non Raspi computer (yet)"
-            )
-        return tca(get_i2c(), self._address)
+            from gaia.hardware._compatibility import TCA9548A as _TCA9548A
+        return _TCA9548A(get_i2c(), self._address)
 
     def get_channel(self, number: int) -> Any:
         return self.device[number]
 
 
-multiplexer_models = {
+multiplexer_models: dict[str, type[Multiplexer]] = {
     hardware.__name__: hardware for hardware in [
         TCA9548A,
     ]

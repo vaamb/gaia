@@ -41,9 +41,10 @@ class busio:
     """ Compatibility class that implements some methods from adafruit busio
     module
     """
-    @staticmethod
-    def I2C(*args, **kwargs) -> None:
-        return None
+
+    class I2C:
+        def __init__(self, *args, **kwargs):
+            pass
 
 
 class pwmio:
@@ -71,7 +72,34 @@ class Pin:
 
 
 # ---------------------------------------------------------------------------
-#   Hardware modules from Adafruit
+#   Multiplexers from Adafruit
+# ---------------------------------------------------------------------------
+class TCA9548A_Channel(busio.I2C):
+    def __init__(self, tca: "TCA9548A", channel: int) -> None:
+        super().__init__()
+        self.tca = tca
+        self.channel_switch = bytearray([1 << channel])
+
+
+class TCA9548A:
+    def __init__(self, i2c: busio.I2C, address: int = 0x70):
+        self.i2c = i2c
+        self.address = address
+        self.channels: list[TCA9548A_Channel | None] = [None] * 8
+
+    def __len__(self) -> int:
+        return 8
+
+    def __getitem__(self, key: int) -> TCA9548A_Channel:
+        if not 0 <= key <= 7:
+            raise IndexError("Channel must be an integer in the range: 0-7.")
+        if self.channels[key] is None:
+            self.channels[key] = TCA9548A_Channel(self, key)
+        return self.channels[key]
+
+
+# ---------------------------------------------------------------------------
+#   Hardware from Adafruit
 # ---------------------------------------------------------------------------
 class CompatibilityDevice:
     def __init__(

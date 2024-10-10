@@ -13,49 +13,61 @@ engine_uid = "engine_uid"
 ecosystem_uid = "Rfrg5Kiv"
 ecosystem_name = "Testing ecosystem"
 
-hardware_address = "GPIO_19"
-i2c_address = "I2C_default"
-gpio_address = "GPIO_4&BOARD_12"
-
 
 sensor_uid = "tKstp8EYJx27eQuK"
-sensor_info = {
-    "name": "VirtualSensor",
-    "address": hardware_address,
+sensor_info: gv.AnonymousHardwareConfigDict = {
+    "name": "VirtualGPIOSensor",
+    "address": "GPIO_19",
     "model": "virtualDHT22",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
     "measures": ["temperature", "humidity"],
     "plants": [],
+    "multiplexer_model": None,
+}
+
+
+i2c_sensor_uid = "xWQ9uF1bplKs0nk7"
+i2c_sensor_info: gv.AnonymousHardwareConfigDict = {
+    "name": "VirtualI2CSensor",
+    "address": "I2C_0x70#1@0x10",
+    "model": "virtualVEML7700",
+    "type": gv.HardwareType.sensor,
+    "level": gv.HardwareLevel.environment,
+    "measures": ["light"],
+    "plants": [],
+    "multiplexer_model": "TCA9548A",
 }
 
 
 light_uid = "cpgCZFJGGYlIXlLL"
-light_info = {
+light_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualLight",
     "address": "GPIO_5&GPIO_13",
-    "model": "gpioDimmable",
+    "model": "virtualgpioDimmable",
     "type": gv.HardwareType.light,
     "level": gv.HardwareLevel.environment,
     "measures": [],
     "plants": [],
+    "multiplexer_model": None,
 }
 
 
 heater_uid = "A0oZpCJ50D0ajfJs"
-heater_info = {
+heater_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualHeater",
     "address": "GPIO_26&GPIO_12",
-    "model": "gpioDimmable",
+    "model": "virtualgpioDimmable",
     "type": gv.HardwareType.heater,
     "level": gv.HardwareLevel.environment,
     "measures": [],
     "plants": [],
+    "multiplexer_model": None,
 }
 
 
 camera_uid = "aVxKrtCOQHeu8GpN"
-camera_info = {
+camera_info: gv.AnonymousHardwareConfigDict = {
     "name": "Camera",
     "address": "PICAMERA",
     "model": "PiCamera",
@@ -63,6 +75,7 @@ camera_info = {
     "level": gv.HardwareLevel.environment,
     "measures": [],
     "plants": [],
+    "multiplexer_model": None,
 }
 
 
@@ -80,6 +93,15 @@ sun_times = {
 lighting_start = time(8, 00)
 lighting_stop = time(20, 00)
 lighting_method = gv.LightingMethod.fixed
+
+
+IO_dict = {
+    light_uid: light_info,
+    heater_uid: heater_info,
+    sensor_uid: sensor_info,
+    i2c_sensor_uid: i2c_sensor_info,
+    camera_uid: camera_info,
+}
 
 
 ecosystem_info = {
@@ -109,11 +131,6 @@ ecosystem_info = {
             },
             "climate": {},
         },
-        "IO": {
-            light_uid: light_info,
-            heater_uid: heater_info,
-            sensor_uid: sensor_info,
-            camera_uid: camera_info,
-        },
+        "IO": IO_dict,
     },
 }

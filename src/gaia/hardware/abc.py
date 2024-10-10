@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import textwrap
 import typing as t
-from typing import Any, Literal, Self, Type
+from typing import Any, Literal, Self
 import weakref
 from weakref import WeakValueDictionary
 
@@ -231,7 +231,7 @@ class Hardware(metaclass=_MetaHardware):
     """
     __slots__ = (
         "__weakref__", "_subroutine", "_uid", "_name", "_address_book",
-        "_level", "_type", "_model", "_measures", "_multiplexer_model", "_plants"
+        "_level", "_type", "_model", "_measures", "_multiplexer", "_plants"
     )
 
     def __init__(
@@ -264,10 +264,25 @@ class Hardware(metaclass=_MetaHardware):
             primary=Address(address_list[0]),
             secondary=Address(address_list[1]) if len(address_list) == 2 else None
         )
+        if multiplexer_model is None and self._address_book.primary.is_multiplexed:
+            raise ValueError("Multiplexed address should be used with a multiplexer.")
+        if multiplexer_model is not None and not self._address_book.primary.is_multiplexed:
+            raise ValueError("Multiplexer can only be used with a multiplexed address.")
+        if multiplexer_model:
+            multiplexer_cls = multiplexer_models[multiplexer_model]
+            self._multiplexer = multiplexer_cls(
+                i2c_address=self._address_book.primary.multiplexer_address)
+        else:
+            self._multiplexer = None
         self._measures: dict[Measure, Unit | None] = \
             self._format_measures(measures)
         self._plants = plants
-        self._multiplexer_model = multiplexer_model
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return (
+            f"<{self.__class__.__name__}({self._uid}, name={self._name}, "
+            f"model={self._model})>"
+        )
 
     @classmethod
     def from_unclean(
@@ -314,12 +329,6 @@ class Hardware(metaclass=_MetaHardware):
             measures=hardware_config.measures,
             plants=hardware_config.plants,
             multiplexer_model=hardware_config.multiplexer_model,
-        )
-
-    def __repr__(self) -> str:
-        return (
-            f"<{self.__class__.__name__}({self._uid}, name={self._name}, "
-            f"model={self._model})>"
         )
 
     def _format_measures(
@@ -399,8 +408,14 @@ class Hardware(metaclass=_MetaHardware):
         return self._plants
 
     @property
-    def multiplexer_model(self):
-        return self._multiplexer_model
+    def multiplexer(self) -> Multiplexer | None:
+        return self._multiplexer
+
+    @property
+    def multiplexer_model(self) -> str | None:
+        if self._multiplexer:
+            return self._multiplexer.__class__.__name__
+        return None
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
         base = gv.HardwareConfig(
@@ -412,7 +427,7 @@ class Hardware(metaclass=_MetaHardware):
             model=self._model,
             measures=self._measures,
             plants=self._plants,
-            multiplexer_model=self._multiplexer_model,
+            multiplexer_model=self.multiplexer_model,
         ).model_dump(exclude_defaults=shorten)
         if base.get("measures"):
             base["measures"] = [
@@ -496,14 +511,10 @@ class i2cHardware(Hardware):
             )
 
     def _get_i2c(self, address_type: AddressBookType = "primary"):
-        address: Address = getattr(self._address_book, address_type)
-        if address.is_multiplexed:
-            multiplexer_address = address.multiplexer_address
+        if self.multiplexer is not None:
+            address: Address = getattr(self._address_book, address_type)
             multiplexer_channel = address.multiplexer_channel
-            multiplexer_class: Type[Multiplexer] = \
-                multiplexer_models[self.multiplexer_model]
-            multiplexer: Multiplexer = multiplexer_class(multiplexer_address)
-            return multiplexer.get_channel(multiplexer_channel)
+            return self.multiplexer.get_channel(multiplexer_channel)
         else:
             return get_i2c()
 

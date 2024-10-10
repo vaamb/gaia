@@ -18,6 +18,7 @@ from ..data import (
     engine_uid,
     heater_info,
     heater_uid,
+    IO_dict,
     light_info,
     light_uid,
     lighting_start,
@@ -142,7 +143,7 @@ async def test_on_registration_ack(
     def get_h_info_list(info_name: str):
         return [
             h[info_name]
-            for h in (heater_info, light_info, sensor_info, camera_info)
+            for h in zevs (heater_info, light_info, sensor_info, camera_info)
         ]
 
     hardware = responses[4]
@@ -150,12 +151,13 @@ async def test_on_registration_ack(
     assert hardware["data"][0]["uid"] == ecosystem_uid
     for h in hardware["data"][0]["data"]:
         h: gv.HardwareConfig
-        assert h["uid"] in (heater_uid, light_uid, sensor_uid, camera_uid)
-        assert h["name"] in get_h_info_list("name")
-        assert h["address"] in get_h_info_list("address")
-        assert h["model"] in get_h_info_list("model")
-        assert h["type"] in get_h_info_list("type")
-        assert h["level"] in get_h_info_list("level")
+        hardware_uid = h["uid"]
+        assert h["uid"] in IO_dict.keys()
+        assert h["name"] == IO_dict[hardware_uid]["name"]
+        assert h["address"] == IO_dict[hardware_uid]["address"]
+        assert h["model"] == IO_dict[hardware_uid]["model"]
+        assert h["type"] == IO_dict[hardware_uid]["type"]
+        assert h["level"] == IO_dict[hardware_uid]["level"]
 
     actuators_data = responses[5]
     assert actuators_data["event"] == "actuators_data"
