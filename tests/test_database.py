@@ -9,9 +9,11 @@ from sqlalchemy import select
 import gaia_validators as gv
 from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
-from gaia import EngineConfig
+from gaia import Ecosystem, EngineConfig, Engine
 from gaia.database import db as gaia_db
 from gaia.database.models import SensorBuffer, SensorRecord
+from gaia.database.routines import log_sensors_data
+from gaia.subroutines import Sensors
 
 from .data import ecosystem_uid, sensor_uid
 
@@ -84,6 +86,47 @@ async def test_buffer(db: AsyncSQLAlchemyWrapper):
         assert empty
 
 
-def test_log_sensors_data():
-    #TODO
-    pass
+@pytest.mark.asyncio
+async def test_log_sensors_data(
+        db: AsyncSQLAlchemyWrapper,
+        engine: Engine,
+        ecosystem: Ecosystem,
+        sensors_subroutine: Sensors
+):
+    # Store the state
+    db_management = ecosystem.config.get_management("database")
+    subroutine_enabled = sensors_subroutine.enabled
+    subroutine_started = sensors_subroutine.started
+
+    # Set everything to the desired state
+    ecosystem.config.set_management("database", True)
+    sensors_subroutine.enable()
+    if not subroutine_started:
+        await sensors_subroutine.start()
+
+    await sensors_subroutine.update_sensors_data()
+
+    # Test the DB routine
+    await log_sensors_data(db.scoped_session, engine)
+
+    # Make sure we logged something
+    async with db.scoped_session() as session:
+        # SensorRecord
+        stmt = select(SensorRecord)
+        result = await session.execute(stmt)
+        records = result.all()
+        assert len(records) > 0
+        # SensorBuffer
+        stmt = select(SensorBuffer)
+        result = await session.execute(stmt)
+        buffers = result.all()
+        assert len(buffers) > 0
+
+    # Restore the previous state
+    ecosystem.config.set_management("database", db_management)
+    if subroutine_enabled:
+        sensors_subroutine.enable()
+    else:
+        sensors_subroutine.disable()
+    if not subroutine_started:
+        await sensors_subroutine.stop()
