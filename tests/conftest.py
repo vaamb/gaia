@@ -79,13 +79,15 @@ def temp_dir(patch) -> YieldFixture[str]:
 @pytest.fixture(scope="session")
 def testing_cfg(temp_dir) -> None:
     class Config(BaseConfig):
-        LOG_TO_STDOUT = False
         TESTING = True
+        LOG_TO_STDOUT = False
         VIRTUALIZATION = True
         DIR = temp_dir
+        ENGINE_UID = engine_uid
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
-        ENGINE_UID = engine_uid
+        SENSORS_LOOP_PERIOD = 5.0
+        CLIMATE_LOOP_PERIOD = 5.0
         PICTURE_SIZE = (42, 21)
 
     GaiaConfigHelper.set_config(Config)

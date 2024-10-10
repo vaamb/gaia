@@ -34,19 +34,31 @@ async def test_add_hardware(sensors_subroutine: Sensors, engine_config: EngineCo
 
 
 @pytest.mark.asyncio
-async def test_update_sensors_data(sensors_subroutine: Sensors):
+async def test_routine(sensors_subroutine: Sensors):
     # Rely on the correct implementation of virtualDHT22
     with pytest.raises(RuntimeError, match="Sensors subroutine has to be started"):
         await sensors_subroutine.update_sensors_data()
 
+    alarms_management = sensors_subroutine.config.get_management(gv.ManagementFlags.alarms)
+    if not alarms_management:
+        sensors_subroutine.config.set_management(gv.ManagementFlags.alarms, True)
+    parameters = {"day": 42.0, "night": 42.0, "hysteresis": 1.0, "alarm": 0.5}
+    sensors_subroutine.config.set_climate_parameter("temperature", **parameters)
     sensors_subroutine.enable()
     sensors_subroutine._started = True
+
     await sensors_subroutine.refresh_hardware()
 
     assert sensors_subroutine.sensors_data == gv.Empty()
 
-    await sensors_subroutine.update_sensors_data()
+    await sensors_subroutine.routine()
 
     assert isinstance(sensors_subroutine.sensors_data, gv.SensorsData)
+    assert len(sensors_subroutine.sensors_data.records) > 0
+    assert len(sensors_subroutine.sensors_data.average) > 0
+    assert len(sensors_subroutine.sensors_data.alarms) > 0
 
+    sensors_subroutine.config.delete_climate_parameter("temperature")
+    if not alarms_management:
+         sensors_subroutine.config.set_management(gv.ManagementFlags.alarms, False)
     sensors_subroutine._started = False

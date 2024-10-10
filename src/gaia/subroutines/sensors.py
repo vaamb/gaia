@@ -281,10 +281,10 @@ class Sensors(SubroutineTemplate):
                 self.send_data(), name=f"{self.ecosystem.uid}-sensors-send_data")
 
     async def trigger_climate_routine(self) -> None:
-        self._climate_routine_counter += 1
         if self._climate_routine_counter % self._climate_routine_ratio == 0:
             self._climate_routine_counter = 0
             self._climate_routine_task = asyncio.create_task(
                 self.ecosystem.subroutines["climate"].routine(),
                 name=f"{self.ecosystem.uid}-climate-routine",
             )
+        self._climate_routine_counter += 1

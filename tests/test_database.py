@@ -104,7 +104,7 @@ async def test_log_sensors_data(
     if not subroutine_started:
         await sensors_subroutine.start()
 
-    await sensors_subroutine.update_sensors_data()
+    await sensors_subroutine.routine()
 
     # Test the DB routine
     await log_sensors_data(db.scoped_session, engine)
