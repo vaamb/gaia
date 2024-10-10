@@ -5,7 +5,8 @@ import gaia_validators as gv
 from gaia import EngineConfig
 from gaia.subroutines import Sensors
 
-from ..data import heater_info, heater_uid, i2c_sensor_uid, sensor_info, sensor_uid
+from ..data import (
+    heater_info, heater_uid, i2c_sensor_uid, sensor_info, sensor_uid)
 from ..utils import get_logs_content
 
 

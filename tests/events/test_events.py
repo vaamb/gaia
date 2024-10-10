@@ -140,12 +140,6 @@ async def test_on_registration_ack(
     assert environmental_parameters["event"] == "environmental_parameters"
     assert environmental_parameters["data"][0]["uid"] == ecosystem_uid
 
-    def get_h_info_list(info_name: str):
-        return [
-            h[info_name]
-            for h in zevs (heater_info, light_info, sensor_info, camera_info)
-        ]
-
     hardware = responses[4]
     assert hardware["event"] == "hardware"
     assert hardware["data"][0]["uid"] == ecosystem_uid

@@ -13,7 +13,7 @@ from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if is_raspi():  # pragma: no cover
+    if is_raspi():
         from picamera2 import Picamera2
     else:
         from gaia.hardware._compatibility import Picamera2

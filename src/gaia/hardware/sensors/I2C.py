@@ -36,7 +36,7 @@ class AHT20(TempHumSensor, i2cSensor):
         super().__init__(*args, default_address=0x38, **kwargs)
 
     def _get_device(self) -> "AHTx0":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_ahtx0 import AHTx0
             except ImportError:
@@ -70,7 +70,7 @@ class ENS160(i2cSensor):
         super().__init__(*args, default_address=0x53, **kwargs)
 
     def _get_device(self) -> "_ENS160":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_ens160 import ENS160 as _ENS160
             except ImportError:
@@ -146,7 +146,7 @@ class VEML7700(i2cSensor, LightSensor):
         super().__init__(*args, default_address=0x10, **kwargs)
 
     def _get_device(self) -> "_VEML7700":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_veml7700 import VEML7700 as _VEML7700
             except ImportError:
@@ -193,7 +193,7 @@ class VCNL4040(i2cSensor, LightSensor):
         super().__init__(*args, default_address=0x60, **kwargs)
 
     def _get_device(self) -> "_VCNL4040":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
             except ImportError:
@@ -240,7 +240,7 @@ class CapacitiveSensor(i2cSensor):
         super().__init__(*args, default_address=0x36, **kwargs)
 
     def _get_device(self) -> "Seesaw":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_seesaw.seesaw import Seesaw
             except ImportError:

@@ -451,7 +451,7 @@ class gpioHardware(Hardware):
 
     @staticmethod
     def _get_pin(address) -> "Pin":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
             except ImportError:
