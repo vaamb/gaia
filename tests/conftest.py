@@ -99,6 +99,7 @@ def testing_cfg(temp_dir) -> None:
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
         ENGINE_UID = engine_uid
+        PICTURE_SIZE = (42, 21)
 
     GaiaConfigHelper.set_config(Config)
 
@@ -158,7 +159,6 @@ async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[Ecosyste
     try:
         yield ecosystem_config
     finally:
-        del _MetaEcosystemConfig.instances[ecosystem_config.uid]
         del ecosystem_config
 
 
@@ -212,7 +212,7 @@ async def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
+async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Pictures]:
     pictures_subroutine: Pictures = ecosystem.subroutines["pictures"]
 
     try:
@@ -234,7 +234,7 @@ async def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
+async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Dummy]:
     dummy_subroutine: Sensors = ecosystem.subroutines["dummy"]
 
     try:

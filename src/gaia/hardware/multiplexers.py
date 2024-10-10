@@ -12,6 +12,8 @@ from gaia.hardware.utils import get_i2c, is_raspi
 if t.TYPE_CHECKING:  # pragma: no cover
     if is_raspi():
         from adafruit_tca9548a import TCA9548A as _TCA9548A
+    else:
+        from gaia.hardware._compatibility import TCA9548A as _TCA9548A
 
 
 class _MetaMultiplexer(type):
@@ -58,7 +60,7 @@ class TCA9548A(Multiplexer):
         super().__init__(i2c_address, i2c)
 
     def _get_device(self) -> _TCA9548A:
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_tca9548a import TCA9548A as _TCA9548A
             except ImportError:

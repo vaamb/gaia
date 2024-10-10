@@ -53,7 +53,7 @@ class DHTSensor(TempHumSensor, gpioHardware):
 
 class DHT11(DHTSensor):
     def _get_device(self) -> "_DHT11":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_dht import DHT11 as _DHT11
             except ImportError:
@@ -69,7 +69,7 @@ class DHT11(DHTSensor):
 
 class DHT22(DHTSensor):
     def _get_device(self) -> "_DHT22":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_dht import DHT22 as _DHT22
             except ImportError:

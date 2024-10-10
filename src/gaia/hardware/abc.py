@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-import os
 from pathlib import Path
 import textwrap
 import typing as t
@@ -147,7 +146,7 @@ class Address:
             raise ValueError("Address type is not valid.")
 
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         if self.type == AddressType.PICAMERA:
             return f"{self.type.value}"
         elif self.type == AddressType.GPIO:
@@ -316,7 +315,7 @@ class Hardware(metaclass=_MetaHardware):
     def from_hardware_config(
             cls,
             hardware_config: gv.HardwareConfig,
-            subroutine: "SubroutineTemplate" | None
+            subroutine: "SubroutineTemplate" | None,
     ) -> Self:
         return cls(
             subroutine=subroutine,
@@ -452,7 +451,7 @@ class gpioHardware(Hardware):
 
     @staticmethod
     def _get_pin(address) -> "Pin":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
             except ImportError:
@@ -489,7 +488,7 @@ class Dimmer(Hardware):
         if self._address_book.secondary is None:  # pragma: no cover
             raise ValueError(
                 "dimmable hardware address should be of form "
-                "'addressType1_addressNum1:addressType2_addressNum2' with"
+                "'addressType1_addressNum1&addressType2_addressNum2' with "
                 "address 1 being for the main (on/off) switch and address 2 "
                 "being PWM-able"
             )
@@ -653,13 +652,16 @@ class Camera(Hardware):
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
             if self.subroutine is None:
-                base_dir = Path(os.getcwd())
+                from gaia.config import GaiaConfigHelper
+
+                config_cls = GaiaConfigHelper.get_config()
+                base_dir = Path(config_cls.DIR)
+                self._camera_dir = base_dir / "camera/orphan_camera"
             else:
                 base_dir = self.subroutine.ecosystem.engine.config.base_dir
-            self._camera_dir = base_dir/f"camera/{self.subroutine.ecosystem.name}"
+                self._camera_dir = base_dir / f"camera/{self.subroutine.ecosystem.name}"
             if not self._camera_dir.exists():
-                # TODO: maybe make non blocking ?
-                os.mkdir(self._camera_dir)
+                self._camera_dir.mkdir(parents=True)
         return self._camera_dir
 
     async def load_image(self, image_path: Path) -> PIL_image.Image:
