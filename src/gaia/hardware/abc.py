@@ -661,10 +661,7 @@ class Camera(Hardware):
                 base_dir = self.subroutine.ecosystem.engine.config.base_dir
                 self._camera_dir = base_dir / f"camera/{self.subroutine.ecosystem.name}"
             if not self._camera_dir.exists():
-                def make_dir():
-                    self._camera_dir.mkdir(parents=True)
-
-                await run_sync(make_dir)
+                self._camera_dir.mkdir(parents=True)
         return self._camera_dir
 
     async def load_image(self, image_path: Path) -> PIL_image.Image:
