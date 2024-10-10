@@ -159,7 +159,6 @@ async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[Ecosyste
     try:
         yield ecosystem_config
     finally:
-        del _MetaEcosystemConfig.instances[ecosystem_config.uid]
         del ecosystem_config
 
 

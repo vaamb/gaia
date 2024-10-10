@@ -6,8 +6,8 @@ import gaia_validators as gv
 
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
-    _MetaHardware, BaseSensor, Camera, Dimmer, gpioHardware, Hardware,
-    i2cHardware, PlantLevelHardware, Switch)
+    BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
+    PlantLevelHardware, Switch)
 from gaia.hardware.camera import PiCamera
 from gaia.utils import create_uid
 
@@ -87,6 +87,3 @@ async def test_hardware_models():
             print(f"Test succeeded for hardware '{hardware}'")
         except Exception as e:
             raise Exception(f"Error while testing {hardware_cls}.") from e
-
-        finally:
-            _MetaHardware.instances.clear()
