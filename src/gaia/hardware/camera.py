@@ -48,7 +48,10 @@ class PiCamera(Camera):
         self.device.configure(camera_config)
         self.device.start()
         # need at least 2 sec sleep for the camera to adapt to light level
-        if not self.subroutine.ecosystem.engine.config.app_config.TESTING:
+        if (
+            self.subroutine
+            and not self.subroutine.ecosystem.engine.config.app_config.TESTING
+        ):
             sleep(2)
         for retry in range(3):
             try:
