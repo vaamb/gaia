@@ -164,7 +164,7 @@ class Climate(SubroutineTemplate):
             )
             self.stop()
 
-    async def routine(self) -> None:
+    async def _routine(self) -> None:
         start_time = monotonic()
         try:
             await self._update_climate_actuators()

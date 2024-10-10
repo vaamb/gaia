@@ -50,7 +50,7 @@ class Sensors(SubroutineTemplate):
         return floor(max(
             1.0, climate_loop_period / self._loop_period))
 
-    async def routine(self) -> None:
+    async def _routine(self) -> None:
         start_time = monotonic()
         self.logger.debug("Starting sensors data update routine ...")
         try:
@@ -80,9 +80,6 @@ class Sensors(SubroutineTemplate):
                 f"indicates errors while data retrieval or the need to "
                 f"adapt 'SENSOR_LOOP_PERIOD'."
             )
-        self.logger.debug(
-            f"Sensors data routine finished in {loop_time:.1f} s."
-        )
         if self.ecosystem.get_subroutine_status("climate"):
             await self.trigger_climate_routine()
 

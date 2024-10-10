@@ -61,7 +61,7 @@ class Health(SubroutineTemplate):
             # TODO: change Exception
             raise Exception
 
-    async def routine(self) -> None:
+    async def _routine(self) -> None:
         try:
             await self._update_health_data()
         except Exception as e:

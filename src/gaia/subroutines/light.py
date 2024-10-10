@@ -32,7 +32,7 @@ class Light(SubroutineTemplate):
         self._any_dimmable_light: bool | None = None
         self._finish__init__()
 
-    async def routine(self) -> None:
+    async def _routine(self) -> None:
         try:
             await self._update_light_actuators()
         except Exception as e:
