@@ -19,6 +19,39 @@ def test_engine_dict(engine: Engine, engine_config: EngineConfig):
     assert engine.config.__dict__ == engine_config.__dict__
 
 
+def test_engine_plugins_needed(engine: Engine):
+    # Store the state
+    communicate = engine.config.app_config.COMMUNICATE_WITH_OURANOS
+    use_db = engine.config.app_config.USE_DATABASE
+
+    # Reset the state for the tests
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
+    engine.config.app_config.USE_DATABASE = False
+
+    assert not engine.plugins_needed
+
+    # Test when only communication is required
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+    assert engine.plugins_needed
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
+
+    # Test when only DB is required
+    engine.config.app_config.USE_DATABASE = True
+    assert engine.plugins_needed
+    engine.config.app_config.USE_DATABASE = False
+
+    # Test when both communication and DB are required
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+    engine.config.app_config.USE_DATABASE = True
+    assert engine.plugins_needed
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
+    engine.config.app_config.USE_DATABASE = False
+
+    # Restore the previous state
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = communicate
+    engine.config.app_config.USE_DATABASE = use_db
+
+
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_engine_message_broker(engine: Engine):
