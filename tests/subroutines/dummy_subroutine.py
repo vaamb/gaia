@@ -16,5 +16,5 @@ class Dummy(SubroutineTemplate):
     def get_hardware_needed_uid(self) -> set[str]:
         return set()
 
-    async def routine(self) -> None:
+    async def _routine(self) -> None:
         pass

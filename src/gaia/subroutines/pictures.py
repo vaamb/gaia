@@ -128,9 +128,8 @@ class Pictures(SubroutineTemplate):
             self._sending_data_task: Task = asyncio.create_task(
                 self.send_pictures(), name=f"{self.ecosystem.uid}-picture-send_pictures")
 
-    async def routine(self) -> None:
+    async def _routine(self) -> None:
         start_time: float = monotonic()
-        self.logger.debug("Starting picture routine ...")
         try:
             await self.update_scored_arrays()
         except ValueError as e:
@@ -140,7 +139,7 @@ class Pictures(SubroutineTemplate):
         finally:
             update_time = monotonic() - start_time
             self.logger.debug(
-                f"Picture scored array update finished in {update_time:.1f} s.")
+                f"Pictures scored array update finished in {update_time:.1f} s.")
         if self._sending_counter % self._sending_ratio == 0:
             # Send data
             if self.ecosystem.engine.use_message_broker:
@@ -160,13 +159,11 @@ class Pictures(SubroutineTemplate):
         loop_time = monotonic() - start_time
         if loop_time > self._loop_period:  # pragma: no cover
             self.logger.warning(
-                f"Picture routine took {loop_time:.1f} s. This either "
+                f"Pictures routine took {loop_time:.1f} s. This either "
                 f"indicates errors while getting pictures and computing mse or "
                 f"that the computing power requested to analyse the pictures is "
                 f"too big. You might need to adapt 'PICTURE_TAKING_PERIOD' or "
                 f"'PICTURE_SIZE'.")
-        self.logger.debug(
-            f"Picture routine finished in {loop_time:.1f} s.")
 
     def _compute_if_manageable(self) -> bool:
         if not self.config.get_IO_group_uids(gv.HardwareType.camera):

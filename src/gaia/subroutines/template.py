@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import logging
 import typing as t
+from time import monotonic
 from typing import Type
 
 import gaia_validators as gv
@@ -37,7 +38,7 @@ class SubroutineTemplate(ABC):
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
 
     @abstractmethod
-    async def routine(self) -> None:
+    async def _routine(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )
@@ -96,6 +97,18 @@ class SubroutineTemplate(ABC):
     @hardware_choices.setter
     def hardware_choices(self, choices: dict[str, Type[Hardware]]) -> None:
         self._hardware_choices = choices
+
+    async def routine(self) -> None:
+        name = self.__class__.__name__
+        start = monotonic()
+        if not self.started:
+            raise RuntimeError(
+                f"{name} subroutine has to be started to use its 'routine' method")
+        self.logger.debug(f"Starting {name} routine ...")
+        await self._routine()
+        routine_time = monotonic() - start
+        self.logger.debug(
+            f"{name} routine finished in {routine_time:.1f} s.")
 
     async def add_hardware(
             self,

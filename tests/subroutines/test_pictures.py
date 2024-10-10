@@ -25,7 +25,7 @@ def test_hardware_needed(pictures_subroutine: Pictures):
 @pytest.mark.asyncio
 async def test_routine(pictures_subroutine: Pictures):
     # Rely on the correct implementation of virtualDHT22
-    with pytest.raises(RuntimeError, match="Picture subroutine has to be started"):
+    with pytest.raises(RuntimeError, match="Pictures subroutine has to be started"):
         await pictures_subroutine.routine()
 
     pictures_subroutine.enable()
