@@ -124,3 +124,22 @@ async def test_safe_stop_from_sensors(
     assert climate_subroutine.enabled
     assert not climate_subroutine.started
     assert not climate_subroutine.manageable
+
+
+@pytest.mark.asyncio
+async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors):
+    # Sensors data are required ...
+    await sensors_subroutine.refresh_hardware()
+    await sensors_subroutine.routine()
+    assert not isinstance(sensors_subroutine.sensors_data, gv.Empty)
+
+    climate_subroutine.enable()
+    await climate_subroutine.start()
+    await climate_subroutine.refresh_hardware()
+
+    climate_subroutine.update_regulated_parameters()
+
+    await climate_subroutine.routine()
+
+    climate_subroutine._started = True
+    climate_subroutine.disable()
