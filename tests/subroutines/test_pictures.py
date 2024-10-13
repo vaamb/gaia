@@ -33,3 +33,12 @@ async def test_routine(pictures_subroutine: Pictures):
     await pictures_subroutine.routine()
 
     assert pictures_subroutine.picture_arrays
+
+
+@pytest.mark.asyncio
+async def test_reset_background_arrays(pictures_subroutine: Pictures):
+    pictures_subroutine.config.set_management("camera", True)
+    pictures_subroutine.enable()
+    await pictures_subroutine.start()
+
+    await pictures_subroutine.reset_background_arrays()
