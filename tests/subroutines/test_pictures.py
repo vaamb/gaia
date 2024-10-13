@@ -1,12 +1,8 @@
 import pytest
 
-import gaia_validators as gv
-
-from gaia import EngineConfig
 from gaia.subroutines import Pictures
 
-from ..data import heater_info, heater_uid, sensor_info, camera_uid
-from ..utils import get_logs_content
+from ..data import camera_uid
 
 
 def test_manageable(pictures_subroutine: Pictures):
