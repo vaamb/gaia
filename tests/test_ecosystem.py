@@ -108,14 +108,3 @@ async def test_climate_actuators(ecosystem: "Ecosystem"):
 
     await ecosystem.stop_subroutine("climate")
     await ecosystem.stop_subroutine("sensors")
-
-
-def test_sensors_calls(ecosystem: "Ecosystem"):
-    assert ecosystem.sensors_data == gv.Empty()
-
-
-def test_health_calls(ecosystem: "Ecosystem"):
-    assert ecosystem.plants_health == gv.Empty()
-
-
-# TODO: add a test for setting light method

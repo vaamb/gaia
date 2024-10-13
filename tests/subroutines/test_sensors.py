@@ -53,3 +53,5 @@ async def test_routine(sensors_subroutine: Sensors):
     assert len(sensors_subroutine.sensors_data.records) > 0
     assert len(sensors_subroutine.sensors_data.average) > 0
     assert len(sensors_subroutine.sensors_data.alarms) > 0
+
+    assert sensors_subroutine.ecosystem.sensors_data.records

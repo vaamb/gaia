@@ -141,5 +141,4 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
 
     await climate_subroutine.routine()
 
-    climate_subroutine._started = True
-    climate_subroutine.disable()
+    assert climate_subroutine.ecosystem.climate_parameters_regulated()

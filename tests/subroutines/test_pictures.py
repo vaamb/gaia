@@ -37,4 +37,6 @@ async def test_reset_background_arrays(pictures_subroutine: Pictures):
     pictures_subroutine.enable()
     await pictures_subroutine.start()
 
+    assert pictures_subroutine.ecosystem.picture_arrays
+
     await pictures_subroutine.reset_background_arrays()
