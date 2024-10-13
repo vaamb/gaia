@@ -359,6 +359,8 @@ class ActuatorHandler:
                     self._check_active()
                     await self.check_countdown()
                 yield
+            except Exception:
+                raise
             finally:
                 if self._any_status_change:
                     updated_data = self.as_record(datetime.now(timezone.utc))
