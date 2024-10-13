@@ -86,8 +86,13 @@ def testing_cfg(temp_dir) -> None:
         ENGINE_UID = engine_uid
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
-        SENSORS_LOOP_PERIOD = 5.0
-        CLIMATE_LOOP_PERIOD = 5.0
+
+        # Make sure routines are only tested on purpose
+        SENSORS_LOOP_PERIOD = 25.0
+        CLIMATE_LOOP_PERIOD = 25.0
+        LIGHT_LOOP_PERIOD = 25.0
+        PICTURE_TAKING_PERIOD = 25.0
+        PICTURE_SENDING_PERIOD = 25.0
         PICTURE_SIZE = (42, 21)
 
     GaiaConfigHelper.set_config(Config)

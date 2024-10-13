@@ -24,17 +24,12 @@ def test_hardware_needed(pictures_subroutine: Pictures):
 
 @pytest.mark.asyncio
 async def test_routine(pictures_subroutine: Pictures):
-    with pytest.raises(RuntimeError, match="Pictures subroutine has to be started"):
-        await pictures_subroutine.routine()
-
+    pictures_subroutine.config.set_management("camera", True)
     pictures_subroutine.enable()
-    pictures_subroutine._started = True
-    await pictures_subroutine.refresh_hardware()
+    await pictures_subroutine.start()
 
     assert not pictures_subroutine.picture_arrays
 
     await pictures_subroutine.routine()
 
     assert pictures_subroutine.picture_arrays
-
-    pictures_subroutine._started = False

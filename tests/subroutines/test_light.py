@@ -87,21 +87,13 @@ async def test_turn_light(light_subroutine: Light):
 
 @pytest.mark.asyncio
 async def test_routine(light_subroutine: Light, sensors_subroutine: Sensors):
-    with pytest.raises(RuntimeError, match="Light subroutine has to be started"):
-        await light_subroutine.routine()
-
     sensors_subroutine.enable()
-    sensors_subroutine._started = True
-    await sensors_subroutine.refresh_hardware()
+    await sensors_subroutine.start()
 
     light_subroutine.enable()
-    light_subroutine._started = True
-    await light_subroutine.refresh_hardware()
+    await light_subroutine.start()
 
     await light_subroutine.routine()
 
-    light_subroutine._started = False
-    light_subroutine.disable()
-
-    sensors_subroutine._started = False
+    await sensors_subroutine.stop()
     sensors_subroutine.disable()

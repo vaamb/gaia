@@ -79,3 +79,17 @@ async def test_hardware(dummy_subroutine: Dummy, engine_config: EngineConfig):
 
     with pytest.raises(HardwareNotFound, match=f"Hardware '{hardware_uid}' not found."):
         await dummy_subroutine.remove_hardware(hardware_uid)
+
+
+@pytest.mark.asyncio
+async def test_subroutine(dummy_subroutine: Dummy):
+    with pytest.raises(RuntimeError, match=r"subroutine has to be started"):
+        await dummy_subroutine.routine()
+
+    dummy_subroutine.enable()
+    await dummy_subroutine.start()
+
+    await dummy_subroutine.routine()
+
+    await dummy_subroutine.stop()
+    dummy_subroutine.disable()
