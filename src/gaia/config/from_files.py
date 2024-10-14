@@ -776,7 +776,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self,
             ecosystem_uid: str,
             method: gv.LightingMethod | gv.NycthemeralSpanMethod,
-            raise_on_warning: bool = False,
+            raise_on_error: bool = False,
     ) -> bool:
         ecosystem_name = self.get_IDs(ecosystem_uid).name
         if method == 0:  # Fixed, no target needed
@@ -795,7 +795,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     f"{ecosystem_name} cannot be 'mimic' as no target is "
                     f"specified in the ecosystems configuration file."
                 )
-                if raise_on_warning:
+                if raise_on_error:
                     raise ValueError(msg)
                 self.logger.warning(msg)
                 return False
@@ -814,7 +814,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"not provided in the private configuration file. Will fall "
                 f"back to 'fixed'."
             )
-            if raise_on_warning:
+            if raise_on_error:
                 raise ValueError(msg)
             self.logger.warning(msg)
         # Try to get the target's sun times
@@ -825,7 +825,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"'{method.name}' as the sun times of '{target}' "
                 f"weren't found. Will fall back to 'fixed'."
             )
-            if raise_on_warning:
+            if raise_on_error:
                 raise ValueError(msg)
             self.logger.warning(msg)
         return True
@@ -1088,7 +1088,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_nycthemeral_span_method(self, method: gv.NycthemeralSpanMethod) -> None:
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
         self.general.check_nycthemeral_method_validity(
-            self.uid, method, raise_on_warning=True)
+            self.uid, method, raise_on_error=True)
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=True)
@@ -1179,7 +1179,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_lighting_method(self, method: gv.LightingMethod) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
         self.general.check_nycthemeral_method_validity(
-            self.uid, method, raise_on_warning=True)
+            self.uid, method, raise_on_error=True)
         self.nycthemeral_cycle["lighting"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=True)
