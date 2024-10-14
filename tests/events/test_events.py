@@ -244,6 +244,18 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
 
 
 @pytest.mark.asyncio
+async def test_on_change_management(events_handler: Events, ecosystem: Ecosystem):
+    assert not ecosystem.config.get_management("camera")
+
+    await events_handler.on_change_management({
+        "uid": ecosystem_uid,
+        "data": {"camera": True},
+    })
+
+    assert ecosystem.config.get_management("camera")
+
+
+@pytest.mark.asyncio
 async def test_send_buffered_data_and_ack(events_handler: Events, ecosystem: Ecosystem):
     ecosystem.config.set_management("database", True)
     ecosystem.engine.config.app_config.USE_DATABASE = True
