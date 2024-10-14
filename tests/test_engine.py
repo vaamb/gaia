@@ -55,16 +55,6 @@ def test_engine_plugins_needed(engine: Engine):
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_engine_message_broker(engine: Engine):
-    # Store the state
-    communicate = engine.config.app_config.COMMUNICATE_WITH_OURANOS
-    message_broker = engine._message_broker
-    event_handler = engine._event_handler
-
-    # Reset the state for the tests
-    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
-    engine.message_broker = None
-    engine.event_handler = None
-
     # Test when communication is disabled in config
     assert engine.use_message_broker is False
 
@@ -107,22 +97,9 @@ async def test_engine_message_broker(engine: Engine):
     await engine.start_message_broker()
     await engine.stop_message_broker()
 
-    # Restore the previous state
-    engine.config.app_config.COMMUNICATE_WITH_OURANOS = communicate
-    engine.message_broker = message_broker
-    engine.event_handler = event_handler
-
 
 @pytest.mark.asyncio
 async def test_engine_database(engine: Engine):
-    # Store the state
-    use_db = engine.config.app_config.USE_DATABASE
-    db = engine._db
-
-    # Reset the state for the tests
-    engine.config.app_config.USE_DATABASE = False
-    engine._db = None
-
     # Test when DB is disabled in config
     assert engine.use_db is False
 
@@ -144,10 +121,6 @@ async def test_engine_database(engine: Engine):
     # Test DB start and stop
     await engine.start_database()
     await engine.stop_database()
-
-    # Restore the previous state
-    engine.config.app_config.USE_DATABASE = use_db
-    engine._db = db
 
 
 @pytest.mark.asyncio
