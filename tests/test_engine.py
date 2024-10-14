@@ -20,14 +20,6 @@ def test_engine_dict(engine: Engine, engine_config: EngineConfig):
 
 
 def test_engine_plugins_needed(engine: Engine):
-    # Store the state
-    communicate = engine.config.app_config.COMMUNICATE_WITH_OURANOS
-    use_db = engine.config.app_config.USE_DATABASE
-
-    # Reset the state for the tests
-    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
-    engine.config.app_config.USE_DATABASE = False
-
     assert not engine.plugins_needed
 
     # Test when only communication is required
@@ -46,10 +38,6 @@ def test_engine_plugins_needed(engine: Engine):
     assert engine.plugins_needed
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
     engine.config.app_config.USE_DATABASE = False
-
-    # Restore the previous state
-    engine.config.app_config.COMMUNICATE_WITH_OURANOS = communicate
-    engine.config.app_config.USE_DATABASE = use_db
 
 
 @pytest.mark.asyncio

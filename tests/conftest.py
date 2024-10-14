@@ -124,9 +124,9 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
         engine_config_master.sun_times = {}
         if engine_config_master.started:
             engine_config_master.stop_watchdog()
-        #if engine_config_master.cache_dir.iterdir():
-        #    shutil.rmtree(engine_config_master.cache_dir)
-        #    engine_config_master._dirs.pop("CACHE_DIR")
+        if engine_config_master.cache_dir.iterdir():
+            shutil.rmtree(engine_config_master.cache_dir)
+            engine_config_master._dirs.pop("CACHE_DIR")
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
