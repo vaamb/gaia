@@ -1259,15 +1259,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Then update info using lock as the whole dict should be transformed at the "same time"
 
         # Log warnings for issues with raw nycthemeral span method
-        #self.general.check_nycthemeral_method_validity(
-        #    self.uid, self.nycthemeral_cycle["span"])
+        self.general.check_nycthemeral_method_validity(
+            self.uid, self.nycthemeral_cycle["span"])
         # Raw nycthemeral span is silently replaced if needed
         self.nycthemeral_span_method
         self.nycthemeral_span_hours
 
         # Log warnings for issues with raw lighting method
-        #self.general.check_nycthemeral_method_validity(
-        #    self.uid, self.nycthemeral_cycle["lighting"])
+        self.general.check_nycthemeral_method_validity(
+            self.uid, self.nycthemeral_cycle["lighting"])
         # Raw lighting method span is silently replaced if needed
         self.lighting_method
         self.lighting_hours
