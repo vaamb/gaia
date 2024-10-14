@@ -1,3 +1,4 @@
+from asyncio import create_task, sleep, wait_for
 from datetime import date
 
 import pytest
@@ -19,12 +20,32 @@ def test_engine_dict(engine: Engine, engine_config: EngineConfig):
     assert engine.config.__dict__ == engine_config.__dict__
 
 
+def test_engine_plugins_needed(engine: Engine):
+    assert not engine.plugins_needed
+
+    # Test when only communication is required
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+    assert engine.plugins_needed
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
+
+    # Test when only DB is required
+    engine.config.app_config.USE_DATABASE = True
+    assert engine.plugins_needed
+    engine.config.app_config.USE_DATABASE = False
+
+    # Test when both communication and DB are required
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+    engine.config.app_config.USE_DATABASE = True
+    assert engine.plugins_needed
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
+    engine.config.app_config.USE_DATABASE = False
+
+
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_engine_message_broker(engine: Engine):
-    assert engine.config.app_config.COMMUNICATE_WITH_OURANOS is False
+    # Test when communication is disabled in config
     assert engine.use_message_broker is False
-    assert engine.plugins_needed is False
 
     with pytest.raises(RuntimeError, match="COMMUNICATE_WITH_OURANOS"):
         await engine.init_message_broker()
@@ -33,9 +54,10 @@ async def test_engine_message_broker(engine: Engine):
     with pytest.raises(AttributeError):
         assert isinstance(engine.event_handler, EventHandler)
 
+    # Test when communication is enabled in config
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
-    assert engine.plugins_needed is True
 
+    # Test invalid communication backend urls
     url = engine.config.app_config.AGGREGATOR_COMMUNICATION_URL
 
     engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = None
@@ -50,6 +72,7 @@ async def test_engine_message_broker(engine: Engine):
     with pytest.raises(ValueError, match="is not supported"):
         await engine.init_message_broker()
 
+    # Test message broker and event handler initialization
     engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = url
     await engine.init_message_broker()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
@@ -59,19 +82,15 @@ async def test_engine_message_broker(engine: Engine):
     assert isinstance(engine.message_broker, AsyncDispatcher)
     assert isinstance(engine.event_handler, EventHandler)
 
+    # Test message broker start and stop
     await engine.start_message_broker()
     await engine.stop_message_broker()
-
-    # Reset the message broker
-    engine.message_broker = None
-    engine.event_handler = None
 
 
 @pytest.mark.asyncio
 async def test_engine_database(engine: Engine):
-    assert engine.config.app_config.USE_DATABASE is False
+    # Test when DB is disabled in config
     assert engine.use_db is False
-    assert engine.plugins_needed is False
 
     with pytest.raises(RuntimeError, match="USE_DATABASE"):
         await engine.init_database()
@@ -79,8 +98,8 @@ async def test_engine_database(engine: Engine):
     with pytest.raises(AttributeError):
         assert isinstance(engine.db, SQLAlchemyWrapper)
 
+    # Test DB initialization
     engine.config.app_config.USE_DATABASE = True
-    assert engine.plugins_needed is True
 
     await engine.init_database()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
@@ -88,11 +107,9 @@ async def test_engine_database(engine: Engine):
     assert engine.use_db is True
     assert isinstance(engine.db, SQLAlchemyWrapper)
 
+    # Test DB start and stop
     await engine.start_database()
     await engine.stop_database()
-
-    # Reset the database
-    engine.db = None
 
 
 @pytest.mark.asyncio
@@ -187,6 +204,19 @@ async def test_engine_states(engine: Engine):
     assert engine.stopped
     with pytest.raises(RuntimeError):
         await engine.resume()
+
+
+@pytest.mark.asyncio
+async def test_engine_run(engine: Engine):
+    task = create_task(engine.run())
+
+    await sleep(0.5)  # Allow to set up and start up
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
+        assert "Starting Gaia ..." in logs
+
+    engine._handle_stop_signal()
+
+    await wait_for(task, 1.0)  # Allow to shut down
 
 
 @pytest.mark.asyncio

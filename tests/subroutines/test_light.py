@@ -5,7 +5,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import EngineConfig
-from gaia.subroutines import Light
+from gaia.subroutines import Light, Sensors
 
 from ..data import light_info, light_uid, sensor_info, sensor_uid
 from ..utils import get_logs_content
@@ -83,3 +83,17 @@ async def test_turn_light(light_subroutine: Light):
 
     with pytest.raises(ValueError):
         await light_subroutine.turn_light("WrongMode")
+
+
+@pytest.mark.asyncio
+async def test_routine(light_subroutine: Light, sensors_subroutine: Sensors):
+    sensors_subroutine.enable()
+    await sensors_subroutine.start()
+
+    light_subroutine.enable()
+    await light_subroutine.start()
+
+    await light_subroutine.routine()
+
+    await sensors_subroutine.stop()
+    sensors_subroutine.disable()

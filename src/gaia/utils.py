@@ -12,6 +12,7 @@ import string
 from typing import Any
 from weakref import WeakValueDictionary
 
+import orjson
 import ruamel.yaml
 from ruamel.yaml import SafeRepresenter, ScalarNode, SequenceNode
 
@@ -44,7 +45,7 @@ yaml.Constructor = ruamel.yaml.constructor.SafeConstructor
 
 try:
     import orjson
-except ImportError:
+except ImportError:  # pragma: no cover
     import json as _json
 
     class datetimeJSONEncoder(_json.JSONEncoder):

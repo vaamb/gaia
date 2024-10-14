@@ -46,7 +46,7 @@ class gpioDimmer(gpioHardware, Dimmer):
         self._dimmer: "pwmio.PWMOut" | None = None
 
     def _get_dimmer(self) -> "pwmio.PWMOut":
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             try:
                 import pwmio
             except ImportError:

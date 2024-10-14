@@ -21,7 +21,7 @@ from gaia.utils import humanize_list, SingletonMeta
 from gaia.virtual import VirtualWorld
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from dispatcher import AsyncDispatcher
     from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
@@ -65,7 +65,7 @@ class Engine(metaclass=SingletonMeta):
         self._stop_event = Event()
         self._shut_down: bool = False
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
 
     @property

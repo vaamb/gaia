@@ -12,8 +12,8 @@ from gaia.hardware.abc import Camera, hardware_logger
 from gaia.hardware.utils import is_raspi
 
 
-if t.TYPE_CHECKING:
-    if is_raspi():  # pragma: no cover
+if t.TYPE_CHECKING:  # pragma: no cover
+    if is_raspi():
         from picamera2 import Picamera2
     else:
         from gaia.hardware._compatibility import Picamera2
@@ -48,7 +48,11 @@ class PiCamera(Camera):
         self.device.configure(camera_config)
         self.device.start()
         # need at least 2 sec sleep for the camera to adapt to light level
-        sleep(2)
+        if (
+            self.subroutine
+            and not self.subroutine.ecosystem.engine.config.app_config.TESTING
+        ):
+            sleep(2)
         for retry in range(3):
             try:
                 now = datetime.now(timezone.utc)

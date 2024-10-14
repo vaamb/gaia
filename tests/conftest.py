@@ -11,7 +11,6 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler
 from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHelper
-from gaia.config.from_files import _MetaEcosystemConfig
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.subroutines import (
@@ -27,18 +26,6 @@ from .utils import get_logs_content
 T = TypeVar("T")
 
 YieldFixture = Generator[T, None, None]
-
-
-#@pytest.fixture(scope="session")
-#def event_loop():
-#    if sys.platform.startswith("win") and sys.version_info[:2] >= (3, 8):
-#        # Avoid "RuntimeError: Event loop is closed" on Windows when tearing down tests
-#        # https://github.com/encode/httpx/issues/914
-#        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-#
-#    loop = asyncio.new_event_loop()
-#    yield loop
-#    loop.close()
 
 
 @pytest.fixture(scope="session")
@@ -92,13 +79,21 @@ def temp_dir(patch) -> YieldFixture[str]:
 @pytest.fixture(scope="session")
 def testing_cfg(temp_dir) -> None:
     class Config(BaseConfig):
-        LOG_TO_STDOUT = False
         TESTING = True
+        LOG_TO_STDOUT = False
         VIRTUALIZATION = True
         DIR = temp_dir
+        ENGINE_UID = engine_uid
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
-        ENGINE_UID = engine_uid
+
+        # Make sure routines are only called on purpose
+        SENSORS_LOOP_PERIOD = 25.0
+        CLIMATE_LOOP_PERIOD = 25.0
+        LIGHT_LOOP_PERIOD = 25.0
+        PICTURE_TAKING_PERIOD = 25.0
+        PICTURE_SENDING_PERIOD = 25.0
+        PICTURE_SIZE = (42, 21)
 
     GaiaConfigHelper.set_config(Config)
 
@@ -129,9 +124,9 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
         engine_config_master.sun_times = {}
         if engine_config_master.started:
             engine_config_master.stop_watchdog()
-        #if engine_config_master.cache_dir.iterdir():
-        #    shutil.rmtree(engine_config_master.cache_dir)
-        #    engine_config_master._dirs.pop("CACHE_DIR")
+        if engine_config_master.cache_dir.iterdir():
+            shutil.rmtree(engine_config_master.cache_dir)
+            engine_config_master._dirs.pop("CACHE_DIR")
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
@@ -158,7 +153,6 @@ async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[Ecosyste
     try:
         yield ecosystem_config
     finally:
-        del _MetaEcosystemConfig.instances[ecosystem_config.uid]
         del ecosystem_config
 
 
@@ -188,7 +182,7 @@ async def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
     # ... as well as a climate parameter
     ecosystem.config.set_climate_parameter(
         "temperature",
-        **{"day": 25, "night": 20, "hysteresis": 2}
+        **{"day": 42.0, "night": 42.0, "hysteresis": 1.0, "alarm": 0.5}
     )
 
     try:
@@ -212,7 +206,7 @@ async def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
+async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Pictures]:
     pictures_subroutine: Pictures = ecosystem.subroutines["pictures"]
 
     try:
@@ -234,7 +228,7 @@ async def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
+async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Dummy]:
     dummy_subroutine: Sensors = ecosystem.subroutines["dummy"]
 
     try:

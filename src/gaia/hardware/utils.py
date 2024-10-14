@@ -6,7 +6,7 @@ import typing as t
 from adafruit_platformdetect import Board, Detector
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from busio import I2C
 
 
@@ -30,7 +30,7 @@ def is_raspi() -> bool:
 def get_i2c() -> "I2C":
     global _i2c
     if _i2c is None:
-        if is_raspi():
+        if is_raspi():  # pragma: no cover
             import board
             import busio
         else:

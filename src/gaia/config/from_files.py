@@ -35,7 +35,7 @@ from gaia.utils import (
     SingletonMeta, yaml)
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
 
 
@@ -79,7 +79,7 @@ def _file_checksum(file_path: Path, _buffer_size: int=4096) -> H:
                     break  # EOF
                 digest_obj.update(view[:size])
             return digest_obj.digest()
-    except FileNotFoundError:
+    except FileNotFoundError:  # pragma: no cover
         return b"\x00"
 
 
@@ -214,7 +214,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._task: Task | None = None
         self.configs_loaded: bool = False
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"EngineConfig(watchdog={self.started})"
 
     @property
@@ -224,7 +224,7 @@ class EngineConfig(metaclass=SingletonMeta):
     @property
     def task(self) -> Task:
         if self._task is None:
-            raise AttributeError("'thread' has not been set up")
+            raise AttributeError("'task' has not been set up")
         return self._task
 
     @task.setter
@@ -314,7 +314,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     RootEcosystemsConfigValidator(
                         **{"config": unvalidated}
                     ).model_dump()["config"]
-            except pydantic.ValidationError as e:
+            except pydantic.ValidationError as e:  # pragma: no cover
                 self.logger.error(
                     f"Could not validate ecosystems configuration file. "
                     f"ERROR msg(s): `{format_pydantic_error(e)}`."
@@ -330,7 +330,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 validated = PrivateConfigValidator(
                     **unvalidated
                 ).model_dump()
-            except pydantic.ValidationError as e:
+            except pydantic.ValidationError as e:  # pragma: no cover
                 self.logger.error(
                     f"Could not validate private configuration file. "
                     f"ERROR msg(s): `{format_pydantic_error(e)}`."
@@ -477,7 +477,7 @@ class EngineConfig(metaclass=SingletonMeta):
         while not self._stop_event.is_set():
             try:
                 await self._watchdog_routine()
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 self.logger.error(
                     f"Encountered an error while running the watchdog routine. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`."
@@ -636,7 +636,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def get_place(self, place: str) -> gv.Coordinates | None:
         try:
             return gv.Coordinates(*self.places[place])
-        except KeyError:
+        except KeyError:  # pragma: no cover
             return None
 
     def set_place(
@@ -671,7 +671,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def delete_place(self, place: str) -> None:
         try:
             del self.places[place]
-        except KeyError:
+        except KeyError:  # pragma: no cover
             raise UndefinedParameter(
                 f"No location named '{place}' was found in the private "
                 f"configuration file.")
@@ -776,6 +776,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self,
             ecosystem_uid: str,
             method: gv.LightingMethod | gv.NycthemeralSpanMethod,
+            raise_on_error: bool = False,
     ) -> bool:
         ecosystem_name = self.get_IDs(ecosystem_uid).name
         if method == 0:  # Fixed, no target needed
@@ -789,13 +790,16 @@ class EngineConfig(metaclass=SingletonMeta):
                 self.ecosystems_config_dict[ecosystem_uid]["environment"]["nycthemeral_cycle"]
             target = nyct_cfg.get("target")
             if target is None:
-                self.logger.warning(
+                msg = (
                     f"Nycthemeral span method method for ecosystem "
                     f"{ecosystem_name} cannot be 'mimic' as no target is "
                     f"specified in the ecosystems configuration file."
                 )
+                if raise_on_error:
+                    raise ValueError(msg)
+                self.logger.warning(msg)
                 return False
-        else:
+        else:  # pragma: no cover
             raise ValueError(
                 "'method' should be either a valid lighting method or a valid "
                 "nycthemeral span method.")
@@ -804,22 +808,26 @@ class EngineConfig(metaclass=SingletonMeta):
         # Try to get the target's coordinates
         place = self.get_place(target)
         if place is None:
-            self.logger.warning(
+            msg = (
                 f"{m} method for ecosystem {ecosystem_name} cannot be "
-                f"'{method.name}' as the coordinates of '{target}' is "
+                f"'{method.name}' as the coordinates of '{target}' are "
                 f"not provided in the private configuration file. Will fall "
                 f"back to 'fixed'."
             )
-            return False
+            if raise_on_error:
+                raise ValueError(msg)
+            self.logger.warning(msg)
         # Try to get the target's sun times
         sun_times = self.get_sun_times(target)
         if sun_times is None:
-            self.logger.warning(
+            msg = (
                 f"{m} method for ecosystem {ecosystem_name} cannot be "
                 f"'{method.name}' as the sun times of '{target}' "
                 f"weren't found. Will fall back to 'fixed'."
             )
-            return False
+            if raise_on_error:
+                raise ValueError(msg)
+            self.logger.warning(msg)
         return True
 
     @property
@@ -846,7 +854,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     validated = ChaosMemoryRootValidator(
                         root=unvalidated
                     ).model_dump()["root"]
-                except pydantic.ValidationError:
+                except pydantic.ValidationError:  # pragma: no cover
                     self.logger.error("Error while loading chaos.")
                     raise
         except (FileNotFoundError, JSONDecodeError):
@@ -895,7 +903,7 @@ class _MetaEcosystemConfig(type):
         except KeyError:
             try:
                 ecosystem_id = args[0]
-            except IndexError:
+            except IndexError:  # pragma: no cover
                 raise TypeError(
                     "EcosystemConfig() missing 1 required argument: 'ecosystem_id'"
                 )
@@ -935,7 +943,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self._lighting_method_cache: gv.LightingMethod | None = None
         self._lighting_hours_data: gv.LightingHours | None = None
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
                f"engine_config={self._engine_config})"
 
@@ -1029,7 +1037,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             return self.__dict["environment"]
-        except KeyError:
+        except KeyError:  # pragma: no cover
             self.__dict["environment"] = EnvironmentConfigValidator().model_dump()
             return self.__dict["environment"]
 
@@ -1040,7 +1048,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             return self.environment["nycthemeral_cycle"]
-        except KeyError:
+        except KeyError:  # pragma: no cover
             self.environment["nycthemeral_cycle"] = gv.NycthemeralCycleConfig().model_dump()
             return self.environment["nycthemeral_cycle"]
 
@@ -1064,10 +1072,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if self._nycthemeral_span_method_cache is None:
             span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
                 gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
-            if self.general.app_config.TESTING:
-                self._nycthemeral_span_method_cache = span_method
             # If using fixed method, no check required
-            elif span_method & gv.NycthemeralSpanMethod.fixed:
+            if span_method & gv.NycthemeralSpanMethod.fixed:
                 self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.fixed
             # Else, we need to make sure we have suntimes for the nycthemeral target
             else:
@@ -1081,12 +1087,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     async def set_nycthemeral_span_method(self, method: gv.NycthemeralSpanMethod) -> None:
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
-        method_is_valid = self.general.check_nycthemeral_method_validity(self.uid, method)
-        if not method_is_valid:
-            raise ValueError(
-                    f"Cannot set nycthemeral span method to '{method.name}'. "
-                    f"See the logs to see the reason."
-                )
+        self.general.check_nycthemeral_method_validity(
+            self.uid, method, raise_on_error=True)
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=True)
@@ -1176,12 +1178,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     async def set_lighting_method(self, method: gv.LightingMethod) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
-        method_is_valid = self.general.check_nycthemeral_method_validity(self.uid, method)
-        if not method_is_valid:
-            raise ValueError(
-                    f"Cannot set light method to '{method.name}'. Look at the "
-                    f"logs to see the reason."
-                )
+        self.general.check_nycthemeral_method_validity(
+            self.uid, method, raise_on_error=True)
         self.nycthemeral_cycle["lighting"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=True)
@@ -1282,7 +1280,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             try:
                 await self.general.engine.event_handler.send_payload_if_connected(
                     "light_data", ecosystem_uids=[self.uid])
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 self.logger.error(
                     f"Encountered an error while sending light data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`"
@@ -1301,7 +1299,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             validated_values = gv.ChaosConfig(**values).model_dump()
-        except pydantic.ValidationError as e:
+        except pydantic.ValidationError as e:  # pragma: no cover
             raise ValueError(
                 f"Invalid chaos parameters provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
@@ -1378,7 +1376,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             return self.environment["climate"]
-        except KeyError:
+        except KeyError:  # pragma: no cover
             self.environment["climate"] = {}
             return self.environment["climate"]
 
@@ -1442,7 +1440,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             return self.__dict["IO"]
-        except KeyError:
+        except KeyError:  # pragma: no cover 
             self.__dict["IO"] = {}
             return self.__dict["IO"]
 

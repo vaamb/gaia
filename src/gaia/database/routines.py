@@ -11,7 +11,7 @@ from gaia.database.models import SensorBuffer, SensorRecord
 from gaia.utils import humanize_list
 
 
-if t.TYPE_CHECKING:
+if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
 
 
@@ -44,7 +44,7 @@ async def log_sensors_data(
                     if (
                             engine.use_message_broker
                             and not engine.event_handler.is_connected()
-                    ):
+                    ) or engine.config.app_config.TESTING:
                         sensor_buffer = SensorBuffer(**formatted_data)
                         session.add(sensor_buffer)
                     logged_ecosystem.add(ecosystem_uid)
