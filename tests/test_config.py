@@ -209,10 +209,8 @@ async def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
     assert ecosystem_config.lighting_method is lighting_method
     new_method = gv.LightMethod.elongate
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="coordinates of 'home' are not provided"):
         await ecosystem_config.set_lighting_method(new_method)
-        with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log") as logs:
-            assert "the coordinates of 'home' are not provided" in logs
 
     ecosystem_config.general.home_coordinates = (0, 0)
     await ecosystem_config.set_lighting_method(new_method)
@@ -234,6 +232,40 @@ async def test_ecosystem_light_method(ecosystem_config: EcosystemConfig):
     assert ecosystem_config.lighting_method is new_method
 
 
+@pytest.mark.asyncio
+async def test_ecosystem_nycthemeral_span(ecosystem_config: EcosystemConfig):
+    assert ecosystem_config.nycthemeral_span_hours == gv.NycthemeralSpanConfig()
+
+    # Test span hours
+    with pytest.raises(ValueError, match="Invalid time parameters provided"):
+        await ecosystem_config.set_nycthemeral_span_hours({"wrong": "value"})
+
+    await ecosystem_config.set_nycthemeral_span_hours({"day": "4h21", "night": "22h00"})
+    assert ecosystem_config.nycthemeral_span_hours.day == time(4, 21)
+    assert ecosystem_config.nycthemeral_span_hours.night == time(22, 00)
+
+    # Test span method
+    with pytest.raises(ValueError, match="is not a valid"):
+        await ecosystem_config.set_nycthemeral_span_method("wrong_value")
+
+    # Fixed method should always work
+    await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.fixed)
+
+    # Mimic is more tedious
+    with pytest.raises(ValueError, match="no target is specified in the ecosystems configuration file"):
+        await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
+
+    with pytest.raises(ValueError, match="The place targeted must first be set with"):
+        await ecosystem_config.set_nycthemeral_span_target("span_target")
+
+    ecosystem_config.general.set_place("span_target", (42.618, 21.1415))
+    await ecosystem_config.set_nycthemeral_span_target("span_target")
+
+    await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
+
+    assert isinstance(ecosystem_config.nycthemeral_span_method, gv.NycthemeralSpanMethod)
+
+
 def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
     with pytest.raises(UndefinedParameter):
         ecosystem_config.get_climate_parameter("temperature")
@@ -248,17 +280,6 @@ def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
     ecosystem_config.delete_climate_parameter("temperature")
     with pytest.raises(UndefinedParameter):
         ecosystem_config.delete_climate_parameter("temperature")
-
-
-@pytest.mark.asyncio
-async def test_ecosystem_time_parameters(ecosystem_config: EcosystemConfig):
-    assert ecosystem_config.nycthemeral_span_hours == gv.NycthemeralSpanConfig()
-
-    with pytest.raises(ValueError):
-        await ecosystem_config.set_nycthemeral_span_hours({"wrong": "value"})
-
-    await ecosystem_config.set_nycthemeral_span_hours({"day": "4h21", "night": "22h00"})
-    assert ecosystem_config.nycthemeral_span_hours.day == time(4, 21)
 
 
 # Test hardware config
