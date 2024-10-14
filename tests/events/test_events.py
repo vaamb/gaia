@@ -1,33 +1,29 @@
+from datetime import datetime, timezone
 from math import isclose
 from time import monotonic
 import uuid
 
 import pytest
+from sqlalchemy import delete
 
 import gaia_validators as gv
 
 from gaia import Ecosystem, EngineConfig
 from gaia.config.from_files import PrivateConfigValidator
+from gaia.database.models import ActuatorBuffer, SensorBuffer
 from gaia.events import Events as Events_
 
 from ..data import (
-    camera_uid,
-    camera_info,
     ecosystem_name,
     ecosystem_uid,
     engine_uid,
-    heater_info,
-    heater_uid,
     IO_dict,
-    light_info,
-    light_uid,
     lighting_start,
     lighting_stop,
     place_latitude,
     place_longitude,
     place_name,
-    sensor_info,
-    sensor_uid
+    sensor_uid,
 )
 from ..utils import get_logs_content, MockDispatcher
 
@@ -245,6 +241,81 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
 
     await ecosystem.disable_subroutine("light")
     await ecosystem.stop_subroutine("light")
+
+
+@pytest.mark.asyncio
+async def test_send_buffered_data_and_ack(events_handler: Events, ecosystem: Ecosystem):
+    ecosystem.config.set_management("database", True)
+    ecosystem.engine.config.app_config.USE_DATABASE = True
+    await ecosystem.engine.init_database()
+
+    # Log some buffered data
+    async with ecosystem.engine.db.scoped_session() as session:
+        await session.execute(delete(SensorBuffer))
+        await session.execute(delete(ActuatorBuffer))
+
+        now = datetime.now(timezone.utc)
+        session.add(
+            SensorBuffer(
+                ecosystem_uid=ecosystem_uid,
+                sensor_uid=sensor_uid,
+                measure="temperature",
+                timestamp=now,
+                value="21.0",
+            )
+        )
+        session.add(
+            ActuatorBuffer(
+                ecosystem_uid=ecosystem_uid,
+                type=gv.HardwareType.light,
+                timestamp=now,
+                active=True,
+                mode=gv.ActuatorMode.automatic,
+                status=True,
+                level=None,
+            )
+        )
+
+        await session.commit()
+
+    # Test the sending event
+    await events_handler.send_buffered_data()
+
+    assert len(events_handler.dispatcher.emit_store) == 2
+    sensors_data = events_handler.dispatcher.emit_store[0]
+    assert sensors_data["event"] == "buffered_sensors_data"
+    assert sensors_data["data"]["data"][0][0] == ecosystem_uid
+    assert sensors_data["data"]["data"][0][1] == sensor_uid
+    sensors_data_uuid = sensors_data["data"]["uuid"]
+
+    actuators_data = events_handler.dispatcher.emit_store[1]
+    assert actuators_data["event"] == "buffered_actuators_data"
+    assert actuators_data["data"]["data"][0][0] == ecosystem_uid
+    assert actuators_data["data"]["data"][0][1] == gv.HardwareType.light
+    actuators_data_uuid = actuators_data["data"]["uuid"]
+
+    # Test the acknowledgment event
+    await events_handler.on_buffered_data_ack({
+        "uuid": sensors_data_uuid,
+        "status": gv.Result.success,
+        "message": None,
+    })
+
+    async with ecosystem.engine.db.scoped_session() as session:
+        remaining_sensors_data = await SensorBuffer.get_buffered_data(session)
+        async for _ in remaining_sensors_data:
+            assert False
+
+    await events_handler.on_buffered_data_ack({
+        "uuid": actuators_data_uuid,
+        "status": gv.Result.success,
+        "message": None,
+    })
+
+    async with ecosystem.engine.db.scoped_session() as session:
+        remaining_actuators_data = await ActuatorBuffer.get_buffered_data(session)
+        async for _ in remaining_sensors_data:
+            assert False
 
 
 @pytest.mark.asyncio
