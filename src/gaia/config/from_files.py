@@ -224,7 +224,7 @@ class EngineConfig(metaclass=SingletonMeta):
     @property
     def task(self) -> Task:
         if self._task is None:
-            raise AttributeError("'thread' has not been set up")
+            raise AttributeError("'task' has not been set up")
         return self._task
 
     @task.setter

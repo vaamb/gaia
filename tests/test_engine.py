@@ -1,3 +1,4 @@
+from asyncio import create_task, sleep, wait_for
 from datetime import date
 
 import pytest
@@ -203,6 +204,19 @@ async def test_engine_states(engine: Engine):
     assert engine.stopped
     with pytest.raises(RuntimeError):
         await engine.resume()
+
+
+@pytest.mark.asyncio
+async def test_engine_run(engine: Engine):
+    task = create_task(engine.run())
+
+    await sleep(0.5)  # Allow to set up and start up
+    with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
+        assert "Starting Gaia ..." in logs
+
+    engine._handle_stop_signal()
+
+    await wait_for(task, 1.0)  # Allow to shut down
 
 
 @pytest.mark.asyncio
