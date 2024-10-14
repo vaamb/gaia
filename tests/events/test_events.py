@@ -245,3 +245,22 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
 
     await ecosystem.disable_subroutine("light")
     await ecosystem.stop_subroutine("light")
+
+
+@pytest.mark.asyncio
+async def test_send_picture_arrays(events_handler: Events, ecosystem: Ecosystem):
+    pictures_subroutine = ecosystem.subroutines["pictures"]
+    pictures_subroutine.config.set_management("camera", True)
+    pictures_subroutine.enable()
+    await pictures_subroutine.start()
+    await pictures_subroutine.routine()
+
+    assert not isinstance(pictures_subroutine.picture_arrays, gv.Empty)
+
+    await events_handler.send_picture_arrays()
+
+    response = events_handler._dispatcher.emit_store[0]
+
+    assert response["namespace"] == "aggregator-stream"
+    assert response["event"] == "picture_arrays"
+    assert isinstance(response["data"], bytes)
