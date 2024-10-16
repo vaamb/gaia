@@ -184,10 +184,10 @@ class Light(SubroutineTemplate):
 
     def compute_level(self,  _now: time | None = None) -> float:
         if not self.light_sensors or not self.any_dimmable_light:
-            return 50_000.0
+            return 500_000.0
         else:
             # TODO: use a function with sharper rise and fall than sin and a plateau
-            return 50_000.0
+            return 500_000.0
 
     def compute_target(self, _now: time | None = None) -> tuple[float, None]:
         now: time = _now or datetime.now().astimezone().time()
