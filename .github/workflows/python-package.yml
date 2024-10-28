@@ -6,7 +6,24 @@ on:
   pull_request:
 
 jobs:
-  test-full-project:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.x
+        cache: pip
+        cache-dependency-path: pyproject.toml
+    - name: Install dependencies
+      run: |
+        pip install -e .[test]
+    - name: Lint with ruff
+      run: |
+        ruff check .
+
+  test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -22,11 +39,11 @@ jobs:
         cache-dependency-path: pyproject.toml
     - name: Install dependencies
       run: |
-        pip install --upgrade pip
         pip install -e .[camera,database,dispatcher,test]
     - name: Run tests with coverage
       run: |
         coverage run -m pytest -v
+      timeout-minutes: 5
     - name: Display coverage
       run: |
         coverage report
