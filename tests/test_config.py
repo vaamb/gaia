@@ -135,8 +135,10 @@ def test_ecosystem_config_dict(
         ecosystem_config: EcosystemConfig,
 ):
     assert ecosystem_config.general.__dict__ is engine_config.__dict__
-    assert ecosystem_config._EcosystemConfig__dict is \
-           engine_config.ecosystems_config_dict[ecosystem_config.uid]
+    assert (
+        ecosystem_config._EcosystemConfig__dict
+        is engine_config.ecosystems_config_dict[ecosystem_config.uid]
+    )
 
 
 def test_ecosystem_config_name(ecosystem_config: EcosystemConfig):
@@ -252,8 +254,12 @@ async def test_ecosystem_nycthemeral_span(ecosystem_config: EcosystemConfig):
     await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.fixed)
 
     # Mimic is more tedious
-    with pytest.raises(ValueError, match="no target is specified in the ecosystems configuration file"):
-        await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
+    with pytest.raises(
+            ValueError,
+            match="no target is specified in the ecosystems configuration file"
+    ):
+        await ecosystem_config.set_nycthemeral_span_method(
+            gv.NycthemeralSpanMethod.mimic)
 
     with pytest.raises(ValueError, match="The place targeted must first be set with"):
         await ecosystem_config.set_nycthemeral_span_target("span_target")
@@ -263,7 +269,8 @@ async def test_ecosystem_nycthemeral_span(ecosystem_config: EcosystemConfig):
 
     await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
 
-    assert isinstance(ecosystem_config.nycthemeral_span_method, gv.NycthemeralSpanMethod)
+    assert isinstance(
+        ecosystem_config.nycthemeral_span_method, gv.NycthemeralSpanMethod)
 
 
 def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
@@ -274,8 +281,8 @@ def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
 
     parameters = {"day": 25, "night": 20, "hysteresis": 1}
     ecosystem_config.set_climate_parameter("temperature", **parameters)
-    assert ecosystem_config.get_climate_parameter("temperature") == \
-           gv.ClimateConfig(parameter="temperature", **parameters)
+    assert ecosystem_config.get_climate_parameter("temperature") == gv.ClimateConfig(
+        parameter="temperature", **parameters)
 
     ecosystem_config.delete_climate_parameter("temperature")
     with pytest.raises(UndefinedParameter):
@@ -292,7 +299,7 @@ def test_hardware_creation_fail_model(ecosystem_config: EcosystemConfig):
     invalid_hardware_info = {
         **sensor_info,
         "address": "GPIO_11",  # Use a free address
-        "model": "Invalid"
+        "model": "Invalid",
     }
     with pytest.raises(ValueError, match="This hardware model is not supported"):
         ecosystem_config.create_new_hardware(**invalid_hardware_info)
@@ -358,8 +365,7 @@ def test_hardware_update_fail_level(ecosystem_config: EcosystemConfig):
 
 
 def test_hardware_update_success(ecosystem_config: EcosystemConfig):
-    ecosystem_config.update_hardware(
-        sensor_uid, model="gpioSwitch", address="BOARD_37")
+    ecosystem_config.update_hardware(sensor_uid, model="gpioSwitch", address="BOARD_37")
 
 
 def test_hardware_delete_fail_not_found(ecosystem_config: EcosystemConfig):

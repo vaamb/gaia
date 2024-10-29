@@ -36,7 +36,7 @@ class VirtualWorld(metaclass=SingletonMeta):
             amp_humidity: float = 10.0,  # 10.0
             avg_midday_light: float = 75000.0,
             yearly_amp_light: float = 25000.0,
-            **kwargs
+            **kwargs,
     ) -> None:
         self.logger: logging.Logger = logging.getLogger("virtual.world")
         self._engine: Engine = engine
@@ -65,7 +65,10 @@ class VirtualWorld(metaclass=SingletonMeta):
         self._dt: datetime | None = None
         self._last_update: float | None = None
 
-    def get_measures(self, time_now: datetime | None = None) -> tuple[float, float, float]:
+    def get_measures(
+            self,
+            time_now: datetime | None = None,
+    ) -> tuple[float, float, float]:
         mono_clock = monotonic()
         if (
             not self._last_update
@@ -112,19 +115,19 @@ class VirtualWorld(metaclass=SingletonMeta):
             if now < sunset:
                 sunset = sunset - timedelta(days=1)
             seconds_since_sunset = (now - sunset).seconds
-            day_factor = - math.sin((seconds_since_sunset / nighttime) * math.pi)
+            day_factor = -math.sin((seconds_since_sunset / nighttime) * math.pi)
             light = 0
             self._light = int(light)
 
         temperature = (
-            base_temperature +
-            self._params["temperature"]["yearly_amp"] * season_factor +
-            self._params["temperature"]["daily_amp"] * day_factor
+            base_temperature
+            + self._params["temperature"]["yearly_amp"] * season_factor
+            + self._params["temperature"]["daily_amp"] * day_factor
         )
         self._temperature = round(temperature, 2)
         humidity = (
-            self._params["humidity"]["avg"] -
-            self._params["humidity"]["amp"] * day_factor
+            self._params["humidity"]["avg"]
+            - self._params["humidity"]["amp"] * day_factor
         )
         self._humidity = round(humidity, 2)
 
@@ -180,7 +183,7 @@ class VirtualEcosystem:
             max_humidifier_output: float = 0.03,  # max humidifier output in g/water per second
             max_light_output: float = 30000.0,  # max light output in lux
             start: bool = False,
-            **kwargs
+            **kwargs,
     ) -> None:
         assert len(dimension) == 3
         self.logger: logging.Logger = logging.getLogger(f"virtual.ecosystem.{uid}")
@@ -288,13 +291,17 @@ class VirtualEcosystem:
     def get_actuator_status(self, actuator_type: gv.HardwareType.actuator) -> bool:
         return self.ecosystem.actuator_hub.get_handler(actuator_type).status
 
-    def get_actuator_level(self, actuator_type: gv.HardwareType.actuator) -> float | None:
+    def get_actuator_level(
+            self,
+            actuator_type: gv.HardwareType.actuator,
+    ) -> float | None:
         return self.ecosystem.actuator_hub.get_handler(actuator_type).level
 
     def measure(self, now: float | None = None) -> None:
         if not self._start_time:
-            raise RuntimeError("The virtualEcosystem needs to be started "
-                               "before computing measures")
+            raise RuntimeError(
+                "The virtualEcosystem needs to be started " "before computing measures"
+            )
         now = monotonic() or now
         if (
             self._last_update is None
@@ -305,13 +312,14 @@ class VirtualEcosystem:
 
     def _measure(self, now: float) -> None:
         if not self._start_time:
-            raise RuntimeError("The virtualEcosystem needs to be started "
-                               "before computing measures")
+            raise RuntimeError(
+                "The virtualEcosystem needs to be started " "before computing measures"
+            )
 
         if self._last_update is None:
             d_sec = 0.1
         else:
-            d_sec = (now - self._last_update)
+            d_sec = now - self._last_update
         out_temp, out_hum, out_light = self.virtual_world.get_measures()
 
         def get_corrected_level(actuator_type: gv.HardwareType.actuator) -> float:
@@ -327,11 +335,11 @@ class VirtualEcosystem:
         heat_quantity -= heat_loss
         if self.get_actuator_status(gv.HardwareType.heater):
             level = get_corrected_level(gv.HardwareType.heater)
-            heater_output = (self._max_heater_output * d_sec * level / 100)
+            heater_output = self._max_heater_output * d_sec * level / 100
             heat_quantity += heater_output
         if self.get_actuator_status(gv.HardwareType.cooler):
             level = get_corrected_level(gv.HardwareType.cooler)
-            cooler_output = (self._max_heater_output * 0.60 * d_sec * level / 100)
+            cooler_output = self._max_heater_output * 0.60 * d_sec * level / 100
             heat_quantity -= cooler_output
         self._heat_quantity = heat_quantity
 
@@ -342,11 +350,12 @@ class VirtualEcosystem:
         humidity_quantity -= humidity_loss
         if self.get_actuator_status(gv.HardwareType.humidifier):
             level = get_corrected_level(gv.HardwareType.humidifier)
-            humidifier_output = (self._max_humidifier_output * d_sec * level / 100)
+            humidifier_output = self._max_humidifier_output * d_sec * level / 100
             humidity_quantity += humidifier_output
         if self.get_actuator_status(gv.HardwareType.dehumidifier):
             level = get_corrected_level(gv.HardwareType.dehumidifier)
-            dehumidifier_output = (self._max_humidifier_output * 0.50 * d_sec * level / 100)
+            dehumidifier_output = \
+                self._max_humidifier_output * 0.50 * d_sec * level / 100
             humidity_quantity -= dehumidifier_output
         self._humidity_quantity = humidity_quantity
 

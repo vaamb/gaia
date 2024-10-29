@@ -25,7 +25,11 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from adafruit_ens160 import ENS160 as _ENS160
     else:
         from gaia.hardware._compatibility import (
-            AHTx0, Seesaw, VEML7700 as _VEML7700, VCNL4040 as _VCNL4040)
+            AHTx0,
+            Seesaw,
+            VEML7700 as _VEML7700,
+            VCNL4040 as _VCNL4040,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -115,25 +119,31 @@ class ENS160(i2cSensor):
         data = []
         AQI, eCO2, TVOC = await run_sync(self._get_raw_data)
         if Measure.aqi in self.measures:
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="AQI",
-                value=AQI
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="AQI",
+                    value=AQI,
+                )
+            )
 
         if Measure.eco2 in self.measures:
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="eCO2",
-                value=eCO2
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="eCO2",
+                    value=eCO2,
+                )
+            )
 
         if Measure.tvoc in self.measures:
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="TVOC",
-                value=TVOC
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="TVOC",
+                    value=TVOC,
+                )
+            )
         return data
 
 
@@ -176,11 +186,13 @@ class VEML7700(i2cSensor, LightSensor):
     async def get_data(self) -> list[gv.SensorRecord]:
         data = []
         if Measure.light in self.measures:
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="light",
-                value=await self.get_lux()
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="light",
+                    value=await self.get_lux(),
+                )
+            )
         return data
 
 
@@ -223,11 +235,13 @@ class VCNL4040(i2cSensor, LightSensor):
     async def get_data(self) -> list[gv.SensorRecord]:
         data = []
         if Measure.light in self.measures:
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="light",
-                value=await self.get_lux()
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="light",
+                    value=await self.get_lux(),
+                )
+            )
         return data
 
 
@@ -253,9 +267,7 @@ class CapacitiveSensor(i2cSensor):
         return Seesaw(self._get_i2c(), self._address_book.primary.main)
 
     async def get_data(self) -> list[gv.SensorRecord]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
@@ -296,25 +308,31 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
             moisture = raw_temperature = None
         data = []
         if Measure.moisture in self.measures:
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="moisture",
-                value=moisture
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="moisture",
+                    value=moisture,
+                )
+            )
 
         if Measure.temperature in self.measures:
             temperature = temperature_converter(
-                raw_temperature, "celsius", get_unit("temperature", "celsius"))
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="temperature",
-                value=temperature
-            ))
+                raw_temperature, "celsius", get_unit("temperature", "celsius")
+            )
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="temperature",
+                    value=temperature,
+                )
+            )
         return data
 
 
 i2c_sensor_models: dict[str, Type[BaseSensor]] = {
-    hardware.__name__: hardware for hardware in [
+    hardware.__name__: hardware
+    for hardware in [
         AHT20,
         CapacitiveMoisture,
         ENS160,

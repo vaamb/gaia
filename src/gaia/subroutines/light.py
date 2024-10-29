@@ -73,7 +73,7 @@ class Light(SubroutineTemplate):
     def _compute_if_manageable(self) -> bool:
         if all((
                 self.config.get_IO_group_uids(gv.HardwareType.light),
-                bool(self.config.lighting_hours.morning_start)
+                bool(self.config.lighting_hours.morning_start),
         )):
             return True
         else:
@@ -116,7 +116,8 @@ class Light(SubroutineTemplate):
 
     async def refresh_hardware(self) -> None:
         await super().refresh_hardware()
-        actuator_handler = self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
+        actuator_handler = self.ecosystem.actuator_hub.get_handler(
+            gv.HardwareType.light)
         actuator_handler.reset_cached_actuators()
 
     @property
@@ -130,7 +131,8 @@ class Light(SubroutineTemplate):
     def light_sensors(self) -> list[LightSensor]:
         if self._light_sensors is None:
             self._light_sensors = [
-                hardware for hardware in Hardware.get_mounted().values()
+                hardware
+                for hardware in Hardware.get_mounted().values()
                 if hardware.ecosystem_uid == self.ecosystem.uid
                 and isinstance(hardware, LightSensor)
             ]
@@ -182,7 +184,7 @@ class Light(SubroutineTemplate):
         else:
             return is_time_between(hours.morning_start, hours.evening_end, now)
 
-    def compute_level(self,  _now: time | None = None) -> float:
+    def compute_level(self, _now: time | None = None) -> float:
         if not self.light_sensors or not self.any_dimmable_light:
             return 500_000.0
         else:
@@ -209,4 +211,5 @@ class Light(SubroutineTemplate):
             await self.actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
-                f"Light subroutine is not started in ecosystem {self.ecosystem}")
+                f"Light subroutine is not started in ecosystem {self.ecosystem}"
+            )

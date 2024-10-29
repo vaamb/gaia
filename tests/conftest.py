@@ -36,6 +36,7 @@ def patch() -> None:
 
     # Patch gaia_validators.ManagementFlags to add the dummy subroutine
     from enum import IntFlag
+
     management_flags = {
         flag.name: flag.value
         for flag in gv.ManagementFlags.__members__.values()

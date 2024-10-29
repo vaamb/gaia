@@ -21,7 +21,7 @@ import gaia_validators as gv
 
 from gaia import Ecosystem, EcosystemConfig, Engine
 from gaia.config.from_files import ConfigType
-from gaia.dependencies.camera import SerializableImage, SerializableImagePayload
+from gaia.dependencies.camera import SerializableImagePayload
 from gaia.utils import humanize_list, local_ip_address
 
 
@@ -30,9 +30,16 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 PayloadName = Literal[
-    "base_info", "management", "environmental_parameters", "hardware",
-    "sensors_data", "health_data", "light_data", "actuators_data",
-    "chaos_parameters", "places_list",
+    "actuators_data",
+    "base_info",
+    "chaos_parameters",
+    "environmental_parameters",
+    "hardware",
+    "health_data",
+    "light_data",
+    "management",
+    "places_list",
+    "sensors_data",
 ]
 
 
@@ -56,13 +63,22 @@ class CrudLinks(NamedTuple):
 
 
 CrudEventName = Literal[
-    "create_ecosystem", "update_ecosystem", "delete_ecosystem",
-    "create_place", "update_place", "delete_place",
-    "update_chaos_config", "update_management", "update_time_parameters",
+    "create_ecosystem",
+    "update_ecosystem",
+    "delete_ecosystem",
+    "create_place",
+    "update_place",
+    "delete_place",
+    "update_chaos_config",
+    "update_management",
+    "update_time_parameters",
     "update_light_method",
-    "create_environment_parameter", "update_environment_parameter",
+    "create_environment_parameter",
+    "update_environment_parameter",
     "delete_environment_parameter",
-    "create_hardware", "update_hardware", "delete_hardware",
+    "create_hardware",
+    "update_hardware",
+    "delete_hardware",
 ]
 
 
@@ -109,7 +125,7 @@ class Events(AsyncEventHandler):
         self._last_heartbeat: float = monotonic()
         self._ping_task: Task | None = None
         self._jobs_scheduled: bool = False
-        self.logger = logging.getLogger(f"gaia.engine.events_handler")
+        self.logger = logging.getLogger("gaia.engine.events_handler")
 
     @property
     def use_db(self) -> bool:
@@ -158,8 +174,7 @@ class Events(AsyncEventHandler):
         self._jobs_scheduled = False
 
     def _start_ping_task(self) -> None:
-        self._ping_task = asyncio.create_task(
-            self._ping_loop(), name="events-ping")
+        self._ping_task = asyncio.create_task(self._ping_loop(), name="events-ping")
 
     async def _ping_loop(self) -> None:
         while True:
@@ -171,10 +186,13 @@ class Events(AsyncEventHandler):
     async def ping(self) -> None:
         if self._dispatcher.connected:
             try:
-                ecosystems = [{
-                    "uid": ecosystem.uid,
-                    "status": ecosystem.started,
-                } for ecosystem in self.ecosystems.values()]
+                ecosystems = [
+                    {
+                        "uid": ecosystem.uid,
+                        "status": ecosystem.started,
+                    }
+                    for ecosystem in self.ecosystems.values()
+                ]
                 self.logger.debug("Sending 'ping'.")
                 await self.emit("ping", data=ecosystems, namespace="aggregator-stream")
             except Exception as e:
@@ -190,24 +208,18 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     #   Data payloads retrieval and sending
     # ---------------------------------------------------------------------------
-    def filter_uids(
-            self,
-            ecosystem_uids: str | list[str] | None = None
-    ) -> list[str]:
+    def filter_uids(self, ecosystem_uids: str | list[str] | None = None) -> list[str]:
         if ecosystem_uids is None:
             return [uid for uid in self.ecosystems.keys()]
         else:
             if isinstance(ecosystem_uids, str):
                 ecosystem_uids = [ecosystem_uids]
-            return [
-                uid for uid in ecosystem_uids
-                if uid in self.ecosystems.keys()
-            ]
+            return [uid for uid in ecosystem_uids if uid in self.ecosystems.keys()]
 
     def get_payload(
             self,
             payload_name: PayloadName,
-            ecosystem_uids: str | list[str] | None = None
+            ecosystem_uids: str | list[str] | None = None,
     ) -> gv.EcosystemPayloadDict | list[gv.EcosystemPayloadDict] | None:
         self.logger.debug(f"Getting '{payload_name}' payload.")
         if payload_name in ("places_list",):
@@ -218,7 +230,7 @@ class Events(AsyncEventHandler):
     def _get_ecosystem_payload(
             self,
             payload_name: PayloadName,
-            ecosystem_uids: str | list[str] | None = None
+            ecosystem_uids: str | list[str] | None = None,
     ) -> list[gv.EcosystemPayloadDict] | None:
         # Check that the event is possible
         if not hasattr(Ecosystem, payload_name):
@@ -241,7 +253,7 @@ class Events(AsyncEventHandler):
 
     def _get_engine_payload(
             self,
-            payload_name: PayloadName
+            payload_name: PayloadName,
     ) -> gv.EcosystemPayloadDict | None:
         # Check that the event is possible
         if not hasattr(Engine, payload_name):
@@ -261,8 +273,7 @@ class Events(AsyncEventHandler):
             ttl: int | None = None,
     ) -> bool:
         if payload_name == "picture_arrays":
-            raise ValueError(
-                "'picture_arrays' need to be sent via a specific method.")
+            raise ValueError("'picture_arrays' need to be sent via a specific method.")
         self.logger.debug(f"Requested to emit event '{payload_name}'.")
         payload = self.get_payload(payload_name, ecosystem_uids)
         if payload:
@@ -287,7 +298,7 @@ class Events(AsyncEventHandler):
             self,
             payload_name: PayloadName,
             ecosystem_uids: str | list[str] | None = None,
-            ttl: int | None = None
+            ttl: int | None = None,
     ) -> None:
         if not self.is_connected():
             self.logger.debug(
@@ -298,7 +309,7 @@ class Events(AsyncEventHandler):
 
     async def send_ecosystems_info(
             self,
-            ecosystem_uids: str | list[str] | None = None
+            ecosystem_uids: str | list[str] | None = None,
     ) -> None:
         await self.send_payload("places_list")
         uids = self.filter_uids(ecosystem_uids)
@@ -406,10 +417,13 @@ class Events(AsyncEventHandler):
             await self.ecosystems[ecosystem_uid].turn_actuator(
                 actuator=data["actuator"],
                 mode=data["mode"],
-                countdown=message.get("countdown", 0.0)
+                countdown=message.get("countdown", 0.0),
             )
 
-    async def on_change_management(self, message: gv.ManagementConfigPayloadDict) -> None:
+    async def on_change_management(
+            self,
+            message: gv.ManagementConfigPayloadDict,
+    ) -> None:
         data: gv.ManagementConfigPayloadDict = self.validate_payload(
             message, gv.ManagementConfigPayload)
         ecosystem_uid: str = data["uid"]
@@ -426,7 +440,7 @@ class Events(AsyncEventHandler):
             self,
             action: gv.CrudAction,
             target: str,
-            ecosystem_uid: str | None = None
+            ecosystem_uid: str | None = None,
     ) -> Callable:
         if target in ("ecosystem", "place"):
             base_obj = self.engine.config
@@ -460,6 +474,7 @@ class Events(AsyncEventHandler):
 
             return get_attr_setter(base_obj, crud_link.func_or_attr_name)
         else:
+
             def get_function(obj: Any, func_name: str) -> Callable:
                 return getattr(obj, func_name)
 
@@ -477,8 +492,8 @@ class Events(AsyncEventHandler):
 
         # Extract CRUD request data
         crud_uuid: UUID = data["uuid"]
-        action: gv.CrudAction = data['action']
-        target: str = data['target']
+        action: gv.CrudAction = data["action"]
+        target: str = data["target"]
         ecosystem_uid: str | None
         if target in ("ecosystem", "place"):
             ecosystem_uid = None
@@ -503,8 +518,8 @@ class Events(AsyncEventHandler):
                 data=gv.RequestResult(
                     uuid=crud_uuid,
                     status=gv.Result.failure,
-                    message=str(e)
-                ).model_dump()
+                    message=str(e),
+                ).model_dump(),
             )
             return
         else:
@@ -512,11 +527,10 @@ class Events(AsyncEventHandler):
                 event="crud_result",
                 data=gv.RequestResult(
                     uuid=crud_uuid,
-                    status=gv.Result.success
-                ).model_dump()
+                    status=gv.Result.success,
+                ).model_dump(),
             )
-            self.logger.info(
-                f"CRUD request '{crud_uuid}' was successfully treated.")
+            self.logger.info(f"CRUD request '{crud_uuid}' was successfully treated.")
 
         # Send back the updated info
         await self.engine.refresh_ecosystems(send_info=False)
@@ -537,6 +551,7 @@ class Events(AsyncEventHandler):
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'.")
         from gaia.database.models import ActuatorBuffer, SensorBuffer
+
         async with self.db.scoped_session() as session:
             sensor_buffer_iterator = await SensorBuffer.get_buffered_data(session)
             async for payload in sensor_buffer_iterator:
@@ -552,10 +567,9 @@ class Events(AsyncEventHandler):
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'.")
-        data: gv.RequestResultDict = self.validate_payload(
-            message, gv.RequestResult)
-        from gaia.database.models import (
-            ActuatorBuffer, DataBufferMixin, SensorBuffer)
+        data: gv.RequestResultDict = self.validate_payload(message, gv.RequestResult)
+        from gaia.database.models import ActuatorBuffer, DataBufferMixin, SensorBuffer
+
         async with self.db.scoped_session() as session:
             for db_model in (ActuatorBuffer, SensorBuffer):
                 db_model: DataBufferMixin
@@ -572,8 +586,7 @@ class Events(AsyncEventHandler):
             ecosystem_uids: str | list[str] | None = None,
     ) -> None:
         uids = self.filter_uids(ecosystem_uids)
-        self.logger.debug(
-            f"Getting 'picture_arrays' for {humanize_list(uids)}.")
+        self.logger.debug(f"Getting 'picture_arrays' for {humanize_list(uids)}.")
 
         for uid in uids:
             picture_arrays = self.ecosystems[uid].picture_arrays
@@ -584,4 +597,7 @@ class Events(AsyncEventHandler):
                 data=picture_arrays,
             )
             await self.emit(
-                "picture_arrays", data=ecosystem_payload.encode(), namespace="aggregator-stream")
+                "picture_arrays",
+                data=ecosystem_payload.encode(),
+                namespace="aggregator-stream",
+            )

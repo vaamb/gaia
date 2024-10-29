@@ -91,7 +91,7 @@ async def test_log_sensors_data(
         db: AsyncSQLAlchemyWrapper,
         engine: Engine,
         ecosystem: Ecosystem,
-        sensors_subroutine: Sensors
+        sensors_subroutine: Sensors,
 ):
     # Store the state
     db_management = ecosystem.config.get_management("database")

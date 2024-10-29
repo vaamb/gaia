@@ -7,7 +7,6 @@ from pathlib import Path
 import textwrap
 import typing as t
 from typing import Any, Literal, Self
-import weakref
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -145,7 +144,6 @@ class Address:
         else:
             raise ValueError("Address type is not valid.")
 
-
     def __repr__(self) -> str:  # pragma: no cover
         if self.type == AddressType.PICAMERA:
             return f"{self.type.value}"
@@ -229,8 +227,17 @@ class Hardware(metaclass=_MetaHardware):
     ecosystems.cfg
     """
     __slots__ = (
-        "__weakref__", "_subroutine", "_uid", "_name", "_address_book",
-        "_level", "_type", "_model", "_measures", "_multiplexer", "_plants"
+        "__weakref__",
+        "_address_book",
+        "_level",
+        "_measures",
+        "_model",
+        "_multiplexer",
+        "_name",
+        "_plants",
+        "_subroutine",
+        "_type",
+        "_uid",
     )
 
     def __init__(
@@ -261,11 +268,14 @@ class Hardware(metaclass=_MetaHardware):
         address_list: list = address.split("&")
         self._address_book: AddressBook = AddressBook(
             primary=Address(address_list[0]),
-            secondary=Address(address_list[1]) if len(address_list) == 2 else None
+            secondary=Address(address_list[1]) if len(address_list) == 2 else None,
         )
         if multiplexer_model is None and self._address_book.primary.is_multiplexed:
             raise ValueError("Multiplexed address should be used with a multiplexer.")
-        if multiplexer_model is not None and not self._address_book.primary.is_multiplexed:
+        if (
+            multiplexer_model is not None
+            and not self._address_book.primary.is_multiplexed
+        ):
             raise ValueError("Multiplexer can only be used with a multiplexed address.")
         if multiplexer_model:
             multiplexer_cls = multiplexer_models[multiplexer_model]
@@ -273,8 +283,7 @@ class Hardware(metaclass=_MetaHardware):
                 i2c_address=self._address_book.primary.multiplexer_address)
         else:
             self._multiplexer = None
-        self._measures: dict[Measure, Unit | None] = \
-            self._format_measures(measures)
+        self._measures: dict[Measure, Unit | None] = self._format_measures(measures)
         self._plants = plants
 
     def __repr__(self) -> str:  # pragma: no cover
@@ -535,8 +544,8 @@ class BaseSensor(Hardware):
     def __init__(self, *args, **kwargs) -> None:
         if self.measures_available is None:
             raise NotImplementedError(
-                f"'cls.measures_available' should be a dict with 'measure: unit' "
-                f"as entries.")
+                "'cls.measures_available' should be a dict with 'measure: unit' "
+                "as entries.")
         kwargs["type"] = gv.HardwareType.sensor
         super().__init__(*args, **kwargs)
         self._device: Any | None = None
@@ -556,7 +565,8 @@ class BaseSensor(Hardware):
             self,
             measures: list[gv.Measure],
     ) -> dict[Measure, Unit | None]:
-        formatted_measures: dict[Measure, Unit | None] = super()._format_measures(measures)
+        formatted_measures: dict[Measure, Unit | None] = \
+            super()._format_measures(measures)
         if not formatted_measures:
             formatted_measures = {
                 measure: unit
@@ -567,8 +577,10 @@ class BaseSensor(Hardware):
             validated: dict[Measure, Unit | None] = {}
             for measure, unit in self.measures_available.items():
                 if measure not in self.measures_available:
-                    err += f"Measure '{measure.name}' is not valid for sensor " \
-                           f"model '{self.model}'.\n"
+                    err += (
+                        f"Measure '{measure.name}' is not valid for sensor "
+                        f"model '{self.model}'.\n"
+                    )
                 else:
                     validated[measure] = self.measures_available[measure]
             formatted_measures = validated
@@ -577,28 +589,20 @@ class BaseSensor(Hardware):
         return formatted_measures
 
     async def get_data(self) -> list[gv.SensorRecord]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class LightSensor(BaseSensor):
     async def get_lux(self) -> float | None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
     async def get_data(self) -> list[gv.SensorRecord]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class gpioSensor(BaseSensor, gpioHardware):
     async def get_data(self) -> list[gv.SensorRecord]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class i2cSensor(BaseSensor, i2cHardware):
@@ -610,9 +614,7 @@ class i2cSensor(BaseSensor, i2cHardware):
         super().__init__(*args, **kwargs)
 
     async def get_data(self) -> list[gv.SensorRecord]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class Camera(Hardware):
@@ -639,9 +641,7 @@ class Camera(Hardware):
         )  # pragma: no cover
 
     async def get_image(self, size: tuple | None = None) -> PIL_image.Image:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
     #async def get_video(self) -> io.BytesIO:
     #    raise NotImplementedError(
@@ -678,6 +678,6 @@ class Camera(Hardware):
             if timestamp is None:
                 timestamp = datetime.now(tz=timezone.utc)
             image_path = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
-            image_path = self.camera_dir/image_path
+            image_path = self.camera_dir / image_path
         await run_sync(image.save, image_path)
         return image_path

@@ -15,7 +15,8 @@ from .data import light_uid
 
 def get_lights() -> list[gpioDimmable | gpioSwitch]:
     return [  # type: ignore
-        hardware for hardware in Hardware.get_mounted().values()
+        hardware
+        for hardware in Hardware.get_mounted().values()
         if hardware.uid == light_uid
     ]
 

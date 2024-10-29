@@ -18,43 +18,49 @@ class TempHumSensor(BaseSensor):
     }
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
     async def get_data(self) -> list[gv.SensorRecord]:
         raw_humidity, raw_temperature = await run_sync(self._get_raw_data)
         data = []
         if Measure.humidity in self.measures:
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="humidity",
-                value=raw_humidity
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="humidity",
+                    value=raw_humidity,
+                )
+            )
 
         if Measure.temperature in self.measures:
             temperature = temperature_converter(
                 raw_temperature, "celsius", get_unit("temperature", "celsius"))
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="temperature",
-                value=temperature
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="temperature",
+                    value=temperature,
+                )
+            )
 
         if Measure.dew_point in self.measures:
             raw_dew_point = get_dew_point(raw_temperature, raw_humidity)
             dew_point = temperature_converter(
                 raw_dew_point, "celsius", get_unit("temperature", "celsius"))
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="dew_point",
-                value=dew_point
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="dew_point",
+                    value=dew_point,
+                )
+            )
 
         if Measure.absolute_humidity in self.measures:
-            data.append(gv.SensorRecord(
-                sensor_uid=self.uid,
-                measure="absolute_humidity",
-                value=get_absolute_humidity(raw_temperature, raw_humidity)
-            ))
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure="absolute_humidity",
+                    value=get_absolute_humidity(raw_temperature, raw_humidity),
+                )
+            )
         return data

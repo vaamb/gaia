@@ -50,7 +50,7 @@ actuator_couples: dict[gv.ClimateParameter: ActuatorCouple] = {
 }
 
 
-def generate_hardware_to_parameter_dict() -> dict[gv.HardwareType.actuator, gv.ClimateParameter]:
+def generate_hardware_to_parameter_dict() -> dict[gv.HardwareType, gv.ClimateParameter]:
     rv = {}
     for climate_parameter, actuator_couple in actuator_couples.items():
         for direction in actuator_couple:
@@ -126,7 +126,7 @@ class HystericalPID:
     def clamp(
             value: float,
             lower_limit: float | None,
-            higher_limit: float | None
+            higher_limit: float | None,
     ) -> float:
         if lower_limit is not None:
             value = max(value, lower_limit)
@@ -227,7 +227,7 @@ class HystericalPID:
         # Derivative-related computation
         derivative = delta_error / delta_time
         # Compute output
-        output = (error * self.Kp) + (integral * self. Ki) + (derivative * self.Kd)
+        output = (error * self.Kp) + (integral * self.Ki) + (derivative * self.Kd)
         return self.clamp(output, self.minimum_output, self.maximum_output)
 
     def _reset_errors(self) -> None:
@@ -243,10 +243,22 @@ class HystericalPID:
 
 class ActuatorHandler:
     __slots__ = (
-        "_active", "_actuators", "_any_status_change", "_level", "_mode",
-        "_status", "_sending_data_task", "_time_limit", "_timer_on",
-        "_update_lock", "_updating", "actuator_hub", "direction", "ecosystem",
-        "logger", "type",
+        "_active",
+        "_actuators",
+        "_any_status_change",
+        "_level",
+        "_mode",
+        "_sending_data_task",
+        "_status",
+        "_time_limit",
+        "_timer_on",
+        "_update_lock",
+        "_updating",
+        "actuator_hub",
+        "direction",
+        "ecosystem",
+        "logger",
+        "type",
     )
 
     def __init__(
@@ -283,7 +295,8 @@ class ActuatorHandler:
     def get_linked_actuators(self) -> list[Switch | Dimmer]:
         if self._actuators is None:
             self._actuators = [
-                hardware for hardware in Hardware.get_mounted().values()
+                hardware
+                for hardware in Hardware.get_mounted().values()
                 if hardware.ecosystem_uid == self.ecosystem.uid
                 and hardware.type == self.type
             ]
@@ -314,7 +327,7 @@ class ActuatorHandler:
             mode=self.mode,
             status=self.status,
             level=self._level,
-            timestamp=timestamp
+            timestamp=timestamp,
         )
 
     @property
@@ -334,12 +347,14 @@ class ActuatorHandler:
         if self._active < 0:
             raise RuntimeError(
                 "Cannot deactivate an actuator more times than it has been "
-                "activated.")
+                "activated."
+            )
 
     def _check_actuator_available(self) -> None:
         if not self.ecosystem.config.get_IO_group_uids(self.type):
             raise RuntimeError(
-                f"No actuator '{self.type.name}' available in the config file.")
+                f"No actuator '{self.type.name}' available in the config file."
+            )
 
     def _check_active(self) -> None:
         if self._active == 0:
@@ -367,8 +382,7 @@ class ActuatorHandler:
     def _check_update_status_transaction(self) -> None:
         if not self._updating:
             raise RuntimeError(
-                "This method should be used in a 'update_status' `async with` "
-                "block."
+                "This method should be used in a 'update_status' `async with` block."
             )
 
     @property
@@ -520,13 +534,14 @@ class ActuatorHandler:
 
     async def log_actuator_state(
             self,
-            data: gv.ActuatorStateRecord | None = None
+            data: gv.ActuatorStateRecord | None = None,
     ) -> None:
         if not self.ecosystem.engine.use_db:
             return
         if data is None:
             data = self.as_record(datetime.now(timezone.utc))
         from gaia.database.models import ActuatorRecord
+
         async with self.ecosystem.engine.db.scoped_session() as session:
             session.add(
                 ActuatorRecord(
@@ -560,11 +575,13 @@ class ActuatorHandler:
         ).model_dump()
         sent = False
         if self.ecosystem.event_handler.is_connected():
-            sent = await self.ecosystem.event_handler.emit("actuators_data", data=[payload])
+            sent = await self.ecosystem.event_handler.emit(
+                "actuators_data", data=[payload])
         # If not sent, and the db is enabled, save the change in the db buffer
         if sent or not self.ecosystem.engine.use_db:
             return
         from gaia.database.models import ActuatorBuffer
+
         async with self.ecosystem.engine.db.scoped_session() as session:
             session.add(
                 ActuatorBuffer(
@@ -624,9 +641,13 @@ class ActuatorHub:
             climate_parameter: gv.ClimateParameter
             pid_parameters = pid_values[climate_parameter]
             self._pids[climate_parameter] = HystericalPID(
-                self, climate_parameter,
-                Kp=pid_parameters.Kp, Ki=pid_parameters.Ki, Kd=pid_parameters.Kd,
-                minimum_output=-100.0, maximum_output=100.0,
+                self,
+                climate_parameter,
+                Kp=pid_parameters.Kp,
+                Ki=pid_parameters.Ki,
+                Kd=pid_parameters.Kd,
+                minimum_output=-100.0,
+                maximum_output=100.0,
             )
 
     def _populate_actuators(self) -> None:
@@ -639,14 +660,14 @@ class ActuatorHub:
 
     def get_pid(
             self,
-            climate_parameter: gv.ClimateParameter | gv.ClimateParameterNames
+            climate_parameter: gv.ClimateParameter | gv.ClimateParameterNames,
     ) -> HystericalPID:
         climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
         return self._pids[climate_parameter]
 
     def get_handler(
             self,
-            actuator_type: gv.HardwareType | gv.HardwareTypeNames
+            actuator_type: gv.HardwareType | gv.HardwareTypeNames,
     ) -> ActuatorHandler:
         actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
         assert actuator_type in gv.HardwareType.actuator

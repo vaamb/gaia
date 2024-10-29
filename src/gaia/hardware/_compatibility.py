@@ -24,7 +24,7 @@ def add_noise(measure: float) -> float:
 
 def random_sleep(
         avg_duration: float = 0.25,
-        std_deviation: float = 0.075
+        std_deviation: float = 0.075,
 ) -> None:
     if not GaiaConfigHelper.get_config().TESTING:
         time.sleep(abs(random.gauss(avg_duration, std_deviation)))
@@ -39,7 +39,7 @@ class board:
 
 
 class busio:
-    """ Compatibility class that implements some methods from adafruit busio
+    """Compatibility class that implements some methods from adafruit busio
     module
     """
 
@@ -49,9 +49,10 @@ class busio:
 
 
 class pwmio:
-    """ Compatibility class that implements some methods from adafruit pwmio
+    """Compatibility class that implements some methods from adafruit pwmio
     module
     """
+
     class PWMOut:
         def __init__(self, *args, **kwargs) -> None:
             duty_cycle = 0
@@ -107,7 +108,7 @@ class CompatibilityDevice:
             self,
             *args,
             subroutine: SubroutineTemplate | None = None,
-            **kwargs
+            **kwargs,
     ) -> None:
         self.virtual_ecosystem: VirtualEcosystem | None
         if subroutine is not None:
@@ -232,7 +233,7 @@ class Picamera2:
         r = np.random.binomial(255, 0.133, (height, width))
         g = np.random.binomial(255, 0.420, (height, width))
         b = np.random.binomial(255, 0.639, (height, width))
-        array = np.stack((r, g ,b), axis=2)
+        array = np.stack((r, g, b), axis=2)
         return array.astype("uint8")
 
     def configure(self, camera_config: dict | str) -> None:

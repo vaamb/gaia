@@ -13,6 +13,7 @@ try:
     from PIL import Image as PIL_image
 
 except ImportError:  # pragma: no cover
+
     class _Image:
         Image = None
 

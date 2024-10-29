@@ -25,8 +25,8 @@ try:
 except ImportError:
     orjson = None
 else:
-    class _Serializer:
 
+    class _Serializer:
         def dumps(*args, **kwargs) -> bytes:
             return orjson.dumps(*args, **kwargs)
 
@@ -44,7 +44,7 @@ class ScoredArray(TypedDict):
 _null_scored_array: ScoredArray = {
     "array": None,
     "score": -1.0,
-    "timestamp": datetime.fromtimestamp(0)
+    "timestamp": datetime.fromtimestamp(0),
 }
 
 
@@ -167,8 +167,7 @@ class Pictures(SubroutineTemplate):
 
     def _compute_if_manageable(self) -> bool:
         if not self.config.get_IO_group_uids(gv.HardwareType.camera):
-            self.logger.warning(
-                "No Camera detected, disabling Picture subroutine.")
+            self.logger.warning("No Camera detected, disabling Picture subroutine.")
             return False
         if not self.ecosystem.engine.use_message_broker:
             self.logger.warning(
@@ -186,12 +185,15 @@ class Pictures(SubroutineTemplate):
         self.ecosystem.engine.scheduler.add_job(
             func=self.routine,
             id=f"{self.ecosystem.uid}-picture_routine",
-            trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period / 10),
+            trigger=IntervalTrigger(
+                seconds=self._loop_period,
+                jitter=self._loop_period / 10,
+            ),
         )
-        self.logger.debug(f"Picture loop successfully started.")
+        self.logger.debug("Picture loop successfully started.")
 
     async def _stop(self) -> None:
-        self.logger.info(f"Stopping picture loop.")
+        self.logger.info("Stopping picture loop.")
         self.ecosystem.engine.scheduler.remove_job(
             f"{self.ecosystem.uid}-picture_routine")
         self._sending_data_task = None
@@ -206,7 +208,7 @@ class Pictures(SubroutineTemplate):
                 metadata={
                     "camera_uid": camera_uid,
                     "timestamp": scored_array["timestamp"],
-                }
+                },
             )
             for camera_uid, scored_array in self._scored_arrays.items()
             if scored_array["array"] is not None

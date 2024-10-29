@@ -26,8 +26,7 @@ class Climate(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self.hardware: dict[str, Dimmer | Switch]
-        loop_period = float(
-            self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
+        loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
         self._sensor_miss: int = 0
         self._regulated_parameters: dict[gv.ClimateParameter: bool] = {
@@ -38,9 +37,7 @@ class Climate(SubroutineTemplate):
         self._finish__init__()
 
     @staticmethod
-    def _any_regulated(
-            parameters_dict: dict[gv.ClimateParameter: bool]
-    ) -> bool:
+    def _any_regulated(parameters_dict: dict[gv.ClimateParameter: bool]) -> bool:
         return any([regulated for regulated in parameters_dict.values()])
 
     def _compute_regulated_parameters(self) -> dict[gv.ClimateParameter: bool]:
@@ -71,7 +68,8 @@ class Climate(SubroutineTemplate):
 
         # Get sensors mounted and the measures they're taking
         sensors = [
-            hardware for hardware in Hardware.get_mounted().values()
+            hardware
+            for hardware in Hardware.get_mounted().values()
             if hardware.ecosystem_uid == self.ecosystem.uid
             and hardware.type == gv.HardwareType.sensor
         ]
@@ -86,8 +84,7 @@ class Climate(SubroutineTemplate):
             if climate_param.name not in measures:
                 regulated_parameters[climate_param] = False
         if not self._any_regulated(regulated_parameters):
-            self.logger.debug(
-                "No sensor measuring regulated parameters detected.")
+            self.logger.debug("No sensor measuring regulated parameters detected.")
             return regulated_parameters
 
         # Check if regulators available
@@ -142,7 +139,8 @@ class Climate(SubroutineTemplate):
 
             actuator_couple: ActuatorCouple = actuator_couples[climate_parameter]
             for direction_name, actuator_type in actuator_couple.items():
-                actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+                actuator_handler = self.ecosystem.actuator_hub.get_handler(
+                    actuator_type)
                 if not actuator_handler.get_linked_actuators():
                     # No actuator to act on, go next
                     continue
@@ -211,7 +209,8 @@ class Climate(SubroutineTemplate):
                 # Check if we have at least one actuator available
                 if not self.config.get_IO_group_uids(actuator_type):
                     continue
-                actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+                actuator_handler = self.ecosystem.actuator_hub.get_handler(
+                    actuator_type)
                 async with actuator_handler.update_status_transaction(activation=True):
                     actuator_handler.activate()
                 activated_actuator_types.add(actuator_type)
@@ -245,11 +244,13 @@ class Climate(SubroutineTemplate):
 
     @property
     def regulated_parameters(self) -> list[gv.ClimateParameter]:
+        if not self.started:
+            return []
         return [
-            climate_param for climate_param, regulated
-            in self._regulated_parameters.items()
+            climate_param
+            for climate_param, regulated in self._regulated_parameters.items()
             if regulated
-        ] if self.started else []
+        ]
 
     def update_regulated_parameters(self) -> None:
         self._regulated_parameters = self._compute_regulated_parameters()
@@ -257,7 +258,7 @@ class Climate(SubroutineTemplate):
     def compute_target(
             self,
             climate_parameter: gv.ClimateParameter,
-            _now: time | None = None
+            _now: time | None = None,
     ) -> tuple[float, float]:
         parameter = self.config.get_climate_parameter(climate_parameter.name)
         now: time = _now or datetime.now().astimezone().time()
@@ -271,17 +272,17 @@ class Climate(SubroutineTemplate):
         return target, hysteresis
 
     async def turn_climate_actuator(
-            self,
-            climate_actuator: gv.HardwareType.climate_actuator | str,
-            turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
-            countdown: float = 0.0
+        self,
+        climate_actuator: gv.HardwareType.climate_actuator | str,
+        turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
+        countdown: float = 0.0,
     ) -> None:
         climate_actuator: gv.HardwareType = gv.safe_enum_from_name(
             gv.HardwareType, climate_actuator)
         assert climate_actuator in gv.HardwareType.climate_actuator
         if self._started:
-            actuator_handler: ActuatorHandler = \
-                self.ecosystem.actuator_hub.get_handler(climate_actuator)
+            actuator_handler: ActuatorHandler = self.ecosystem.actuator_hub.get_handler(
+                climate_actuator)
             await actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(

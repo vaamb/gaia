@@ -71,7 +71,8 @@ class PiCamera(Camera):
 
 
 camera_models: dict[str, Type[Camera]] = {
-    hardware.__name__: hardware for hardware in [
+    hardware.__name__: hardware
+    for hardware in [
         PiCamera
     ]
 }

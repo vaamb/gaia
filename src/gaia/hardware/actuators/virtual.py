@@ -11,7 +11,8 @@ class virtualgpioDimmable(virtualgpioSwitch, gpioDimmer):
 
 
 virtual_actuator_models = {
-    hardware.__name__: hardware for hardware in [
+    hardware.__name__: hardware
+    for hardware in [
         virtualgpioDimmable,
         virtualgpioSwitch,
     ]

@@ -14,7 +14,6 @@ class EmitDict(TypedDict):
     namespace: str
 
 
-
 @contextmanager
 def get_logs_content(logger_path: Path):
     with open(logger_path, "r+") as logger_handle:
@@ -36,14 +35,16 @@ class MockDispatcher(AsyncDispatcher):
             room: str | None = None,
             namespace: str | None = None,
             ttl: int | None = None,
-            **kwargs
+            **kwargs,
     ):
-        self.emit_store.append(EmitDict(**{
-            "event": event,
-            "data": data,
-            "room": room,
-            "namespace": namespace,
-        }))
+        self.emit_store.append(
+            EmitDict(**{
+                "event": event,
+                "data": data,
+                "room": room,
+                "namespace": namespace,
+            })
+        )
 
     def clear_store(self):
         self.emit_store.clear()

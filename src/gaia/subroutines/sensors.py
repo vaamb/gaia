@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import Lock, Task
+from asyncio import Task
 from datetime import datetime, timezone
 from math import floor
 from statistics import mean
@@ -32,8 +32,7 @@ class Sensors(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = sensor_models
         self.hardware: dict[str, BaseSensor]
-        loop_period = float(
-            self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
+        loop_period = float(self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
         self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
@@ -45,10 +44,8 @@ class Sensors(SubroutineTemplate):
 
     @property
     def _climate_routine_ratio(self) -> int:
-        climate_loop_period: float = \
-            self.ecosystem.subroutines["climate"]._loop_period
-        return floor(max(
-            1.0, climate_loop_period / self._loop_period))
+        climate_loop_period: float = self.ecosystem.subroutines["climate"]._loop_period
+        return floor(max(1.0, climate_loop_period / self._loop_period))
 
     async def _routine(self) -> None:
         start_time = monotonic()
@@ -62,9 +59,7 @@ class Sensors(SubroutineTemplate):
             )
         finally:
             update_time = monotonic() - start_time
-            self.logger.debug(
-                f"Sensors data update finished in {update_time:.1f} s."
-            )
+            self.logger.debug(f"Sensors data update finished in {update_time:.1f} s.")
         if self.ecosystem.engine.use_message_broker:
             try:
                 await self.send_data_if_possible()
@@ -97,12 +92,15 @@ class Sensors(SubroutineTemplate):
         self.ecosystem.engine.scheduler.add_job(
             func=self.routine,
             id=f"{self.ecosystem.uid}-sensors_routine",
-            trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
+            trigger=IntervalTrigger(
+                seconds=self._loop_period,
+                jitter=self._loop_period / 10,
+            ),
         )
-        self.logger.debug(f"Sensors loop successfully started.")
+        self.logger.debug("Sensors loop successfully started.")
 
     async def _stop(self) -> None:
-        self.logger.info(f"Stopping sensors loop.")
+        self.logger.info("Stopping sensors loop.")
         if self.ecosystem.get_subroutine_status("climate"):
             await self.ecosystem.stop_subroutine("climate")
         self.ecosystem.engine.scheduler.remove_job(
@@ -147,9 +145,14 @@ class Sensors(SubroutineTemplate):
         #async with self._data_lock:
         self._sensors_data = data
 
-    async def _add_sensor_records(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
+    async def _add_sensor_records(
+            self,
+            cache: gv.SensorsDataDict,
+    ) -> gv.SensorsDataDict:
         slow_sensors: list[str] = [
-            future.hardware_uid for future in self._slow_sensor_futures]
+            future.hardware_uid
+            for future in self._slow_sensor_futures
+        ]
         futures: list[_SensorFuture] = []
         for hardware in self.hardware.values():
             # Do not try to get data from sensors still trying to get their measures
@@ -174,11 +177,11 @@ class Sensors(SubroutineTemplate):
                 f"fetch data. Will try to gather data during next routine.")
         self._slow_sensor_futures = pending
         # Gather the data
-        sensors_data: list[list[gv.SensorRecord]] = \
-            [future.result() for future in done]
+        sensors_data: list[list[gv.SensorRecord]] = [future.result() for future in done]
         for sensor_data in sensors_data:
             cache["records"].extend(
-                sensor_record for sensor_record in sensor_data
+                sensor_record
+                for sensor_record in sensor_data
                 if sensor_record.value is not None
             )
         return cache
@@ -194,7 +197,7 @@ class Sensors(SubroutineTemplate):
             gv.MeasureAverage(
                 measure=measure,
                 value=round(mean(value), 2),
-                timestamp=None
+                timestamp=None,
             )
             for measure, value in to_average.items()
         ]
@@ -214,7 +217,7 @@ class Sensors(SubroutineTemplate):
             return cache
         sensor_warnings: list[gv.SensorAlarm] = []
         for record in cache["records"]:
-            if not record.measure in parameter_limits:
+            if record.measure not in parameter_limits:
                 continue
             p_lim = parameter_limits[record.measure]
             direction: gv.Position
@@ -234,13 +237,15 @@ class Sensors(SubroutineTemplate):
                 level = gv.WarningLevel.high
             else:
                 level = gv.WarningLevel.critical
-            sensor_warnings.append(gv.SensorAlarm(
-                sensor_uid=record.sensor_uid,
-                measure=record.measure,
-                position=direction,
-                delta=delta,
-                level=level,
-            ))
+            sensor_warnings.append(
+                gv.SensorAlarm(
+                    sensor_uid=record.sensor_uid,
+                    measure=record.measure,
+                    position=direction,
+                    delta=delta,
+                    level=level,
+                )
+            )
         cache["alarms"] = sensor_warnings
         return cache
 
@@ -261,7 +266,7 @@ class Sensors(SubroutineTemplate):
         cache = await self._add_sensor_records(cache)
         cache = self._add_sensor_averages(cache)
         alarms_flag = gv.ManagementFlags.alarms
-        if (self.config.management_flag & alarms_flag == alarms_flag):
+        if (self.config.management_flag & alarms_flag) == alarms_flag:
             cache = self._add_sensor_warnings(cache)
         if len(cache["records"]) > 0:
             self.sensors_data = gv.SensorsData(**cache)
@@ -273,10 +278,7 @@ class Sensors(SubroutineTemplate):
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
 
     async def send_data_if_possible(self) -> None:
-        if (
-                self._sending_data_task is None
-                or self._sending_data_task.done()
-        ):
+        if self._sending_data_task is None or self._sending_data_task.done():
             self._sending_data_task = asyncio.create_task(
                 self.send_data(), name=f"{self.ecosystem.uid}-sensors-send_data")
 

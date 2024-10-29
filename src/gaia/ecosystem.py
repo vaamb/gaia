@@ -33,10 +33,11 @@ class Ecosystem:
     def __init__(
             self,
             ecosystem_id: str,
-            engine: "Engine" | None = None
+            engine: "Engine" | None = None,
     ) -> None:
         if engine is None:
             from gaia import Engine
+
             engine = Engine()
         self._engine: "Engine" = weakref.proxy(engine)
         self._config: EcosystemConfig = \
@@ -58,11 +59,13 @@ class Ecosystem:
         for subroutine_name in subroutine_names:
             self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
         self._started: bool = False
-        self.logger.debug(f"Ecosystem initialization successful.")
+        self.logger.debug("Ecosystem initialization successful.")
 
     def __repr__(self) -> str:  # pragma: no cover
-        return f"{self.__class__.__name__}({self.uid}, name={self.name}, " \
-               f"status={self.started}, engine={self._engine})"
+        return (
+            f"{self.__class__.__name__}({self.uid}, name={self.name}, "
+            f"status={self.started}, engine={self._engine})"
+        )
 
     """
     API calls
@@ -94,7 +97,8 @@ class Ecosystem:
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
         return set([  # noqa
-            subroutine_name for subroutine_name, subroutine in self.subroutines.items()
+            subroutine_name
+            for subroutine_name, subroutine in self.subroutines.items()
             if subroutine.started
         ])
 
@@ -114,7 +118,7 @@ class Ecosystem:
     async def set_lighting_method(
             self,
             value: gv.LightMethod,
-            send_info: bool = True
+            send_info: bool = True,
     ) -> None:
         await self.config.set_lighting_method(value)
         if send_info and self.engine.use_message_broker:
@@ -286,7 +290,7 @@ class Ecosystem:
         await self.refresh_subroutines()
         if self.engine.use_message_broker and self.event_handler.registered:
             await self.event_handler.send_ecosystems_info(self.uid)
-        self.logger.debug(f"Ecosystem successfully started.")
+        self.logger.debug("Ecosystem successfully started.")
         self._started = True
 
     async def stop(self):
@@ -298,8 +302,10 @@ class Ecosystem:
         for subroutine in reversed(subroutines_to_stop):
             if self.subroutines[subroutine].started:
                 await self.subroutines[subroutine].stop()
-        if not any([self.subroutines[subroutine].started
-                    for subroutine in self.subroutines]):
+        if not any([
+                self.subroutines[subroutine].started
+                for subroutine in self.subroutines
+        ]):
             self.logger.debug("Ecosystem successfully stopped.")
         else:
             self.logger.error("Failed to stop the ecosystem.")
@@ -320,7 +326,7 @@ class Ecosystem:
             self,
             actuator: gv.HardwareType.actuator | gv.HardwareTypeNames,
             mode: gv.ActuatorModePayload | str = gv.ActuatorModePayload.automatic,
-            countdown: float = 0.0
+            countdown: float = 0.0,
     ) -> None:
         """Turn the actuator to the specified mode
 
@@ -347,8 +353,10 @@ class Ecosystem:
                 if self.get_subroutine_status("climate"):
                     climate_subroutine: Climate = self.subroutines["climate"]
                     await climate_subroutine.turn_climate_actuator(
-                        climate_actuator=validated_actuator, turn_to=validated_mode,
-                        countdown=countdown)
+                        climate_actuator=validated_actuator,
+                        turn_to=validated_mode,
+                        countdown=countdown,
+                    )
                 else:
                     raise ValueError("Climate subroutine is not running")
             else:
@@ -364,7 +372,7 @@ class Ecosystem:
 
     def get_actuator_handler(
             self,
-            actuator_type: gv.HardwareType.actuator | gv.HardwareTypeNames
+            actuator_type: gv.HardwareType.actuator | gv.HardwareTypeNames,
     ) -> ActuatorHandler:
         return self.actuator_hub.get_handler(actuator_type)
 
