@@ -65,4 +65,4 @@ version = {attr = "gaia.__version__"}
 where = ["src"]
 
 [tool.ruff.lint]
-ignore = ["E402"]
+ignore = ["E402", "F401"]
