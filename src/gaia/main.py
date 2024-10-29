@@ -3,8 +3,7 @@ import uvloop
 
 
 async def _main():
-    """Launch Gaia
-    """
+    """Launch Gaia"""
     from setproctitle import setproctitle
 
     setproctitle("gaia")

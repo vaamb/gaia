@@ -102,7 +102,6 @@ file_format = (
 logging_config = {
     "version": 1,
     "disable_existing_loggers": False,
-
     "formatters": {
         "base_formatter": {
             "format": "%(asctime)s %(levelname)-7.7s: %(name)-35.35s: %(message)s",
@@ -113,7 +112,6 @@ logging_config = {
             "datefmt": "%Y-%m-%d %H:%M:%S",
         },
     },
-
     "handlers": {
         "stream_handler": {
             "level": "INFO",
@@ -130,7 +128,6 @@ logging_config = {
             "backupCount": 5,
         },
     },
-
     "loggers": {
         "gaia": {
             "handlers": handlers,
@@ -160,17 +157,18 @@ def configure_logging(config_class: GaiaConfig) -> None:
 
     # Prepend log_dir path to the file handler file name
     file_handler_filename = logging_config["handlers"]["file_handler"]["filename"]
-    logging_config["handlers"]["file_handler"]["filename"] = str(log_dir / file_handler_filename)
+    logging_config["handlers"]["file_handler"]["filename"] = str(
+        log_dir / file_handler_filename)
 
     if config_class.DEBUG or config_class.TESTING:
         debug_fmt = "%(asctime)s %(levelname)-7.7s: [%(filename)-20.20s:%(lineno)4d] %(name)-35.35s: %(message)s"
         logging_config["formatters"]["base_formatter"]["format"] = debug_fmt
-        logging_config["handlers"]["stream_handler"]["level"] = 'DEBUG'
-        logging_config["handlers"]["file_handler"]["level"] = 'DEBUG'
-        logging_config["loggers"]["gaia"]["level"] = 'DEBUG'
-        logging_config["loggers"]["virtual"]["level"] = 'DEBUG'
-        logging_config["loggers"]["dispatcher"]["level"] = 'DEBUG'
-        logging_config["loggers"]["apscheduler"]["level"] = 'DEBUG'
+        logging_config["handlers"]["stream_handler"]["level"] = "DEBUG"
+        logging_config["handlers"]["file_handler"]["level"] = "DEBUG"
+        logging_config["loggers"]["gaia"]["level"] = "DEBUG"
+        logging_config["loggers"]["virtual"]["level"] = "DEBUG"
+        logging_config["loggers"]["dispatcher"]["level"] = "DEBUG"
+        logging_config["loggers"]["apscheduler"]["level"] = "DEBUG"
 
     if config_class.LOG_TO_STDOUT:
         handlers.append("stream_handler")

@@ -44,6 +44,7 @@ test = [
     "pytest~=7.1.2",
     "pytest-asyncio~=0.23.0",
     "pytest-timeout~=2.2.0",
+    "ruff~=0.7",
 ]
 
 [project.urls]
@@ -62,3 +63,6 @@ version = {attr = "gaia.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff.lint]
+ignore = ["E402", "F401"]

@@ -24,7 +24,7 @@ def test_expected_status(light_subroutine: Light):
         morning_start=time(8),
         morning_end=time(10),
         evening_start=time(18),
-        evening_end=time(20)
+        evening_end=time(20),
     )
 
     now = time(6)
@@ -65,7 +65,8 @@ def test_hardware_needed(light_subroutine: Light):
 async def test_add_hardware(light_subroutine: Light, engine_config: EngineConfig):
     await light_subroutine.add_hardware(gv.HardwareConfig(uid=light_uid, **light_info))
 
-    await light_subroutine.add_hardware(gv.HardwareConfig(uid=sensor_uid, **sensor_info))
+    await light_subroutine.add_hardware(
+        gv.HardwareConfig(uid=sensor_uid, **sensor_info))
     with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
         assert "not in the list of the hardware available." in logs
 

@@ -52,8 +52,8 @@ async def test_hardware_models():
             # Setup measures
             if issubclass(hardware_cls, BaseSensor):
                 hardware_cfg["measures"] = [
-                    measure.name for measure in
-                    hardware_cls.measures_available.keys()
+                    measure.name
+                    for measure in hardware_cls.measures_available.keys()
                 ]
             # Setup plants
             if issubclass(hardware_cls, PlantLevelHardware):
@@ -62,9 +62,7 @@ async def test_hardware_models():
             else:
                 hardware_cfg["level"] = gv.HardwareLevel.environment
         except Exception as e:
-            raise Exception(
-                f"Error while setting up config for {hardware_cls}."
-            ) from e
+            raise Exception(f"Error while setting up config for {hardware_cls}.") from e
 
         # Test hardware
         try:

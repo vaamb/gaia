@@ -17,7 +17,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 async def log_sensors_data(
         scoped_session_: Callable[..., scoped_session],
-        engine: "Engine"
+        engine: "Engine",
 ) -> None:
     logged_ecosystem: set[str] = set()
     async with scoped_session_() as session:

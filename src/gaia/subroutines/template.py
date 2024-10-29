@@ -19,8 +19,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 class SubroutineTemplate(ABC):
     def __init__(self, ecosystem: "Ecosystem") -> None:
-        """Base class to manage an ecosystem subroutine
-        """
+        """Base class to manage an ecosystem subroutine"""
         self._ecosystem: "Ecosystem" = ecosystem
         self.name: str = self.__class__.__name__.lower()
         eco_name = self._ecosystem.name.replace(" ", "_")
@@ -39,27 +38,19 @@ class SubroutineTemplate(ABC):
 
     @abstractmethod
     async def _routine(self) -> None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
     @abstractmethod
     def _compute_if_manageable(self) -> bool:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
     @abstractmethod
     async def _start(self) -> None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
     @abstractmethod
     async def _stop(self) -> None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
     """API calls"""
     @property
@@ -79,11 +70,11 @@ class SubroutineTemplate(ABC):
         return self.config.get_management(self.name)
 
     def enable(self) -> None:
-        self.logger.info(f"Enabling the subroutine.")
+        self.logger.info("Enabling the subroutine.")
         self.config.set_management(self.name, True)
 
     def disable(self) -> None:
-        self.logger.info(f"Disabling the subroutine.")
+        self.logger.info("Disabling the subroutine.")
         self.config.set_management(self.name, False)
 
     @property
@@ -107,8 +98,7 @@ class SubroutineTemplate(ABC):
         self.logger.debug(f"Starting {name} routine ...")
         await self._routine()
         routine_time = monotonic() - start
-        self.logger.debug(
-            f"{name} routine finished in {routine_time:.1f} s.")
+        self.logger.debug(f"{name} routine finished in {routine_time:.1f} s.")
 
     async def add_hardware(
             self,
@@ -140,7 +130,7 @@ class SubroutineTemplate(ABC):
 
     async def remove_hardware(self, hardware_uid: str) -> None:
         if not self.hardware.get(hardware_uid):
-            error_msg =f"Hardware '{hardware_uid}' not found."
+            error_msg = f"Hardware '{hardware_uid}' not found."
             self.logger.error(error_msg)
             raise HardwareNotFound(error_msg)
 
@@ -154,9 +144,7 @@ class SubroutineTemplate(ABC):
 
     @abstractmethod
     def get_hardware_needed_uid(self) -> set[str]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass."
-        )
+        raise NotImplementedError("This method must be implemented in a subclass.")
 
     async def refresh_hardware(self) -> None:
         hardware_needed: set[str] = self.get_hardware_needed_uid()
@@ -183,15 +171,13 @@ class SubroutineTemplate(ABC):
         except Exception as e:
             self._started = False
             self.logger.error(
-                f"Starting failed. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`."
-            )
+                f"Starting failed. ERROR msg: `{e.__class__.__name__}: {e}`.")
             raise e
 
     async def stop(self) -> None:
         if not self.started:
             raise RuntimeError("The subroutine is not running.")
-        self.logger.debug(f"Stopping the subroutine.")
+        self.logger.debug("Stopping the subroutine.")
         try:
             await self._stop()
             for hardware_uid in [*self.hardware.keys()]:

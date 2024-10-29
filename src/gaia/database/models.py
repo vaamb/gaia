@@ -69,7 +69,7 @@ class DataBufferMixin(Base):
             while True:
                 stmt = (
                     select(cls)
-                    .where(cls.exchange_uuid == None)
+                    .where(cls.exchange_uuid == None)  # noqa: E711
                     .offset(per_page * page)
                     .limit(per_page)
                 )
@@ -135,7 +135,8 @@ class BaseSensorRecord(Base):
     __table_args__ = (
         sa.schema.UniqueConstraint(
             "measure", "timestamp", "value", "ecosystem_uid", "sensor_uid",
-            name="_no_repost_constraint"),
+            name="_uq_no_repost_constraint",
+        ),
     )
 
     @property
@@ -160,7 +161,7 @@ class SensorBuffer(BaseSensorRecord, DataBufferMixin):
     async def get_buffered_data(
             cls,
             session: AsyncSession,
-            per_page: int = 50
+            per_page: int = 50,
     ) -> AsyncGenerator[gv.BufferedSensorsDataPayload]:
         return cls._get_buffered_data(
             buffered_record_class=gv.BufferedSensorRecord,
@@ -185,7 +186,8 @@ class BaseActuatorRecord(Base):
     __table_args__ = (
         sa.schema.UniqueConstraint(
             "type", "ecosystem_uid", "timestamp", "mode", "status",
-            name="_no_repost_constraint"),
+            name="_uq_no_repost_constraint",
+        ),
     )
 
 
@@ -202,7 +204,7 @@ class ActuatorBuffer(BaseActuatorRecord, DataBufferMixin):
     async def get_buffered_data(
             cls,
             session: AsyncSession,
-            per_page: int = 50
+            per_page: int = 50,
     ) -> AsyncGenerator[gv.BufferedActuatorsStatePayload]:
         return cls._get_buffered_data(
             buffered_record_class=gv.BufferedActuatorRecord,

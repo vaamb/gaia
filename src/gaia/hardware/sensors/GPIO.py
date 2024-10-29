@@ -13,8 +13,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     if is_raspi():
         from adafruit_dht import DHT11 as _DHT11, DHT22 as _DHT22
     else:
-        from gaia.hardware._compatibility import (
-            DHT11 as _DHT11, DHT22 as _DHT22)
+        from gaia.hardware._compatibility import DHT11 as _DHT11, DHT22 as _DHT22
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +83,8 @@ class DHT22(DHTSensor):
 
 
 gpio_sensor_models: dict[str, Type[BaseSensor]] = {
-    hardware.__name__: hardware for hardware in [
+    hardware.__name__: hardware
+    for hardware in [
         DHT11,
         DHT22,
     ]

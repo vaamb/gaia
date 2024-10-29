@@ -12,7 +12,14 @@ SubroutineNames = Literal["sensors", "light", "climate", "pictures", "health"]
 
 # Sensors and light subroutines need to remain first as other subroutines depend
 #  on them
-subroutine_names: list[SubroutineNames] = ["sensors", "light", "climate", "pictures", "health"]
+subroutine_names: list[SubroutineNames] = [
+    "sensors",
+    "light",
+    "climate",
+    "pictures",
+    "health",
+]
+
 
 class SubroutineDict(TypedDict):
     sensors: Sensors
@@ -23,7 +30,8 @@ class SubroutineDict(TypedDict):
 
 
 subroutine_dict: SubroutineDict = {
-    subroutine.__name__.lower(): subroutine for subroutine in [
+    subroutine.__name__.lower(): subroutine
+    for subroutine in [
         Sensors,
         Light,
         Climate,

@@ -12,7 +12,6 @@ import string
 from typing import Any
 from weakref import WeakValueDictionary
 
-import orjson
 import ruamel.yaml
 from ruamel.yaml import SafeRepresenter, ScalarNode, SequenceNode
 
@@ -26,15 +25,15 @@ yaml = ruamel.yaml.YAML()
 
 def _repr_time(self: SafeRepresenter, data: time) -> ScalarNode:
     time_repr = str(data).split(".")[0]
-    return self.represent_scalar('tag:yaml.org,2002:str', time_repr)
+    return self.represent_scalar("tag:yaml.org,2002:str", time_repr)
 
 
 def _repr_enum(self: SafeRepresenter, data: Enum) -> ScalarNode:
-    return self.represent_scalar('tag:yaml.org,2002:str', data.name)
+    return self.represent_scalar("tag:yaml.org,2002:str", data.name)
 
 
 def _repr_coordinates(self: SafeRepresenter, data: gv.Coordinates) -> SequenceNode:
-    return self.represent_sequence('tag:yaml.org,2002:seq', tuple(data))
+    return self.represent_sequence("tag:yaml.org,2002:seq", tuple(data))
 
 
 ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
@@ -62,10 +61,9 @@ except ImportError:  # pragma: no cover
                 )
 
     class json:
-
         def dumps(*args, **kwargs) -> str:
-            if 'cls' not in kwargs:
-                kwargs['cls'] = datetimeJSONEncoder
+            if "cls" not in kwargs:
+                kwargs["cls"] = datetimeJSONEncoder
             return _json.dumps(*args, **kwargs)
 
         @staticmethod
@@ -73,8 +71,8 @@ except ImportError:  # pragma: no cover
             return _json.loads(*args, **kwargs)
 
 else:
-    class json:
 
+    class json:
         def dumps(*args, **kwargs) -> str:
             return orjson.dumps(*args, **kwargs).decode("utf8")
 
@@ -111,7 +109,7 @@ pin_board_to_bcm = {
     36: 16,
     37: 26,
     38: 20,
-    40: 21
+    40: 21,
 }
 
 
@@ -143,7 +141,7 @@ pin_bcm_to_board = {
     16: 36,
     26: 37,
     20: 38,
-    21: 40
+    21: 40,
 }
 
 
@@ -156,7 +154,7 @@ def human_time_parser(human_time: str) -> time:
     and minutes separated by a 'h' or a 'H'. 06h05 as well as 6h05 or
     even 6H5 are valid input
     """
-    hours, minutes = human_time.replace('H', 'h').split("h")
+    hours, minutes = human_time.replace("H", "h").split("h")
     return time(int(hours), int(minutes))
 
 
@@ -172,7 +170,7 @@ def humanize_list(lst: list) -> str:
 
 def pin_translation(pin: int, direction: str) -> int:
     """Tool to translate Raspberry Pi pin number
-    Translates Raspberry Pi pin numbering from BCM number to board number 
+    Translates Raspberry Pi pin numbering from BCM number to board number
     and vice versa
     ---
     :param pin: int, number of the pin to translate
@@ -190,7 +188,7 @@ def pin_translation(pin: int, direction: str) -> int:
 def get_dew_point(
         temp: float | None,
         hum: float | None,
-        precision_digit: int = 2
+        precision_digit: int = 2,
 ) -> float | None:
     """
     Returns the dew point temperature calculated using the Magnus formula.
@@ -217,7 +215,7 @@ def get_dew_point(
 def get_absolute_humidity(
         temp: float | None,
         rel_hum: float | None,
-        precision_digit: int = 2
+        precision_digit: int = 2,
 ) -> float | None:
     """
     Calculates the absolute humidity. The formula used is given below
@@ -238,11 +236,11 @@ def get_absolute_humidity(
     # Molar weight of water
     # Mwater = 18.02
     # Gas constant (here we want the result in grams, not kg, so we divide it by 1000)
-    # R = 0.08314 
+    # R = 0.08314
     # result = (p*Mwater)/(R*(Temp+273.15))
     # Or simplified:
     psat = 6.112 * e ** ((17.67 * temp) / (temp + 243.5))
-    other_consts: float =  18.02 / 100 / 0.08314
+    other_consts: float = 18.02 / 100 / 0.08314
     x = (psat * rel_hum * other_consts) / (273.15 + temp)
     return float(round(x, precision_digit))
 
@@ -250,7 +248,7 @@ def get_absolute_humidity(
 def get_relative_humidity(
         temp: float | None,
         abs_hum: float | None,
-        precision_digit: int = 2
+        precision_digit: int = 2,
 ) -> float | None:
     """
     Calculates the absolute humidity. The formula used is given below
@@ -264,16 +262,16 @@ def get_relative_humidity(
         return None
     # Cf `get_absolute_humidity()` for the formula
     psat = 6.112 * e ** ((17.67 * temp) / (temp + 243.5))
-    other_consts: float =  18.02 / 100 / 0.08314
+    other_consts: float = 18.02 / 100 / 0.08314
     x = (abs_hum * (273.15 + temp)) / (other_consts * psat)
     return float(round(x, precision_digit))
 
 
 def temperature_converter(
-        temp: float | None,
+    temp: float | None,
         unit_in: str,
         unit_out: str,
-        precision_digit: int = 2
+        precision_digit: int = 2,
 ) -> float | None:
     """
     :param temp: float, the temperature in Celsius degrees
@@ -301,9 +299,7 @@ def temperature_converter(
         elif unit_out.lower() in fahrenheit:
             x = temp * (9 / 5) + 32
         else:
-            raise ValueError(
-                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
-            )
+            raise ValueError("units must be 'celsius', 'fahrenheit' or 'kelvin'")
 
     elif unit_in.lower() in kelvin:
         if unit_out.lower() in celsius:
@@ -311,9 +307,7 @@ def temperature_converter(
         elif unit_out.lower() in fahrenheit:
             x = (temp - K) * (9 / 5) + 32
         else:
-            raise ValueError(
-                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
-            )
+            raise ValueError("units must be 'celsius', 'fahrenheit' or 'kelvin'")
 
     elif unit_in.lower() in fahrenheit:
         if unit_out.lower() in celsius:
@@ -321,27 +315,24 @@ def temperature_converter(
         elif unit_out.lower() in kelvin:
             x = (temp - 32) * (5 / 9) + K
         else:
-            raise ValueError(
-                "units must be 'celsius', 'fahrenheit' or 'kelvin'"
-            )
+            raise ValueError("units must be 'celsius', 'fahrenheit' or 'kelvin'")
 
     else:
-        raise ValueError(
-            "units must be 'celsius', 'fahrenheit' or 'kelvin'"
-        )
+        raise ValueError("units must be 'celsius', 'fahrenheit' or 'kelvin'")
 
     return float(round(x, precision_digit))
 
 
 def get_unit(measure: str, default: str) -> str:
     from gaia.config.from_files import EngineConfig
+
     return EngineConfig().units.get(measure, default)
 
 
 def get_sun_times(
         longitude: float,
         latitude: float,
-        day: date | None = None
+        day: date | None = None,
 ) -> dict[str, time | None]:
     TO_RAD = pi / 180.0
     # from https://en.wikipedia.org/wiki/Sunrise_equation
@@ -349,21 +340,25 @@ def get_sun_times(
     today: date = day or date.today()
     day_of_year: float = float(today.timetuple().tm_yday)
     # Correct for leap seconds and the fact that julian day start at noon on jan 1 (= 0.5 day)
-    day_of_year += (0.0008 - 0.5)
+    day_of_year += 0.0008 - 0.5
     # Mean solar time
     solar_noon: float = day_of_year - (longitude / 360.0)
     # Solar mean Anomaly
     sma_deg: float = (357.5291 + (0.98560028 * solar_noon)) % 360.0
     # Equation of center
     center_deg: float = (
-            1.9148 * sin(TO_RAD * sma_deg)
-            + 0.02 * sin(2.0 * TO_RAD * sma_deg)
-            + 0.0003 * sin(3.0 * TO_RAD * sma_deg)
+        1.9148 * sin(TO_RAD * sma_deg)
+        + 0.02 * sin(2.0 * TO_RAD * sma_deg)
+        + 0.0003 * sin(3.0 * TO_RAD * sma_deg)
     )
     # Ecliptic longitude
     el_deg: float = (sma_deg + center_deg + 180.0 + 102.9372) % 360.0
     # Solar transit
-    st = solar_noon + (0.0053 * sin(TO_RAD * sma_deg)) - (0.0069 * sin(2 * TO_RAD * el_deg))
+    st = (
+        solar_noon
+        + (0.0053 * sin(TO_RAD * sma_deg))
+        - (0.0069 * sin(2 * TO_RAD * el_deg))
+    )
     # Declination of the sun
     sin_decl: float = sin(TO_RAD * el_deg) * sin(TO_RAD * 23.4397)
     cos_decl: float = cos(asin(sin_decl))
@@ -376,7 +371,7 @@ def get_sun_times(
         )
         if cos_ha < -1 or cos_ha > 1:
             return None
-        return 1/TO_RAD * (acos(cos_ha))
+        return 1 / TO_RAD * (acos(cos_ha))
 
     # Some specific sun angles
     sun_angles = {
@@ -421,7 +416,7 @@ def get_sun_times(
 def is_time_between(
         begin_time: time,
         end_time: time,
-        now: time
+        now: time,
 ) -> bool:
     try:
         if begin_time < end_time:
@@ -466,10 +461,11 @@ def local_ip_address() -> str:
 
 def generate_secret_key_from_password(
         password: str | bytes,
-        set_env: bool = False
+        set_env: bool = False,
 ) -> str:
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
     if isinstance(password, str):
         password = password.encode("utf-8")
     kdf = PBKDF2HMAC(

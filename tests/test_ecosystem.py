@@ -29,15 +29,16 @@ async def test_ecosystem_states(ecosystem: "Ecosystem"):
     await ecosystem.start()
     assert ecosystem.started
     with get_logs_content(ecosystem.engine.config.logs_dir / "gaia.log") as logs:
-        assert f"Ecosystem successfully started" in logs
+        assert "Ecosystem successfully started" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         await ecosystem.start()
 
     await ecosystem.stop()
     assert not ecosystem.started
     with get_logs_content(ecosystem.engine.config.logs_dir / "gaia.log") as logs:
-        assert f"Ecosystem successfully stopped" in logs
-    with pytest.raises(RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
+        assert "Ecosystem successfully stopped" in logs
+    with pytest.raises(
+        RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
         await ecosystem.stop()
 
 
@@ -69,7 +70,8 @@ def test_actuators_data(ecosystem: "Ecosystem"):
 @pytest.mark.asyncio
 async def test_light_actuators(ecosystem: "Ecosystem"):
     with pytest.raises(ValueError, match=r"Light subroutine is not running"):
-        await ecosystem.turn_actuator(gv.HardwareType.light, gv.ActuatorModePayload.automatic)
+        await ecosystem.turn_actuator(
+            gv.HardwareType.light, gv.ActuatorModePayload.automatic)
 
     # All subroutines are disabled by default in testing config
     await ecosystem.enable_subroutine("light")
@@ -77,7 +79,8 @@ async def test_light_actuators(ecosystem: "Ecosystem"):
 
     await ecosystem.turn_actuator(gv.HardwareType.light, gv.ActuatorModePayload.on)
     await ecosystem.turn_actuator(gv.HardwareType.light, gv.ActuatorModePayload.off)
-    await ecosystem.turn_actuator(gv.HardwareType.light, gv.ActuatorModePayload.automatic)
+    await ecosystem.turn_actuator(
+        gv.HardwareType.light, gv.ActuatorModePayload.automatic)
     with pytest.raises(ValueError):
         await ecosystem.turn_actuator(gv.HardwareType.light, "WrongMode")
 
@@ -87,14 +90,15 @@ async def test_light_actuators(ecosystem: "Ecosystem"):
 @pytest.mark.asyncio
 async def test_climate_actuators(ecosystem: "Ecosystem"):
     with pytest.raises(ValueError, match=r"Climate subroutine is not running"):
-        await ecosystem.turn_actuator(gv.HardwareType.heater, gv.ActuatorModePayload.automatic)
+        await ecosystem.turn_actuator(
+            gv.HardwareType.heater, gv.ActuatorModePayload.automatic)
 
     # Climate subroutine requires a working sensors subroutine ...
     await ecosystem.enable_subroutine("sensors")
     await ecosystem.start_subroutine("sensors")
     # ... and climatic parameters set
     ecosystem.config.set_climate_parameter(
-        "temperature", day=25, night= 20, hysteresis=2)
+        "temperature", day=25, night=20, hysteresis=2)
 
     # All subroutines are disabled by default in testing config
     await ecosystem.enable_subroutine("climate")
@@ -102,7 +106,8 @@ async def test_climate_actuators(ecosystem: "Ecosystem"):
 
     await ecosystem.turn_actuator(gv.HardwareType.heater, gv.ActuatorModePayload.on)
     await ecosystem.turn_actuator(gv.HardwareType.heater, gv.ActuatorModePayload.off)
-    await ecosystem.turn_actuator(gv.HardwareType.heater, gv.ActuatorModePayload.automatic)
+    await ecosystem.turn_actuator(
+        gv.HardwareType.heater, gv.ActuatorModePayload.automatic)
     with pytest.raises(ValueError):
         await ecosystem.turn_actuator("WrongActuator", "on")
 

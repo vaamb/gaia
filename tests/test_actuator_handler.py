@@ -15,7 +15,8 @@ from .data import light_uid
 
 def get_lights() -> list[gpioDimmable | gpioSwitch]:
     return [  # type: ignore
-        hardware for hardware in Hardware.get_mounted().values()
+        hardware
+        for hardware in Hardware.get_mounted().values()
         if hardware.uid == light_uid
     ]
 
@@ -116,9 +117,6 @@ async def test_timer(light_handler: ActuatorHandler):
 
 @pytest.mark.asyncio
 async def test_turn_to(light_handler: ActuatorHandler):
-    ecosystem = light_handler.ecosystem
-    hardware = ecosystem.subroutines["light"].hardware
-
     # Test default state
     assert light_handler.status is False
     assert light_handler.mode is gv.ActuatorMode.automatic

@@ -41,9 +41,7 @@ class Multiplexer(metaclass=_MetaMultiplexer):
         self.device = self._get_device()
 
     def _get_device(self) -> Any:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )
+        raise NotImplementedError("This method must be implemented in a subclass")
 
     @property
     def address(self) -> int:
@@ -79,7 +77,8 @@ class TCA9548A(Multiplexer):
 
 
 multiplexer_models: dict[str, type[Multiplexer]] = {
-    hardware.__name__: hardware for hardware in [
+    hardware.__name__: hardware
+    for hardware in [
         TCA9548A,
     ]
 }

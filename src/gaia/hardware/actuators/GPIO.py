@@ -83,7 +83,8 @@ class gpioDimmable(gpioSwitch, gpioDimmer):
 
 
 gpio_actuator_models = {
-    hardware.__name__: hardware for hardware in [
+    hardware.__name__: hardware
+    for hardware in [
         gpioDimmable,
         gpioDimmer,
         gpioSwitch,

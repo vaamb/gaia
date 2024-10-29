@@ -45,7 +45,7 @@ class Engine(metaclass=SingletonMeta):
     def __init__(self, engine_config: EngineConfig | None = None) -> None:
         self._config: EngineConfig = engine_config or EngineConfig()
         self.config.engine = self
-        self.logger: logging.Logger = logging.getLogger(f"gaia.engine")
+        self.logger: logging.Logger = logging.getLogger("gaia.engine")
         self.logger.info("Initializing Gaia.")
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = self.config.app_config.ENGINE_UID
@@ -96,9 +96,7 @@ class Engine(metaclass=SingletonMeta):
                 "'COMMUNICATE_WITH_OURANOS' is set to 'False'."
             )
         if self.use_message_broker:
-            raise RuntimeError(
-                "The message broker has already been initialized."
-            )
+            raise RuntimeError("The message broker has already been initialized.")
         broker_url = self.config.app_config.AGGREGATOR_COMMUNICATION_URL
         if not broker_url:
             raise RuntimeError(
@@ -106,8 +104,9 @@ class Engine(metaclass=SingletonMeta):
                 "'AGGREGATOR_COMMUNICATION_URL' is not set."
             )
         from gaia.events import Events  # This will check the dependencies
+
         try:
-            broker_type = broker_url[:broker_url.index("://")]
+            broker_type = broker_url[: broker_url.index("://")]
         except ValueError:
             raise ValueError(f"'{broker_url}' is not a valid broker URL")
         brokers_available = ["amqp", "redis"]
@@ -118,11 +117,14 @@ class Engine(metaclass=SingletonMeta):
         self.logger.info("Initialising the event dispatcher.")
         if broker_type == "amqp":
             from dispatcher import AsyncAMQPDispatcher
+
             if broker_url == "amqp://":
                 broker_url = "amqp://guest:guest@localhost:5672//"
 
             self.message_broker = AsyncAMQPDispatcher(
-                "gaia", url=broker_url, queue_options={
+                "gaia",
+                url=broker_url,
+                queue_options={
                     "name": f"gaia-{self.config.app_config.ENGINE_UID}",
                     "durable": True,
                     "arguments": {
@@ -134,15 +136,19 @@ class Engine(metaclass=SingletonMeta):
             )
         elif broker_type == "redis":
             from dispatcher import AsyncRedisDispatcher
+
             if broker_url == "redis://":
                 broker_url = "redis://localhost:6379/0"
             self.message_broker = AsyncRedisDispatcher(
-                "gaia", url=broker_url, queue_options={
+                "gaia",
+                url=broker_url,
+                queue_options={
                     "name": f"gaia-{self.config.app_config.ENGINE_UID}",
-                }
+                },
             )
         elif broker_type == "memory":
             from dispatcher import AsyncInMemoryDispatcher
+
             self.message_broker = AsyncInMemoryDispatcher("gaia")
         events_handler = Events(engine=self)
         self.message_broker.register_event_handler(events_handler)
@@ -163,7 +169,8 @@ class Engine(metaclass=SingletonMeta):
                 "'message_broker' is not valid as the message broker between "
                 "Ouranos and Gaia is not used. To use it, set the Gaia app config "
                 "parameter 'COMMUNICATE_WITH_OURANOS' to True, and the "
-                "parameter 'AGGREGATOR_COMMUNICATION_URL' to a valid url")
+                "parameter 'AGGREGATOR_COMMUNICATION_URL' to a valid url"
+            )
         return self._message_broker
 
     @message_broker.setter
@@ -195,11 +202,10 @@ class Engine(metaclass=SingletonMeta):
                 "is set to 'False'."
             )
         if self.use_db:
-            raise RuntimeError(
-                "The database has already been initialized."
-            )
+            raise RuntimeError("The database has already been initialized.")
         self.logger.info("Initialising the database.")
         from gaia.database import db
+
         self.db = db
         dict_cfg = {
             key: getattr(self.config.app_config, key)
@@ -212,23 +218,29 @@ class Engine(metaclass=SingletonMeta):
     async def start_database(self) -> None:
         self.logger.info("Starting the database.")
         # Reset buffered data's "exchange_uuid"
-        from gaia.database.models import (
-            ActuatorBuffer, DataBufferMixin, SensorBuffer)
+        from gaia.database.models import ActuatorBuffer, DataBufferMixin, SensorBuffer
+
         async with self.db.scoped_session() as session:
             for db_model in (ActuatorBuffer, SensorBuffer):
                 db_model: DataBufferMixin
                 await db_model.reset_exchange_uuids(session)
         # Set up logging routines
         from gaia.database import routines
+
         if self.config.app_config.SENSORS_LOGGING_PERIOD is not None:
             cron_minute: str = self.config.app_config.SENSORS_LOGGING_PERIOD
             loop_period = self.config.app_config.SENSORS_LOOP_PERIOD
             seconds_offset = ceil(loop_period * 1.5)
             job_kwargs = {"scoped_session_": self.db.scoped_session, "engine": self}
             self.scheduler.add_job(
-                func=routines.log_sensors_data, kwargs=job_kwargs,
+                func=routines.log_sensors_data,
+                kwargs=job_kwargs,
                 id="log_sensors_data",
-                trigger=CronTrigger(minute=cron_minute, second=seconds_offset, jitter=1.5),
+                trigger=CronTrigger(
+                    minute=cron_minute,
+                    second=seconds_offset,
+                    jitter=1.5,
+                ),
                 misfire_grace_time=10,
             )
 
@@ -242,7 +254,8 @@ class Engine(metaclass=SingletonMeta):
         if self._db is None:
             raise AttributeError(
                 "'db' is not valid as the database is currently not used. To use "
-                "it, set the Gaia app config parameter 'USE_DATABASE' to True")
+                "it, set the Gaia app config parameter 'USE_DATABASE' to True"
+            )
         return self._db
 
     @db.setter
@@ -319,7 +332,7 @@ class Engine(metaclass=SingletonMeta):
 
     async def _send_ecosystems_info(
             self,
-            ecosystem_uids: str | list[str] | None = None
+            ecosystem_uids: str | list[str] | None = None,
     ) -> None:
         if self.use_message_broker and self.event_handler.registered:
             await self.event_handler.send_ecosystems_info(ecosystem_uids=ecosystem_uids)
@@ -357,18 +370,12 @@ class Engine(metaclass=SingletonMeta):
             - The EngineConfig config files watchdog.
             - The plugins (the database and event broker if enabled)
         """
-        return (
-            self._running_event.is_set()
-            and not self._stop_event.is_set()
-        )
+        return self._running_event.is_set() and not self._stop_event.is_set()
 
     @property
     def paused(self) -> bool:
         """Indicate if the Engine has paused its background tasks."""
-        return (
-            self.started
-            and not self._running_event.is_set()
-        )
+        return self.started and not self._running_event.is_set()
 
     @property
     def stopping(self) -> bool:
@@ -377,8 +384,7 @@ class Engine(metaclass=SingletonMeta):
 
     @property
     def stopped(self) -> bool:
-        """Indicate if the Engine background tasks have been stopped and cleared.
-        """
+        """Indicate if the Engine background tasks have been stopped and cleared."""
         return self._shut_down
 
     @property
@@ -394,16 +400,19 @@ class Engine(metaclass=SingletonMeta):
         rv: list[gv.Place] = []
         places = self.config.places
         for place, coordinates in places.items():
-            rv.append(gv.Place(
-                name=place,
-                coordinates=coordinates,
-            ))
+            rv.append(
+                gv.Place(
+                    name=place,
+                    coordinates=coordinates,
+                )
+            )
         return rv
 
     @property
     def ecosystems_started(self) -> set[str]:
         return set([
-            ecosystem.uid for ecosystem in self.ecosystems.values()
+            ecosystem.uid
+            for ecosystem in self.ecosystems.values()
             if ecosystem.started
         ])
 
@@ -433,16 +442,16 @@ class Engine(metaclass=SingletonMeta):
         if ecosystem_uid not in self.ecosystems:
             ecosystem = Ecosystem(ecosystem_uid, self)
             self.ecosystems[ecosystem_uid] = ecosystem
-            self.logger.debug(
-                f"Ecosystem {ecosystem_id} has been created.")
+            self.logger.debug(f"Ecosystem {ecosystem_id} has been created.")
             if start:
                 warnings.warn(
                     "The 'start' parameter is deprecated, please use "
-                    "'start_ecosystem' instead.", DeprecationWarning)
+                    "'start_ecosystem' instead.",
+                    DeprecationWarning,
+                )
             #    await self.start_ecosystem(ecosystem_uid)
             return ecosystem
-        raise RuntimeError(
-            f"Ecosystem {ecosystem_id} already exists")
+        raise RuntimeError(f"Ecosystem {ecosystem_id} already exists")
 
     async def start_ecosystem(self, ecosystem_id: str, send_info: bool = False) -> None:
         """Start an Ecosystem.
@@ -456,17 +465,14 @@ class Engine(metaclass=SingletonMeta):
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid not in self.ecosystems_started:
                 ecosystem: Ecosystem = self.ecosystems[ecosystem_uid]
-                self.logger.debug(
-                    f"Starting ecosystem {ecosystem_id}.")
+                self.logger.debug(f"Starting ecosystem {ecosystem_id}.")
                 await ecosystem.start()
                 if send_info:
                     await self._send_ecosystems_info([ecosystem_uid])
             else:
-                raise RuntimeError(
-                    f"Ecosystem {ecosystem_id} is already running")
+                raise RuntimeError(f"Ecosystem {ecosystem_id} is already running")
         else:
-            raise RuntimeError(
-                f"Need to initialise Ecosystem {ecosystem_id} first")
+            raise RuntimeError(f"Need to initialise Ecosystem {ecosystem_id} first")
 
     async def stop_ecosystem(
             self,
@@ -496,9 +502,7 @@ class Engine(metaclass=SingletonMeta):
                     await self.dismount_ecosystem(ecosystem_uid)
                 if send_info:
                     await self._send_ecosystems_info([ecosystem_uid])
-                self.logger.info(
-                    f"Ecosystem {ecosystem_id} has been stopped"
-                )
+                self.logger.info(f"Ecosystem {ecosystem_id} has been stopped")
             else:
                 raise RuntimeError(
                     f"Cannot stop Ecosystem {ecosystem_id} as it has not been "
@@ -510,7 +514,11 @@ class Engine(metaclass=SingletonMeta):
                 f"initialised"
             )
 
-    async def dismount_ecosystem(self, ecosystem_id: str, send_info: bool = False) -> None:
+    async def dismount_ecosystem(
+            self,
+            ecosystem_id: str,
+            send_info: bool = False,
+    ) -> None:
         """Remove the Ecosystem from Engine's memory.
 
         :param ecosystem_id: The name or the uid of an ecosystem, as written in
@@ -524,16 +532,12 @@ class Engine(metaclass=SingletonMeta):
             ecosystem_uid, _ = self.config.get_IDs(ecosystem_id)
         if ecosystem_uid in self.ecosystems:
             if ecosystem_uid in self.ecosystems_started:
-                raise RuntimeError(
-                    "Cannot dismount a started ecosystem. First stop it"
-                )
+                raise RuntimeError("Cannot dismount a started ecosystem. First stop it")
             else:
                 del self.ecosystems[ecosystem_uid]
                 if send_info:
                     await self._send_ecosystems_info([ecosystem_uid])
-                self.logger.info(
-                    f"Ecosystem {ecosystem_id} has been dismounted"
-                )
+                self.logger.info(f"Ecosystem {ecosystem_id} has been dismounted")
         else:
             raise RuntimeError(
                 f"Cannot dismount ecosystem {ecosystem_id} as it has not been "
@@ -691,8 +695,7 @@ class Engine(metaclass=SingletonMeta):
         if self.plugins_initialized:
             await self.start_plugins()
         # Start the engine thread
-        self.task = asyncio.create_task(
-            self._loop(), name="engine-loop")
+        self.task = asyncio.create_task(self._loop(), name="engine-loop")
         # Refresh ecosystems a first time
         await sleep(0)  # Allow _loop() to start
         await self._resume()

@@ -6,8 +6,7 @@ import gaia_validators as gv
 
 from gaia.events import Events as Events_
 
-from ..data import (
-    ecosystem_uid, engine_uid, hardware_info, hardware_uid, IO_dict)
+from ..data import ecosystem_uid, engine_uid, hardware_info, hardware_uid, IO_dict
 from ..utils import get_logs_content, MockDispatcher
 
 
@@ -88,7 +87,10 @@ async def test_create_ecosystem(events_handler: Events):
     assert len(data_update) == 2
     assert "TestCrud" in [ecosystem["data"]["name"] for ecosystem in data_update]
     assert len(events_handler.ecosystems) == 2
-    assert "TestCrud" in [ecosystem.name for ecosystem in events_handler.ecosystems.values()]
+    assert "TestCrud" in [
+        ecosystem.name
+        for ecosystem in events_handler.ecosystems.values()
+    ]
 
 
 @pytest.mark.asyncio
@@ -121,7 +123,8 @@ async def test_update_ecosystem(events_handler: Events):
 
     assert_success(events_handler)
 
-    ecosystem_config = events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]
+    ecosystem_config = \
+        events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]
     assert ecosystem_config["name"] == new_name
 
 
@@ -275,7 +278,7 @@ async def test_update_chaos(events_handler: Events):
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ChaosParametersPayload(**data_update[0])
-    assert  verified.data.frequency == frequency
+    assert verified.data.frequency == frequency
     assert verified.data.duration == duration
     assert verified.data.intensity == intensity
 
@@ -313,12 +316,17 @@ async def test_update_time_parameters(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.LightDataPayloadDict] = events_handler._dispatcher.emit_store[1]["data"]
+    data_update: list[gv.LightDataPayloadDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.LightDataPayload(**data_update[0])
     assert verified.data.morning_start == day
     assert verified.data.evening_end == night
-    assert events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.day == day
-    assert events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.night == night
+    ecosystem_day = \
+        events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.day
+    assert ecosystem_day == day
+    ecosystem_night = \
+        events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.night
+    assert ecosystem_night == night
 
 
 @pytest.mark.asyncio
@@ -336,7 +344,8 @@ async def test_update_light_method(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.LightDataPayloadDict] = events_handler._dispatcher.emit_store[1]["data"]
+    data_update: list[gv.LightDataPayloadDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.LightDataPayload(**data_update[0])
     assert verified.data.method == method
     assert events_handler.ecosystems[ecosystem_uid].lighting_method == method
@@ -352,14 +361,20 @@ async def test_create_environment_parameter(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
         target="environment_parameter",
-        data={"parameter": parameter, "day": day, "night": night, "hysteresis": hysteresis},
+        data={
+            "parameter": parameter,
+            "day": day,
+            "night": night,
+            "hysteresis": hysteresis,
+        },
     ).model_dump()
 
     await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    data_update: list[gv.EnvironmentConfigDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.EnvironmentConfigPayload(**data_update[0])
     environment_parameter = verified.data.climate[0]
     assert environment_parameter.parameter == parameter
@@ -378,7 +393,12 @@ async def test_update_environment_parameter_failure(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="environment_parameter",
-        data={"parameter": parameter, "day": day, "night": night, "hysteresis": hysteresis},
+        data={
+            "parameter": parameter,
+            "day": day,
+            "night": night,
+            "hysteresis": hysteresis,
+        },
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -405,14 +425,20 @@ async def test_update_environment_parameter(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="environment_parameter",
-        data={"parameter": parameter, "day": day, "night": night, "hysteresis": hysteresis},
+        data={
+            "parameter": parameter,
+            "day": day,
+            "night": night,
+            "hysteresis": hysteresis,
+        },
     ).model_dump()
 
     await events_handler.on_crud(message)
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    data_update: list[gv.EnvironmentConfigDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.EnvironmentConfigPayload(**data_update[0])
     environment_parameter = verified.data.climate[0]
     assert environment_parameter.parameter == parameter
@@ -459,7 +485,8 @@ async def test_delete_environment_parameter(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    data_update: list[gv.EnvironmentConfigDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.EnvironmentConfigPayload(**data_update[0])
     assert len(verified.data.climate) == 0
 
@@ -483,7 +510,8 @@ async def test_create_hardware(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    data_update: list[gv.EnvironmentConfigDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
     hardware: gv.HardwareConfig = verified.data[0]
     assert hardware.name == valid_hardware_info["name"]
@@ -531,7 +559,8 @@ async def test_update_hardware(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    data_update: list[gv.EnvironmentConfigDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
     hardware: gv.HardwareConfig = verified.data[2]
     assert hardware.address == valid_hardware_info["address"]
@@ -567,7 +596,8 @@ async def test_delete_hardware(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = events_handler._dispatcher.emit_store[1]["data"]
+    data_update: list[gv.EnvironmentConfigDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
     assert len(verified.data) == len(IO_dict) - 1
     assert hardware_uid not in [hardware.uid for hardware in verified.data]

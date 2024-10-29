@@ -23,22 +23,19 @@ class BaseConfig:
 
     ENGINE_UID = os.environ.get("GAIA_UID") or hex(uuid.getnode())[2:]
     VIRTUALIZATION = os.environ.get("GAIA_VIRTUALIZATION", False)
-    VIRTUALIZATION_PARAMETERS = {"world": {},"ecosystems": {}}
+    VIRTUALIZATION_PARAMETERS = {"world": {}, "ecosystems": {}}
 
     USE_DATABASE = False
 
     @property
     def SQLALCHEMY_DATABASE_URI(self):
         return (
-            os.environ.get("GAIA_DATABASE_URI") or
-            "sqlite+aiosqlite:///" + os.path.join(self.DIR, "gaia_data.db")
+            os.environ.get("GAIA_DATABASE_URI")
+            or "sqlite+aiosqlite:///" + os.path.join(self.DIR, "gaia_data.db")
         )
 
     COMMUNICATE_WITH_OURANOS = False
-    AGGREGATOR_COMMUNICATION_URL = (
-        os.environ.get("GAIA_COMMUNICATION_URL") or
-        "amqp://"
-    )
+    AGGREGATOR_COMMUNICATION_URL = os.environ.get("GAIA_COMMUNICATION_URL") or "amqp://"
     OURANOS_SECRET_KEY = os.environ.get("OURANOS_SECRET_KEY") or "secret_key"
 
     HEALTH_LOGGING_TIME = "00h00"

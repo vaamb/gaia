@@ -4,7 +4,7 @@ from gaia.hardware.abc import Hardware
 class virtualHardware(Hardware):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if(
+        if (
             self.subroutine is not None
             and self.subroutine.ecosystem.engine.config.app_config.VIRTUALIZATION
         ):
