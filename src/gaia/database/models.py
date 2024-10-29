@@ -69,7 +69,7 @@ class DataBufferMixin(Base):
             while True:
                 stmt = (
                     select(cls)
-                    .where(cls.exchange_uuid == None)
+                    .where(cls.exchange_uuid == None)  # noqa: E711
                     .offset(per_page * page)
                     .limit(per_page)
                 )

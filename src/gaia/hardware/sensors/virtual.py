@@ -14,6 +14,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
         AHTx0,
         DHT11 as _DHT11,
         DHT22 as _DHT22,
+        ENS160 as _ENS160,
         Seesaw,
         VCNL4040 as _VCNL4040,
         VEML7700 as _VEML7700,

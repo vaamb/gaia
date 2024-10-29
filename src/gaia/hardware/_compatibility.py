@@ -54,8 +54,8 @@ class pwmio:
     """
 
     class PWMOut:
-        def __init__(self, *args, **kwargs) -> None:
-            duty_cycle = 0
+        def __init__(self, *args, duty_cycle: int = 0, **kwargs) -> None:
+            self.duty_cycle = duty_cycle
 
 
 class Pin:

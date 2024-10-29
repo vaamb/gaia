@@ -12,7 +12,6 @@ import string
 from typing import Any
 from weakref import WeakValueDictionary
 
-import orjson
 import ruamel.yaml
 from ruamel.yaml import SafeRepresenter, ScalarNode, SequenceNode
 

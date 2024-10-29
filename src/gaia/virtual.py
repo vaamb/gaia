@@ -323,10 +323,10 @@ class VirtualEcosystem:
         out_temp, out_hum, out_light = self.virtual_world.get_measures()
 
         def get_corrected_level(actuator_type: gv.HardwareType.actuator) -> float:
-            l = self.get_actuator_level(actuator_type)
-            if l is None:
-                l = 100.0
-            return l
+            level = self.get_actuator_level(actuator_type)
+            if level is None:
+                level = 100.0
+            return level
 
         # New heat quantity
         d_temp = self.temperature - out_temp

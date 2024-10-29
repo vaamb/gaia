@@ -326,7 +326,7 @@ async def test_send_buffered_data_and_ack(events_handler: Events, ecosystem: Eco
 
     async with ecosystem.engine.db.scoped_session() as session:
         remaining_actuators_data = await ActuatorBuffer.get_buffered_data(session)
-        async for _ in remaining_sensors_data:
+        async for _ in remaining_actuators_data:
             assert False
 
 
