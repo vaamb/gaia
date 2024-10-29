@@ -63,3 +63,6 @@ version = {attr = "gaia.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff.lint]
+ignore = ["E402"]
