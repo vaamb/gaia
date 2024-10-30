@@ -88,6 +88,10 @@ def testing_cfg(temp_dir) -> None:
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
 
+        @property
+        def SQLALCHEMY_DATABASE_URI(self):
+            return "sqlite+aiosqlite://"
+
         # Make sure routines are only called on purpose
         SENSORS_LOOP_PERIOD = 25.0
         CLIMATE_LOOP_PERIOD = 25.0
