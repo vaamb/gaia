@@ -145,12 +145,13 @@ class EcosystemConfigValidator(gv.BaseModel):
 class EcosystemConfigDict(TypedDict):
     name: str
     status: bool
-    management: dict[gv.ManagementNames, bool]
+    management: gv.ManagementConfigDict
     environment: EnvironmentConfigDict
     IO: dict[str, gv.AnonymousHardwareConfigDict]
 
 
-RootEcosystemsConfigValidator = RootModel[dict[str, EcosystemConfigValidator]]
+class RootEcosystemsConfigValidator(RootModel):
+    root: dict[str, EcosystemConfigValidator]
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +173,8 @@ class ChaosMemory(TypedDict):
     time_window: gv.TimeWindow
 
 
-ChaosMemoryRootValidator = RootModel[dict[str, ChaosMemoryValidator]]
+class ChaosMemoryRootValidator(RootModel):
+    root: dict[str, ChaosMemoryValidator]
 
 
 # ---------------------------------------------------------------------------
@@ -305,8 +307,11 @@ class EngineConfig(metaclass=SingletonMeta):
             with open(config_path, "r") as file:
                 unvalidated = yaml.load(file)
             try:
-                validated: dict[str, EcosystemConfigDict] = \
-                    RootEcosystemsConfigValidator(unvalidated).model_dump()
+                validated: dict[str, EcosystemConfigDict] = (
+                    RootEcosystemsConfigValidator
+                    .model_validate(unvalidated)
+                    .model_dump()
+                )
             except pydantic.ValidationError as e:  # pragma: no cover
                 self.logger.error(
                     f"Could not validate ecosystems configuration file. "
@@ -841,12 +846,15 @@ class EngineConfig(metaclass=SingletonMeta):
     def _load_chaos_memory(self) -> None:
         self.logger.debug("Trying to load chaos memory.")
         chaos_path = self.get_file_path(CacheType.chaos)
-        validated: dict[str, ChaosMemory]
         try:
             with chaos_path.open("r") as file:
                 unvalidated = json.loads(file.read())
                 try:
-                    validated = ChaosMemoryRootValidator(unvalidated).model_dump()
+                    validated: dict[str, ChaosMemory] = (
+                        ChaosMemoryRootValidator
+                        .model_validate(unvalidated)
+                        .model_dump()
+                    )
                 except pydantic.ValidationError:  # pragma: no cover
                     self.logger.error("Error while loading chaos.")
                     raise
