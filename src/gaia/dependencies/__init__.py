@@ -12,7 +12,7 @@ def check_dependencies(module: Module | list[Module]) -> None:
     if "camera" in module:
         from .camera import check_dependencies
 
-        check_dependencies(check_skimage=True)
+        check_dependencies(check_cv2=True)
     if "database" in module:
         from .database import check_dependencies
 

@@ -14,7 +14,7 @@ from anyio.to_thread import run_sync
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
-from gaia.dependencies.camera import check_dependencies, PIL_image, skimage
+from gaia.dependencies.camera import check_dependencies, PIL_image, cv2
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import (
@@ -619,12 +619,11 @@ class i2cSensor(BaseSensor, i2cHardware):
 
 class Camera(Hardware):
     def __init__(self, *args, **kwargs) -> None:
-        check_dependencies(check_skimage=False)
-        if skimage is None:
+        check_dependencies(check_cv2=False)
+        if cv2 is None:
             hardware_logger.warning(
-                "`scikit-image` is not installed, some functionalities might be "
-                "disabled or not work properly."
-            )
+                "`opencv-python` is not installed, some functionalities might be "
+                "disabled or not work properly.")
         super().__init__(*args, **kwargs)
         self._device: Any | None = None
         self._camera_dir: Path | None = None

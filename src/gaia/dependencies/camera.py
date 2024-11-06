@@ -22,9 +22,9 @@ except ImportError:  # pragma: no cover
     _uninstalled_dependencies = True
 
 try:
-    import skimage
+    import cv2
 except ImportError:  # pragma: no cover
-    skimage = None
+    cv2 = None
 #    _uninstalled_dependencies = True
 
 
@@ -40,14 +40,14 @@ if t.TYPE_CHECKING:  # pragma: no cover
     import numpy as np
     import PIL
     from PIL import Image as PIL_image
-    import skimage
+    import cv2
 
     from gaia_validators.image import SerializableImage, SerializableImagePayload
 
 
-def check_dependencies(check_skimage: bool = True) -> None:
-    if check_skimage:
-        if _uninstalled_dependencies is True or skimage is None:  # pragma: no cover
+def check_dependencies(check_cv2: bool = True) -> None:
+    if check_cv2:
+        if _uninstalled_dependencies is True or cv2 is None:  # pragma: no cover
             raise RuntimeError(
                 "All the dependencies required to use the camera have not been "
                 "installed. Run 'pip install . [camera]' in your virtual "
