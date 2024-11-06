@@ -12,7 +12,6 @@ from time import monotonic
 import typing as t
 from typing import Any, Callable, cast, Literal, NamedTuple, Type
 from uuid import UUID
-import weakref
 
 from pydantic import ValidationError
 
@@ -118,7 +117,7 @@ class Events(AsyncEventHandler):
     def __init__(self, engine: Engine, **kwargs) -> None:
         kwargs["namespace"] = "aggregator"
         super().__init__(**kwargs)
-        self.engine: Engine = weakref.proxy(engine)
+        self.engine: Engine = engine
         self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
         self._resent_initialization_data: bool = False
