@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 import logging
 import time
 import typing
-import weakref
 
 import gaia_validators as gv
 
@@ -628,7 +627,7 @@ class ActuatorHandler:
 
 class ActuatorHub:
     def __init__(self, ecosystem: "Ecosystem") -> None:
-        self.ecosystem: Ecosystem = weakref.proxy(ecosystem)
+        self.ecosystem: Ecosystem = ecosystem
         self.logger = logging.getLogger(
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: dict[gv.ClimateParameter, HystericalPID] = {}

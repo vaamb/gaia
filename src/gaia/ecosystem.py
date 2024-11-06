@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import typing
-import weakref
 
 import gaia_validators as gv
 
@@ -39,7 +38,7 @@ class Ecosystem:
             from gaia import Engine
 
             engine = Engine()
-        self._engine: "Engine" = weakref.proxy(engine)
+        self._engine: Engine = engine
         self._config: EcosystemConfig = \
             self.engine.config.get_ecosystem_config(ecosystem_id)
         self._uid: str = self.config.uid

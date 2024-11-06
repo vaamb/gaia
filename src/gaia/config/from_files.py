@@ -13,7 +13,6 @@ from pathlib import Path
 import random
 import typing as t
 from typing import cast, Type, TypedDict, TypeVar
-import weakref
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -236,8 +235,8 @@ class EngineConfig(metaclass=SingletonMeta):
         raise AttributeError("'engine' has not been set up")
 
     @engine.setter
-    def engine(self, value: "Engine") -> None:
-        self._engine = weakref.proxy(value)
+    def engine(self, value: Engine) -> None:
+        self._engine = value
 
     @property
     def engine_set_up(self) -> bool:
