@@ -28,7 +28,7 @@ dependencies = [
 camera = [
     "numpy~=2.1",
     "pillow~=10.4.0",
-    "scikit-image~=0.24",
+    "opencv-python~=4.10",
 ]
 database = [
     "aiosqlite~=0.20.0",

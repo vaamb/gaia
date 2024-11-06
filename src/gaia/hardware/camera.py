@@ -41,10 +41,12 @@ class PiCamera(Camera):
         return await run_sync(self._get_image, size)
 
     def _get_image(self, size: tuple | None) -> PIL_image.Image:
+        config = {
+            "format": "RGB888"
+        }
         if size is not None:
-            camera_config = self.device.create_still_configuration(main={"size": size})
-        else:
-            camera_config = self.device.create_still_configuration()
+            config.update({"size": size})
+        camera_config = self.device.create_still_configuration(main=config)
         self.device.configure(camera_config)
         self.device.start()
         # need at least 2 sec sleep for the camera to adapt to light level
@@ -64,7 +66,7 @@ class PiCamera(Camera):
                     f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
             else:
-                image: PIL_image.Image = PIL_image.fromarray(array)
+                image: PIL_image.Image = PIL_image.fromarray(array, mode="RGB")
                 image.info["timestamp"] = now
                 return image
         raise RuntimeError("There was an error while taking the picture.")
