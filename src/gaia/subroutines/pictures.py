@@ -5,7 +5,7 @@ from asyncio import Task
 from datetime import datetime
 from math import ceil
 from time import monotonic
-from typing import Any, TypedDict
+from typing import TypedDict
 
 # from anyio.to_process import run_sync as run_sync_in_process  # Crashes somehow
 from anyio.to_thread import run_sync
@@ -20,31 +20,15 @@ from gaia.array_utils import (
     compute_mse, dump_picture_array, load_picture_array, rgb_to_gray)
 from gaia.subroutines.template import SubroutineTemplate
 
-try:
-    import orjson
-except ImportError:
-    orjson = None
-else:
 
-    class _Serializer:
-        def dumps(*args, **kwargs) -> bytes:
-            return orjson.dumps(*args, **kwargs)
-
-        @staticmethod
-        def loads(*args, **kwargs) -> Any:
-            return orjson.loads(*args, **kwargs)
-
-
-class ScoredArray(TypedDict):
-    array: np.ndarray | None
+class ScoredImage(TypedDict):
+    image: SerializableImage | None
     score: float
-    timestamp: datetime
 
 
-_null_scored_array: ScoredArray = {
-    "array": None,
+_null_scored_image: ScoredImage = {
+    "image": None,
     "score": -1.0,
-    "timestamp": datetime.fromtimestamp(0),
 }
 
 
@@ -68,52 +52,42 @@ class Pictures(SubroutineTemplate):
             self._cache_dir.mkdir(parents=True)
         # Pictures
         self._sending_data_task: Task | None = None
-        self._background_arrays: dict[str, np.ndarray] = {}
-        self._scored_arrays: dict[str, ScoredArray] = {}
-        if orjson is not None:
-            SerializableImage._serializer = _Serializer
+        self._background_arrays: dict[str, SerializableImage] = {}
+        self._scored_images: dict[str, ScoredImage] = {}
         self._finish__init__()
 
     async def _load_background_arrays(self) -> None:
         for camera_uid in self.hardware:
             array_path = self._cache_dir / f"{camera_uid}-background.pkl"
-            if array_path.exists():
-                array = await run_sync(load_picture_array, array_path)
-            else:
-                camera: Camera = self.hardware[camera_uid]
-                image = await camera.get_image(size=self._picture_size)
-                array = np.array(image)
-                if self._sending_ratio > 1:
-                    array = rgb_to_gray(array)
-                await run_sync(dump_picture_array, array, array_path)
-            self._background_arrays[camera_uid] = array
+            if not array_path.exists():
+                await self.reset_background_array(camera_uid)
+            image = await run_sync(SerializableImage.load_array, array_path)
+            self._background_arrays[camera_uid] = image
 
-    async def _get_scored_array(self, camera: Camera) -> ScoredArray:
+    async def _get_scored_image(self, camera: Camera) -> ScoredImage:
         image = await camera.get_image(size=self._picture_size)
-        array = np.array(image)
-        timestamp: datetime = image.info.get("timestamp")
-        background_array: np.ndarray = self._background_arrays[camera.uid]
+        image.metadata["camera_uid"] = camera.uid
+        background_array: SerializableImage = self._background_arrays[camera.uid]
         if self._sending_ratio > 1:
-            gray_array = rgb_to_gray(array)
-            mse = await run_sync(compute_mse, background_array, gray_array)
+            gray_array = image.to_grayscale(inplace=False)
+            mse = await run_sync(gray_array.compute_mse, background_array)
         else:
             mse = 1.0  # No need to compute it, the picture will be sent anyway
         return {
-            "array": array,
+            "image": image,
             "score": mse,
-            "timestamp": timestamp,
         }
 
-    async def update_scored_arrays(self) -> None:
+    async def update_scored_images(self) -> None:
         if not self.started:
             raise RuntimeError(
                 "Picture subroutine has to be started to update the scored arrays"
             )
         for camera in self.hardware.values():
-            new_scored_array = await self._get_scored_array(camera)
-            old_scored_array = self._scored_arrays.get(camera.uid, _null_scored_array)
-            if new_scored_array["score"] > old_scored_array["score"]:
-                self._scored_arrays[camera.uid] = new_scored_array
+            new_scored_image = await self._get_scored_image(camera)
+            old_scored_image = self._scored_images.get(camera.uid, _null_scored_image)
+            if new_scored_image["score"] > old_scored_image["score"]:
+                self._scored_images[camera.uid] = new_scored_image
 
     async def send_pictures(self) -> None:
         await self.ecosystem.engine.event_handler.send_picture_arrays(
@@ -131,7 +105,7 @@ class Pictures(SubroutineTemplate):
     async def _routine(self) -> None:
         start_time: float = monotonic()
         try:
-            await self.update_scored_arrays()
+            await self.update_scored_images()
         except ValueError as e:
             self.logger.error(
                 f"Encountered an error while updating scored arrays. "
@@ -153,7 +127,7 @@ class Pictures(SubroutineTemplate):
                 finally:
                     self._sending_counter = 0
             # Reset scores
-            for scored_array in self._scored_arrays.values():
+            for scored_array in self._scored_images.values():
                 scored_array["score"] = -1.0
         self._sending_counter += 1
         loop_time = monotonic() - start_time
@@ -203,15 +177,9 @@ class Pictures(SubroutineTemplate):
     @property
     def picture_arrays(self) -> list[SerializableImage]:
         return [
-            SerializableImage.from_array(
-                array=scored_array["array"],
-                metadata={
-                    "camera_uid": camera_uid,
-                    "timestamp": scored_array["timestamp"],
-                },
-            )
-            for camera_uid, scored_array in self._scored_arrays.items()
-            if scored_array["array"] is not None
+            scored_array["image"]
+            for scored_array in self._scored_images.values()
+            if scored_array["image"] is not None
         ]
 
     def get_hardware_needed_uid(self) -> set[str]:
@@ -224,9 +192,9 @@ class Pictures(SubroutineTemplate):
     async def reset_background_array(self, camera_uid: str) -> None:
         array_path = self._cache_dir / f"{camera_uid}-background.pkl"
         camera: Camera = self.hardware[camera_uid]
-        image = await camera.get_image()
-        array = np.array(image)
-        await run_sync(dump_picture_array, array, array_path)
+        image: SerializableImage = await camera.get_image()
+        image.to_grayscale(inplace=True)
+        await run_sync(image.dump_array, array_path)
 
     async def reset_background_arrays(self) -> None:
         for camera_uid in self.hardware:

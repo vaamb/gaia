@@ -7,7 +7,7 @@ from typing import Type
 
 from anyio.to_thread import run_sync
 
-from gaia.dependencies.camera import PIL_image
+from gaia.dependencies.camera import SerializableImage
 from gaia.hardware.abc import Camera, hardware_logger
 from gaia.hardware.utils import is_raspi
 
@@ -37,10 +37,10 @@ class PiCamera(Camera):
             from gaia.hardware._compatibility import Picamera2
         return Picamera2()
 
-    async def get_image(self, size: tuple | None = None) -> PIL_image.Image:
+    async def get_image(self, size: tuple | None = None) -> SerializableImage:
         return await run_sync(self._get_image, size)
 
-    def _get_image(self, size: tuple | None) -> PIL_image.Image:
+    def _get_image(self, size: tuple | None) -> SerializableImage:
         config = {
             "format": "RGB888"
         }
@@ -66,8 +66,7 @@ class PiCamera(Camera):
                     f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
             else:
-                image: PIL_image.Image = PIL_image.fromarray(array, mode="RGB")
-                image.info["timestamp"] = now
+                image = SerializableImage(array, metadata={"timestamp": now})
                 return image
         raise RuntimeError("There was an error while taking the picture.")
 

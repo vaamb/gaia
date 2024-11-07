@@ -597,6 +597,6 @@ class Events(AsyncEventHandler):
             )
             await self.emit(
                 "picture_arrays",
-                data=ecosystem_payload.encode(),
+                data=ecosystem_payload.serialize(),
                 namespace="aggregator-stream",
             )

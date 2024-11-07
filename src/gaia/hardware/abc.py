@@ -14,7 +14,7 @@ from anyio.to_thread import run_sync
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
-from gaia.dependencies.camera import check_dependencies, PIL_image, cv2
+from gaia.dependencies.camera import check_dependencies, cv2, SerializableImage
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import (
@@ -618,11 +618,7 @@ class i2cSensor(BaseSensor, i2cHardware):
 
 class Camera(Hardware):
     def __init__(self, *args, **kwargs) -> None:
-        check_dependencies(check_cv2=False)
-        if cv2 is None:
-            hardware_logger.warning(
-                "`opencv-python` is not installed, some functionalities might be "
-                "disabled or not work properly.")
+        check_dependencies()
         super().__init__(*args, **kwargs)
         self._device: Any | None = None
         self._camera_dir: Path | None = None
@@ -638,7 +634,7 @@ class Camera(Hardware):
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
-    async def get_image(self, size: tuple | None = None) -> PIL_image.Image:
+    async def get_image(self, size: tuple | None = None) -> SerializableImage:
         raise NotImplementedError("This method must be implemented in a subclass")
 
     #async def get_video(self) -> io.BytesIO:
@@ -662,20 +658,20 @@ class Camera(Hardware):
                 self._camera_dir.mkdir(parents=True)
         return self._camera_dir
 
-    async def load_image(self, image_path: Path) -> PIL_image.Image:
-        image = await run_sync(PIL_image.open, str(image_path))
+    async def load_image(self, image_path: Path) -> SerializableImage:
+        image = await run_sync(SerializableImage.read, str(image_path))
         return image
 
     async def save_image(
             self,
-            image: PIL_image.Image,
+            image: SerializableImage,
             image_path: Path | None = None,
     ) -> Path:
         if image_path is None:
-            timestamp: datetime | None = image.info.get("timestamp")
+            timestamp: datetime | None = image.metadata.get("timestamp", None)
             if timestamp is None:
                 timestamp = datetime.now(tz=timezone.utc)
             image_path = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
             image_path = self.camera_dir / image_path
-        await run_sync(image.save, image_path)
+        await run_sync(image.write, image_path)
         return image_path
