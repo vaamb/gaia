@@ -4,6 +4,7 @@ import shutil
 import tempfile
 from typing import Generator, TypeVar
 
+from pydantic import RootModel
 import pytest
 import pytest_asyncio
 
@@ -58,8 +59,8 @@ def patch() -> None:
     class EcosystemConfigValidator(from_files.EcosystemConfigValidator):
         management: gv.ManagementConfig = Field(default_factory=gv.ManagementConfig)
 
-    class RootEcosystemsConfigValidator(gv.BaseModel):
-        config: dict[str, EcosystemConfigValidator]
+    class RootEcosystemsConfigValidator(RootModel):
+        root: dict[str, EcosystemConfigValidator]
 
     from_files.RootEcosystemsConfigValidator = RootEcosystemsConfigValidator
 
