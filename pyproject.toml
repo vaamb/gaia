@@ -27,7 +27,6 @@ dependencies = [
 [project.optional-dependencies]
 camera = [
     "numpy~=2.1",
-    "pillow~=10.4.0",
     "opencv-python~=4.10",
 ]
 database = [
