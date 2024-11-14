@@ -389,7 +389,7 @@ class Ecosystem:
 
     # Health
     @property
-    def plants_health(self) -> gv.HealthRecord | gv.Empty:
+    def plants_health(self) -> list[gv.HealthRecord] | gv.Empty:
         if self.get_subroutine_status("health"):
             health_subroutine: Health = self.subroutines["health"]
             return health_subroutine.plants_health

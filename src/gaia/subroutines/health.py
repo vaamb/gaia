@@ -1,15 +1,22 @@
 from __future__ import annotations
 
-from datetime import datetime
-import io
+import asyncio
+from asyncio import Task
+from datetime import datetime, timezone
+from time import monotonic
 import typing as t
+from typing import Any, TypedDict
 
+from anyio.to_thread import run_sync
 from apscheduler.triggers.cron import CronTrigger
-import gaia_validators as gv
+import numpy as np
 
-from gaia.dependencies import check_dependencies
+import gaia_validators as gv
+from numpy import floating
+
+from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.hardware import camera_models
-from gaia.hardware.abc import Camera
+from gaia.hardware.abc import Camera, Measure
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -17,18 +24,84 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.light import Light
 
 
+indices: dict[Measure, str] = {
+    Measure.mpri: "(g-r)/(g+r)",  # Yang, Willis & Mueller 2008
+    Measure.ndrgi: "(r-g)/(g+r)",  # Yang, Willis & Mueller 2008
+    Measure.ndvi: "(nir-r)/(nir+r)",
+    Measure.vari: "(g-r)/(g+r-b)",
+}
+
+
+class _PartialHealthRecord(TypedDict):
+    measure: str
+    value: float
+
+
 class Health(SubroutineTemplate):
-    # TODO: fix
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = camera_models
         self.hardware: dict[str, Camera]
-        self._plants_health: gv.HealthRecord | gv.Empty = gv.Empty()
-        self._imageIO = io.BytesIO()
+        # Picture size
+        app_config = self.ecosystem.engine.config.app_config
+        self._picture_size: tuple[int, int] = app_config.PICTURE_SIZE
+        # Records
+        self._sending_data_task: Task | None = None
+        self._plants_health: list[gv.HealthRecord] | gv.Empty = gv.Empty()
         self._finish__init__()
 
-    def _start_scheduler(self) -> None:
+    """SubroutineTemplate methods"""
+    async def _routine(self) -> None:
+        start_time = monotonic()
+        self.logger.debug("Starting health data update routine ...")
+        try:
+            await self.update_health_data()
+        except Exception as e:
+            x = 1
+            self.logger.error(
+                f"Encountered an error while updating health data. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+            )
+        finally:
+            update_time = monotonic() - start_time
+            self.logger.debug(f"Health data update finished in {update_time:.1f} s.")
+        if self.ecosystem.engine.use_message_broker:
+            try:
+                await self.send_data_if_possible()
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending health data and warnings. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                )
+        routine_time = monotonic() - start_time
+        self.logger.debug(f"Health routine took {routine_time:.1f} s.")
+
+    def _compute_if_manageable(self) -> bool:
+        try:
+            check_dependencies()
+        except RuntimeError:
+            self.logger.warning(
+                "Health subroutine does not have all the dependencies installed.")
+            return False
+        cameras_uid = self.config.get_IO_group_uids(gv.HardwareType.camera)
+        for camera_uid in cameras_uid:
+            camera_dict = self.config.get_hardware_config(camera_uid)
+            measures_name = [measure.name for measure in camera_dict.measures]
+            indices_name = [index.value for index in indices.keys()]
+            if any(measure in indices_name for measure in measures_name):
+                return True
+        self.logger.warning("No health camera detected.")
+        return False
+
+    async def _start(self) -> None:
         h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
+        self.logger.info(
+            f"Starting the health subroutine. It will run every day at {h}h{m}.")
+        if not self.ecosystem.get_subroutine_status("light"):
+            self.logger.warning(
+                f"{self.ecosystem.name} is not managing light subroutine, be "
+                f"sure the ecosystem receive sufficient and consistent light "
+                f"when the subroutine is run.")
         self.ecosystem.engine.scheduler.add_job(
             func=self.routine,
             id=f"{self.ecosystem.uid}-health_routine",
@@ -36,52 +109,48 @@ class Health(SubroutineTemplate):
             misfire_grace_time=15 * 60,
         )
 
-    def _stop_scheduler(self) -> None:
-        self.logger.info("Closing the tasks scheduler.")
+    async def _stop(self) -> None:
+        self.logger.info("Stopping health subroutine.")
         self.ecosystem.engine.scheduler.remove_job(
             f"{self.ecosystem.uid}-health_routine")
-        self.logger.info("The tasks scheduler was closed properly.")
+        self._sending_data_task = None
 
-    async def analyse_picture(self) -> None:
-        self.logger.info(f"Starting analysis of {self._ecosystem} image.")
-        # If got an image, analyse it
-        if self._imageIO.getbuffer().nbytes:
-            import random
+    def get_hardware_needed_uid(self) -> set[str]:
+        return set(self.config.get_IO_group_uids(IO_type=gv.HardwareType.camera))
 
-            green = random.randrange(12000, 1500000, 1000)
-            necrosis = random.uniform(5, 55)
-            health_index = random.uniform(70, 97)
-            self._plants_health = gv.HealthRecord(
-                timestamp=datetime.now().astimezone().replace(microsecond=0),
-                green=green,
-                necrosis=round(necrosis, 2),
-                index=round(health_index, 2),
+    """Routine specific methods"""
+    async def update_health_data(self) -> None:
+        if not self.started:
+            raise RuntimeError(
+                "Health subroutine has to be started to update the health data"
             )
-            self.logger.info(
-                f"{self._ecosystem} picture successfully analysed, "
-                f"indexes computed.")
+        images = await self._get_the_images()
+        if images:
+            self._plants_health = await self._analyse_images(images)
         else:
-            # TODO: change Exception
-            raise Exception
+            self._plants_health = gv.Empty()
 
-    async def _routine(self) -> None:
-        try:
-            await self._update_health_data()
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an error while running the health routine. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`."
-            )
-
-    async def _update_health_data(self) -> None:
+    async def _get_the_images(self) -> dict[str, SerializableImage]:
+        """Get the images from the cameras before analysing them as depending
+        on the config, lights can be set on while taking the images, which can
+        disturb animals.
+        """
         # If webcam: turn it off and restart after
-        light_running = self.ecosystem.get_subroutine_status("light")
-        if light_running:
-            light_subroutine: "Light" = self.ecosystem.subroutines["light"]
-            light_mode = light_subroutine.actuator_handler.mode
-            light_status = light_subroutine.actuator_handler.status
+        light_subroutine: Light = self.ecosystem.subroutines["light"]
+        light_mode = light_subroutine.actuator_handler.mode
+        light_status = light_subroutine.actuator_handler.status
+        # Turn the lights on
+        if light_subroutine.started:
+            self.logger.info("Turning on the light(s) to take a 'health' picture.")
             await light_subroutine.turn_light(gv.ActuatorModePayload.on)
-            self.take_picture()
+        # Get the pictures
+        images: dict[str, SerializableImage] = {}
+        for camera_uid, camera in self.hardware.items():
+            camera: Camera
+            images[camera_uid] = await camera.get_image(size=self._picture_size)
+        # Turn the lights back to their previous state
+        if light_subroutine.started:
+            self.logger.info("Turning back the light subroutine to its previous state.")
             if light_mode is gv.ActuatorMode.automatic:
                 await light_subroutine.turn_light(gv.ActuatorModePayload.automatic)
             else:
@@ -89,41 +158,74 @@ class Health(SubroutineTemplate):
                     await light_subroutine.turn_light(gv.ActuatorModePayload.on)
                 else:
                     await light_subroutine.turn_light(gv.ActuatorModePayload.off)
-        else:
-            self.take_picture()
-        await self.analyse_picture()
+        # return the images
+        return images
 
-    def _compute_if_manageable(self) -> bool:
-        cameras_uid = self.config.get_IO_group_uids(gv.HardwareType.camera)
-        if cameras_uid:
-            for camera_uid in cameras_uid:
-                camera_dict = self.config.get_hardware_config(camera_uid)
-                measures = camera_dict.measures
-                if "health" in measures:
-                    return True
-        self.logger.warning("No health camera detected.")
-        return False
+    @staticmethod
+    def _get_index(image0: SerializableImage, measure: Measure) -> floating[Any]:
+        image1 = image0.apply_rgb_formula(indices[measure])
+        return np.mean(image1.array)
 
-    async def _start(self) -> None:
-        check_dependencies("camera")
-        if not self.ecosystem.get_subroutine_status("light"):
-            self.logger.warning(
-                "The Ecosystem is not managing light subroutine, be sure the "
-                "plants will receive sufficient and consistent light when "
-                "taking the image."
+    @staticmethod
+    async def _get_partial_record(
+            image0: SerializableImage,
+            measure: Measure,
+    ) -> _PartialHealthRecord:
+        index = await run_sync(Health._get_index, image0, measure)
+        return {
+            "measure": measure.name,
+            "value": index,
+        }
+
+    async def _get_records_for_image(
+            self,
+            camera_uid: str,
+            image: SerializableImage,
+    ) -> list[gv.HealthRecord]:
+        camera: Camera = self.hardware[camera_uid]
+        measures = camera.measures
+        now = datetime.now().astimezone(timezone.utc).replace(microsecond=0)
+        futures = [
+            asyncio.create_task(self._get_partial_record(image, measure))
+            for measure in measures
+        ]
+        partial_records = await asyncio.gather(*futures)
+        return [
+            gv.HealthRecord(
+                camera_uid=camera_uid,
+                measure=record["measure"],
+                value=record["value"],
+                timestamp=now,
             )
+            for record in partial_records
+        ]
 
-    async def _stop(self) -> None:
-        self.hardware = {}
+    async def _analyse_images(
+            self,
+            images: dict[str, SerializableImage],
+    ) -> list[gv.HealthRecord] | gv.Empty:
+        self.logger.debug(f"Starting analysis of {self._ecosystem.name} image(s).")
+        rv: list[gv.HealthRecord] = []
+        futures = [
+            asyncio.create_task(self._get_records_for_image(camera_uid, image))
+            for camera_uid, image in images.items()
+        ]
+        for records in await asyncio.gather(*futures):
+            rv.extend(records)
+        self.logger.debug(f"Analysis of {self._ecosystem.name} image(s) done.")
+        return rv
 
-    """API calls"""
-    def get_hardware_needed_uid(self) -> set[str]:
-        # TODO
-        pass
+    async def send_data(self) -> None:
+        if not self.ecosystem.engine.use_message_broker:
+            return
+        await self.ecosystem.engine.event_handler.send_payload_if_connected(
+            "health_data", ecosystem_uids=[self.ecosystem.uid])
 
-    def take_picture(self) -> None:
-        pass
+    async def send_data_if_possible(self) -> None:
+        if self._sending_data_task is None or self._sending_data_task.done():
+            self._sending_data_task = asyncio.create_task(
+                self.send_data(), name=f"{self.ecosystem.uid}-health-send_data")
 
     @property
-    def plants_health(self) -> gv.HealthRecord | gv.Empty:
+    def plants_health(self) -> list[gv.HealthRecord] | gv.Empty:
         return self._plants_health
