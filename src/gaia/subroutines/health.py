@@ -57,7 +57,6 @@ class Health(SubroutineTemplate):
         try:
             await self.update_health_data()
         except Exception as e:
-            x = 1
             self.logger.error(
                 f"Encountered an error while updating health data. "
                 f"ERROR msg: `{e.__class__.__name__} :{e}`."
