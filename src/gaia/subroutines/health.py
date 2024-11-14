@@ -192,7 +192,7 @@ class Health(SubroutineTemplate):
         partial_records = await asyncio.gather(*futures)
         return [
             gv.HealthRecord(
-                camera_uid=camera_uid,
+                sensor_uid=camera_uid,
                 measure=record["measure"],
                 value=record["value"],
                 timestamp=now,
