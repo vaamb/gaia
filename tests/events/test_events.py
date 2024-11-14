@@ -346,4 +346,4 @@ async def test_send_picture_arrays(events_handler: Events, ecosystem: Ecosystem)
 
     assert response["namespace"] == "aggregator-stream"
     assert response["event"] == "picture_arrays"
-    assert isinstance(response["data"], bytes)
+    assert isinstance(response["data"], (bytes, bytearray))
