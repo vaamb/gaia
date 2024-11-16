@@ -21,6 +21,8 @@ from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from sqlalchemy.orm import DeclarativeBase, DeclarativeMeta
+
     from gaia.subroutines.light import Light
 
 
@@ -214,6 +216,28 @@ class Health(SubroutineTemplate):
         self.logger.debug(f"Analysis of {self._ecosystem.name} image(s) done.")
         return rv
 
+    async def _log_data(self, db_model: "DeclarativeBase" | "DeclarativeMeta") -> None:
+        async with self.ecosystem.engine.db.scoped_session() as session:
+            for record in self._plants_health:
+                session.add(
+                    db_model(
+                        ecosystem_uid=self.ecosystem.uid,
+                        sensor_uid=record.sensor_uid,
+                        measure=record.measure,
+                        value=record.value,
+                        timestamp=record.timestamp,
+                    )
+                )
+            await session.commit()
+
+    async def log_data(self) -> None:
+        if not self.ecosystem.engine.use_db:
+            return
+
+        from gaia.database.models import HealthRecord
+
+        await self._log_data(HealthRecord)
+
     async def send_data(self) -> None:
         if not self.ecosystem.engine.use_message_broker:
             return
@@ -224,6 +248,14 @@ class Health(SubroutineTemplate):
         if self._sending_data_task is None or self._sending_data_task.done():
             self._sending_data_task = asyncio.create_task(
                 self.send_data(), name=f"{self.ecosystem.uid}-health-send_data")
+
+        else:
+            if not self.ecosystem.engine.use_db:
+                return
+
+            from gaia.database.models import HealthBuffer
+
+            await self._log_data(HealthBuffer)
 
     @property
     def plants_health(self) -> list[gv.HealthRecord] | gv.Empty:
