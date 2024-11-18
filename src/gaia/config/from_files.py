@@ -1026,6 +1026,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         validated_management = safe_enum_from_name(gv.ManagementFlags, management)
         management_name: gv.ManagementNames = validated_management.name
+        if validated_management >= 256 and value:
+            composite_name = f"{validated_management.name}_enabled"
+            composite_mgmt = safe_enum_from_name(gv.ManagementFlags, composite_name)
+            flag = self.management_flag
+            if not flag & composite_mgmt == composite_mgmt:
+                dep = gv.ManagementFlags(composite_mgmt - validated_management)
+                self.logger.warning(
+                    f"{management_name.upper()} management has unmet dependencies: "
+                    f"{dep}. This might lead to issues if it is not enabled.")
         self.__dict["management"][management_name] = value
 
     def get_subroutines_enabled(self) -> list[gv.ManagementNames]:
