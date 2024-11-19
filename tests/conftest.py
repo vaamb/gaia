@@ -15,7 +15,7 @@ from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHel
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.subroutines import (
-    Climate, Light, Pictures, Sensors, subroutine_dict, subroutine_names)
+    Climate, Health, Light, Pictures, Sensors, subroutine_dict, subroutine_names)
 from gaia.utils import SingletonMeta, yaml
 
 from .data import (
@@ -198,6 +198,18 @@ async def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
             await ecosystem.stop_subroutine("sensors")
         if climate_subroutine.started:
             await climate_subroutine.stop()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def health_subroutine(ecosystem: Ecosystem) -> YieldFixture[Health]:
+    ecosystem.config.set_management("camera", True)
+    health_subroutine: Health = ecosystem.subroutines["health"]
+
+    try:
+        yield health_subroutine
+    finally:
+        if health_subroutine.started:
+            await health_subroutine.stop()
 
 
 @pytest_asyncio.fixture(scope="function")

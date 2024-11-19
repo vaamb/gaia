@@ -41,6 +41,11 @@ class Measure(Enum):
     moisture = "moisture"
     temperature = "temperature"
     tvoc = "TVOC"
+    # Camera
+    mpri = "MPRI"
+    ndrgi = "NDRGI"
+    vari = "VARI"
+    ndvi = "NDVI"
 
 
 class Unit(Enum):

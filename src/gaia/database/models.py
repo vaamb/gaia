@@ -212,3 +212,26 @@ class ActuatorBuffer(BaseActuatorRecord, DataBufferMixin):
             session=session,
             per_page=per_page,
         )
+
+
+class HealthRecord(BaseSensorRecord):
+    __tablename__ = "health_records"
+
+
+class HealthBuffer(BaseSensorRecord, DataBufferMixin):
+    __tablename__ = "health_buffers"
+
+    exchange_uuid: Mapped[UUID | None] = mapped_column()
+
+    @classmethod
+    async def get_buffered_data(
+            cls,
+            session: AsyncSession,
+            per_page: int = 50,
+    ) -> AsyncGenerator[gv.BufferedHealthRecordPayload]:
+        return cls._get_buffered_data(
+            buffered_record_class=gv.BufferedSensorRecord,
+            buffered_payload_model=gv.BufferedHealthRecordPayload,
+            session=session,
+            per_page=per_page,
+        )
