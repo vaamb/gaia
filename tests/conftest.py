@@ -213,6 +213,7 @@ async def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
 
 @pytest_asyncio.fixture(scope="function")
 async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Pictures]:
+    ecosystem.config.set_management("camera", True)
     pictures_subroutine: Pictures = ecosystem.subroutines["pictures"]
 
     try:

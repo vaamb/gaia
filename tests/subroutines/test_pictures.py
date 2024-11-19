@@ -20,7 +20,6 @@ def test_hardware_needed(pictures_subroutine: Pictures):
 
 @pytest.mark.asyncio
 async def test_routine(pictures_subroutine: Pictures):
-    pictures_subroutine.config.set_management("camera", True)
     pictures_subroutine.enable()
     await pictures_subroutine.start()
 
@@ -33,7 +32,6 @@ async def test_routine(pictures_subroutine: Pictures):
 
 @pytest.mark.asyncio
 async def test_reset_background_arrays(pictures_subroutine: Pictures):
-    pictures_subroutine.config.set_management("camera", True)
     pictures_subroutine.enable()
     await pictures_subroutine.start()
 
