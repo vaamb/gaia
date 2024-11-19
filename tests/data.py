@@ -73,7 +73,7 @@ camera_info: gv.AnonymousHardwareConfigDict = {
     "model": "PiCamera",
     "type": gv.HardwareType.camera,
     "level": gv.HardwareLevel.environment,
-    "measures": [],
+    "measures": ["mpri"],
     "plants": [],
     "multiplexer_model": None,
 }
