@@ -35,6 +35,7 @@ database = [
     "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git",
 ]
 dispatcher = [
+    "aiohttp~=3.11",
     "aio-pika~=9.0",
     "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git",
 ]

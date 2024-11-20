@@ -13,6 +13,7 @@ import typing as t
 from typing import Any, Callable, cast, Literal, NamedTuple, Type
 from uuid import UUID
 
+from aiohttp import ClientSession
 from pydantic import ValidationError
 
 from dispatcher import AsyncEventHandler
@@ -25,6 +26,7 @@ from gaia.utils import humanize_list, local_ip_address
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia_validators.image import SerializableImage
     from sqlalchemy_wrapper import SQLAlchemyWrapper
 
 
@@ -124,6 +126,7 @@ class Events(AsyncEventHandler):
         self._last_heartbeat: float = monotonic()
         self._ping_task: Task | None = None
         self._jobs_scheduled: bool = False
+        self.camera_token: str | None = None
         self.logger = logging.getLogger("gaia.engine.events_handler")
 
     @property
@@ -374,6 +377,10 @@ class Events(AsyncEventHandler):
             "Engine registration successful, sending initial ecosystems info.")
         await self.send_initialization_data()
 
+    async def on_camera_token(self, camera_token: str) -> None:
+        self.logger.info("Received camera token from Ouranos.")
+        self.camera_token = camera_token
+
     async def send_initialization_data(self) -> None:
         await self.send_ecosystems_info()
         self.logger.info("Initial ecosystems info sent.")
@@ -580,10 +587,32 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     #   Pictures
     # ---------------------------------------------------------------------------
+    async def _send_image(self, image: "SerializableImage") -> None:
+        # Format data
+        to_send = image.serialize(".jpeg")
+        headers = {"token": self.camera_token}
+        host = self.engine.config.app_config.OURANOS_HOST
+        port = self.engine.config.app_config.OURANOS_PORT
+        url = f"http://{host}:{port}/upload_camera_image"
+        # Upload data
+        try:
+            async with ClientSession(headers=headers) as session:
+                async with session.post(url, data=to_send, timeout=3.0) as resp:
+                    response = await resp.json()
+                    self.logger.debug(f"Image sent. Response: {response}")
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while uploading image. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+            )
+
     async def send_picture_arrays(
             self,
             ecosystem_uids: str | list[str] | None = None,
     ) -> None:
+        if self.camera_token is None:
+            self.logger.error("No camera token found, cannot send picture arrays.")
+            return
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(f"Getting 'picture_arrays' for {humanize_list(uids)}.")
 
@@ -591,12 +620,7 @@ class Events(AsyncEventHandler):
             picture_arrays = self.ecosystems[uid].picture_arrays
             if isinstance(picture_arrays, gv.Empty):
                 continue
-            ecosystem_payload = SerializableImagePayload(
-                uid=uid,
-                data=picture_arrays,
-            )
-            await self.emit(
-                "picture_arrays",
-                data=ecosystem_payload.serialize(),
-                namespace="aggregator-stream",
-            )
+            for image in picture_arrays:
+                image: SerializableImage
+                image.metadata["ecosystem_uid"] = uid
+                await self._send_image(image)
