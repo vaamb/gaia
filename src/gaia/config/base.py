@@ -35,8 +35,7 @@ class BaseConfig:
         )
 
     COMMUNICATE_WITH_OURANOS = False
-    OURANOS_HOST = os.environ.get("OURANOS_HOST", "127.0.0.1")
-    OURANOS_PORT = os.environ.get("OURANOS_PORT", 7191)
+    AGGREGATOR_SERVER_URL = os.environ.get("AGGREGATOR_SERVER_URL", "http://127.0.0.1:7191")
     AGGREGATOR_COMMUNICATION_URL = os.environ.get("GAIA_COMMUNICATION_URL") or "amqp://"
 
     HEALTH_LOGGING_TIME = "00h00"

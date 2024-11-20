@@ -595,9 +595,8 @@ class Events(AsyncEventHandler):
         # Format data
         to_send = image.serialize(".jpeg")
         headers = {"token": self.camera_token}
-        host = self.engine.config.app_config.OURANOS_HOST
-        port = self.engine.config.app_config.OURANOS_PORT
-        url = f"http://{host}:{port}/upload_camera_image"
+        base_url = self.engine.config.app_config.AGGREGATOR_SERVER_URL
+        url = f"{base_url}/upload_camera_image"
         # Upload data
         try:
             async with ClientSession(headers=headers) as session:
