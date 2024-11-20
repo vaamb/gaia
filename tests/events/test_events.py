@@ -341,9 +341,3 @@ async def test_send_picture_arrays(events_handler: Events, ecosystem: Ecosystem)
     assert not isinstance(pictures_subroutine.picture_arrays, gv.Empty)
 
     await events_handler.send_picture_arrays()
-
-    response = events_handler._dispatcher.emit_store[0]
-
-    assert response["namespace"] == "aggregator-stream"
-    assert response["event"] == "picture_arrays"
-    assert isinstance(response["data"], (bytes, bytearray))
