@@ -127,6 +127,8 @@ class Events(AsyncEventHandler):
         self._ping_task: Task | None = None
         self._jobs_scheduled: bool = False
         self.camera_token: str | None = None
+        app_config = self.engine.config.app_config
+        self._compression_format: str | None = app_config.PICTURE_COMPRESSION_FORMAT
         self.logger = logging.getLogger("gaia.engine.events_handler")
 
     @property
@@ -608,13 +610,14 @@ class Events(AsyncEventHandler):
             )
             await self.emit(
                 "picture_arrays",
-                data=ecosystem_payload.serialize(),
+                data=ecosystem_payload.serialize(
+                    compression_format=self._compression_format),
                 namespace="aggregator-stream",
             )
 
     async def _upload_image(self, image: "SerializableImage") -> None:
         # Format data
-        to_send = image.serialize(".jpeg")
+        to_send = image.serialize(compression_format=self._compression_format)
         headers = {"token": self.camera_token}
         base_url = self.engine.config.app_config.AGGREGATOR_SERVER_URL
         url = f"{base_url}/upload_camera_image"
