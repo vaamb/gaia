@@ -591,7 +591,28 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     #   Pictures
     # ---------------------------------------------------------------------------
-    async def _send_image(self, image: "SerializableImage") -> None:
+    async def send_picture_arrays(
+            self,
+            ecosystem_uids: str | list[str] | None = None,
+    ) -> None:
+        uids = self.filter_uids(ecosystem_uids)
+        self.logger.debug(f"Getting 'picture_arrays' for {humanize_list(uids)}.")
+
+        for uid in uids:
+            picture_arrays = self.ecosystems[uid].picture_arrays
+            if isinstance(picture_arrays, gv.Empty):
+                continue
+            ecosystem_payload = SerializableImagePayload(
+                uid=uid,
+                data=picture_arrays,
+            )
+            await self.emit(
+                "picture_arrays",
+                data=ecosystem_payload.serialize(),
+                namespace="aggregator-stream",
+            )
+
+    async def _upload_image(self, image: "SerializableImage") -> None:
         # Format data
         to_send = image.serialize(".jpeg")
         headers = {"token": self.camera_token}
@@ -609,7 +630,7 @@ class Events(AsyncEventHandler):
                 f"ERROR msg: `{e.__class__.__name__} :{e}`."
             )
 
-    async def send_picture_arrays(
+    async def upload_picture_arrays(
             self,
             ecosystem_uids: str | list[str] | None = None,
     ) -> None:
@@ -626,4 +647,4 @@ class Events(AsyncEventHandler):
             for image in picture_arrays:
                 image: SerializableImage
                 image.metadata["ecosystem_uid"] = uid
-                await self._send_image(image)
+                await self._upload_image(image)
