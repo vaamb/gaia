@@ -45,6 +45,11 @@ class Pictures(SubroutineTemplate):
         self._sending_ratio: int = ceil(sending_period / picture_period)
         self._sending_counter: int = 0
         self._picture_size: tuple[int, int] = app_config.PICTURE_SIZE
+        self._picture_transfer_method: str = app_config.PICTURE_TRANSFER_METHOD
+        if self._picture_transfer_method not in ("broker", "upload"):
+            raise ValueError(
+                f"Invalid picture transfer method: {self._picture_transfer_method}"
+            )
         # Caching
         app_cache_dir = self.ecosystem.engine.config.cache_dir
         self._cache_dir = app_cache_dir / f"camera/{self.ecosystem.name}"
@@ -90,8 +95,12 @@ class Pictures(SubroutineTemplate):
                 self._scored_images[camera.uid] = new_scored_image
 
     async def send_pictures(self) -> None:
-        await self.ecosystem.engine.event_handler.send_picture_arrays(
-            [self.ecosystem.uid])
+        if self._picture_transfer_method == "broker":
+            await self.ecosystem.engine.event_handler.send_picture_arrays(
+                [self.ecosystem.uid])
+        else:
+            await self.ecosystem.engine.event_handler.upload_picture_arrays(
+                [self.ecosystem.uid])
 
     async def send_pictures_if_possible(self) -> None:
         if (
