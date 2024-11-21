@@ -129,6 +129,7 @@ class Events(AsyncEventHandler):
         self.camera_token: str | None = None
         app_config = self.engine.config.app_config
         self._compression_format: str | None = app_config.PICTURE_COMPRESSION_FORMAT
+        self._resize_ratio: float = app_config.PICTURE_RESIZE_RATIO
         self.logger = logging.getLogger("gaia.engine.events_handler")
 
     @property
@@ -604,6 +605,11 @@ class Events(AsyncEventHandler):
             picture_arrays = self.ecosystems[uid].picture_arrays
             if isinstance(picture_arrays, gv.Empty):
                 continue
+            if self._resize_ratio != 1.0:
+                picture_arrays = [
+                    picture_array.resize(ratio=self._resize_ratio)
+                    for picture_array in picture_arrays
+                ]
             ecosystem_payload = SerializableImagePayload(
                 uid=uid,
                 data=picture_arrays,
@@ -617,6 +623,8 @@ class Events(AsyncEventHandler):
 
     async def _upload_image(self, image: "SerializableImage") -> None:
         # Format data
+        if self._resize_ratio != 1.0:
+            image = image.resize(ratio=self._resize_ratio)
         to_send = image.serialize(compression_format=self._compression_format)
         headers = {"token": self.camera_token}
         base_url = self.engine.config.app_config.AGGREGATOR_SERVER_URL
