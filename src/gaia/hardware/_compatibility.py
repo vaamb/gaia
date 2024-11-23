@@ -233,7 +233,7 @@ class Picamera2:
         r = np.random.binomial(255, 0.133, (height, width))
         g = np.random.binomial(255, 0.420, (height, width))
         b = np.random.binomial(255, 0.639, (height, width))
-        array = np.stack((r, g, b), axis=2)
+        array = np.stack((b, g, r), axis=2)
         return array.astype("uint8")
 
     def configure(self, camera_config: dict | str) -> None:
