@@ -6,6 +6,7 @@ check_dependencies("dispatcher")
 
 import asyncio
 from asyncio import sleep, Task
+from datetime import datetime, timezone
 import inspect
 import logging
 from time import monotonic
@@ -191,15 +192,19 @@ class Events(AsyncEventHandler):
     async def ping(self) -> None:
         if self._dispatcher.connected:
             try:
-                ecosystems = [
-                    {
-                        "uid": ecosystem.uid,
-                        "status": ecosystem.started,
-                    }
-                    for ecosystem in self.ecosystems.values()
-                ]
+                ping_data: gv.EnginePingPayloadDict = {
+                    "engine_uid": self.engine.uid,
+                    "timestamp": datetime.now(timezone.utc),
+                    "ecosystems": [
+                        {
+                            "uid": ecosystem.uid,
+                            "status": ecosystem.started,
+                        }
+                        for ecosystem in self.ecosystems.values()
+                    ]
+                }
                 self.logger.debug("Sending 'ping'.")
-                await self.emit("ping", data=ecosystems, namespace="aggregator-stream")
+                await self.emit("ping", data=ping_data, namespace="aggregator-stream")
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while running the ping routine. "
