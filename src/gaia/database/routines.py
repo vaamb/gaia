@@ -50,5 +50,5 @@ async def log_sensors_data(
                     logged_ecosystem.add(ecosystem_uid)
         await session.commit()
     if logged_ecosystem:
-        engine.logger.info(
+        engine.logger.debug(
             f"Logged sensors data for {humanize_list(list(logged_ecosystem))}.")
