@@ -14,7 +14,6 @@ import typing as t
 from typing import Any, Callable, cast, Literal, NamedTuple, Type
 from uuid import UUID
 
-from aiohttp import ClientSession
 from pydantic import ValidationError
 
 from dispatcher import AsyncEventHandler
@@ -627,6 +626,7 @@ class Events(AsyncEventHandler):
             )
 
     async def _upload_image(self, image: "SerializableImage") -> None:
+        from aiohttp import ClientSession
         # Format data
         if self._resize_ratio != 1.0:
             image = image.resize(ratio=self._resize_ratio)

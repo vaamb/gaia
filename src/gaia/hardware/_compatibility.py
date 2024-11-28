@@ -230,11 +230,15 @@ class Picamera2:
         import numpy as np
 
         width, height = self._cfg["size"]
-        r = np.random.binomial(255, 0.133, (height, width))
-        g = np.random.binomial(255, 0.420, (height, width))
-        b = np.random.binomial(255, 0.639, (height, width))
-        array = np.stack((b, g, r), axis=2)
-        return array.astype("uint8")
+        array = np.stack(
+            (
+                np.random.binomial(255, 0.639, (height, width)).astype("uint8"),  #b
+                np.random.binomial(255, 0.420, (height, width)).astype("uint8"),  #g
+                np.random.binomial(255, 0.133, (height, width)).astype("uint8"),  #r
+            ),
+            axis=2,
+        )
+        return array
 
     def configure(self, camera_config: dict | str) -> None:
         if isinstance(camera_config, dict):
