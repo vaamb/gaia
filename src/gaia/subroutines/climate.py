@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import datetime, time
 from time import monotonic
 import typing as t
+from typing import Sequence
 
 import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorCouple, actuator_couples, HystericalPID
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, Hardware, Switch
+from gaia.hardware.abc import BaseSensor, Dimmer, Switch
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -26,85 +27,73 @@ class Climate(SubroutineTemplate):
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
         self.hardware: dict[str, Dimmer | Switch]
+        self._expected_actuators: dict[gv.HardwareType, gv.ClimateParameter] = {}
+        # Routine parameters
         loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
         self._sensor_miss: int = 0
-        self._regulated_parameters: dict[gv.ClimateParameter: bool] = {
-            gv.ClimateParameter.temperature: False,
-            gv.ClimateParameter.humidity: False,
-        }
-        self._activated_actuator_types: set[gv.HardwareType.actuator] = set()
         self._finish__init__()
 
-    @staticmethod
-    def _any_regulated(parameters_dict: dict[gv.ClimateParameter: bool]) -> bool:
-        return any([regulated for regulated in parameters_dict.values()])
-
-    def _compute_regulated_parameters(self) -> dict[gv.ClimateParameter: bool]:
-        regulated_parameters: dict[gv.ClimateParameter: bool] = {
-            gv.ClimateParameter.temperature: True,
-            gv.ClimateParameter.humidity: True,
-        }
+    def _compute_expected_actuators(self) -> dict[gv.HardwareType, gv.ClimateParameter]:
+        regulated_parameters: list[gv.ClimateParameter] = [
+            gv.ClimateParameter.temperature,
+            gv.ClimateParameter.humidity,
+        ]
 
         # Make sure the sensor subroutine is running
         if not self.ecosystem.get_subroutine_status("sensors"):
             self.logger.warning(
                 "Climate subroutine requires a running sensors subroutine in "
-                "order to work."
-            )
-            for climate_param in regulated_parameters.keys():
-                regulated_parameters[climate_param] = False
-            return regulated_parameters
+                "order to work.")
+            return {}
 
-        # Check if target values in config
+        # Check if climate parameters are available in the config file
         for climate_param in regulated_parameters:
             try:
                 self.config.get_climate_parameter(climate_param.name)
             except UndefinedParameter:
-                regulated_parameters[climate_param] = False
-        if not self._any_regulated(regulated_parameters):
-            self.logger.debug("No climate parameter found.")
-            return regulated_parameters
+                regulated_parameters.remove(climate_param)
+        if not regulated_parameters:
+            self.logger.warning("No climate parameter found.")
+            return {}
 
         # Get sensors mounted and the measures they're taking
-        sensors = [
-            hardware
-            for hardware in Hardware.get_mounted().values()
-            if hardware.ecosystem_uid == self.ecosystem.uid
-            and hardware.type == gv.HardwareType.sensor
-        ]
-        measures: set[str] = set()
-        for sensor in sensors:
-            measures.update([measure.name for measure in sensor.measures])
+        sensors: Sequence[BaseSensor] = self.ecosystem.subroutines["sensors"].hardware.values()
+        measures: set[str] = {
+            measure.name
+            for sensor in sensors
+            for measure in sensor.measures
+        }
 
         # Check if sensors taking regulated params are available
-        for climate_param, regulated in regulated_parameters.items():
-            if not regulated:
-                continue
+        for climate_param in regulated_parameters:
             if climate_param.name not in measures:
-                regulated_parameters[climate_param] = False
-        if not self._any_regulated(regulated_parameters):
+                regulated_parameters.remove(climate_param)
+        if not regulated_parameters:
             self.logger.debug("No sensor measuring regulated parameters detected.")
-            return regulated_parameters
+            return {}
 
-        # Check if regulators available
-        for climate_param, regulated in regulated_parameters.items():
-            if not regulated:
-                continue
+        # Check if there are regulators available and map them with climate parameters
+        rv: dict[gv.HardwareType, gv.ClimateParameter] = {}
+        for climate_param in regulated_parameters:
             actuator_couple: ActuatorCouple = actuator_couples[climate_param]
-            any_regulator = False
             for actuator_type in actuator_couple:
-                if actuator_type is None:
-                    continue
-                if self.config.get_IO_group_uids(actuator_type):
-                    any_regulator = True
-                    break
-            if not any_regulator:
-                regulated_parameters[climate_param] = False
-        if not self._any_regulated(regulated_parameters):
+                if (
+                        actuator_type is not None
+                        and self.config.get_IO_group_uids(actuator_type)
+                ):
+                    rv[actuator_type] = climate_param
+        if not rv:
             self.logger.debug("No climatic actuator detected.")
-            return regulated_parameters
-        return regulated_parameters
+            return {}
+        return rv
+
+    def update_expected_actuators(self) -> None:
+        self._expected_actuators = self._compute_expected_actuators()
+
+    @property
+    def expected_actuators(self) -> dict[gv.HardwareType, gv.ClimateParameter]:
+        return self._expected_actuators
 
     async def _get_sensors_average(self) -> dict[str, float]:
         # Get the sensors average
@@ -172,7 +161,7 @@ class Climate(SubroutineTemplate):
         sensors_average: dict[str, float] = await self._get_sensors_average()
         for climate_parameter in self.regulated_parameters:
             self._update_pid(climate_parameter, sensors_average)
-        for actuator_type in self._activated_actuator_types:
+        for actuator_type in self._expected_actuators:
             actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
             async with actuator_handler.update_status_transaction():
                 await self._update_actuator_handler(actuator_handler)
@@ -202,8 +191,8 @@ class Climate(SubroutineTemplate):
             )
 
     def _compute_if_manageable(self) -> bool:
-        self.update_regulated_parameters()
-        if not self._any_regulated(self._regulated_parameters):
+        self.update_expected_actuators()
+        if not self._expected_actuators:
             self.logger.warning(
                 "No parameters that could be regulated were found. "
                 "Disabling Climate subroutine."
@@ -213,50 +202,32 @@ class Climate(SubroutineTemplate):
             return True
 
     async def _start(self) -> None:
-        # self.update_regulated_parameters()  # Done in _compute_if_manageable
         self.logger.info(
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
-        for climate_parameter in self._regulated_parameters:
+        for climate_parameter in self.regulated_parameters:
             pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
             pid.reset()
-        #self.ecosystem.engine.scheduler.add_job(
-        #    func=self.routine,
-        #    id=f"{self.ecosystem.uid}-climate_routine",
-        #    trigger=IntervalTrigger(seconds=self._loop_period, jitter=self._loop_period/10),
-        #)
-        activated_actuator_types: set[gv.HardwareType] = set()
-        for parameter in self._regulated_parameters:
-            actuator_couple: ActuatorCouple = actuator_couples[parameter]
-            for actuator_type in actuator_couple:
-                # Check if we have at least one actuator available
-                if not self.config.get_IO_group_uids(actuator_type):
-                    continue
-                actuator_handler = self.ecosystem.actuator_hub.get_handler(
-                    actuator_type)
-                async with actuator_handler.update_status_transaction(activation=True):
-                    actuator_handler.activate()
-                activated_actuator_types.add(actuator_type)
-        self._activated_actuator_types = activated_actuator_types
+        for actuator_type in self.expected_actuators:
+            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            async with actuator_handler.update_status_transaction(activation=True):
+                actuator_handler.activate()
 
     async def _stop(self) -> None:
         #self.ecosystem.engine.scheduler.remove_job(
         #    f"{self.ecosystem.uid}-climate_routine")
-        for actuator_type in self._activated_actuator_types:
+        for actuator_type in self.expected_actuators:
             actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
             async with actuator_handler.update_status_transaction(activation=True):
                 actuator_handler.deactivate()
-        self._activated_actuator_types = set()
 
     """API calls"""
     def get_hardware_needed_uid(self) -> set[str]:
-        self.update_regulated_parameters()
+        self.update_expected_actuators()
         hardware_needed: set[str] = set()
-        for climate_parameter in self._regulated_parameters:
-            couple = actuator_couples[climate_parameter]
-            for IO_type in couple:
-                extra = set(self.config.get_IO_group_uids(IO_type))
-                hardware_needed = hardware_needed | extra
+        for actuator_type in self.expected_actuators:
+            extra = set(self.config.get_IO_group_uids(actuator_type))
+            hardware_needed = hardware_needed | extra
         return hardware_needed
 
     async def refresh_hardware(self) -> None:
@@ -269,14 +240,7 @@ class Climate(SubroutineTemplate):
     def regulated_parameters(self) -> list[gv.ClimateParameter]:
         if not self.started:
             return []
-        return [
-            climate_param
-            for climate_param, regulated in self._regulated_parameters.items()
-            if regulated
-        ]
-
-    def update_regulated_parameters(self) -> None:
-        self._regulated_parameters = self._compute_regulated_parameters()
+        return [*set(self._expected_actuators.values())]
 
     def compute_target(
             self,
