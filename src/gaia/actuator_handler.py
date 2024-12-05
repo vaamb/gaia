@@ -670,14 +670,14 @@ class ActuatorHub:
 
     def get_pid(
             self,
-            climate_parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            climate_parameter: gv.ClimateParameter,
     ) -> HystericalPID:
         climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
         return self._pids[climate_parameter]
 
     def get_handler(
             self,
-            actuator_type: gv.HardwareType | gv.HardwareTypeNames,
+            actuator_type: gv.HardwareType,
     ) -> ActuatorHandler:
         actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
         assert actuator_type in gv.HardwareType.actuator
