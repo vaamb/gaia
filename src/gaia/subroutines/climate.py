@@ -34,6 +34,70 @@ class Climate(SubroutineTemplate):
         self._sensor_miss: int = 0
         self._finish__init__()
 
+    """SubroutineTemplate methods"""
+    async def _routine(self) -> None:
+        start_time = monotonic()
+        try:
+            await self._update_climate_actuators()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while running the climate routine. "
+                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+            )
+        loop_time = monotonic() - start_time
+        if loop_time > self._loop_period:  # pragma: no cover
+            self.logger.warning(
+                f"Climate routine took {loop_time:.1f}. You should consider "
+                f"increasing 'CLIMATE_LOOP_PERIOD'."
+            )
+
+    def _compute_if_manageable(self) -> bool:
+        self.update_expected_actuators()
+        if not self._expected_actuators:
+            self.logger.warning(
+                "No parameters that could be regulated were found. "
+                "Disabling Climate subroutine."
+            )
+            return False
+        else:
+            return True
+
+    async def _start(self) -> None:
+        self.logger.info(
+            f"Starting the climate loop. It will run every "
+            f"{self._loop_period:.1f} s.")
+        for climate_parameter in self.regulated_parameters:
+            pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
+            pid.reset()
+        for actuator_type in self.expected_actuators:
+            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            async with actuator_handler.update_status_transaction(activation=True):
+                actuator_handler.activate()
+
+    async def _stop(self) -> None:
+        #self.ecosystem.engine.scheduler.remove_job(
+        #    f"{self.ecosystem.uid}-climate_routine")
+        for actuator_type in self.expected_actuators:
+            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            async with actuator_handler.update_status_transaction(activation=True):
+                actuator_handler.deactivate()
+
+    def get_hardware_needed_uid(self) -> set[str]:
+        self.update_expected_actuators()
+        hardware_needed: set[str] = set()
+        for actuator_type in self.expected_actuators:
+            extra = set(self.config.get_IO_group_uids(actuator_type))
+            hardware_needed = hardware_needed | extra
+        return hardware_needed
+
+    async def refresh_hardware(self) -> None:
+        await super().refresh_hardware()
+        for actuator_type in gv.HardwareType.climate_actuator:
+            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            actuator_handler.reset_cached_actuators()
+
+    """Routine specific methods"""
+    # Climate parameters and actuators management
     def _compute_expected_actuators(self) -> dict[gv.HardwareType, gv.ClimateParameter]:
         regulated_parameters: list[gv.ClimateParameter] = [
             gv.ClimateParameter.temperature,
@@ -95,6 +159,22 @@ class Climate(SubroutineTemplate):
     def expected_actuators(self) -> dict[gv.HardwareType, gv.ClimateParameter]:
         return self._expected_actuators
 
+    @property
+    def regulated_parameters(self) -> list[gv.ClimateParameter]:
+        if not self.started:
+            return []
+        return [*set(self._expected_actuators.values())]
+
+    # Routine specific methods
+    def _check_misses(self) -> bool:
+        if self._sensor_miss >= MISSES_BEFORE_STOP:
+            self.logger.error(
+                "Maximum number of Sensors data miss reached, stopping "
+                "climate subroutine."
+            )
+            return True
+        return False
+
     async def _get_sensors_average(self) -> dict[str, float]:
         # Get the sensors average
         prior_sensor_miss = self._sensor_miss
@@ -131,7 +211,6 @@ class Climate(SubroutineTemplate):
         # Reset sensor miss counter if there wasn't any new miss
         if self._sensor_miss == prior_sensor_miss:
             self._sensor_miss = 0
-        self._check_misses()
 
         return sensors_average
 
@@ -159,6 +238,9 @@ class Climate(SubroutineTemplate):
 
     async def _update_climate_actuators(self) -> None:
         sensors_average: dict[str, float] = await self._get_sensors_average()
+        if self._check_misses():
+            await self.stop()
+            return
         for climate_parameter in self.regulated_parameters:
             self._update_pid(climate_parameter, sensors_average)
         for actuator_type in self._expected_actuators:
@@ -166,82 +248,7 @@ class Climate(SubroutineTemplate):
             async with actuator_handler.update_status_transaction():
                 await self._update_actuator_handler(actuator_handler)
 
-    def _check_misses(self) -> None:
-        if self._sensor_miss >= MISSES_BEFORE_STOP:
-            self.logger.error(
-                "Maximum number of Sensors data miss reached, stopping "
-                "climate subroutine."
-            )
-            self.stop()
-
-    async def _routine(self) -> None:
-        start_time = monotonic()
-        try:
-            await self._update_climate_actuators()
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an error while running the climate routine. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`."
-            )
-        loop_time = monotonic() - start_time
-        if loop_time > self._loop_period:  # pragma: no cover
-            self.logger.warning(
-                f"Climate routine took {loop_time:.1f}. You should consider "
-                f"increasing 'CLIMATE_LOOP_PERIOD'."
-            )
-
-    def _compute_if_manageable(self) -> bool:
-        self.update_expected_actuators()
-        if not self._expected_actuators:
-            self.logger.warning(
-                "No parameters that could be regulated were found. "
-                "Disabling Climate subroutine."
-            )
-            return False
-        else:
-            return True
-
-    async def _start(self) -> None:
-        self.logger.info(
-            f"Starting the climate loop. It will run every "
-            f"{self._loop_period:.1f} s.")
-        for climate_parameter in self.regulated_parameters:
-            pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
-            pid.reset()
-        for actuator_type in self.expected_actuators:
-            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-            async with actuator_handler.update_status_transaction(activation=True):
-                actuator_handler.activate()
-
-    async def _stop(self) -> None:
-        #self.ecosystem.engine.scheduler.remove_job(
-        #    f"{self.ecosystem.uid}-climate_routine")
-        for actuator_type in self.expected_actuators:
-            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-            async with actuator_handler.update_status_transaction(activation=True):
-                actuator_handler.deactivate()
-
     """API calls"""
-    def get_hardware_needed_uid(self) -> set[str]:
-        self.update_expected_actuators()
-        hardware_needed: set[str] = set()
-        for actuator_type in self.expected_actuators:
-            extra = set(self.config.get_IO_group_uids(actuator_type))
-            hardware_needed = hardware_needed | extra
-        return hardware_needed
-
-    async def refresh_hardware(self) -> None:
-        await super().refresh_hardware()
-        for actuator_type in gv.HardwareType.climate_actuator:
-            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-            actuator_handler.reset_cached_actuators()
-
-    @property
-    def regulated_parameters(self) -> list[gv.ClimateParameter]:
-        if not self.started:
-            return []
-        return [*set(self._expected_actuators.values())]
-
     def compute_target(
             self,
             climate_parameter: gv.ClimateParameter,
