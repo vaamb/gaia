@@ -156,31 +156,42 @@ class HystericalPID:
     def last_output(self) -> float:
         return self._last_output
 
-    def update_pid(self, current_value: float) -> float:
-        sampling_time = time.monotonic()
-        output = None
+    def update_pid(self, current_value: float | None) -> float:
+        if current_value is None:
+            # Set output to 0 and refresh the old sampling time
+            sampling_time = self._last_sampling_time
+            output = 0.0
 
-        if self.hysteresis:
-            output = self._hysteresis_internal(current_value)
-        if output is None:
-            output = self._pid_internal(current_value, sampling_time)
+        else:
+            # Compute output
+            sampling_time = time.monotonic()
+            output = None
+            if self.hysteresis:
+                output = self._hysteresis_internal(current_value)
+            if output is None:
+                output = self._pid_internal(current_value, sampling_time)
+
+        # Update the internal state
         self._last_sampling_time = sampling_time
         self._last_input = current_value
         self._last_output = output
-        if output > 0 and not self.direction | Direction.increase:
-            self.actuator_hub.logger.debug(
-                f"PID output for {self.climate_parameter.name} is > 0 but no"
-                f"actuator able to increase {self.climate_parameter.name} "
-                f"has been detected. {self.climate_parameter.name.capitalize()} "
-                f"may remain under the targeted value."
-            )
-        if output < 0 and not self.direction | Direction.decrease:
-            self.actuator_hub.logger.debug(
-                f"PID output for {self.climate_parameter.name} is < 0 but no"
-                f"actuator able to decrease {self.climate_parameter.name} "
-                f"has been detected. {self.climate_parameter.name.capitalize()} "
-                f"may remain above the targeted value."
-            )
+
+        # Debug
+        if self.actuator_hub.logger.level <= logging.DEBUG:
+            if output > 0.0 and not self.direction | Direction.increase:
+                self.actuator_hub.logger.debug(
+                    f"PID output for {self.climate_parameter.name} is > 0 but no"
+                    f"actuator able to increase {self.climate_parameter.name} "
+                    f"has been detected. {self.climate_parameter.name.capitalize()} "
+                    f"may remain under the targeted value."
+                )
+            if output < 0.0 and not self.direction | Direction.decrease:
+                self.actuator_hub.logger.debug(
+                    f"PID output for {self.climate_parameter.name} is < 0 but no"
+                    f"actuator able to decrease {self.climate_parameter.name} "
+                    f"has been detected. {self.climate_parameter.name.capitalize()} "
+                    f"may remain above the targeted value."
+                )
         return output
 
     def _hysteresis_internal(self, current_value: float) -> float | None:
@@ -659,14 +670,14 @@ class ActuatorHub:
 
     def get_pid(
             self,
-            climate_parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            climate_parameter: gv.ClimateParameter,
     ) -> HystericalPID:
         climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
         return self._pids[climate_parameter]
 
     def get_handler(
             self,
-            actuator_type: gv.HardwareType | gv.HardwareTypeNames,
+            actuator_type: gv.HardwareType,
     ) -> ActuatorHandler:
         actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
         assert actuator_type in gv.HardwareType.actuator
