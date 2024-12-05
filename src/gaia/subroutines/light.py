@@ -207,9 +207,7 @@ class Light(SubroutineTemplate):
             turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0
     ) -> None:
-        if self._started:
+        if not self._started:
+            raise RuntimeError("Light subroutine is not started")
+        async with self.actuator_handler.update_status_transaction():
             await self.actuator_handler.turn_to(turn_to, countdown)
-        else:
-            raise RuntimeError(
-                f"Light subroutine is not started in ecosystem {self.ecosystem}"
-            )

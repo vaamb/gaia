@@ -523,24 +523,23 @@ class ActuatorHandler:
         turn_to: gv.ActuatorModePayload = gv.safe_enum_from_name(
             gv.ActuatorModePayload, turn_to)
         additional_message = ""
-        async with self.update_status_transaction():
-            if turn_to == gv.ActuatorModePayload.automatic:
-                await self.set_mode(gv.ActuatorMode.automatic)
-            else:
-                await self.set_mode(gv.ActuatorMode.manual)
-                if turn_to == gv.ActuatorModePayload.on:
-                    await self.set_status(True)
-                else:  # turn_to == ActuatorModePayload.off
-                    await self.set_status(False)
-            if countdown:
-                self._time_limit = 0.0
-                self.increase_countdown(countdown)
-                additional_message = f" for {countdown} seconds"
-                # TODO: use a callback ?
-            if self._any_status_change:
-                self.logger.info(
-                    f"{self.type.name.capitalize()} has been manually turned to "
-                    f"'{turn_to.name}'{additional_message}.")
+        if turn_to == gv.ActuatorModePayload.automatic:
+            await self.set_mode(gv.ActuatorMode.automatic)
+        else:
+            await self.set_mode(gv.ActuatorMode.manual)
+            if turn_to == gv.ActuatorModePayload.on:
+                await self.set_status(True)
+            else:  # turn_to == ActuatorModePayload.off
+                await self.set_status(False)
+        if countdown:
+            self._time_limit = 0.0
+            self.increase_countdown(countdown)
+            additional_message = f" for {countdown} seconds"
+            # TODO: use a callback ?
+        if self._any_status_change:
+            self.logger.info(
+                f"{self.type.name.capitalize()} has been turned to "
+                f"'{turn_to.name}'{additional_message}.")
 
     async def log_actuator_state(
             self,
