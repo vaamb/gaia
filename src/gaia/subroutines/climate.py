@@ -277,13 +277,16 @@ class Climate(SubroutineTemplate):
         turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
         countdown: float = 0.0,
     ) -> None:
+        if not self._started:
+            raise RuntimeError("Climate subroutine is not started")
         climate_actuator: gv.HardwareType = gv.safe_enum_from_name(
             gv.HardwareType, climate_actuator)
         assert climate_actuator in gv.HardwareType.climate_actuator
         if self._started:
             actuator_handler: ActuatorHandler = self.ecosystem.actuator_hub.get_handler(
                 climate_actuator)
-            await actuator_handler.turn_to(turn_to, countdown)
+            async with actuator_handler.update_status_transaction():
+                await actuator_handler.turn_to(turn_to, countdown)
         else:
             raise RuntimeError(
                 f"Climate subroutine is not started in ecosystem {self.ecosystem}")

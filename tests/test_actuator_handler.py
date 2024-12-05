@@ -122,24 +122,29 @@ async def test_turn_to(light_handler: ActuatorHandler):
     assert light_handler.mode is gv.ActuatorMode.automatic
 
     # Test turn on
-    await light_handler.turn_to(gv.ActuatorModePayload.on)
+    async with light_handler.update_status_transaction():
+        await light_handler.turn_to(gv.ActuatorModePayload.on)
     assert light_handler.status is True
     assert light_handler.mode is gv.ActuatorMode.manual
 
     # Test turn automatic
-    await light_handler.turn_to(gv.ActuatorModePayload.automatic)
+    async with light_handler.update_status_transaction():
+        await light_handler.turn_to(gv.ActuatorModePayload.automatic)
     assert light_handler.mode is gv.ActuatorMode.automatic
 
     # Test turn off
-    await light_handler.turn_to(gv.ActuatorModePayload.off)
+    async with light_handler.update_status_transaction():
+        await light_handler.turn_to(gv.ActuatorModePayload.off)
     assert light_handler.status is False
     assert light_handler.mode is gv.ActuatorMode.manual
 
     # Test turn with str
-    await light_handler.turn_to("automatic")
+    async with light_handler.update_status_transaction():
+        await light_handler.turn_to("automatic")
 
     # Test countdown
-    await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=0.25)
+    async with light_handler.update_status_transaction():
+        await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=0.25)
     assert light_handler.status is True
     assert light_handler.mode is gv.ActuatorMode.manual
     assert math.isclose(light_handler.countdown, 0.25, abs_tol=0.001)
