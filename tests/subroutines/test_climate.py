@@ -140,7 +140,7 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
     await climate_subroutine.start()
     await climate_subroutine.refresh_hardware()
 
-    climate_subroutine.update_regulated_parameters()
+    climate_subroutine.update_expected_actuators()
 
     await climate_subroutine.routine()
 
