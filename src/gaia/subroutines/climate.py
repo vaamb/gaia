@@ -28,6 +28,7 @@ class Climate(SubroutineTemplate):
         self.hardware_choices = actuator_models
         self.hardware: dict[str, Dimmer | Switch]
         self._expected_actuators: dict[gv.HardwareType, gv.ClimateParameter] = {}
+        self._actuators_activated: set[gv.HardwareType] = set()
         # Routine parameters
         loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
@@ -63,21 +64,16 @@ class Climate(SubroutineTemplate):
             return True
 
     async def _start(self) -> None:
+        # Actuator activation is done during hardware refresh
         self.logger.info(
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
         for climate_parameter in self.regulated_parameters:
             pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
             pid.reset()
-        for actuator_type in self.expected_actuators:
-            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-            async with actuator_handler.update_status_transaction(activation=True):
-                actuator_handler.activate()
 
     async def _stop(self) -> None:
-        #self.ecosystem.engine.scheduler.remove_job(
-        #    f"{self.ecosystem.uid}-climate_routine")
-        for actuator_type in self.expected_actuators:
+        for actuator_type in self._actuators_activated:
             actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
             async with actuator_handler.update_status_transaction(activation=True):
                 actuator_handler.deactivate()
@@ -91,10 +87,21 @@ class Climate(SubroutineTemplate):
         return hardware_needed
 
     async def refresh_hardware(self) -> None:
+        previously_activated: set[gv.HardwareType] = self._actuators_activated
+        self.update_expected_actuators()
         await super().refresh_hardware()
-        for actuator_type in gv.HardwareType.climate_actuator:
+        currently_activated: set[gv.HardwareType] = set(self._expected_actuators.keys())
+        to_activate = currently_activated - previously_activated
+        for actuator_type in to_activate:
             actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            actuator_handler.activate()
             actuator_handler.reset_cached_actuators()
+            self._actuators_activated.add(actuator_type)
+        to_deactivate = previously_activated - currently_activated
+        for actuator_type in to_deactivate:
+            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            actuator_handler.deactivate()
+            self._actuators_activated.remove(actuator_type)
 
     """Routine specific methods"""
     # Climate parameters and actuators management
