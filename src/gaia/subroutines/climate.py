@@ -106,53 +106,76 @@ class Climate(SubroutineTemplate):
             return regulated_parameters
         return regulated_parameters
 
-    async def _update_climate_actuators(self) -> None:
+    async def _get_sensors_average(self) -> dict[str, float]:
+        # Get the sensors average
+        prior_sensor_miss = self._sensor_miss
         sensors_subroutine: Sensors = self.ecosystem.subroutines["sensors"]
         sensors_data = sensors_subroutine.sensors_data
+        sensors_average: dict[str, float]
+
         if isinstance(sensors_data, gv.Empty):
             self.logger.debug(
                 f"No sensor data found, climate subroutine will try again "
                 f"{MISSES_BEFORE_STOP - self._sensor_miss} times before "
-                f"stopping."
-            )
+                f"stopping.")
             self._sensor_miss += 1
-            self._check_misses()
-            return
+            sensors_average = {}
+        else:
+            sensors_average = {
+                data.measure: data.value
+                for data in sensors_data.average
+            }
 
-        self._sensor_miss = 0
-        sensors_average: dict[str, float] = {
-            data.measure: data.value for data in sensors_data.average
-        }
+        # Make sure we have sensors data for all the regulated parameters
+        missing_parameter: bool = False
         for climate_parameter in self.regulated_parameters:
-            # Minimal change between run, should be ok to change pid target
-            pid: HystericalPID = self.ecosystem.actuator_hub.get_pid(climate_parameter)
-            target, hysteresis = self.compute_target(climate_parameter)
-            pid.target = target
-            pid.hysteresis = hysteresis
+            if not sensors_average.get(climate_parameter, False):
+                missing_parameter = True
+                self.logger.debug(
+                    f"No sensor data found for {climate_parameter}, climate "
+                    f"subroutine will try again "
+                    f"{MISSES_BEFORE_STOP - self._sensor_miss} times before "
+                    f"adjusting its regulated parameters.")
+        if missing_parameter:
+            self._sensor_miss += 1
 
-            # Current value is None if there is no sensor reading for it
-            current_value: float | None = sensors_average.get(climate_parameter, None)
-            if current_value is None:
-                pid_output = 0.0  # TODO: log and add a miss ?
-            else:
-                pid_output = pid.update_pid(current_value)
+        # Reset sensor miss counter if there wasn't any new miss
+        if self._sensor_miss == prior_sensor_miss:
+            self._sensor_miss = 0
+        self._check_misses()
 
-            actuator_couple: ActuatorCouple = actuator_couples[climate_parameter]
-            for direction_name, actuator_type in actuator_couple.items():
-                actuator_handler = self.ecosystem.actuator_hub.get_handler(
-                    actuator_type)
-                if not actuator_handler.get_linked_actuators():
-                    # No actuator to act on, go next
-                    continue
-                async with actuator_handler.update_status_transaction():
-                    expected_status = actuator_handler.compute_expected_status(
-                        pid_output)
-                    if expected_status:
-                        await actuator_handler.turn_on()
-                        await actuator_handler.set_level(abs(pid_output))
-                    else:
-                        await actuator_handler.turn_off()
-                        await actuator_handler.set_level(0.0)
+        return sensors_average
+
+    def _update_pid(
+            self,
+            climate_parameter: gv.ClimateParameter,
+            sensors_average: dict[str, float],
+    ) -> None:
+        pid: HystericalPID = self.ecosystem.actuator_hub.get_pid(climate_parameter)
+        target, hysteresis = self.compute_target(climate_parameter)
+        pid.target = target
+        pid.hysteresis = hysteresis
+        current_value: float | None = sensors_average.get(climate_parameter)
+        pid.update_pid(current_value)
+
+    async def _update_actuator_handler(self, actuator_handler: ActuatorHandler) -> None:
+        pid = actuator_handler.get_associated_pid()
+        expected_status = actuator_handler.compute_expected_status(pid.last_output)
+        if expected_status:
+            await actuator_handler.turn_on()
+            await actuator_handler.set_level(abs(pid.last_output))
+        else:
+            await actuator_handler.turn_off()
+            await actuator_handler.set_level(0.0)
+
+    async def _update_climate_actuators(self) -> None:
+        sensors_average: dict[str, float] = await self._get_sensors_average()
+        for climate_parameter in self.regulated_parameters:
+            self._update_pid(climate_parameter, sensors_average)
+        for actuator_type in self._activated_actuator_types:
+            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+            async with actuator_handler.update_status_transaction():
+                await self._update_actuator_handler(actuator_handler)
 
     def _check_misses(self) -> None:
         if self._sensor_miss >= MISSES_BEFORE_STOP:
