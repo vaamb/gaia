@@ -32,6 +32,7 @@ class Light(SubroutineTemplate):
         self._any_dimmable_light: bool | None = None
         self._finish__init__()
 
+    """SubroutineTemplate methods"""
     async def _routine(self) -> None:
         try:
             await self._update_light_actuators()
@@ -48,28 +49,6 @@ class Light(SubroutineTemplate):
             sleep_time = max(self._loop_period - (monotonic() - start), 0.01)
             await asyncio.sleep(sleep_time)
 
-    async def _update_light_actuators(self) -> None:
-        pid: HystericalPID = self.get_pid()
-        target, hysteresis = self.compute_target()
-        pid.target = target
-        pid.hysteresis = hysteresis
-
-        current_value: float | None = await self.get_ambient_light_level()
-        if current_value is None:
-            current_value = 0.0
-
-        pid_output = pid.update_pid(current_value)
-        async with self.actuator_handler.update_status_transaction():
-            expected_status = self.actuator_handler.compute_expected_status(pid_output)
-
-            if expected_status:
-                await self.actuator_handler.turn_on()
-                await self.actuator_handler.set_level(pid_output)
-            else:
-                await self.actuator_handler.turn_off()
-                await self.actuator_handler.set_level(0.0)
-
-    """Functions to switch the light on/off either manually or automatically"""
     def _compute_if_manageable(self) -> bool:
         if all((
                 self.config.get_IO_group_uids(gv.HardwareType.light),
@@ -101,7 +80,6 @@ class Light(SubroutineTemplate):
         async with self.actuator_handler.update_status_transaction(activation=True):
             self.actuator_handler.deactivate()
 
-    """API calls"""
     async def add_hardware(self, hardware_config: gv.HardwareConfig) -> Switch | Dimmer:
         hardware = await super().add_hardware(hardware_config)
         self.reset_any_dimmable_light()
@@ -120,6 +98,7 @@ class Light(SubroutineTemplate):
             gv.HardwareType.light)
         actuator_handler.reset_cached_actuators()
 
+    """Routine specific methods"""
     @property
     def actuator_handler(self) -> ActuatorHandler:
         return self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
@@ -201,6 +180,27 @@ class Light(SubroutineTemplate):
 
         level = self.compute_level(now)
         return level, None
+
+    async def _update_light_actuators(self) -> None:
+        pid: HystericalPID = self.get_pid()
+        target, hysteresis = self.compute_target()
+        pid.target = target
+        pid.hysteresis = hysteresis
+
+        current_value: float | None = await self.get_ambient_light_level()
+        if current_value is None:
+            current_value = 0.0
+
+        pid_output = pid.update_pid(current_value)
+        async with self.actuator_handler.update_status_transaction():
+            expected_status = self.actuator_handler.compute_expected_status(pid_output)
+
+            if expected_status:
+                await self.actuator_handler.turn_on()
+                await self.actuator_handler.set_level(pid_output)
+            else:
+                await self.actuator_handler.turn_off()
+                await self.actuator_handler.set_level(0.0)
 
     async def turn_light(
             self,
