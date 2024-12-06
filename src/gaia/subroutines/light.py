@@ -150,13 +150,16 @@ class Light(SubroutineTemplate):
         # If there isn't any dimmable light, the info cannot be properly used
         if not self.light_sensors or not self.any_dimmable_light:
             return 0.0  # Fallback value
-        light_level: list[float] = []
-        for light_sensor in self.light_sensors:
-            light = await light_sensor.get_lux()
-            if light is not None:
-                light_level.append(light)
-        if not light_level:
+        futures = [
+            asyncio.create_task(light_sensor.get_lux())
+            for light_sensor in self.light_sensors
+        ]
+        if not futures:
             return 0.0  # Fallback value
+        done, pending = await asyncio.wait(futures, timeout=self._loop_period / 2)
+        for future in pending:
+            future.cancel()
+        light_level: list[float] = [future.result() for future in done]
         return mean(light_level)
 
     async def _update_pid(self) -> None:
