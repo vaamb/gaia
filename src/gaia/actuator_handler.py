@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import Lock, Task
+from asyncio import Future, Lock, Task, TimerHandle, CancelledError
 from contextlib import asynccontextmanager
 import enum
 import dataclasses
@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import logging
 import time
 import typing
+from typing import Awaitable, Callable
 
 import gaia_validators as gv
 
@@ -249,6 +250,53 @@ class HystericalPID:
         self._last_sampling_time = None
         self._last_output = 0.0
         self._reset_errors()
+
+
+class Timer:
+    def __init__(self, callback: Awaitable | Callable, countdown: float) -> None:
+        self._start_time: float = time.monotonic()
+        self._countdown = 0
+        self._canceled = False
+        self._task: Task = asyncio.create_task(self._job(callback))
+        self._future: Future = Future()
+        self._handle: TimerHandle | None = None
+        self.modify_countdown(countdown)
+
+    @property
+    def done(self) -> bool:
+        return self._task.done()
+
+    @property
+    def canceled(self) -> bool:
+        return self._canceled
+
+    async def _job(self, callback: Awaitable | Callable) -> None:
+        await self._future
+        if asyncio.iscoroutinefunction(callback):
+            await callback()
+        else:
+            callback()
+
+    def cancel(self) -> None:
+        self._task.cancel()
+        self._handle.cancel()
+        self._canceled = True
+
+    def time_left(self) -> float:
+        if self.done or self.canceled:
+            return 0.0
+        return self._start_time + self._countdown - time.monotonic()
+
+    def modify_countdown(self, countdown_delta: float) -> None:
+        if self.done:
+            raise RuntimeError("The task has already been completed")
+        if self.canceled:
+            raise CancelledError("The task has been canceled")
+        self._countdown += countdown_delta
+        loop = asyncio.get_running_loop()
+        if self._handle:
+            self._handle.cancel()
+        self._handle = loop.call_later(self.time_left(), self._future.set_result, None)
 
 
 class ActuatorHandler:
