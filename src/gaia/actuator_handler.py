@@ -304,6 +304,7 @@ class ActuatorHandler:
         "_active",
         "_actuators",
         "_any_status_change",
+        "_last_expected_level",
         "_level",
         "_mode",
         "_sending_data_task",
@@ -339,6 +340,7 @@ class ActuatorHandler:
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         self._timer: Timer | None = None
         self._actuators: list[Switch | Dimmer] | None = None
+        self._last_expected_level: float | None = None
         self._update_lock: Lock = Lock()
         self._updating: bool = False
         self._any_status_change: bool = False
@@ -659,21 +661,20 @@ class ActuatorHandler:
                 self.send_actuator_state(data), name=task_name)
 
     def compute_expected_status(self, expected_level: float | None) -> bool:
-        if self.mode == gv.ActuatorMode.automatic:
-            if expected_level is None:
-                self.logger.error(
-                    "Cannot compute an expected status for automatic mode "
-                    "without an expected PID level. Falling back to off status.")
-                return False
-            else:
-                if self.direction == Direction.increase:
-                    return expected_level > 0  # Should be on when trying to increase measure
-                else:
-                    return expected_level < 0  # Should be on when trying to decrease measure
+        if self.mode == gv.ActuatorMode.manual:
+            self._last_expected_level = expected_level
+            return self.status
         else:
-            if self.status:
-                return True
-            return False
+            # Mode is automatic
+            if expected_level is None:
+                if self._last_expected_level is None:
+                    return False  # Failsafe value
+                expected_level = self._last_expected_level
+            self._last_expected_level = expected_level
+            if self.direction == Direction.increase:
+                return expected_level > 0  # Should be on when trying to increase measure
+            else:
+                return expected_level < 0  # Should be on when trying to decrease measure
 
 
 class ActuatorHub:
