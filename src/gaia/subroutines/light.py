@@ -167,20 +167,20 @@ class Light(SubroutineTemplate):
         current_value: float = await self._get_ambient_light_level()
         pid.update_pid(current_value)
 
-    async def _update_actuator_handler(self) -> None:
-        pid = self.get_pid()
-        async with self.actuator_handler.update_status_transaction():
-            expected_status = self.actuator_handler.compute_expected_status(pid.last_output)
-            if expected_status:
-                await self.actuator_handler.turn_on()
-                await self.actuator_handler.set_level(pid.last_output)
-            else:
-                await self.actuator_handler.turn_off()
-                await self.actuator_handler.set_level(0.0)
+    async def _update_actuator_handler(self, actuator_handler: ActuatorHandler) -> None:
+        pid = actuator_handler.get_associated_pid()
+        expected_status = actuator_handler.compute_expected_status(pid.last_output)
+        if expected_status:
+            await actuator_handler.turn_on()
+            await actuator_handler.set_level(pid.last_output)
+        else:
+            await actuator_handler.turn_off()
+            await actuator_handler.set_level(0.0)
 
     async def _update_light_actuators(self) -> None:
         await self._update_pid()
-        await self._update_actuator_handler()
+        async with self.actuator_handler.update_status_transaction():
+            await self._update_actuator_handler(self.actuator_handler)
 
     """API calls"""
     def _compute_target_status(self, _now: time | None = None) -> bool:
