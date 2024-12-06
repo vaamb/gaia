@@ -256,20 +256,25 @@ class Climate(SubroutineTemplate):
                 await self._update_actuator_handler(actuator_handler)
 
     """API calls"""
+    def _compute_target_status(self, _now: time | None = None) -> bool:
+        now = _now or datetime.now().time()
+        hours = self.config.lighting_hours
+        return hours.morning_start <= now <= hours.evening_end
+
     def compute_target(
             self,
             climate_parameter: gv.ClimateParameter,
             _now: time | None = None,
     ) -> tuple[float, float]:
-        parameter = self.config.get_climate_parameter(climate_parameter.name)
-        now: time = _now or datetime.now().astimezone().time()
+        climate_cfg = self.config.get_climate_parameter(climate_parameter.name)
         chaos_factor = self.config.get_chaos_factor()
-        lighting_hours = self.config.lighting_hours
-        if lighting_hours.morning_start < now <= lighting_hours.evening_end:
-            target = parameter.day * chaos_factor
+        now = _now or datetime.now().time()
+        target_status = self._compute_target_status(now)
+        if target_status:
+            target = climate_cfg.day * chaos_factor
         else:
-            target = parameter.night * chaos_factor
-        hysteresis = parameter.hysteresis * chaos_factor
+            target = climate_cfg.night * chaos_factor
+        hysteresis = climate_cfg.hysteresis * chaos_factor
         return target, hysteresis
 
     async def turn_climate_actuator(

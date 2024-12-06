@@ -10,6 +10,7 @@ import typing
 import gaia_validators as gv
 
 from gaia.actuator_handler import HystericalPID
+from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
 from gaia.subroutines.template import SubroutineTemplate
@@ -18,6 +19,14 @@ from gaia.utils import is_time_between
 
 if typing.TYPE_CHECKING:
     from gaia.actuator_handler import ActuatorHandler
+
+
+DEFAULT_CLIMATE_CFG = gv.ClimateConfig(**{
+    "parameter": gv.ClimateParameter.light,
+    "day": 250_000,
+    "night": -30_000,
+    "hysteresis": 0.0,
+})
 
 
 class Light(SubroutineTemplate):
@@ -32,6 +41,7 @@ class Light(SubroutineTemplate):
         self._any_dimmable_light: bool | None = None
         self._finish__init__()
 
+    """SubroutineTemplate methods"""
     async def _routine(self) -> None:
         try:
             await self._update_light_actuators()
@@ -48,28 +58,6 @@ class Light(SubroutineTemplate):
             sleep_time = max(self._loop_period - (monotonic() - start), 0.01)
             await asyncio.sleep(sleep_time)
 
-    async def _update_light_actuators(self) -> None:
-        pid: HystericalPID = self.get_pid()
-        target, hysteresis = self.compute_target()
-        pid.target = target
-        pid.hysteresis = hysteresis
-
-        current_value: float | None = await self.get_ambient_light_level()
-        if current_value is None:
-            current_value = 0.0
-
-        pid_output = pid.update_pid(current_value)
-        async with self.actuator_handler.update_status_transaction():
-            expected_status = self.actuator_handler.compute_expected_status(pid_output)
-
-            if expected_status:
-                await self.actuator_handler.turn_on()
-                await self.actuator_handler.set_level(pid_output)
-            else:
-                await self.actuator_handler.turn_off()
-                await self.actuator_handler.set_level(0.0)
-
-    """Functions to switch the light on/off either manually or automatically"""
     def _compute_if_manageable(self) -> bool:
         if all((
                 self.config.get_IO_group_uids(gv.HardwareType.light),
@@ -101,7 +89,6 @@ class Light(SubroutineTemplate):
         async with self.actuator_handler.update_status_transaction(activation=True):
             self.actuator_handler.deactivate()
 
-    """API calls"""
     async def add_hardware(self, hardware_config: gv.HardwareConfig) -> Switch | Dimmer:
         hardware = await super().add_hardware(hardware_config)
         self.reset_any_dimmable_light()
@@ -119,7 +106,10 @@ class Light(SubroutineTemplate):
         actuator_handler = self.ecosystem.actuator_hub.get_handler(
             gv.HardwareType.light)
         actuator_handler.reset_cached_actuators()
+        self.reset_light_sensors()
+        self.reset_any_dimmable_light()
 
+    """Routine specific methods"""
     @property
     def actuator_handler(self) -> ActuatorHandler:
         return self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
@@ -155,21 +145,48 @@ class Light(SubroutineTemplate):
     def reset_any_dimmable_light(self) -> None:
         self._any_dimmable_light = None
 
-    async def get_ambient_light_level(self) -> float | None:
+    async def _get_ambient_light_level(self) -> float:
         # If there isn't any light sensors we cannot get the info
         # If there isn't any dimmable light, the info cannot be properly used
         if not self.light_sensors or not self.any_dimmable_light:
-            return None
-        light_level: list[float] = []
-        for light_sensor in self.light_sensors:
-            light = await light_sensor.get_lux()
-            if light is not None:
-                light_level.append(light)
-        if not light_level:
-            return None
+            return 0.0  # Fallback value
+        futures = [
+            asyncio.create_task(light_sensor.get_lux())
+            for light_sensor in self.light_sensors
+        ]
+        if not futures:
+            return 0.0  # Fallback value
+        done, pending = await asyncio.wait(futures, timeout=self._loop_period / 2)
+        for future in pending:
+            future.cancel()
+        light_level: list[float] = [future.result() for future in done]
         return mean(light_level)
 
-    def compute_status(self, _now: time | None = None) -> bool:
+    async def _update_pid(self) -> None:
+        pid: HystericalPID = self.get_pid()
+        target, hysteresis = self.compute_target()
+        pid.target = target
+        pid.hysteresis = hysteresis
+        current_value: float = await self._get_ambient_light_level()
+        pid.update_pid(current_value)
+
+    async def _update_actuator_handler(self, actuator_handler: ActuatorHandler) -> None:
+        pid = actuator_handler.get_associated_pid()
+        expected_status = actuator_handler.compute_expected_status(pid.last_output)
+        if expected_status:
+            await actuator_handler.turn_on()
+            await actuator_handler.set_level(pid.last_output)
+        else:
+            await actuator_handler.turn_off()
+            await actuator_handler.set_level(0.0)
+
+    async def _update_light_actuators(self) -> None:
+        await self._update_pid()
+        async with self.actuator_handler.update_status_transaction():
+            await self._update_actuator_handler(self.actuator_handler)
+
+    """API calls"""
+    def _compute_target_status(self, _now: time | None = None) -> bool:
         now = _now or datetime.now().time()
         hours = self.config.lighting_hours
         if self.config.lighting_method == gv.LightMethod.elongate:
@@ -184,23 +201,20 @@ class Light(SubroutineTemplate):
         else:
             return is_time_between(hours.morning_start, hours.evening_end, now)
 
-    def compute_level(self, _now: time | None = None) -> float:
-        if not self.light_sensors or not self.any_dimmable_light:
-            return 500_000.0
+    def compute_target(self, _now: time | None = None) -> tuple[float, float]:
+        try:
+            climate_cfg = self.config.get_climate_parameter(gv.ClimateParameter.light)
+        except UndefinedParameter:
+            climate_cfg = DEFAULT_CLIMATE_CFG
+        chaos_factor = self.config.get_chaos_factor()
+        now = _now or datetime.now().time()
+        target_status = self._compute_target_status(now)
+        if target_status:
+            target = climate_cfg.day * chaos_factor
         else:
-            # TODO: use a function with sharper rise and fall than sin and a plateau
-            return 500_000.0
-
-    def compute_target(self, _now: time | None = None) -> tuple[float, None]:
-        now: time = _now or datetime.now().astimezone().time()
-
-        status = self.compute_status(now)
-
-        if not status:
-            return -30_000.0, None  # To be sure that the PID output always will be < 0
-
-        level = self.compute_level(now)
-        return level, None
+            target = climate_cfg.night * chaos_factor
+        hysteresis = climate_cfg.hysteresis * chaos_factor
+        return target, hysteresis
 
     async def turn_light(
             self,
