@@ -7,7 +7,7 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia.actuator_handler import ActuatorHandler
+from gaia.actuator_handler import ActuatorHandler, Timer
 from gaia.hardware import gpioDimmable, gpioSwitch, Hardware
 
 from .data import light_uid
@@ -19,6 +19,22 @@ def get_lights() -> list[gpioDimmable | gpioSwitch]:
         for hardware in Hardware.get_mounted().values()
         if hardware.uid == light_uid
     ]
+
+
+@pytest.mark.asyncio
+async def test_timer():
+    x = False
+
+    async def set_to_true():
+        nonlocal x
+        x = True
+
+    countdown = 0.5
+    timer = Timer(set_to_true, countdown)
+    assert math.isclose(timer.time_left(), countdown, abs_tol=0.01)
+
+    await sleep(countdown + 0.5)
+    assert x is True
 
 
 @pytest.mark.asyncio
@@ -72,7 +88,7 @@ async def test_level(light_handler: ActuatorHandler):
 
 
 @pytest.mark.asyncio
-async def test_timer(light_handler: ActuatorHandler):
+async def test_handler_timer(light_handler: ActuatorHandler):
     # Test default countdown
     assert light_handler.countdown is None
 
