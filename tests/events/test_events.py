@@ -1,3 +1,4 @@
+from asyncio import sleep
 from datetime import datetime, timezone
 from math import isclose
 from time import monotonic
@@ -193,51 +194,35 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
         pass  # To clean up logs
 
     actuator = gv.HardwareType.light
-    mode = gv.ActuatorModePayload.on
+    handler = ecosystem.actuator_hub.get_handler(actuator)
+    current_mode = handler.mode
+    current_state = handler.status
+    countdown = 0.5
+
+    payload_mode = gv.ActuatorModePayload.on
     turn_actuator_payload = gv.TurnActuatorPayloadDict(**{
         "ecosystem_uid": ecosystem_uid,
         "actuator": actuator,
-        "mode": mode,
-        "countdown": 2.0,
+        "mode": payload_mode,
+        "countdown": countdown,
     })
     await events_handler.on_turn_actuator(turn_actuator_payload)
 
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         assert "Received 'turn_actuator' event" in logs
         assert actuator.name in logs
-        assert mode.name in logs
+        assert payload_mode.name in logs
 
-    light_handler = ecosystem.actuator_hub.get_handler(actuator)
-    assert light_handler.active is True
-    assert light_handler.status is True
-    assert light_handler.mode is gv.ActuatorMode.manual
-    assert isclose(light_handler.countdown, 2.0, abs_tol=0.01)
+    handler = ecosystem.actuator_hub.get_handler(actuator)
+    assert handler.status is current_state
+    assert handler.mode is current_mode
+    assert isclose(handler.countdown, countdown, abs_tol=0.01)
 
-    mode = gv.ActuatorModePayload.off
-    turn_actuator_payload = gv.TurnActuatorPayloadDict(**{
-        "ecosystem_uid": ecosystem_uid,
-        "actuator": actuator,
-        "mode": mode,
-        "countdown": 5.0,
-    })
-    await events_handler.on_turn_actuator(turn_actuator_payload)
+    await sleep(countdown + 0.01)
 
-    assert light_handler.active is True
-    assert light_handler.status is False
-    assert light_handler.mode is gv.ActuatorMode.manual
-    assert isclose(light_handler.countdown, 5.0, abs_tol=0.01)
-
-    mode = gv.ActuatorModePayload.automatic
-    turn_actuator_payload = gv.TurnActuatorPayloadDict(**{
-        "ecosystem_uid": ecosystem_uid,
-        "actuator": actuator,
-        "mode": mode,
-        "countdown": 0.0,
-    })
-    await events_handler.on_turn_actuator(turn_actuator_payload)
-
-    assert light_handler.active is True
-    assert light_handler.mode is gv.ActuatorMode.automatic
+    assert handler.status is True
+    assert handler.mode is gv.ActuatorMode.manual
+    assert handler.countdown is None
 
     await ecosystem.disable_subroutine("light")
     await ecosystem.stop_subroutine("light")
