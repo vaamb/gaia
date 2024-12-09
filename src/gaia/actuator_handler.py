@@ -304,6 +304,7 @@ class ActuatorHandler:
         "_active",
         "_actuators",
         "_any_status_change",
+        "_last_expected_level",
         "_level",
         "_mode",
         "_sending_data_task",
@@ -339,6 +340,7 @@ class ActuatorHandler:
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         self._timer: Timer | None = None
         self._actuators: list[Switch | Dimmer] | None = None
+        self._last_expected_level: float | None = None
         self._update_lock: Lock = Lock()
         self._updating: bool = False
         self._any_status_change: bool = False
@@ -549,6 +551,9 @@ class ActuatorHandler:
     async def _turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
             await self.set_mode(gv.ActuatorMode.automatic)
+            outdated_expected_status = self.compute_expected_status(
+                self._last_expected_level)
+            await self.set_status(outdated_expected_status)
         else:
             await self.set_mode(gv.ActuatorMode.manual)
             if turn_to == gv.ActuatorModePayload.on:
@@ -658,7 +663,8 @@ class ActuatorHandler:
             self._sending_data_task = asyncio.create_task(
                 self.send_actuator_state(data), name=task_name)
 
-    def compute_expected_status(self, expected_level: float | None) -> bool:
+    def compute_expected_status(self, expected_level: float) -> bool:
+        self._last_expected_level = expected_level
         if self.mode == gv.ActuatorMode.automatic:
             if expected_level is None:
                 self.logger.error(
@@ -671,9 +677,8 @@ class ActuatorHandler:
                 else:
                     return expected_level < 0  # Should be on when trying to decrease measure
         else:
-            if self.status:
-                return True
-            return False
+            # Mode is manual
+            return self.status
 
 
 class ActuatorHub:
