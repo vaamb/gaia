@@ -160,7 +160,7 @@ async def test_turn_to(light_handler: ActuatorHandler):
     # Test turn automatic
     async with light_handler.update_status_transaction():
         await light_handler.turn_to(gv.ActuatorModePayload.automatic)
-    # Light handler status changes throughout the time when tested
+    # Light handler status changes throughout the day, cannot test it
     assert light_handler.mode is gv.ActuatorMode.automatic
 
     # Test countdown

@@ -256,8 +256,7 @@ class HystericalPID:
 class Timer:
     def __init__(self, callback: Awaitable | Callable, countdown: float) -> None:
         self._start_time: float = time.monotonic()
-        self._countdown = 0
-        self._canceled = False
+        self._countdown: float = 0.0
         self._task: Task = asyncio.create_task(self._job(callback))
         self._future: Future = Future()
         self._handle: TimerHandle | None = None
@@ -268,8 +267,8 @@ class Timer:
         return self._task.done()
 
     @property
-    def canceled(self) -> bool:
-        return self._canceled
+    def cancelled(self) -> bool:
+        return self._task.cancelled()
 
     async def _job(self, callback: Awaitable | Callable) -> None:
         await self._future
@@ -281,17 +280,17 @@ class Timer:
     def cancel(self) -> None:
         self._task.cancel()
         self._handle.cancel()
-        self._canceled = True
+        self._future.cancel()
 
     def time_left(self) -> float:
-        if self.done or self.canceled:
+        if self.done or self.cancelled:
             return 0.0
         return self._start_time + self._countdown - time.monotonic()
 
     def modify_countdown(self, countdown_delta: float) -> None:
         if self.done:
             raise RuntimeError("The task has already been completed")
-        if self.canceled:
+        if self.cancelled:
             raise CancelledError("The task has been canceled")
         self._countdown += countdown_delta
         loop = asyncio.get_running_loop()
@@ -522,10 +521,7 @@ class ActuatorHandler:
     def countdown(self) -> float | None:
         if self._timer is None:
             return None
-        left = self._timer.time_left()
-        if left < 0.0:
-            return None
-        return left
+        return self._timer.time_left()
 
     def reset_timer(self) -> None:
         self._check_update_status_transaction()

@@ -195,7 +195,7 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
 
     actuator = gv.HardwareType.light
     handler = ecosystem.actuator_hub.get_handler(actuator)
-    current_mode = handler.mode
+    mode = handler.mode
     current_state = handler.status
     countdown = 0.5
 
@@ -215,7 +215,7 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
 
     handler = ecosystem.actuator_hub.get_handler(actuator)
     assert handler.status is current_state
-    assert handler.mode is current_mode
+    assert handler.mode is mode
     assert isclose(handler.countdown, countdown, abs_tol=0.01)
 
     await sleep(countdown + 0.01)
