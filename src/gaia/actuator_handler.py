@@ -551,6 +551,8 @@ class ActuatorHandler:
     async def _turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
             await self.set_mode(gv.ActuatorMode.automatic)
+            outdated_expected_status = self.compute_expected_status(None)
+            await self.set_status(outdated_expected_status)
         else:
             await self.set_mode(gv.ActuatorMode.manual)
             if turn_to == gv.ActuatorModePayload.on:
