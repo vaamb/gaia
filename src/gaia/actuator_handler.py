@@ -551,7 +551,8 @@ class ActuatorHandler:
     async def _turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
             await self.set_mode(gv.ActuatorMode.automatic)
-            outdated_expected_status = self.compute_expected_status(None)
+            outdated_expected_status = self.compute_expected_status(
+                self._last_expected_level)
             await self.set_status(outdated_expected_status)
         else:
             await self.set_mode(gv.ActuatorMode.manual)
@@ -662,21 +663,22 @@ class ActuatorHandler:
             self._sending_data_task = asyncio.create_task(
                 self.send_actuator_state(data), name=task_name)
 
-    def compute_expected_status(self, expected_level: float | None) -> bool:
-        if self.mode == gv.ActuatorMode.manual:
-            self._last_expected_level = expected_level
-            return self.status
-        else:
-            # Mode is automatic
+    def compute_expected_status(self, expected_level: float) -> bool:
+        self._last_expected_level = expected_level
+        if self.mode == gv.ActuatorMode.automatic:
             if expected_level is None:
-                if self._last_expected_level is None:
-                    return False  # Failsafe value
-                expected_level = self._last_expected_level
-            self._last_expected_level = expected_level
-            if self.direction == Direction.increase:
-                return expected_level > 0  # Should be on when trying to increase measure
+                self.logger.error(
+                    "Cannot compute an expected status for automatic mode "
+                    "without an expected PID level. Falling back to off status.")
+                return False
             else:
-                return expected_level < 0  # Should be on when trying to decrease measure
+                if self.direction == Direction.increase:
+                    return expected_level > 0  # Should be on when trying to increase measure
+                else:
+                    return expected_level < 0  # Should be on when trying to decrease measure
+        else:
+            # Mode is manual
+            return self.status
 
 
 class ActuatorHub:
