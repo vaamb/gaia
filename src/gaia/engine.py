@@ -223,7 +223,7 @@ class Engine(metaclass=SingletonMeta):
         async with self.db.scoped_session() as session:
             for db_model in (ActuatorBuffer, SensorBuffer):
                 db_model: DataBufferMixin
-                await db_model.reset_exchange_uuids(session)
+                await db_model.reset_ongoing_exchanges(session)
         # Set up logging routines
         from gaia.database import routines
 

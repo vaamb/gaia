@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import AsyncGenerator, NamedTuple, Sequence, Type, TypeVar
+from typing import AsyncGenerator, NamedTuple, Self, Sequence, Type, TypeVar
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -35,10 +35,12 @@ class UtcDateTime(TypeDecorator):
     def process_bind_param(self, value, dialect):
         if isinstance(value, datetime):
             return value.astimezone(timezone.utc)
+        return value
 
     def process_result_value(self, value, dialect):
         if isinstance(value, datetime):
             return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class DataBufferMixin(Base):
@@ -67,6 +69,7 @@ class DataBufferMixin(Base):
         page: int = 0
         try:
             while True:
+                # Get buffered data
                 stmt = (
                     select(cls)
                     .where(cls.exchange_uuid == None)  # noqa: E711
@@ -92,32 +95,38 @@ class DataBufferMixin(Base):
                     data=rv,
                     uuid=uuid,
                 )
+                await session.commit()
                 page += 1
         finally:
             await session.commit()
 
     @classmethod
-    async def clear_buffer(cls, session: AsyncSession, uuid: UUID | str) -> None:
+    async def mark_exchange_as_success(cls, session: AsyncSession, exchange_uuid: UUID | str) -> None:
         stmt = (
             delete(cls)
-            .where(cls.exchange_uuid == uuid)
+            .where(cls.exchange_uuid == exchange_uuid)
         )
         await session.execute(stmt)
 
     @classmethod
-    async def clear_uuid(cls, session: AsyncSession, uuid: UUID | str) -> None:
+    async def mark_exchange_as_failed(cls, session: AsyncSession, exchange_uuid: UUID | str) -> None:
         stmt = (
             update(cls)
-            .where(cls.exchange_uuid == uuid)
-            .values(exchange_uuid=None)
+            .where(cls.exchange_uuid == exchange_uuid)
+            .values({
+                "exchange_uuid": None,
+            })
         )
         await session.execute(stmt)
 
     @classmethod
-    async def reset_exchange_uuids(cls, session: AsyncSession) -> None:
+    async def reset_ongoing_exchanges(cls, session: AsyncSession) -> None:
         stmt = (
             update(cls)
-            .values(exchange_uuid=None)
+            .where(cls.exchange_uuid != None)
+            .values({
+                "exchange_uuid": None,
+            })
         )
         await session.execute(stmt)
 

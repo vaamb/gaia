@@ -591,9 +591,9 @@ class Events(AsyncEventHandler):
             for db_model in (ActuatorBuffer, SensorBuffer):
                 db_model: DataBufferMixin
                 if data["status"] == gv.Result.success:
-                    await db_model.clear_buffer(session, data["uuid"])
+                    await db_model.mark_exchange_as_success(session, data["uuid"])
                 else:
-                    await db_model.clear_uuid(session, data["uuid"])
+                    await db_model.mark_exchange_as_failed(session, data["uuid"])
 
     # ---------------------------------------------------------------------------
     #   Pictures
