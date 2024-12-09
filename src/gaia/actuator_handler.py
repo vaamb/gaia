@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import Lock, Task
+from asyncio import Future, Lock, Task, TimerHandle, CancelledError
 from contextlib import asynccontextmanager
 import enum
 import dataclasses
 from datetime import datetime, timezone
+from functools import partial
 import logging
 import time
 import typing
+from typing import Awaitable, Callable
 
 import gaia_validators as gv
 
@@ -251,6 +253,52 @@ class HystericalPID:
         self._reset_errors()
 
 
+class Timer:
+    def __init__(self, callback: Awaitable | Callable, countdown: float) -> None:
+        self._start_time: float = time.monotonic()
+        self._countdown: float = 0.0
+        self._task: Task = asyncio.create_task(self._job(callback))
+        self._future: Future = Future()
+        self._handle: TimerHandle | None = None
+        self.modify_countdown(countdown)
+
+    @property
+    def done(self) -> bool:
+        return self._task.done()
+
+    @property
+    def cancelled(self) -> bool:
+        return self._task.cancelled()
+
+    async def _job(self, callback: Awaitable | Callable) -> None:
+        await self._future
+        if asyncio.iscoroutinefunction(callback):
+            await callback()
+        else:
+            callback()
+
+    def cancel(self) -> None:
+        self._task.cancel()
+        self._handle.cancel()
+        self._future.cancel()
+
+    def time_left(self) -> float:
+        if self.done or self.cancelled:
+            return 0.0
+        return self._start_time + self._countdown - time.monotonic()
+
+    def modify_countdown(self, countdown_delta: float) -> None:
+        if self.done:
+            raise RuntimeError("The task has already been completed")
+        if self.cancelled:
+            raise CancelledError("The task has been canceled")
+        self._countdown += countdown_delta
+        loop = asyncio.get_running_loop()
+        if self._handle:
+            self._handle.cancel()
+        self._handle = loop.call_later(self.time_left(), self._future.set_result, None)
+
+
 class ActuatorHandler:
     __slots__ = (
         "_active",
@@ -260,8 +308,7 @@ class ActuatorHandler:
         "_mode",
         "_sending_data_task",
         "_status",
-        "_time_limit",
-        "_timer_on",
+        "_timer",
         "_update_lock",
         "_updating",
         "actuator_hub",
@@ -290,8 +337,7 @@ class ActuatorHandler:
         self._status: bool = False
         self._level: float | None = None
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
-        self._timer_on: bool = False
-        self._time_limit: float = 0.0
+        self._timer: Timer | None = None
         self._actuators: list[Switch | Dimmer] | None = None
         self._update_lock: Lock = Lock()
         self._updating: bool = False
@@ -378,7 +424,6 @@ class ActuatorHandler:
                 self._any_status_change = False
                 if not activation:
                     self._check_active()
-                    await self.check_countdown()
                 yield
             except Exception:
                 raise
@@ -474,55 +519,34 @@ class ActuatorHandler:
 
     @property
     def countdown(self) -> float | None:
-        if self._timer_on:
-            countdown = self._time_limit - time.monotonic()
-            if countdown > 0.0:
-                return countdown
-            return 0.0
-        return None
+        if self._timer is None:
+            return None
+        return self._timer.time_left()
 
-    def reset_countdown(self) -> None:
+    def reset_timer(self) -> None:
         self._check_update_status_transaction()
-        self._timer_on = False
-        self._time_limit = 0.0
+        if self._timer is not None:
+            self._timer.cancel()
+        self._timer = None
         self._any_status_change = True
-
-    async def check_countdown(self) -> None:
-        self._check_update_status_transaction()
-        countdown = self.countdown
-        if countdown is not None and countdown <= 0.1:
-            await self.set_mode(gv.ActuatorMode.automatic)
-            self.reset_countdown()
 
     def increase_countdown(self, delta_time: float) -> None:
         self._check_update_status_transaction()
-        if self._time_limit:
-            self.logger.info(f"Increasing timer by {delta_time} seconds.")
-            self._time_limit += delta_time
-        else:
-            self._time_limit = time.monotonic() + delta_time
-        self._timer_on = True
+        if self._timer is None:
+            raise AttributeError("No timer set, you cannot increase the countdown.")
+        self.logger.info(f"Increasing timer by {delta_time} seconds.")
+        self._timer.modify_countdown(delta_time)
         self._any_status_change = True
 
     def decrease_countdown(self, delta_time: float) -> None:
         self._check_update_status_transaction()
-        if self._time_limit:
-            self.logger.info(f"Decreasing timer by {delta_time} seconds.")
-            self._time_limit -= delta_time
-            if self._time_limit <= 0:
-                self._time_limit = 0.0
-            self._any_status_change = True
-        else:
-            raise AttributeError("No timer set, you cannot reduce the countdown.")
+        if self._timer is None:
+            raise AttributeError("No timer set, you cannot decrease the countdown.")
+        self.logger.info(f"Decreasing timer by {delta_time} seconds.")
+        self._timer.modify_countdown(-delta_time)
+        self._any_status_change = True
 
-    async def turn_to(
-            self,
-            turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
-            countdown: float = 0.0
-    ) -> None:
-        turn_to: gv.ActuatorModePayload = gv.safe_enum_from_name(
-            gv.ActuatorModePayload, turn_to)
-        additional_message = ""
+    async def _turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
             await self.set_mode(gv.ActuatorMode.automatic)
         else:
@@ -531,15 +555,32 @@ class ActuatorHandler:
                 await self.set_status(True)
             else:  # turn_to == ActuatorModePayload.off
                 await self.set_status(False)
-        if countdown:
-            self._time_limit = 0.0
-            self.increase_countdown(countdown)
-            additional_message = f" for {countdown} seconds"
-            # TODO: use a callback ?
         if self._any_status_change:
             self.logger.info(
                 f"{self.type.name.capitalize()} has been turned to "
-                f"'{turn_to.name}'{additional_message}.")
+                f"'{turn_to.name}'.")
+        self.reset_timer()
+
+    async def _transactional_turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
+        async with self.update_status_transaction():
+            await self._turn_to(turn_to)
+
+    async def turn_to(
+            self,
+            turn_to: gv.ActuatorModePayload,
+            countdown: float | None = None,
+    ) -> None:
+        self._check_update_status_transaction()
+        turn_to: gv.ActuatorModePayload = gv.safe_enum_from_name(
+            gv.ActuatorModePayload, turn_to)
+        if countdown:
+            self.logger.info(
+                f"{self.type.name.capitalize()} will be turned to "
+                f"'{turn_to.name}' in {countdown} seconds.")
+            callback = partial(self._transactional_turn_to, turn_to)
+            self._timer = Timer(callback, countdown)
+        else:
+            await self._turn_to(turn_to)
 
     async def log_actuator_state(
             self,

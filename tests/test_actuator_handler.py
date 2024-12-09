@@ -7,7 +7,7 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia.actuator_handler import ActuatorHandler
+from gaia.actuator_handler import ActuatorHandler, Timer
 from gaia.hardware import gpioDimmable, gpioSwitch, Hardware
 
 from .data import light_uid
@@ -19,6 +19,22 @@ def get_lights() -> list[gpioDimmable | gpioSwitch]:
         for hardware in Hardware.get_mounted().values()
         if hardware.uid == light_uid
     ]
+
+
+@pytest.mark.asyncio
+async def test_timer():
+    x = False
+
+    async def set_to_true():
+        nonlocal x
+        x = True
+
+    countdown = 0.5
+    timer = Timer(set_to_true, countdown)
+    assert math.isclose(timer.time_left(), countdown, abs_tol=0.01)
+
+    await sleep(countdown + 0.5)
+    assert x is True
 
 
 @pytest.mark.asyncio
@@ -72,46 +88,54 @@ async def test_level(light_handler: ActuatorHandler):
 
 
 @pytest.mark.asyncio
-async def test_timer(light_handler: ActuatorHandler):
+async def test_handler_timer_modification(light_handler: ActuatorHandler):
     # Test default countdown
     assert light_handler.countdown is None
 
     # Test setup countdown
     timer = 1.0
     async with light_handler.update_status_transaction():
-        light_handler.increase_countdown(timer)
+        await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=timer)
     assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
     # Test setup countdown
     increase = 0.50
-    timer += increase
+    timer += increase  # remaining ~ 1.50 sec
     async with light_handler.update_status_transaction():
         light_handler.increase_countdown(increase)
     assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
     # Test decrease countdown
     decrease = 0.75
-    timer -= decrease
+    timer -= decrease  # remaining ~ 0.75 sec
     async with light_handler.update_status_transaction():
         light_handler.decrease_countdown(decrease)
     assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
     # Test sleep, remaining above 0
     decrease = 0.15
-    timer -= decrease
+    timer -= decrease  # remaining ~ 0.60 sec
     await sleep(decrease)
     assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
     # Test sleep, remaining under 0
     decrease = 0.65
-    timer -= decrease
+    timer -= decrease  # remaining ~ -0.05 sec
     assert timer < 0
     await sleep(decrease)
-    assert light_handler.countdown == 0.0
+    assert light_handler.countdown is None
 
-    # Test reset countdown
+@pytest.mark.asyncio
+async def test_handler_timer_reset(light_handler: ActuatorHandler):
+    # Test reset timer
     async with light_handler.update_status_transaction():
-        light_handler.reset_countdown()
+        await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=1.0)
+
+    await sleep(0.01)
+    assert light_handler.countdown > 0.0
+
+    async with light_handler.update_status_transaction():
+        light_handler.reset_timer()
     assert light_handler.countdown is None
 
 
@@ -127,30 +151,26 @@ async def test_turn_to(light_handler: ActuatorHandler):
     assert light_handler.status is True
     assert light_handler.mode is gv.ActuatorMode.manual
 
-    # Test turn automatic
-    async with light_handler.update_status_transaction():
-        await light_handler.turn_to(gv.ActuatorModePayload.automatic)
-    assert light_handler.mode is gv.ActuatorMode.automatic
-
     # Test turn off
     async with light_handler.update_status_transaction():
         await light_handler.turn_to(gv.ActuatorModePayload.off)
     assert light_handler.status is False
     assert light_handler.mode is gv.ActuatorMode.manual
 
-    # Test turn with str
+    # Test turn automatic
     async with light_handler.update_status_transaction():
-        await light_handler.turn_to("automatic")
+        await light_handler.turn_to(gv.ActuatorModePayload.automatic)
+    # Light handler status changes throughout the day, cannot test it
+    assert light_handler.mode is gv.ActuatorMode.automatic
 
     # Test countdown
+    countdown = 0.10
     async with light_handler.update_status_transaction():
-        await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=0.25)
+        await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=countdown)
+    assert light_handler.mode is gv.ActuatorMode.automatic
+    assert math.isclose(light_handler.countdown, countdown, abs_tol=0.001)
+
+    await sleep(0.15)
+    # Process all the countdown associated timing info
     assert light_handler.status is True
     assert light_handler.mode is gv.ActuatorMode.manual
-    assert math.isclose(light_handler.countdown, 0.25, abs_tol=0.001)
-
-    await sleep(0.5)
-    # Process all the countdown associated timing info
-    async with light_handler.update_status_transaction():
-        await light_handler.check_countdown()
-    assert light_handler.mode is gv.ActuatorMode.automatic
