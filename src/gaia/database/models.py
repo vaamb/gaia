@@ -114,7 +114,11 @@ class DataBufferMixin(Base):
             raise
 
     @classmethod
-    async def mark_exchange_as_success(cls, session: AsyncSession, exchange_uuid: UUID | str) -> None:
+    async def mark_exchange_as_success(
+            cls,
+            session: AsyncSession,
+            exchange_uuid: UUID | str,
+    ) -> None:
         stmt = (
             delete(cls)
             .where(cls.exchange_uuid == exchange_uuid)
@@ -122,7 +126,11 @@ class DataBufferMixin(Base):
         await session.execute(stmt)
 
     @classmethod
-    async def mark_exchange_as_failed(cls, session: AsyncSession, exchange_uuid: UUID | str) -> None:
+    async def mark_exchange_as_failed(
+            cls,
+            session: AsyncSession,
+            exchange_uuid: UUID | str,
+    ) -> None:
         stmt = (
             update(cls)
             .where(cls.exchange_uuid == exchange_uuid)
