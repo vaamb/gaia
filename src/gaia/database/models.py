@@ -6,7 +6,7 @@ from typing import AsyncGenerator, NamedTuple, Self, Sequence, Type, TypeVar
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, UniqueConstraint, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import DateTime, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column
@@ -51,15 +51,17 @@ class DataBufferMixin(Base):
 
     exchange_uuid: Mapped[UUID | None] = mapped_column()
 
+    @property
+    def dict_repr(self) -> dict:
+        raise NotImplementedError("This method must be implemented in a subclass")  # pragma: no cover
+
     @classmethod
     async def get_buffered_data(
             cls,
             session: AsyncSession,
             per_page: int = 50,
     ) -> AsyncGenerator[gv.BufferedDataPayload]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
+        raise NotImplementedError("This method must be implemented in a subclass")  # pragma: no cover
 
     @classmethod
     async def _get_buffered_data(
@@ -98,12 +100,7 @@ class DataBufferMixin(Base):
                 yield buffered_payload_model(
                     uuid=exchange_uuid,
                     data=[
-                        buffered_record_class(
-                            **{
-                                data_field: getattr(row, data_field)
-                                for data_field in buffered_record_class._fields
-                            }
-                        )
+                        buffered_record_class(**row.dict_repr)
                         for row in buffered_data
                     ]
                 )
@@ -112,9 +109,9 @@ class DataBufferMixin(Base):
         except Exception as e:
             db_logger.error(
                 f"Encountered an error while retrieving buffered data for "
-                f"{cls.__name__}. ERROR msg: `{e.__class__.__name__} :{e}`."
-            )
+                f"{cls.__name__}. ERROR msg: `{e.__class__.__name__} :{e}`.")
             await session.rollback()
+            raise
 
     @classmethod
     async def mark_exchange_as_success(cls, session: AsyncSession, exchange_uuid: UUID | str) -> None:
@@ -149,6 +146,12 @@ class DataBufferMixin(Base):
 
 class BaseSensorRecord(Base):
     __abstract__ = True
+    __table_args__ = (
+        UniqueConstraint(
+            "measure", "timestamp", "value", "ecosystem_uid", "sensor_uid",
+            name="_uq_no_repost_constraint",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(nullable=False, primary_key=True)
     ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
@@ -156,13 +159,6 @@ class BaseSensorRecord(Base):
     measure: Mapped[str] = mapped_column(sa.String(length=16))
     timestamp: Mapped[datetime] = mapped_column(UtcDateTime)
     value: Mapped[float] = mapped_column(sa.Float(precision=2))
-
-    __table_args__ = (
-        sa.schema.UniqueConstraint(
-            "measure", "timestamp", "value", "ecosystem_uid", "sensor_uid",
-            name="_uq_no_repost_constraint",
-        ),
-    )
 
     @property
     def dict_repr(self) -> dict:
@@ -198,6 +194,12 @@ class SensorBuffer(BaseSensorRecord, DataBufferMixin):
 
 class BaseActuatorRecord(Base):
     __abstract__ = True
+    __table_args__ = (
+        UniqueConstraint(
+            "ecosystem_uid", "type", "timestamp", "mode", "status",
+            name="_uq_no_repost_constraint",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
@@ -208,12 +210,17 @@ class BaseActuatorRecord(Base):
     status: Mapped[bool] = mapped_column()
     level: Mapped[float | None] = mapped_column(default=None)
 
-    __table_args__ = (
-        sa.schema.UniqueConstraint(
-            "type", "ecosystem_uid", "timestamp", "mode", "status",
-            name="_uq_no_repost_constraint",
-        ),
-    )
+    @property
+    def dict_repr(self) -> dict:
+        return {
+            "ecosystem_uid": self.ecosystem_uid,
+            "type": self.type,
+            "active": self.active,
+            "mode": self.mode,
+            "status": self.status,
+            "level": self.level,
+            "timestamp": self.timestamp,
+        }
 
 
 class ActuatorRecord(BaseActuatorRecord):
