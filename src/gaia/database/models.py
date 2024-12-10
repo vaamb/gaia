@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from logging import getLogger, Logger
 from typing import AsyncGenerator, NamedTuple, Self, Sequence, Type, TypeVar
 from uuid import UUID, uuid4
 
@@ -17,6 +18,8 @@ from gaia.utils import json
 
 
 BT = TypeVar("BT", bound=gv.BufferedDataPayload)
+
+db_logger: Logger = getLogger(f"gaia.engine.db")
 
 
 db = AsyncSQLAlchemyWrapper(
@@ -77,28 +80,41 @@ class DataBufferMixin(Base):
                     .limit(per_page)
                 )
                 result = await session.execute(stmt)
-                buffered_data: Sequence[DataBufferMixin] = result.scalars().all()
+                buffered_data: Sequence[Self] = result.scalars().all()
                 if not buffered_data:
                     break
-                uuid = uuid4()
-                rv: list[NamedTuple] = []
-                for data in buffered_data:
-                    data.exchange_uuid = uuid
-                    rv.append(
-                        buffered_record_class(**{
-                            data_field: getattr(data, data_field)
-                            for data_field in buffered_record_class._fields
-                        })
-                    )
-
+                # Create an exchange uuid ...
+                exchange_uuid = uuid4()
+                # ... store it in the db ...
+                stmt = (
+                    update(cls)
+                    .where(cls.id.in_([row.id for row in buffered_data]))
+                    .values({
+                        "exchange_uuid": exchange_uuid,
+                    })
+                )
+                await session.execute(stmt)
+                # ... and use it in the payload
                 yield buffered_payload_model(
-                    data=rv,
-                    uuid=uuid,
+                    uuid=exchange_uuid,
+                    data=[
+                        buffered_record_class(
+                            **{
+                                data_field: getattr(row, data_field)
+                                for data_field in buffered_record_class._fields
+                            }
+                        )
+                        for row in buffered_data
+                    ]
                 )
                 await session.commit()
                 page += 1
-        finally:
-            await session.commit()
+        except Exception as e:
+            db_logger.error(
+                f"Encountered an error while retrieving buffered data for "
+                f"{cls.__name__}. ERROR msg: `{e.__class__.__name__} :{e}`."
+            )
+            await session.rollback()
 
     @classmethod
     async def mark_exchange_as_success(cls, session: AsyncSession, exchange_uuid: UUID | str) -> None:
