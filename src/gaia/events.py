@@ -593,6 +593,10 @@ class Events(AsyncEventHandler):
                 if data["status"] == gv.Result.success:
                     await db_model.mark_exchange_as_success(session, data["uuid"])
                 else:
+                    self.logger.error(
+                        f"Encountered an error while treating buffered data "
+                        f"exchange `{data['uuid']}`. ERROR msg: "
+                        f"`{data['message']}`.")
                     await db_model.mark_exchange_as_failed(session, data["uuid"])
 
     # ---------------------------------------------------------------------------
