@@ -333,7 +333,9 @@ class Events(AsyncEventHandler):
     #   Events for connection and initial handshake
     # ---------------------------------------------------------------------------
     async def register(self) -> None:
-        await self.engine._reset_db_exchanges_uuid()
+        if self.engine.use_db:
+            # Reset exchanges uuid as Ouranos could have failed through data exchange
+            await self.engine._reset_db_exchanges_uuid()
         self._resent_initialization_data = False
         data = gv.EnginePayload(
             engine_uid=self.engine.config.app_config.ENGINE_UID,
