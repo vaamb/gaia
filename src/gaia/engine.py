@@ -215,15 +215,19 @@ class Engine(metaclass=SingletonMeta):
         self.db.init(dict_cfg)
         await self.db.create_all()
 
-    async def start_database(self) -> None:
-        self.logger.info("Starting the database.")
+    async def _reset_db_exchanges_uuid(self) -> None:
         # Reset buffered data's "exchange_uuid"
-        from gaia.database.models import ActuatorBuffer, DataBufferMixin, SensorBuffer
+        from gaia.database.models import (
+            ActuatorBuffer, DataBufferMixin, HealthBuffer, SensorBuffer)
 
         async with self.db.scoped_session() as session:
-            for db_model in (ActuatorBuffer, SensorBuffer):
+            for db_model in (ActuatorBuffer, HealthBuffer, SensorBuffer):
                 db_model: DataBufferMixin
-                await db_model.reset_exchange_uuids(session)
+                await db_model.reset_ongoing_exchanges(session)
+
+    async def start_database(self) -> None:
+        self.logger.info("Starting the database.")
+        await self._reset_db_exchanges_uuid()
         # Set up logging routines
         from gaia.database import routines
 

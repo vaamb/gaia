@@ -77,7 +77,7 @@ async def test_buffer(db: AsyncSQLAlchemyWrapper):
                 assert buffer.timestamp == data.timestamp
                 assert buffer.value == data.value
 
-        await SensorBuffer.clear_buffer(session, uuid)
+        await SensorBuffer.mark_exchange_as_success(session, uuid)
         empty = True
         sensor_buffer = await SensorBuffer.get_buffered_data(session)
         async for _ in sensor_buffer:

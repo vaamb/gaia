@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import AsyncGenerator, NamedTuple, Sequence, Type, TypeVar
+from logging import getLogger, Logger
+from typing import AsyncGenerator, NamedTuple, Self, Sequence, Type, TypeVar
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, UniqueConstraint, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import DateTime, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column
@@ -17,6 +18,8 @@ from gaia.utils import json
 
 
 BT = TypeVar("BT", bound=gv.BufferedDataPayload)
+
+db_logger: Logger = getLogger("gaia.engine.db")
 
 
 db = AsyncSQLAlchemyWrapper(
@@ -35,10 +38,12 @@ class UtcDateTime(TypeDecorator):
     def process_bind_param(self, value, dialect):
         if isinstance(value, datetime):
             return value.astimezone(timezone.utc)
+        return value
 
     def process_result_value(self, value, dialect):
         if isinstance(value, datetime):
             return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class DataBufferMixin(Base):
@@ -46,15 +51,17 @@ class DataBufferMixin(Base):
 
     exchange_uuid: Mapped[UUID | None] = mapped_column()
 
+    @property
+    def dict_repr(self) -> dict:
+        raise NotImplementedError("This method must be implemented in a subclass")  # pragma: no cover
+
     @classmethod
     async def get_buffered_data(
             cls,
             session: AsyncSession,
             per_page: int = 50,
     ) -> AsyncGenerator[gv.BufferedDataPayload]:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
+        raise NotImplementedError("This method must be implemented in a subclass")  # pragma: no cover
 
     @classmethod
     async def _get_buffered_data(
@@ -67,6 +74,7 @@ class DataBufferMixin(Base):
         page: int = 0
         try:
             while True:
+                # Get buffered data
                 stmt = (
                     select(cls)
                     .where(cls.exchange_uuid == None)  # noqa: E711
@@ -74,56 +82,84 @@ class DataBufferMixin(Base):
                     .limit(per_page)
                 )
                 result = await session.execute(stmt)
-                buffered_data: Sequence[DataBufferMixin] = result.scalars().all()
+                buffered_data: Sequence[Self] = result.scalars().all()
                 if not buffered_data:
                     break
-                uuid = uuid4()
-                rv: list[NamedTuple] = []
-                for data in buffered_data:
-                    data.exchange_uuid = uuid
-                    rv.append(
-                        buffered_record_class(**{
-                            data_field: getattr(data, data_field)
-                            for data_field in buffered_record_class._fields
-                        })
-                    )
-
-                yield buffered_payload_model(
-                    data=rv,
-                    uuid=uuid,
+                # Create an exchange uuid ...
+                exchange_uuid = uuid4()
+                # ... store it in the db ...
+                stmt = (
+                    update(cls)
+                    .where(cls.id.in_([row.id for row in buffered_data]))
+                    .values({
+                        "exchange_uuid": exchange_uuid,
+                    })
                 )
+                await session.execute(stmt)
+                # ... and use it in the payload
+                yield buffered_payload_model(
+                    uuid=exchange_uuid,
+                    data=[
+                        buffered_record_class(**row.dict_repr)
+                        for row in buffered_data
+                    ]
+                )
+                await session.commit()
                 page += 1
-        finally:
-            await session.commit()
+        except Exception as e:
+            db_logger.error(
+                f"Encountered an error while retrieving buffered data for "
+                f"{cls.__name__}. ERROR msg: `{e.__class__.__name__} :{e}`.")
+            await session.rollback()
+            raise
 
     @classmethod
-    async def clear_buffer(cls, session: AsyncSession, uuid: UUID | str) -> None:
+    async def mark_exchange_as_success(
+            cls,
+            session: AsyncSession,
+            exchange_uuid: UUID | str,
+    ) -> None:
         stmt = (
             delete(cls)
-            .where(cls.exchange_uuid == uuid)
+            .where(cls.exchange_uuid == exchange_uuid)
         )
         await session.execute(stmt)
 
     @classmethod
-    async def clear_uuid(cls, session: AsyncSession, uuid: UUID | str) -> None:
+    async def mark_exchange_as_failed(
+            cls,
+            session: AsyncSession,
+            exchange_uuid: UUID | str,
+    ) -> None:
         stmt = (
             update(cls)
-            .where(cls.exchange_uuid == uuid)
-            .values(exchange_uuid=None)
+            .where(cls.exchange_uuid == exchange_uuid)
+            .values({
+                "exchange_uuid": None,
+            })
         )
         await session.execute(stmt)
 
     @classmethod
-    async def reset_exchange_uuids(cls, session: AsyncSession) -> None:
+    async def reset_ongoing_exchanges(cls, session: AsyncSession) -> None:
         stmt = (
             update(cls)
-            .values(exchange_uuid=None)
+            .where(cls.exchange_uuid != None)  # noqa: E711
+            .values({
+                "exchange_uuid": None,
+            })
         )
         await session.execute(stmt)
 
 
 class BaseSensorRecord(Base):
     __abstract__ = True
+    __table_args__ = (
+        UniqueConstraint(
+            "measure", "timestamp", "value", "ecosystem_uid", "sensor_uid",
+            name="_uq_no_repost_constraint",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(nullable=False, primary_key=True)
     ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
@@ -131,13 +167,6 @@ class BaseSensorRecord(Base):
     measure: Mapped[str] = mapped_column(sa.String(length=16))
     timestamp: Mapped[datetime] = mapped_column(UtcDateTime)
     value: Mapped[float] = mapped_column(sa.Float(precision=2))
-
-    __table_args__ = (
-        sa.schema.UniqueConstraint(
-            "measure", "timestamp", "value", "ecosystem_uid", "sensor_uid",
-            name="_uq_no_repost_constraint",
-        ),
-    )
 
     @property
     def dict_repr(self) -> dict:
@@ -173,6 +202,12 @@ class SensorBuffer(BaseSensorRecord, DataBufferMixin):
 
 class BaseActuatorRecord(Base):
     __abstract__ = True
+    __table_args__ = (
+        UniqueConstraint(
+            "ecosystem_uid", "type", "timestamp", "mode", "status",
+            name="_uq_no_repost_constraint",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
@@ -183,12 +218,17 @@ class BaseActuatorRecord(Base):
     status: Mapped[bool] = mapped_column()
     level: Mapped[float | None] = mapped_column(default=None)
 
-    __table_args__ = (
-        sa.schema.UniqueConstraint(
-            "type", "ecosystem_uid", "timestamp", "mode", "status",
-            name="_uq_no_repost_constraint",
-        ),
-    )
+    @property
+    def dict_repr(self) -> dict:
+        return {
+            "ecosystem_uid": self.ecosystem_uid,
+            "type": self.type,
+            "active": self.active,
+            "mode": self.mode,
+            "status": self.status,
+            "level": self.level,
+            "timestamp": self.timestamp,
+        }
 
 
 class ActuatorRecord(BaseActuatorRecord):

@@ -333,6 +333,9 @@ class Events(AsyncEventHandler):
     #   Events for connection and initial handshake
     # ---------------------------------------------------------------------------
     async def register(self) -> None:
+        if self.engine.use_db:
+            # Reset exchanges uuid as Ouranos could have failed through data exchange
+            await self.engine._reset_db_exchanges_uuid()
         self._resent_initialization_data = False
         data = gv.EnginePayload(
             engine_uid=self.engine.config.app_config.ENGINE_UID,
@@ -591,9 +594,13 @@ class Events(AsyncEventHandler):
             for db_model in (ActuatorBuffer, SensorBuffer):
                 db_model: DataBufferMixin
                 if data["status"] == gv.Result.success:
-                    await db_model.clear_buffer(session, data["uuid"])
+                    await db_model.mark_exchange_as_success(session, data["uuid"])
                 else:
-                    await db_model.clear_uuid(session, data["uuid"])
+                    self.logger.error(
+                        f"Encountered an error while treating buffered data "
+                        f"exchange `{data['uuid']}`. ERROR msg: "
+                        f"`{data['message']}`.")
+                    await db_model.mark_exchange_as_failed(session, data["uuid"])
 
     # ---------------------------------------------------------------------------
     #   Pictures
