@@ -19,7 +19,7 @@ from gaia.utils import json
 
 BT = TypeVar("BT", bound=gv.BufferedDataPayload)
 
-db_logger: Logger = getLogger(f"gaia.engine.db")
+db_logger: Logger = getLogger("gaia.engine.db")
 
 
 db = AsyncSQLAlchemyWrapper(
@@ -144,7 +144,7 @@ class DataBufferMixin(Base):
     async def reset_ongoing_exchanges(cls, session: AsyncSession) -> None:
         stmt = (
             update(cls)
-            .where(cls.exchange_uuid != None)
+            .where(cls.exchange_uuid != None)  # noqa: E711
             .values({
                 "exchange_uuid": None,
             })
