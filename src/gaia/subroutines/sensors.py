@@ -60,7 +60,7 @@ class Sensors(SubroutineTemplate):
         finally:
             update_time = monotonic() - start_time
             self.logger.debug(f"Sensors data update finished in {update_time:.1f} s.")
-        if self.ecosystem.engine.use_message_broker:
+        if self.ecosystem.engine.message_broker_started:
             try:
                 await self.send_data_if_possible()
             except Exception as e:

@@ -1297,7 +1297,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if (
                 send_info
                 and self.general.engine_set_up
-                and self.general.engine.use_message_broker
+                and self.general.engine.message_broker_started
         ):
             try:
                 await self.general.engine.event_handler.send_payload_if_connected(
@@ -1342,7 +1342,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if (
                     send_info
                     and self.general.engine_set_up
-                    and self.general.engine.use_message_broker
+                    and self.general.engine.message_broker_started
             ):
                 await self.general.engine.event_handler.send_payload_if_connected(
                     "chaos_parameters")

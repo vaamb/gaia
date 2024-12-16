@@ -617,7 +617,7 @@ class ActuatorHandler:
     ) -> None:
         # Check if we use the message broker and if the engine is registered
         if not (
-                self.ecosystem.engine.use_message_broker
+                self.ecosystem.engine.message_broker_started
                 and self.ecosystem.event_handler.registered
         ):
             return

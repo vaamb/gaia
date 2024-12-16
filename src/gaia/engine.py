@@ -58,7 +58,9 @@ class Engine(metaclass=SingletonMeta):
             self._virtual_world = VirtualWorld(self, **virtual_world_cfg)
         self._message_broker: AsyncDispatcher | None = None
         self._event_handler: Events | None = None
+        self._message_broker_started: bool = False
         self._db: AsyncSQLAlchemyWrapper | None = None
+        self._db_started: bool = False
         self.plugins_initialized: bool = False
         self._task: Task | None = None
         self._running_event = Event()
@@ -89,13 +91,17 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Events dispatcher
     # ---------------------------------------------------------------------------
+    @property
+    def use_message_broker(self) -> bool:
+        return self.config.app_config.COMMUNICATE_WITH_OURANOS
+
     async def init_message_broker(self) -> None:
-        if not self.config.app_config.COMMUNICATE_WITH_OURANOS:
+        if not self.use_message_broker:
             raise RuntimeError(
                 "Cannot initialize the message broker if the parameter "
                 "'COMMUNICATE_WITH_OURANOS' is set to 'False'."
             )
-        if self.use_message_broker:
+        if self._message_broker is not None:
             raise RuntimeError("The message broker has already been initialized.")
         broker_url = self.config.app_config.AGGREGATOR_COMMUNICATION_URL
         if not broker_url:
@@ -157,10 +163,16 @@ class Engine(metaclass=SingletonMeta):
     async def start_message_broker(self) -> None:
         self.logger.info("Starting the event dispatcher.")
         await self.message_broker.start(retry=True, block=False)
+        self._message_broker_started = True
 
     async def stop_message_broker(self) -> None:
         self.logger.info("Stopping the event dispatcher.")
         await self.message_broker.stop()
+        self._message_broker_started = False
+
+    @property
+    def message_broker_started(self) -> bool:
+        return self._message_broker_started
 
     @property
     def message_broker(self) -> AsyncDispatcher:
@@ -178,10 +190,6 @@ class Engine(metaclass=SingletonMeta):
         self._message_broker = value
 
     @property
-    def use_message_broker(self) -> bool:
-        return self._event_handler is not None
-
-    @property
     def event_handler(self) -> "Events":
         """Return the event handler"""
         if self._event_handler is not None:
@@ -195,13 +203,17 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   DB
     # ---------------------------------------------------------------------------
+    @property
+    def use_db(self) -> bool:
+        return self.config.app_config.USE_DATABASE
+
     async def init_database(self) -> None:
-        if not self.config.app_config.USE_DATABASE:
+        if not self.use_db:
             raise RuntimeError(
                 "Cannot initialize the database if the parameter 'USE_DATABASE' "
                 "is set to 'False'."
             )
-        if self.use_db:
+        if self._db is not None:
             raise RuntimeError("The database has already been initialized.")
         self.logger.info("Initialising the database.")
         from gaia.database import db
@@ -247,11 +259,17 @@ class Engine(metaclass=SingletonMeta):
                 ),
                 misfire_grace_time=10,
             )
+        self._db_started = True
 
     async def stop_database(self) -> None:
         self.logger.info("Stopping the database.")
         if self.config.app_config.SENSORS_LOGGING_PERIOD:
             self.scheduler.remove_job("log_sensors_data")
+        self._db_started = False
+
+    @property
+    def db_started(self) -> bool:
+        return self._db_started
 
     @property
     def db(self) -> AsyncSQLAlchemyWrapper:
@@ -265,10 +283,6 @@ class Engine(metaclass=SingletonMeta):
     @db.setter
     def db(self, value: AsyncSQLAlchemyWrapper | None) -> None:
         self._db = value
-
-    @property
-    def use_db(self) -> bool:
-        return self._db is not None
 
     # ---------------------------------------------------------------------------
     #   Plugins management
@@ -296,16 +310,16 @@ class Engine(metaclass=SingletonMeta):
                 "Cannot start plugins if they have not been initialised."
             )
         self.logger.info("Initialising the plugins.")
-        if self.use_message_broker:
+        if self.use_message_broker and not self.message_broker_started:
             await self.start_message_broker()
-        if self.use_db:
+        if self.use_db and not self.db_started:
             await self.start_database()
 
     async def stop_plugins(self) -> None:
         self.logger.info("Stopping the plugins.")
-        if self.use_message_broker:
+        if self.use_message_broker and self.message_broker_started:
             await self.stop_message_broker()
-        if self.use_db:
+        if self.use_db and self.db_started:
             await self.stop_database()
 
     # ---------------------------------------------------------------------------
@@ -338,7 +352,7 @@ class Engine(metaclass=SingletonMeta):
             self,
             ecosystem_uids: str | list[str] | None = None,
     ) -> None:
-        if self.use_message_broker and self.event_handler.registered:
+        if self.message_broker_started and self.event_handler.registered:
             await self.event_handler.send_ecosystems_info(ecosystem_uids=ecosystem_uids)
 
     async def _loop(self) -> None:
@@ -658,7 +672,7 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem in self.ecosystems.values():
             if ecosystem.started:
                 await ecosystem.refresh_lighting_hours(send_info=False)
-        if send_info and self.use_message_broker:
+        if send_info and self.message_broker_started:
             await self.event_handler.send_payload_if_connected("light_data")
 
     async def update_chaos_time_window(self, send_info: bool = True) -> None:
@@ -666,7 +680,7 @@ class Engine(metaclass=SingletonMeta):
         for ecosystem in self.ecosystems.values():
             await ecosystem.config.update_chaos_time_window(send_info=False)
         await self.config.save(CacheType.chaos)
-        if send_info and self.use_message_broker:
+        if send_info and self.message_broker_started:
             await self.event_handler.send_payload_if_connected("chaos_parameters")
 
     # ---------------------------------------------------------------------------
