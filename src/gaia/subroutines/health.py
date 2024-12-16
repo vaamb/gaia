@@ -66,7 +66,7 @@ class Health(SubroutineTemplate):
         finally:
             update_time = monotonic() - start_time
             self.logger.debug(f"Health data update finished in {update_time:.1f} s.")
-        if self.ecosystem.engine.use_message_broker:
+        if self.ecosystem.engine.message_broker_started:
             try:
                 await self.send_data_if_possible()
             except Exception as e:
@@ -239,7 +239,7 @@ class Health(SubroutineTemplate):
         await self._log_data(HealthRecord)
 
     async def send_data(self) -> None:
-        if not self.ecosystem.engine.use_message_broker:
+        if not self.ecosystem.engine.message_broker_started:
             return
         await self.ecosystem.engine.event_handler.send_payload_if_connected(
             "health_data", ecosystem_uids=[self.ecosystem.uid])
