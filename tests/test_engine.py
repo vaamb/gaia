@@ -45,6 +45,7 @@ def test_engine_plugins_needed(engine: Engine):
 @pytest.mark.timeout(10)
 async def test_engine_message_broker(engine: Engine):
     # Test when communication is disabled in config
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
     assert engine.use_message_broker is False
 
     with pytest.raises(RuntimeError, match="COMMUNICATE_WITH_OURANOS"):
@@ -56,6 +57,7 @@ async def test_engine_message_broker(engine: Engine):
 
     # Test when communication is enabled in config
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+    assert engine.use_message_broker
 
     # Test invalid communication backend urls
     url = engine.config.app_config.AGGREGATOR_COMMUNICATION_URL
@@ -78,18 +80,21 @@ async def test_engine_message_broker(engine: Engine):
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Initialising the event dispatcher" in logs
 
-    assert engine.use_message_broker is True
+    assert engine._message_broker is not None
     assert isinstance(engine.message_broker, AsyncDispatcher)
     assert isinstance(engine.event_handler, EventHandler)
 
     # Test message broker start and stop
     await engine.start_message_broker()
+    assert engine.message_broker_started
     await engine.stop_message_broker()
+    assert not engine.message_broker_started
 
 
 @pytest.mark.asyncio
 async def test_engine_database(engine: Engine):
     # Test when DB is disabled in config
+    engine.config.app_config.USE_DATABASE = False
     assert engine.use_db is False
 
     with pytest.raises(RuntimeError, match="USE_DATABASE"):
@@ -100,16 +105,18 @@ async def test_engine_database(engine: Engine):
 
     # Test DB initialization
     engine.config.app_config.USE_DATABASE = True
+    assert engine.use_db is True
 
     await engine.init_database()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Initialising the database" in logs
-    assert engine.use_db is True
     assert isinstance(engine.db, SQLAlchemyWrapper)
 
     # Test DB start and stop
     await engine.start_database()
+    assert engine.db_started
     await engine.stop_database()
+    assert not engine.db_started
 
 
 @pytest.mark.asyncio

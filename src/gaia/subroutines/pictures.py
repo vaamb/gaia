@@ -125,7 +125,7 @@ class Pictures(SubroutineTemplate):
                 f"Pictures scored array update finished in {update_time:.1f} s.")
         if self._sending_counter % self._sending_ratio == 0:
             # Send data
-            if self.ecosystem.engine.use_message_broker:
+            if self.ecosystem.engine.message_broker_started:
                 try:
                     await self.send_pictures_if_possible()
                 except Exception as e:
@@ -152,7 +152,7 @@ class Pictures(SubroutineTemplate):
         if not self.config.get_IO_group_uids(gv.HardwareType.camera):
             self.logger.warning("No Camera detected, disabling Picture subroutine.")
             return False
-        if not self.ecosystem.engine.use_message_broker:
+        if not self.ecosystem.engine.message_broker_started:
             self.logger.warning(
                 "The engine is not using event dispatcher, the photo taken"
                 "will not be sent to Ouranos.")

@@ -42,7 +42,7 @@ async def log_sensors_data(
                     sensor_record = SensorRecord(**formatted_data)
                     session.add(sensor_record)
                     if (
-                            engine.use_message_broker
+                            engine.message_broker_started
                             and not engine.event_handler.is_connected()
                     ) or engine.config.app_config.TESTING:
                         sensor_buffer = SensorBuffer(**formatted_data)

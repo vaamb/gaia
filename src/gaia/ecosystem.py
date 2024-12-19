@@ -120,7 +120,7 @@ class Ecosystem:
             send_info: bool = True,
     ) -> None:
         await self.config.set_lighting_method(value)
-        if send_info and self.engine.use_message_broker:
+        if send_info and self.engine.message_broker_started:
             try:
                 await self.engine.event_handler.send_payload_if_connected(
                     "light_data", ecosystem_uids=[self.uid])
@@ -287,7 +287,7 @@ class Ecosystem:
         if self.virtualized:
             self.virtual_self.start()
         await self.refresh_subroutines()
-        if self.engine.use_message_broker and self.event_handler.registered:
+        if self.engine.message_broker_started and self.event_handler.registered:
             await self.event_handler.send_ecosystems_info(self.uid)
         self.logger.debug("Ecosystem successfully started.")
         self._started = True
