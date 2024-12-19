@@ -7,7 +7,9 @@ import pytest
 
 import gaia_validators as gv
 
+from data import ecosystem_uid
 from gaia.actuator_handler import ActuatorHandler, Timer
+from gaia.events import Events
 from gaia.hardware import gpioDimmable, gpioSwitch, Hardware
 
 from .data import light_uid
@@ -140,7 +142,10 @@ async def test_handler_timer_reset(light_handler: ActuatorHandler):
 
 
 @pytest.mark.asyncio
-async def test_turn_to(light_handler: ActuatorHandler):
+async def test_turn_to(
+        light_handler: ActuatorHandler,
+        registered_events_handler: Events,
+):
     # Test default state
     assert light_handler.status is False
     assert light_handler.mode is gv.ActuatorMode.automatic
@@ -151,11 +156,27 @@ async def test_turn_to(light_handler: ActuatorHandler):
     assert light_handler.status is True
     assert light_handler.mode is gv.ActuatorMode.manual
 
+    await sleep(0.01)  # Allow the send data task to be processed
+    event_payload = registered_events_handler.dispatcher.emit_store[0]
+    assert event_payload["event"] == "actuators_data"
+    ecosystem_payload = event_payload["data"][0]
+    assert ecosystem_payload["uid"] == ecosystem_uid
+    actuator_payload = ecosystem_payload["data"][0]
+    assert actuator_payload[0] == light_handler.type      # Hardware type
+    assert actuator_payload[2] == gv.ActuatorMode.manual  # Actuator mode
+    assert actuator_payload[3] is True                    # Actuator status
+
     # Test turn off
     async with light_handler.update_status_transaction():
         await light_handler.turn_to(gv.ActuatorModePayload.off)
     assert light_handler.status is False
     assert light_handler.mode is gv.ActuatorMode.manual
+
+    await sleep(0.01)  # Allow the send data task to be processed
+    actuator_payload = registered_events_handler.dispatcher.emit_store[1]["data"][0]["data"][0]
+    assert actuator_payload[0] == light_handler.type      # Hardware type
+    assert actuator_payload[2] == gv.ActuatorMode.manual  # Actuator mode
+    assert actuator_payload[3] is False                   # Actuator status
 
     # Test turn automatic
     async with light_handler.update_status_transaction():
@@ -163,14 +184,26 @@ async def test_turn_to(light_handler: ActuatorHandler):
     # Light handler status changes throughout the day, cannot test it
     assert light_handler.mode is gv.ActuatorMode.automatic
 
+    await sleep(0.01)  # Allow the send data task to be processed
+    actuator_payload = registered_events_handler.dispatcher.emit_store[2]["data"][0]["data"][0]
+    assert actuator_payload[0] == light_handler.type         # Hardware type
+    assert actuator_payload[2] == gv.ActuatorMode.automatic  # Actuator mode
+    assert actuator_payload[3] is False                      # Actuator status
+
     # Test countdown
-    countdown = 0.10
+    countdown = 0.05
     async with light_handler.update_status_transaction():
         await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=countdown)
-    assert light_handler.mode is gv.ActuatorMode.automatic
+    assert light_handler.mode is gv.ActuatorMode.automatic  # Make sure it hasn't changed yet
     assert math.isclose(light_handler.countdown, countdown, abs_tol=0.001)
+    assert len(registered_events_handler.dispatcher.emit_store) == 3
 
-    await sleep(0.15)
-    # Process all the countdown associated timing info
+    await sleep(0.06)  # Allow the countdown to finish
     assert light_handler.status is True
     assert light_handler.mode is gv.ActuatorMode.manual
+
+    await sleep(0.01)  # Allow the send data task to be processed
+    actuator_payload = registered_events_handler.dispatcher.emit_store[3]["data"][0]["data"][0]
+    assert actuator_payload[0] == light_handler.type      # Hardware type
+    assert actuator_payload[2] == gv.ActuatorMode.manual  # Actuator mode
+    assert actuator_payload[3] is True                    # Actuator status
