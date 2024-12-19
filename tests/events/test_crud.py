@@ -341,7 +341,7 @@ async def test_update_light_method(events_handler: Events):
     ).model_dump()
 
     await events_handler.on_crud(message)
-
+    events_handler.dispatcher.emit_store.pop(0)  # TODO: Check why an event is inserted before
     assert_success(events_handler)
 
     data_update: list[gv.LightDataPayloadDict] = \

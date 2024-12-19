@@ -290,7 +290,7 @@ async def mock_dispatcher(
         yield mock_dispatcher_module
     finally:
         await engine.stop_message_broker()
-        mock_dispatcher_module.emit_store.clear()
+        mock_dispatcher_module.clear_store()
         engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
 
 
@@ -303,7 +303,10 @@ async def events_handler(
     mock_dispatcher.register_event_handler(events_handler)
     ecosystem.engine.event_handler = events_handler
 
-    yield events_handler
+    try:
+        yield events_handler
+    finally:
+        mock_dispatcher.clear_store()
 
 
 @pytest_asyncio.fixture(scope="function")

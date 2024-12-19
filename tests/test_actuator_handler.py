@@ -7,12 +7,11 @@ import pytest
 
 import gaia_validators as gv
 
-from data import ecosystem_uid
 from gaia.actuator_handler import ActuatorHandler, Timer
 from gaia.events import Events
 from gaia.hardware import gpioDimmable, gpioSwitch, Hardware
 
-from .data import light_uid
+from .data import ecosystem_uid, light_uid
 
 
 def get_lights() -> list[gpioDimmable | gpioSwitch]:
