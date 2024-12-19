@@ -50,4 +50,9 @@ class MockDispatcher(AsyncDispatcher):
         self.emit_store.clear()
 
     async def start(self, *args, **kwargs) -> None:
-        pass
+        self._connected.set()
+        self._running.set()
+
+    async def stop(self, *args, **kwargs) -> None:
+        self._running.set()
+        self._connected.set()

@@ -2,6 +2,7 @@ from copy import deepcopy
 import os
 import shutil
 import tempfile
+from time import monotonic
 from typing import Generator, TypeVar
 
 from pydantic import RootModel
@@ -14,6 +15,7 @@ from gaia.actuator_handler import ActuatorHandler
 from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHelper
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
+from gaia.events import Events
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, subroutine_names)
 from gaia.utils import SingletonMeta, yaml
@@ -21,7 +23,7 @@ from gaia.utils import SingletonMeta, yaml
 from .data import (
     ecosystem_info, ecosystem_name, engine_uid, light_info, light_uid)
 from .subroutines.dummy_subroutine import Dummy
-from .utils import get_logs_content
+from .utils import get_logs_content, MockDispatcher
 
 
 T = TypeVar("T")
@@ -267,3 +269,55 @@ async def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
     light_handler.activate()
 
     yield light_handler
+
+
+@pytest.fixture(scope="module")
+def mock_dispatcher_module()  -> MockDispatcher:
+    mock_dispatcher = MockDispatcher("gaia")
+    return mock_dispatcher
+
+
+@pytest_asyncio.fixture(scope="function")
+async def mock_dispatcher(
+        mock_dispatcher_module: MockDispatcher,
+        engine: Engine,
+) -> YieldFixture[MockDispatcher]:
+    engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
+    engine.message_broker = mock_dispatcher_module
+    await engine.start_message_broker()
+
+    try:
+        yield mock_dispatcher_module
+    finally:
+        await engine.stop_message_broker()
+        mock_dispatcher_module.clear_store()
+        engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
+
+
+@pytest_asyncio.fixture(scope="function")
+async def events_handler(
+        ecosystem: Ecosystem,
+        mock_dispatcher: MockDispatcher,
+) -> YieldFixture[Events]:
+    events_handler = Events(ecosystem.engine)
+    mock_dispatcher.register_event_handler(events_handler)
+    ecosystem.engine.event_handler = events_handler
+
+    try:
+        yield events_handler
+    finally:
+        mock_dispatcher.clear_store()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def registered_events_handler(
+        events_handler: Events,
+) -> YieldFixture[Events]:
+    events_handler._last_heartbeat = monotonic()
+    assert events_handler.is_connected()
+    events_handler.registered = True
+
+    try:
+        yield events_handler
+    finally:
+        events_handler.registered = False
