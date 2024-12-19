@@ -10,7 +10,7 @@ from functools import partial
 import logging
 import time
 import typing
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Type
 
 import gaia_validators as gv
 
@@ -19,6 +19,8 @@ from gaia.hardware.abc import Dimmer, Hardware, Switch
 
 if typing.TYPE_CHECKING:
     from gaia import Ecosystem
+
+    from gaia.database.models import ActuatorBuffer, ActuatorRecord
 
 
 @dataclasses.dataclass(frozen=True)
@@ -433,7 +435,7 @@ class ActuatorHandler:
                 if self._any_status_change:
                     updated_data = self.as_record(datetime.now(timezone.utc))
                     await self.log_actuator_state(updated_data)
-                    await self.send_actuator_state_if_possible(updated_data)
+                    await self.schedule_send_actuator_state(updated_data)
                 self._updating = False
 
     def _check_update_status_transaction(self) -> None:
@@ -587,6 +589,25 @@ class ActuatorHandler:
         else:
             await self._turn_to(turn_to)
 
+    async def _log_actuator_state(
+            self,
+            data: gv.ActuatorStateRecord,
+            db_model: Type[ActuatorRecord] | Type[ActuatorBuffer],
+    ) -> None:
+        async with self.ecosystem.engine.db.scoped_session() as session:
+            session.add(
+                db_model(
+                    ecosystem_uid=self.ecosystem.uid,
+                    type=data.type,
+                    timestamp=data.timestamp,
+                    active=data.active,
+                    mode=data.mode,
+                    status=data.status,
+                    level=None,
+                )
+            )
+            await session.commit()
+
     async def log_actuator_state(
             self,
             data: gv.ActuatorStateRecord | None = None,
@@ -597,71 +618,51 @@ class ActuatorHandler:
             data = self.as_record(datetime.now(timezone.utc))
         from gaia.database.models import ActuatorRecord
 
-        async with self.ecosystem.engine.db.scoped_session() as session:
-            session.add(
-                ActuatorRecord(
-                    ecosystem_uid=self.ecosystem.uid,
-                    type=data.type,
-                    timestamp=data.timestamp,
-                    active=data.active,
-                    mode=data.mode,
-                    status=data.status,
-                    level=None,
-                )
-            )
-            await session.commit()
+        await self._log_actuator_state(data, ActuatorRecord)
 
     async def send_actuator_state(
             self,
             data: gv.ActuatorStateRecord | None = None,
     ) -> None:
-        # Check if we use the message broker and if the engine is registered
-        if not (
-                self.ecosystem.engine.message_broker_started
-                and self.ecosystem.event_handler.registered
-        ):
+        # Check if we use the message broker
+        if not self.ecosystem.engine.use_message_broker:
             return
+        # Get the actuator data if needed
         if data is None:
             data = self.as_record(datetime.now(timezone.utc))
-        # Send the actuator data
-        payload = gv.ActuatorsDataPayload(
-            uid=self.ecosystem.uid,
-            data=[data],
-        ).model_dump()
-        sent = False
+        # Check whether we can send the actuator data
+        sent: bool = False
         if self.ecosystem.event_handler.is_connected():
-            sent = await self.ecosystem.event_handler.emit(
-                "actuators_data", data=[payload])
-        # If not sent, and the db is enabled, save the change in the db buffer
-        if sent or not self.ecosystem.engine.use_db:
-            return
-        from gaia.database.models import ActuatorBuffer
-
-        async with self.ecosystem.engine.db.scoped_session() as session:
-            session.add(
-                ActuatorBuffer(
-                    ecosystem_uid=self.ecosystem.uid,
-                    type=data.type,
-                    timestamp=data.timestamp,
-                    active=data.active,
-                    mode=data.mode,
-                    status=data.status,
-                    level=None,
-                )
+            payload = gv.ActuatorsDataPayload(
+                uid=self.ecosystem.uid,
+                data=[data],
+            ).model_dump()
+            sent = await self.ecosystem.engine.message_broker.emit(
+                "actuators_data",
+                data=[payload],
             )
-            await session.commit()
+        # If the data wasn't sent, and the db is enabled, save the data in the db buffer
+        if not sent and self.ecosystem.engine.use_db:
+            from gaia.database.models import ActuatorBuffer
 
-    async def send_actuator_state_if_possible(
+            await self._log_actuator_state(data, ActuatorBuffer)
+
+    async def schedule_send_actuator_state(
             self,
             data: gv.ActuatorStateRecord | None = None,
     ) -> None:
-        if (
+        if not (
                 self._sending_data_task is None
                 or self._sending_data_task.done()
         ):
-            task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_actuator_state"
-            self._sending_data_task = asyncio.create_task(
-                self.send_actuator_state(data), name=task_name)
+            self.logger.warning(
+                "There is already an actuator state sending task running. "
+                "The new task will be cancelled."
+            )
+            self._sending_data_task.cancel()
+        task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_actuator_state"
+        self._sending_data_task = asyncio.create_task(
+            self.send_actuator_state(data), name=task_name)
 
     def compute_expected_status(self, expected_level: float) -> bool:
         self._last_expected_level = expected_level
