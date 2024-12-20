@@ -632,20 +632,23 @@ class ActuatorHandler:
             data = self.as_record(datetime.now(timezone.utc))
         # Check whether we can send the actuator data
         sent: bool = False
-        if self.ecosystem.event_handler.is_connected():
-            payload = gv.ActuatorsDataPayload(
-                uid=self.ecosystem.uid,
-                data=[data],
-            ).model_dump()
-            sent = await self.ecosystem.engine.message_broker.emit(
-                "actuators_data",
-                data=[payload],
-            )
+        try:
+            # Can be cancelled if it takes too long
+            if self.ecosystem.event_handler.is_connected():
+                payload = gv.ActuatorsDataPayload(
+                    uid=self.ecosystem.uid,
+                    data=[data],
+                ).model_dump()
+                sent = await self.ecosystem.engine.message_broker.emit(
+                    "actuators_data",
+                    data=[payload],
+                )
         # If the data wasn't sent, and the db is enabled, save the data in the db buffer
-        if not sent and self.ecosystem.engine.use_db:
-            from gaia.database.models import ActuatorBuffer
+        finally:
+            if not sent and self.ecosystem.engine.use_db:
+                from gaia.database.models import ActuatorBuffer
 
-            await self._log_actuator_state(data, ActuatorBuffer)
+                await self._log_actuator_state(data, ActuatorBuffer)
 
     async def schedule_send_actuator_state(
             self,
@@ -656,11 +659,11 @@ class ActuatorHandler:
                 or self._sending_data_task.done()
         ):
             self.logger.warning(
-                "There is already an actuator state sending task running. "
-                "The new task will be cancelled."
+                "There is already an actuator state sending task running. It "
+                "will be cancelled to start a new one."
             )
             self._sending_data_task.cancel()
-        task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_actuator_state"
+        task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_data"
         self._sending_data_task = asyncio.create_task(
             self.send_actuator_state(data), name=task_name)
 
