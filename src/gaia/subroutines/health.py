@@ -5,7 +5,7 @@ from asyncio import Task
 from datetime import datetime, timezone
 from time import monotonic
 import typing as t
-from typing import Any, TypedDict
+from typing import Any, Type, TypedDict
 
 from anyio.to_thread import run_sync
 from apscheduler.triggers.cron import CronTrigger
@@ -21,8 +21,7 @@ from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from sqlalchemy.orm import DeclarativeBase, DeclarativeMeta
-
+    from gaia.database.models import HealthBuffer, HealthRecord
     from gaia.subroutines.light import Light
 
 
@@ -216,7 +215,7 @@ class Health(SubroutineTemplate):
         self.logger.debug(f"Analysis of {self._ecosystem.name} image(s) done.")
         return rv
 
-    async def _log_data(self, db_model: "DeclarativeBase" | "DeclarativeMeta") -> None:
+    async def _log_data(self, db_model: Type[HealthBuffer | HealthRecord]) -> None:
         async with self.ecosystem.engine.db.scoped_session() as session:
             for record in self._plants_health:
                 session.add(
@@ -239,23 +238,35 @@ class Health(SubroutineTemplate):
         await self._log_data(HealthRecord)
 
     async def send_data(self) -> None:
-        if not self.ecosystem.engine.message_broker_started:
+        # Check if we use the message broker
+        if not self.ecosystem.engine.use_message_broker:
             return
-        await self.ecosystem.engine.event_handler.send_payload_if_connected(
-            "health_data", ecosystem_uids=[self.ecosystem.uid])
 
-    async def send_data_if_possible(self) -> None:
-        if self._sending_data_task is None or self._sending_data_task.done():
-            self._sending_data_task = asyncio.create_task(
-                self.send_data(), name=f"{self.ecosystem.uid}-health-send_data")
+        sent: bool = False
+        try:
+            # Can be cancelled if it takes too long
+            if self.ecosystem.event_handler.is_connected():
+                sent = await self.ecosystem.engine.event_handler.send_payload(
+                    "health_data", ecosystem_uids=[self.ecosystem.uid])
 
-        else:
-            if not self.ecosystem.engine.use_db:
-                return
+        finally:
+            if not sent and self.ecosystem.engine.use_db:
+                from gaia.database.models import HealthBuffer
 
-            from gaia.database.models import HealthBuffer
+                await self._log_data(HealthBuffer)
 
-            await self._log_data(HealthBuffer)
+    async def schedule_send_data(self) -> None:
+        if not(
+                self._sending_data_task is None
+                or self._sending_data_task.done()
+        ):
+            self.logger.warning(
+                "There is already an health data sending task running. It will "
+                "be cancelled to start a new one."
+            )
+            self._sending_data_task.cancel()
+        self._sending_data_task = asyncio.create_task(
+            self.send_data(), name=f"{self.ecosystem.uid}-health-send_data")
 
     @property
     def plants_health(self) -> list[gv.HealthRecord] | gv.Empty:
