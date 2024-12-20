@@ -60,9 +60,9 @@ class Sensors(SubroutineTemplate):
         finally:
             update_time = monotonic() - start_time
             self.logger.debug(f"Sensors data update finished in {update_time:.1f} s.")
-        if self.ecosystem.engine.message_broker_started:
+        if self.ecosystem.engine.use_message_broker:
             try:
-                await self.send_data_if_possible()
+                await self.schedule_send_data()
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while sending sensors data and warnings. "
@@ -274,13 +274,25 @@ class Sensors(SubroutineTemplate):
             self.sensors_data = gv.Empty()
 
     async def send_data(self) -> None:
+        # Check if we use the message broker
+        if not self.ecosystem.engine.use_message_broker:
+            return
+
         await self.ecosystem.engine.event_handler.send_payload_if_connected(
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
 
-    async def send_data_if_possible(self) -> None:
-        if self._sending_data_task is None or self._sending_data_task.done():
-            self._sending_data_task = asyncio.create_task(
-                self.send_data(), name=f"{self.ecosystem.uid}-sensors-send_data")
+    async def schedule_send_data(self) -> None:
+        if not (
+                self._sending_data_task is None
+                or self._sending_data_task.done()
+        ):
+            self.logger.warning(
+                "There is already a sensors data sending task running. It will "
+                "be cancelled to start a new one."
+            )
+            self._sending_data_task.cancel()
+        self._sending_data_task = asyncio.create_task(
+            self.send_data(), name=f"{self.ecosystem.uid}-sensors-send_data")
 
     async def trigger_climate_routine(self) -> None:
         if self._climate_routine_counter % self._climate_routine_ratio == 0:
