@@ -274,6 +274,10 @@ class Sensors(SubroutineTemplate):
             self.sensors_data = gv.Empty()
 
     async def send_data(self) -> None:
+        # Check if we use the message broker
+        if not self.ecosystem.engine.use_message_broker:
+            return
+
         await self.ecosystem.engine.event_handler.send_payload_if_connected(
             "sensors_data", ecosystem_uids=[self.ecosystem.uid])
 

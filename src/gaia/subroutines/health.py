@@ -65,12 +65,12 @@ class Health(SubroutineTemplate):
         finally:
             update_time = monotonic() - start_time
             self.logger.debug(f"Health data update finished in {update_time:.1f} s.")
-        if self.ecosystem.engine.message_broker_started:
+        if self.ecosystem.engine.use_message_broker:
             try:
-                await self.send_data_if_possible()
+                await self.schedule_send_data()
             except Exception as e:
                 self.logger.error(
-                    f"Encountered an error while sending health data and warnings. "
+                    f"Encountered an error while sending health data. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`."
                 )
         routine_time = monotonic() - start_time

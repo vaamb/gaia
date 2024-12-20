@@ -19,7 +19,6 @@ from gaia.hardware.abc import Dimmer, Hardware, Switch
 
 if typing.TYPE_CHECKING:
     from gaia import Ecosystem
-
     from gaia.database.models import ActuatorBuffer, ActuatorRecord
 
 
