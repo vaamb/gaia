@@ -638,7 +638,7 @@ class ActuatorHandler:
                     uid=self.ecosystem.uid,
                     data=[data],
                 ).model_dump()
-                sent = await self.ecosystem.engine.message_broker.emit(
+                sent = await self.ecosystem.engine.event_handler.emit(
                     "actuators_data",
                     data=[payload],
                 )
