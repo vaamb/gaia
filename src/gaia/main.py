@@ -1,3 +1,5 @@
+import os
+
 import click
 import uvloop
 
@@ -18,6 +20,9 @@ async def _main():
 
 @click.command()
 def main() -> None:
+    # Set libcamera logging level to "WARN" to avoid spurious warnings
+    os.environ["LIBCAMERA_LOG_LEVELS"] = "2"
+
     # Patch anyio's WorkerThread to increase its max idle time
     from anyio._backends._asyncio import WorkerThread
 
