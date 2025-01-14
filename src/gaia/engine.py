@@ -50,8 +50,6 @@ class Engine(metaclass=SingletonMeta):
         self._ecosystems: dict[str, Ecosystem] = {}
         self._uid: str = self.config.app_config.ENGINE_UID
         self._virtual_world: VirtualWorld | None = None
-        self._executor: ThreadPoolExecutor = ThreadPoolExecutor(
-                thread_name_prefix=f"Engine_ThreadPoolExecutor", max_workers=15)
         self._scheduler: AsyncScheduler = AsyncScheduler()
         if self.config.app_config.VIRTUALIZATION:
             self.logger.info("Using ecosystem virtualization.")
@@ -344,11 +342,10 @@ class Engine(metaclass=SingletonMeta):
     async def stop_background_tasks(self) -> None:
         self.logger.debug("Stopping the background tasks.")
         # No cleaner way to do it
-        self._scheduler = await self._scheduler.__aexit__(None, None, None)
         await self.scheduler.remove_schedule("refresh_sun_times")
         await self.scheduler.remove_schedule("refresh_chaos")
-        #self.scheduler.remove_all_jobs()  # To be 100% sure
         await self.scheduler.stop()
+        await self._scheduler.__aexit__(None, None, None)
 
     async def _send_ecosystems_info(
             self,
@@ -790,7 +787,6 @@ class Engine(metaclass=SingletonMeta):
             await self.stop_plugins()
         self.config.stop_watchdog()
         await self.stop_background_tasks()
-        self.executor.shutdown()
         self._shut_down = True
         self.logger.info("Gaia has shut down")
 
