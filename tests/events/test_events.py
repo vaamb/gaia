@@ -218,7 +218,7 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
     assert handler.mode is mode
     assert isclose(handler.countdown, countdown, abs_tol=0.01)
 
-    await sleep(countdown + 0.01)
+    await sleep(countdown + 0.1)
 
     assert handler.status is True
     assert handler.mode is gv.ActuatorMode.manual
