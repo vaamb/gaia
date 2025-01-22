@@ -272,6 +272,20 @@ async def test_ecosystem_nycthemeral_span(ecosystem_config: EcosystemConfig):
     assert isinstance(
         ecosystem_config.nycthemeral_span_method, gv.NycthemeralSpanMethod)
 
+    # Test setting the whole cycle
+    await ecosystem_config.set_nycthemeral_cycle({
+        "span": "fixed",
+        "lighting": "fixed",
+        "target": None,
+        "day": "8h42",
+        "night": "21h00",
+    })
+    assert ecosystem_config.nycthemeral_span_method == gv.NycthemeralSpanMethod.fixed
+    assert ecosystem_config.lighting_method == gv.LightMethod.fixed
+    assert ecosystem_config.nycthemeral_span_target is None
+    assert ecosystem_config.nycthemeral_span_hours.day == time(8, 42)
+    assert ecosystem_config.nycthemeral_span_hours.night == time(21, 00)
+
 
 def test_ecosystem_climate_parameters(ecosystem_config: EcosystemConfig):
     with pytest.raises(UndefinedParameter):
