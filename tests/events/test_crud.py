@@ -14,11 +14,16 @@ class Events(Events_):
     _dispatcher: MockDispatcher
 
 
-def assert_success(events_handler: Events, expected_events_emitted: int = 2):
+def assert_success(
+        events_handler: Events,
+        expected_events_emitted: int = 2,
+        crud_result_index: int = 0
+) -> None:
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         assert "was successfully treated" in logs
     assert len(events_handler._dispatcher.emit_store) == expected_events_emitted
-    emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
+    emitted_msg: gv.RequestResultDict = \
+        events_handler._dispatcher.emit_store[crud_result_index]["data"]
     assert emitted_msg["status"] == gv.Result.success
 
 
@@ -284,6 +289,42 @@ async def test_update_chaos(events_handler: Events):
 
 
 @pytest.mark.asyncio
+async def test_update_nycthemeral_cycle(events_handler: Events):
+    events_handler.engine.config.set_place("home", (0, 0))
+
+    span = gv.NycthemeralSpanMethod.mimic
+    lighting = gv.LightMethod.elongate
+    target = "home"
+    day = time(8, 42)
+    night = time(21, 0)
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="nycthemeral_cycle",
+        data={
+            "span": span,
+            "lighting": lighting,
+            "target": target,
+            "day": day,
+            "night": night
+        },
+    ).model_dump()
+
+    await events_handler.on_crud(message)
+
+    assert_success(events_handler, 3, 1)  # updated light_data, crud_result, and nycthemeral_cycle
+
+    data_update = events_handler._dispatcher.emit_store[2]["data"]
+
+    verified = gv.NycthemeralCycleConfigPayload(**data_update[0])
+    assert verified.data.span == span
+    assert verified.data.lighting == lighting
+    assert verified.data.target == target
+    assert verified.data.day == day
+    assert verified.data.night == night
+
+
+@pytest.mark.asyncio
 async def test_update_management(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
@@ -302,57 +343,7 @@ async def test_update_management(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_time_parameters(events_handler: Events):
-    day = time(8, 0)
-    night = time(20, 0)
-    message = gv.CrudPayloadDict = gv.CrudPayload(
-        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
-        action=gv.CrudAction.update,
-        target="time_parameters",
-        data={"day": day, "night": night},
-    ).model_dump()
-
-    await events_handler.on_crud(message)
-
-    assert_success(events_handler)
-
-    data_update: list[gv.LightDataPayloadDict] = \
-        events_handler._dispatcher.emit_store[1]["data"]
-    verified = gv.LightDataPayload(**data_update[0])
-    assert verified.data.morning_start == day
-    assert verified.data.evening_end == night
-    ecosystem_day = \
-        events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.day
-    assert ecosystem_day == day
-    ecosystem_night = \
-        events_handler.ecosystems[ecosystem_uid].config.nycthemeral_span_hours.night
-    assert ecosystem_night == night
-
-
-@pytest.mark.asyncio
-async def test_update_light_method(events_handler: Events):
-    method = gv.LightMethod.elongate
-    events_handler.engine.config.set_place("home", (0, 0))
-    message = gv.CrudPayloadDict = gv.CrudPayload(
-        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
-        action=gv.CrudAction.update,
-        target="light_method",
-        data={"method": method},
-    ).model_dump()
-
-    await events_handler.on_crud(message)
-    events_handler.dispatcher.emit_store.pop(0)  # TODO: Check why an event is inserted before
-    assert_success(events_handler)
-
-    data_update: list[gv.LightDataPayloadDict] = \
-        events_handler._dispatcher.emit_store[1]["data"]
-    verified = gv.LightDataPayload(**data_update[0])
-    assert verified.data.method == method
-    assert events_handler.ecosystems[ecosystem_uid].lighting_method == method
-
-
-@pytest.mark.asyncio
-async def test_create_environment_parameter(events_handler: Events):
+async def test_create_climate_parameter(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     day = 10.0
     night = 15.0
@@ -360,7 +351,7 @@ async def test_create_environment_parameter(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
-        target="environment_parameter",
+        target="climate_parameter",
         data={
             "parameter": parameter,
             "day": day,
@@ -375,8 +366,8 @@ async def test_create_environment_parameter(events_handler: Events):
 
     data_update: list[gv.EnvironmentConfigDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
-    verified = gv.EnvironmentConfigPayload(**data_update[0])
-    environment_parameter = verified.data.climate[0]
+    verified = gv.ClimateConfigPayload(**data_update[0])
+    environment_parameter = verified.data[0]
     assert environment_parameter.parameter == parameter
     assert environment_parameter.day == day
     assert environment_parameter.night == night
@@ -384,7 +375,7 @@ async def test_create_environment_parameter(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_environment_parameter_failure(events_handler: Events):
+async def test_update_climate_parameter_failure(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     day = 10.0
     night = 15.0
@@ -392,7 +383,7 @@ async def test_update_environment_parameter_failure(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
-        target="environment_parameter",
+        target="climate_parameter",
         data={
             "parameter": parameter,
             "day": day,
@@ -409,7 +400,7 @@ async def test_update_environment_parameter_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_environment_parameter(events_handler: Events):
+async def test_update_climate_parameter(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
         parameter=parameter,
@@ -424,7 +415,7 @@ async def test_update_environment_parameter(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
-        target="environment_parameter",
+        target="climate_parameter",
         data={
             "parameter": parameter,
             "day": day,
@@ -439,8 +430,8 @@ async def test_update_environment_parameter(events_handler: Events):
 
     data_update: list[gv.EnvironmentConfigDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
-    verified = gv.EnvironmentConfigPayload(**data_update[0])
-    environment_parameter = verified.data.climate[0]
+    verified = gv.ClimateConfigPayload(**data_update[0])
+    environment_parameter = verified.data[0]
     assert environment_parameter.parameter == parameter
     assert environment_parameter.day == day
     assert environment_parameter.night == night
@@ -448,12 +439,12 @@ async def test_update_environment_parameter(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_delete_environment_parameter_failure(events_handler: Events):
+async def test_delete_climate_parameter_failure(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
-        target="environment_parameter",
+        target="climate_parameter",
         data={"parameter": parameter},
     ).model_dump()
 
@@ -465,7 +456,7 @@ async def test_delete_environment_parameter_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_delete_environment_parameter(events_handler: Events):
+async def test_delete_climate_parameter(events_handler: Events):
     parameter = gv.ClimateParameter.temperature
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
         parameter=parameter,
@@ -477,7 +468,7 @@ async def test_delete_environment_parameter(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
-        target="environment_parameter",
+        target="climate_parameter",
         data={"parameter": parameter},
     ).model_dump()
 
@@ -487,8 +478,8 @@ async def test_delete_environment_parameter(events_handler: Events):
 
     data_update: list[gv.EnvironmentConfigDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
-    verified = gv.EnvironmentConfigPayload(**data_update[0])
-    assert len(verified.data.climate) == 0
+    verified = gv.ClimateConfigPayload(**data_update[0])
+    assert len(verified.data) == 0
 
 
 @pytest.mark.asyncio
