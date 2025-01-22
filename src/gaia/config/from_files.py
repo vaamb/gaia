@@ -1093,12 +1093,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             target: str | None,
             send_info: bool = False,
     ) -> None:
-        place = self.general.get_place(target)
-        if place is None:
-            raise ValueError(
-                "The place targeted must first be set with "
-                "`EngineConfig.set_place` before using it as a target."
-            )
+        if target is not None:
+            place = self.general.get_place(target)
+            if place is None:
+                raise ValueError(
+                    "The place targeted must first be set with "
+                    "`EngineConfig.set_place` before using it as a target."
+                )
         self.nycthemeral_cycle["target"] = target
         self.reset_nycthemeral_caches()
         await self.refresh_lighting_hours(send_info=send_info)
