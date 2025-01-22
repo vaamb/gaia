@@ -535,7 +535,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def create_ecosystem(self, ecosystem_name: str) -> None:
         self._create_ecosystem(ecosystem_name)
 
-    def update_ecosystem(
+    def update_ecosystem_base_info(
             self,
             ecosystem_id: str,
             **updating_values: EcosystemBaseUpdateDict,

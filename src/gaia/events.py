@@ -86,7 +86,7 @@ CrudEventName = Literal[
 crud_links_dict: dict[CrudEventName, CrudLinks] = {
     # Ecosystem creation and deletion
     "create_ecosystem": CrudLinks("create_ecosystem", "base_info"),
-    "update_ecosystem": CrudLinks("update_ecosystem", "base_info"),
+    "update_ecosystem": CrudLinks("update_ecosystem_base_info", "base_info"),
     "delete_ecosystem": CrudLinks("delete_ecosystem", "base_info"),
     # Places creation, update and deletion
     "create_place": CrudLinks("set_place", "places_list"),
@@ -466,7 +466,6 @@ class Events(AsyncEventHandler):
                     f"{action.name.capitalize()} {target} requires the "
                     f"'ecosystem_uid' field to be set.")
             if ecosystem_uid not in self.engine.ecosystems:
-                pass
                 raise ValueError(
                     f"Ecosystem with uid '{ecosystem_uid}' is not one of the "
                     f"started ecosystems.")
