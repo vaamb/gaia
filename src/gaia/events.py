@@ -34,11 +34,13 @@ PayloadName = Literal[
     "actuators_data",
     "base_info",
     "chaos_parameters",
+    "climate",
     "environmental_parameters",
     "hardware",
     "health_data",
     "light_data",
     "management",
+    "nycthemeral_cycle",
     "places_list",
     "sensors_data",
 ]
@@ -48,12 +50,14 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "base_info": gv.BaseInfoConfigPayload,
     "management": gv.ManagementConfigPayload,
     "environmental_parameters": gv.EnvironmentConfigPayload,
+    "chaos_parameters": gv.ChaosParametersPayload,
+    "nycthemeral_cycle": gv.NycthemeralCycleConfigPayload,
+    "climate": gv.ClimateConfigPayload,
     "hardware": gv.HardwareConfigPayload,
     "sensors_data": gv.SensorsDataPayload,
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
     "actuators_data": gv.ActuatorsDataPayload,
-    "chaos_parameters": gv.ChaosParametersPayload,
     "places_list": gv.PlacesPayload,
 }
 
@@ -70,13 +74,12 @@ CrudEventName = Literal[
     "create_place",
     "update_place",
     "delete_place",
-    "update_chaos_config",
     "update_management",
-    "update_time_parameters",
-    "update_light_method",
-    "create_environment_parameter",
-    "update_environment_parameter",
-    "delete_environment_parameter",
+    "update_chaos_config",
+    "update_nycthemeral_cycle",
+    "create_climate_parameter",
+    "update_climate_parameter",
+    "delete_climate_parameter",
     "create_hardware",
     "update_hardware",
     "delete_hardware",
@@ -86,24 +89,23 @@ CrudEventName = Literal[
 crud_links_dict: dict[CrudEventName, CrudLinks] = {
     # Ecosystem creation and deletion
     "create_ecosystem": CrudLinks("create_ecosystem", "base_info"),
-    "update_ecosystem": CrudLinks("update_ecosystem", "base_info"),
+    "update_ecosystem": CrudLinks("update_ecosystem_base_info", "base_info"),
     "delete_ecosystem": CrudLinks("delete_ecosystem", "base_info"),
     # Places creation, update and deletion
     "create_place": CrudLinks("set_place", "places_list"),
     "update_place": CrudLinks("update_place", "places_list"),
     "delete_place": CrudLinks("delete_place", "places_list"),
     # Ecosystem properties update
-    "update_chaos_config": CrudLinks("chaos_config", "chaos_parameters"),
     "update_management": CrudLinks("managements", "management"),
-    "update_time_parameters": CrudLinks("time_parameters", "light_data"),
-    "update_light_method": CrudLinks("set_lighting_method", "light_data"),
     # Environment parameter creation, deletion and update
-    "create_environment_parameter": CrudLinks(
-        "set_climate_parameter", "environmental_parameters"),
-    "update_environment_parameter": CrudLinks(
-        "update_climate_parameter", "environmental_parameters"),
-    "delete_environment_parameter": CrudLinks(
-        "delete_climate_parameter", "environmental_parameters"),
+    "update_chaos_config": CrudLinks("chaos_config", "chaos_parameters"),
+    "update_nycthemeral_cycle": CrudLinks("set_nycthemeral_cycle", "nycthemeral_cycle"),
+    "create_climate_parameter": CrudLinks(
+        "set_climate_parameter", "climate"),
+    "update_climate_parameter": CrudLinks(
+        "update_climate_parameter", "climate"),
+    "delete_climate_parameter": CrudLinks(
+        "delete_climate_parameter", "climate"),
     # Hardware creation, deletion and update
     "create_hardware": CrudLinks("create_new_hardware", "hardware"),
     "update_hardware": CrudLinks("update_hardware", "hardware"),
@@ -324,10 +326,13 @@ class Events(AsyncEventHandler):
         uids = self.filter_uids(ecosystem_uids)
         await self.send_payload("base_info", uids)
         await self.send_payload("management", uids)
-        await self.send_payload("environmental_parameters", uids)
+        # await self.send_payload("environmental_parameters", uids)
+        await self.send_payload("chaos_parameters", uids)
+        await self.send_payload("nycthemeral_cycle", uids)
+        await self.send_payload("light_data", uids)
+        await self.send_payload("climate", uids)
         await self.send_payload("hardware", uids)
         await self.send_payload("actuators_data", uids)
-        await self.send_payload("light_data", uids)
 
     # ---------------------------------------------------------------------------
     #   Events for connection and initial handshake
@@ -466,7 +471,6 @@ class Events(AsyncEventHandler):
                     f"{action.name.capitalize()} {target} requires the "
                     f"'ecosystem_uid' field to be set.")
             if ecosystem_uid not in self.engine.ecosystems:
-                pass
                 raise ValueError(
                     f"Ecosystem with uid '{ecosystem_uid}' is not one of the "
                     f"started ecosystems.")

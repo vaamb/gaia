@@ -134,10 +134,25 @@ async def test_on_registration_ack(
         assert value is False
 
     environmental_parameters = responses[3]
-    assert environmental_parameters["event"] == "environmental_parameters"
+    assert environmental_parameters["event"] == "chaos_parameters"
     assert environmental_parameters["data"][0]["uid"] == ecosystem_uid
 
-    hardware = responses[4]
+    environmental_parameters = responses[4]
+    assert environmental_parameters["event"] == "nycthemeral_cycle"
+    assert environmental_parameters["data"][0]["uid"] == ecosystem_uid
+
+    light_data = responses[5]
+    assert light_data["event"] == "light_data"
+    assert light_data["data"][0]["uid"] == ecosystem_uid
+    #assert light_data["data"][0]["data"]["morning_start"] == lighting_start
+    #assert light_data["data"][0]["data"]["evening_end"] == lighting_stop
+    #assert light_data["data"][0]["data"]["method"] == lighting_method
+
+    environmental_parameters = responses[6]
+    assert environmental_parameters["event"] == "climate"
+    assert environmental_parameters["data"][0]["uid"] == ecosystem_uid
+
+    hardware = responses[7]
     assert hardware["event"] == "hardware"
     assert hardware["data"][0]["uid"] == ecosystem_uid
     for h in hardware["data"][0]["data"]:
@@ -150,7 +165,7 @@ async def test_on_registration_ack(
         assert h["type"] == IO_dict[hardware_uid]["type"]
         assert h["level"] == IO_dict[hardware_uid]["level"]
 
-    actuators_data = responses[5]
+    actuators_data = responses[8]
     assert actuators_data["event"] == "actuators_data"
     assert actuators_data["data"][0]["uid"] == ecosystem_uid
     for actuator_record in actuators_data["data"][0]["data"]:
@@ -161,14 +176,7 @@ async def test_on_registration_ack(
         assert actuator_record[2] == gv.ActuatorMode.automatic
         assert actuator_record[3] is False
 
-    light_data = responses[6]
-    assert light_data["event"] == "light_data"
-    assert light_data["data"][0]["uid"] == ecosystem_uid
-    assert light_data["data"][0]["data"]["morning_start"] == lighting_start
-    assert light_data["data"][0]["data"]["evening_end"] == lighting_stop
-    #assert light_data["data"][0]["data"]["method"] == lighting_method
-
-    initialized_event = responses[7]
+    initialized_event = responses[9]
     assert initialized_event["event"] == "initialization_data_sent"
 
 
