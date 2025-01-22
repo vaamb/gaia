@@ -156,6 +156,21 @@ class Ecosystem:
         return gv.EnvironmentConfig(**environment_dict)
 
     @property
+    def chaos_parameters(self) -> gv.ChaosParameters:
+        return self.config.chaos_parameters
+
+    @property
+    def nycthemeral_cycle(self) -> gv.NycthemeralCycleConfig:
+        return gv.NycthemeralCycleConfig(**self.config.nycthemeral_cycle)
+
+    @property
+    def climate(self) -> list[gv.ClimateConfigDict]:
+        return [
+            gv.ClimateConfigDict(parameter=key, **value)
+            for key, value in self.config.climate.items()
+        ]
+
+    @property
     def hardware(self) -> list[gv.HardwareConfig]:
         hardware_dict = self.config.IO_dict
         return [
@@ -310,11 +325,6 @@ class Ecosystem:
             self.logger.error("Failed to stop the ecosystem.")
             raise Exception(f"Failed to stop ecosystem {self.name}")
         self._started = False
-
-    # Chaos
-    @property
-    def chaos_parameters(self) -> gv.ChaosParameters:
-        return self.config.chaos_parameters
 
     # Actuator
     @property
