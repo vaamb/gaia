@@ -273,13 +273,8 @@ async def test_ecosystem_nycthemeral_span(ecosystem_config: EcosystemConfig):
         ecosystem_config.nycthemeral_span_method, gv.NycthemeralSpanMethod)
 
     # Test setting the whole cycle
-    await ecosystem_config.set_nycthemeral_cycle({
-        "span": "fixed",
-        "lighting": "fixed",
-        "target": None,
-        "day": "8h42",
-        "night": "21h00",
-    })
+    await ecosystem_config.set_nycthemeral_cycle(
+        span="fixed", lighting="fixed", target=None, day="8h42", night="21h00")
     assert ecosystem_config.nycthemeral_span_method == gv.NycthemeralSpanMethod.fixed
     assert ecosystem_config.lighting_method == gv.LightMethod.fixed
     assert ecosystem_config.nycthemeral_span_target is None
