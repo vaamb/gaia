@@ -326,10 +326,13 @@ class Events(AsyncEventHandler):
         uids = self.filter_uids(ecosystem_uids)
         await self.send_payload("base_info", uids)
         await self.send_payload("management", uids)
-        await self.send_payload("environmental_parameters", uids)
+        # await self.send_payload("environmental_parameters", uids)
+        await self.send_payload("chaos_parameters", uids)
+        await self.send_payload("nycthemeral_cycle", uids)
+        await self.send_payload("light_data", uids)
+        await self.send_payload("climate", uids)
         await self.send_payload("hardware", uids)
         await self.send_payload("actuators_data", uids)
-        await self.send_payload("light_data", uids)
 
     # ---------------------------------------------------------------------------
     #   Events for connection and initial handshake
