@@ -673,7 +673,7 @@ class Engine(metaclass=SingletonMeta):
             if ecosystem.started:
                 await ecosystem.refresh_lighting_hours(send_info=False)
         if send_info and self.message_broker_started:
-            await self.event_handler.send_payload_if_connected("light_data")
+            await self.event_handler.send_payload_if_connected("nycthemeral_info")
 
     async def update_chaos_time_window(self, send_info: bool = True) -> None:
         self.logger.info("Updating ecosystems chaos time window.")

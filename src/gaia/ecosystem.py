@@ -123,7 +123,7 @@ class Ecosystem:
         if send_info and self.engine.message_broker_started:
             try:
                 await self.engine.event_handler.send_payload_if_connected(
-                    "light_data", ecosystem_uids=[self.uid])
+                    "nycthemeral_info", ecosystem_uids=[self.uid])
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while sending light data. "
@@ -160,8 +160,15 @@ class Ecosystem:
         return self.config.chaos_parameters
 
     @property
-    def nycthemeral_cycle(self) -> gv.NycthemeralCycleConfig:
+    def nycthemeral_config(self) -> gv.NycthemeralCycleConfig:
         return gv.NycthemeralCycleConfig(**self.config.nycthemeral_cycle)
+
+    @property
+    def nycthemeral_info(self) -> gv.NycthemeralCycleInfo:
+        return gv.NycthemeralCycleInfo(
+            **self.config.nycthemeral_cycle,
+            **self.config.lighting_hours.model_dump(),
+        )
 
     @property
     def climate(self) -> list[gv.ClimateConfigDict]:

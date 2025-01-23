@@ -40,7 +40,8 @@ PayloadName = Literal[
     "health_data",
     "light_data",
     "management",
-    "nycthemeral_cycle",
+    "nycthemeral_config",
+    "nycthemeral_info",
     "places_list",
     "sensors_data",
 ]
@@ -51,12 +52,13 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "management": gv.ManagementConfigPayload,
     "environmental_parameters": gv.EnvironmentConfigPayload,
     "chaos_parameters": gv.ChaosParametersPayload,
-    "nycthemeral_cycle": gv.NycthemeralCycleConfigPayload,
+    "nycthemeral_config": gv.NycthemeralCycleConfigPayload,
+    "light_data": gv.LightDataPayload,
+    "nycthemeral_info": gv.NycthemeralCycleInfoPayload,
     "climate": gv.ClimateConfigPayload,
     "hardware": gv.HardwareConfigPayload,
     "sensors_data": gv.SensorsDataPayload,
     "health_data": gv.HealthDataPayload,
-    "light_data": gv.LightDataPayload,
     "actuators_data": gv.ActuatorsDataPayload,
     "places_list": gv.PlacesPayload,
 }
@@ -76,7 +78,7 @@ CrudEventName = Literal[
     "delete_place",
     "update_management",
     "update_chaos_config",
-    "update_nycthemeral_cycle",
+    "update_nycthemeral_config",
     "create_climate_parameter",
     "update_climate_parameter",
     "delete_climate_parameter",
@@ -99,7 +101,7 @@ crud_links_dict: dict[CrudEventName, CrudLinks] = {
     "update_management": CrudLinks("managements", "management"),
     # Environment parameter creation, deletion and update
     "update_chaos_config": CrudLinks("chaos_config", "chaos_parameters"),
-    "update_nycthemeral_cycle": CrudLinks("set_nycthemeral_cycle", "nycthemeral_cycle"),
+    "update_nycthemeral_config": CrudLinks("set_nycthemeral_cycle", "nycthemeral_info"),
     "create_climate_parameter": CrudLinks(
         "set_climate_parameter", "climate"),
     "update_climate_parameter": CrudLinks(
@@ -328,8 +330,7 @@ class Events(AsyncEventHandler):
         await self.send_payload("management", uids)
         # await self.send_payload("environmental_parameters", uids)
         await self.send_payload("chaos_parameters", uids)
-        await self.send_payload("nycthemeral_cycle", uids)
-        await self.send_payload("light_data", uids)
+        await self.send_payload("nycthemeral_info", uids)
         await self.send_payload("climate", uids)
         await self.send_payload("hardware", uids)
         await self.send_payload("actuators_data", uids)
