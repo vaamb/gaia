@@ -289,7 +289,7 @@ async def test_update_chaos(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_nycthemeral_cycle(events_handler: Events):
+async def test_update_nycthemeral_config(events_handler: Events):
     events_handler.engine.config.set_place("home", (0, 0))
 
     span = gv.NycthemeralSpanMethod.mimic
@@ -300,7 +300,7 @@ async def test_update_nycthemeral_cycle(events_handler: Events):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
-        target="nycthemeral_cycle",
+        target="nycthemeral_config",
         data={
             "span": span,
             "lighting": lighting,
@@ -316,7 +316,7 @@ async def test_update_nycthemeral_cycle(events_handler: Events):
 
     data_update = events_handler._dispatcher.emit_store[2]["data"]
 
-    verified = gv.NycthemeralCycleConfigPayload(**data_update[0])
+    verified = gv.NycthemeralCycleInfoPayload(**data_update[0])
     assert verified.data.span == span
     assert verified.data.lighting == lighting
     assert verified.data.target == target

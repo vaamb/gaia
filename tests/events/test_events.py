@@ -19,6 +19,7 @@ from ..data import (
     ecosystem_uid,
     engine_uid,
     IO_dict,
+    lighting_method,
     lighting_start,
     lighting_stop,
     place_latitude,
@@ -133,26 +134,22 @@ async def test_on_registration_ack(
         assert gv.ManagementFlags[man]
         assert value is False
 
-    environmental_parameters = responses[3]
-    assert environmental_parameters["event"] == "chaos_parameters"
-    assert environmental_parameters["data"][0]["uid"] == ecosystem_uid
+    chaos_parameters = responses[3]
+    assert chaos_parameters["event"] == "chaos_parameters"
+    assert chaos_parameters["data"][0]["uid"] == ecosystem_uid
 
-    environmental_parameters = responses[4]
-    assert environmental_parameters["event"] == "nycthemeral_cycle"
-    assert environmental_parameters["data"][0]["uid"] == ecosystem_uid
+    nycthemeral_info = responses[4]
+    assert nycthemeral_info["event"] == "nycthemeral_info"
+    assert nycthemeral_info["data"][0]["uid"] == ecosystem_uid
+    assert nycthemeral_info["data"][0]["data"]["lighting"] == lighting_method
+    assert nycthemeral_info["data"][0]["data"]["day"] == lighting_start
+    assert nycthemeral_info["data"][0]["data"]["night"] == lighting_stop
 
-    light_data = responses[5]
-    assert light_data["event"] == "light_data"
-    assert light_data["data"][0]["uid"] == ecosystem_uid
-    #assert light_data["data"][0]["data"]["morning_start"] == lighting_start
-    #assert light_data["data"][0]["data"]["evening_end"] == lighting_stop
-    #assert light_data["data"][0]["data"]["method"] == lighting_method
+    climate = responses[5]
+    assert climate["event"] == "climate"
+    assert climate["data"][0]["uid"] == ecosystem_uid
 
-    environmental_parameters = responses[6]
-    assert environmental_parameters["event"] == "climate"
-    assert environmental_parameters["data"][0]["uid"] == ecosystem_uid
-
-    hardware = responses[7]
+    hardware = responses[6]
     assert hardware["event"] == "hardware"
     assert hardware["data"][0]["uid"] == ecosystem_uid
     for h in hardware["data"][0]["data"]:
@@ -165,7 +162,7 @@ async def test_on_registration_ack(
         assert h["type"] == IO_dict[hardware_uid]["type"]
         assert h["level"] == IO_dict[hardware_uid]["level"]
 
-    actuators_data = responses[8]
+    actuators_data = responses[7]
     assert actuators_data["event"] == "actuators_data"
     assert actuators_data["data"][0]["uid"] == ecosystem_uid
     for actuator_record in actuators_data["data"][0]["data"]:
@@ -176,7 +173,7 @@ async def test_on_registration_ack(
         assert actuator_record[2] == gv.ActuatorMode.automatic
         assert actuator_record[3] is False
 
-    initialized_event = responses[9]
+    initialized_event = responses[8]
     assert initialized_event["event"] == "initialization_data_sent"
 
 

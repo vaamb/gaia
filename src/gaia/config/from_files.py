@@ -1332,7 +1332,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         ):
             try:
                 await self.general.engine.event_handler.send_payload_if_connected(
-                    "light_data", ecosystem_uids=[self.uid])
+                    "nycthemeral_info", ecosystem_uids=[self.uid])
             except Exception as e:  # pragma: no cover
                 self.logger.error(
                     f"Encountered an error while sending light data. "
