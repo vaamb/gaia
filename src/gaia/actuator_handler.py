@@ -283,9 +283,9 @@ class Timer:
         self._handle.cancel()
         self._future.cancel()
 
-    def time_left(self) -> float:
+    def time_left(self) -> float | None:
         if self.done or self.cancelled:
-            return 0.0
+            return None
         return self._start_time + self._countdown - time.monotonic()
 
     def modify_countdown(self, countdown_delta: float) -> None:
@@ -435,6 +435,9 @@ class ActuatorHandler:
                     updated_data = self.as_record(datetime.now(timezone.utc))
                     await self.log_actuator_state(updated_data)
                     await self.schedule_send_actuator_state(updated_data)
+                if self._timer is not None:
+                    if self._timer.time_left is None:
+                        self.reset_timer()
                 self._updating = False
 
     def _check_update_status_transaction(self) -> None:
@@ -565,7 +568,6 @@ class ActuatorHandler:
             self.logger.info(
                 f"{self.type.name.capitalize()} has been turned to "
                 f"'{turn_to.name}'.")
-        self.reset_timer()
 
     async def _transactional_turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
         async with self.update_status_transaction():
@@ -579,6 +581,12 @@ class ActuatorHandler:
         self._check_update_status_transaction()
         turn_to: gv.ActuatorModePayload = gv.safe_enum_from_name(
             gv.ActuatorModePayload, turn_to)
+        if self._timer is not None:
+            self.logger.warning(
+                f"{self.type.name.capitalize()}'s timer already set, resetting "
+                f"it for {turn_to.name}."
+            )
+            self.reset_timer()
         if countdown:
             self.logger.info(
                 f"{self.type.name.capitalize()} will be turned to "
