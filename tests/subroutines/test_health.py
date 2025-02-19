@@ -40,7 +40,7 @@ async def test_routine(health_subroutine: Health):
     await health_subroutine.stop()
 
     assert health_subroutine.plants_health != gv.Empty()
-    assert isinstance(health_subroutine.plants_health[0], gv.HealthRecord)
+    assert isinstance(health_subroutine.plants_health["records"][0], gv.HealthRecord)
 
 
 @pytest.mark.asyncio

@@ -48,7 +48,8 @@ class Health(SubroutineTemplate):
         self._picture_size: tuple[int, int] = app_config.PICTURE_SIZE
         # Records
         self._sending_data_task: Task | None = None
-        self._plants_health: list[gv.HealthRecord] | gv.Empty = gv.Empty()
+        self._plants_health: gv.HealthData | gv.Empty = gv.Empty()
+        # self._data_lock = Lock()
         self._finish__init__()
 
     """SubroutineTemplate methods"""
@@ -119,16 +120,15 @@ class Health(SubroutineTemplate):
         return set(self.config.get_IO_group_uids(IO_type=gv.HardwareType.camera))
 
     """Routine specific methods"""
-    async def update_health_data(self) -> None:
-        if not self.started:
-            raise RuntimeError(
-                "Health subroutine has to be started to update the health data"
-            )
-        images = await self._get_the_images()
-        if images:
-            self._plants_health = await self._analyse_images(images)
-        else:
-            self._plants_health = gv.Empty()
+    @property
+    def plants_health(self) -> gv.HealthData | gv.Empty:
+        #async with self._data_lock:
+        return self._plants_health
+
+    @plants_health.setter
+    def plants_health(self, data: gv.HealthData | gv.Empty) -> None:
+        #async with self._data_lock:
+        self._plants_health = data
 
     async def _get_the_images(self) -> dict[str, SerializableImage]:
         """Get the images from the cameras before analysing them as depending
@@ -215,6 +215,23 @@ class Health(SubroutineTemplate):
         self.logger.debug(f"Analysis of {self._ecosystem.name} image(s) done.")
         return rv
 
+    async def update_health_data(self) -> None:
+        if not self.started:
+            raise RuntimeError(
+                "Health subroutine has to be started to update the health data"
+            )
+        self.logger.info("Getting the images.")
+        images = await self._get_the_images()
+        timestamp = datetime.now(timezone.utc).replace(microsecond=0)
+        if images:
+            self.logger.info("Analyzing the images.")
+            self.plants_health = {
+                "timestamp": timestamp,
+                "records": await self._analyse_images(images),
+            }
+        else:
+            self.plants_health = gv.Empty()
+
     async def _log_data(self, db_model: Type[HealthBuffer | HealthRecord]) -> None:
         async with self.ecosystem.engine.db.scoped_session() as session:
             for record in self._plants_health:
@@ -267,7 +284,3 @@ class Health(SubroutineTemplate):
             self._sending_data_task.cancel()
         self._sending_data_task = asyncio.create_task(
             self.send_data(), name=f"{self.ecosystem.uid}-health-send_data")
-
-    @property
-    def plants_health(self) -> list[gv.HealthRecord] | gv.Empty:
-        return self._plants_health
