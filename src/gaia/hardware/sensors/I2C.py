@@ -122,7 +122,7 @@ class ENS160(i2cSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="AQI",
+                    measure=Measure.aqi.value,
                     value=AQI,
                 )
             )
@@ -131,7 +131,7 @@ class ENS160(i2cSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="eCO2",
+                    measure=Measure.aqi.value,
                     value=eCO2,
                 )
             )
@@ -140,7 +140,7 @@ class ENS160(i2cSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="TVOC",
+                    measure=Measure.aqi.value,
                     value=TVOC,
                 )
             )
@@ -189,7 +189,7 @@ class VEML7700(i2cSensor, LightSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="light",
+                    measure=Measure.light.value,
                     value=await self.get_lux(),
                 )
             )
@@ -238,7 +238,7 @@ class VCNL4040(i2cSensor, LightSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="light",
+                    measure=Measure.light.value,
                     value=await self.get_lux(),
                 )
             )
@@ -311,7 +311,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="moisture",
+                    measure=Measure.moisture.value,
                     value=moisture,
                 )
             )
@@ -323,7 +323,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="temperature",
+                    measure=Measure.moisture.value,
                     value=temperature,
                 )
             )
