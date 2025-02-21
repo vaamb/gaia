@@ -27,7 +27,7 @@ class TempHumSensor(BaseSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="humidity",
+                    measure=Measure.humidity.value,
                     value=raw_humidity,
                 )
             )
@@ -38,7 +38,7 @@ class TempHumSensor(BaseSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="temperature",
+                    measure=Measure.temperature.value,
                     value=temperature,
                 )
             )
@@ -50,7 +50,7 @@ class TempHumSensor(BaseSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="dew_point",
+                    measure=Measure.dew_point.value,
                     value=dew_point,
                 )
             )
@@ -59,7 +59,7 @@ class TempHumSensor(BaseSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure="absolute_humidity",
+                    measure=Measure.absolute_humidity.value,
                     value=get_absolute_humidity(raw_temperature, raw_humidity),
                 )
             )

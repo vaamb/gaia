@@ -173,7 +173,7 @@ class Health(SubroutineTemplate):
     ) -> _PartialHealthRecord:
         index = await run_sync(Health._get_index, image0, measure)
         return {
-            "measure": measure.name,
+            "measure": measure.value,
             "value": index,
         }
 
