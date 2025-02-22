@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
@@ -43,7 +43,5 @@ jobs:
     - name: Run tests with coverage
       run: |
         coverage run -m pytest -v
+        coverage report -i
       timeout-minutes: 5
-    #- name: Display coverage
-    #  run: |
-    #    coverage report
