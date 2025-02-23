@@ -151,10 +151,10 @@ async def test_engine_plugins(engine: Engine):
 
 @pytest.mark.asyncio
 async def test_engine_background_tasks(engine: Engine):
-    engine.start_background_tasks()
+    await engine.start_background_tasks()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Starting the background tasks" in logs
-    engine.stop_background_tasks()
+    await engine.stop_background_tasks()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Stopping the background tasks" in logs
 
@@ -178,7 +178,7 @@ async def test_engine_states(engine: Engine):
     with pytest.raises(RuntimeError):
         await engine.resume()
 
-    engine.pause()
+    await engine.pause()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
         assert "Pausing Gaia ..." in logs
     assert engine.started
@@ -187,7 +187,7 @@ async def test_engine_states(engine: Engine):
     assert not engine.stopping
     assert not engine.stopped
     with pytest.raises(RuntimeError):
-        engine.pause()
+        await engine.pause()
 
     await engine.resume()
     with get_logs_content(engine.config.logs_dir / "gaia.log") as logs:
