@@ -131,7 +131,7 @@ class ENS160(i2cSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure=Measure.aqi.value,
+                    measure=Measure.eco2.value,
                     value=eCO2,
                 )
             )
@@ -140,7 +140,7 @@ class ENS160(i2cSensor):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure=Measure.aqi.value,
+                    measure=Measure.tvoc.value,
                     value=TVOC,
                 )
             )
@@ -323,7 +323,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
             data.append(
                 gv.SensorRecord(
                     sensor_uid=self.uid,
-                    measure=Measure.moisture.value,
+                    measure=Measure.temperature.value,
                     value=temperature,
                 )
             )
