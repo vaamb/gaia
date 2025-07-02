@@ -298,6 +298,7 @@ class Events(AsyncEventHandler):
                 self.logger.error(
                     f"Encountered an error while emitting event '{payload_name}'. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`.")
+                return False
             else:
                 if result:
                     self.logger.debug(f"Payload for event '{payload_name}' sent.")
@@ -355,7 +356,8 @@ class Events(AsyncEventHandler):
         else:
             self.logger.warning("Registration request could not be sent.")
 
-    async def on_connect(self, environment) -> None:  # noqa
+    @validate_payload(RootModel[dict | None])
+    async def on_connect(self, environment: dict | None) -> None:  # noqa
         self.logger.info(
             "Connection to the message broker successful. Will try to register "
             "the engine to Ouranos.")
@@ -380,6 +382,7 @@ class Events(AsyncEventHandler):
         await sleep(0.25)  # Allow to finish engine initialization in some cases
         await self.register()
 
+    @validate_payload(RootModel[str])
     async def on_registration_ack(self, host_uid: str) -> None:
         try:
             uuid = UUID(host_uid)
@@ -406,6 +409,7 @@ class Events(AsyncEventHandler):
         await sleep(1.0)  # Allow Ouranos to handle all the initialization data
         await self.emit("initialization_data_sent")
 
+    @validate_payload(RootModel[list | None])
     async def on_initialization_ack(self, missing_data: list | None = None) -> None:
         if missing_data is None:
             self.registered = True
