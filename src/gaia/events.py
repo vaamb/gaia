@@ -7,14 +7,15 @@ check_dependencies("dispatcher")
 import asyncio
 from asyncio import sleep, Task
 from datetime import datetime, timezone
+from functools import wraps
 import inspect
 import logging
 from time import monotonic
 import typing as t
-from typing import Any, Callable, cast, Literal, NamedTuple, Type
+from typing import Any, Callable, cast, Literal, NamedTuple, Type, TypeVar
 from uuid import UUID
 
-from pydantic import ValidationError
+from pydantic import RootModel, ValidationError
 
 from dispatcher import AsyncEventHandler
 import gaia_validators as gv
@@ -28,6 +29,9 @@ from gaia.utils import humanize_list, local_ip_address
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia_validators.image import SerializableImage
     from sqlalchemy_wrapper import SQLAlchemyWrapper
+
+
+PT = TypeVar("PT", dict, list[dict])
 
 
 PayloadName = Literal[
@@ -115,6 +119,27 @@ crud_links_dict: dict[CrudEventName, CrudLinks] = {
 }
 
 
+def validate_payload(model_cls: Type[gv.BaseModel] | Type[RootModel]):
+    """Decorator which validate and parse data payload before calling the event
+    and the remaining decorators"""
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(self: Events, data: PT, *args):
+            try:
+                validated_data = model_cls.model_validate(data).model_dump(by_alias=True)
+            except ValidationError as e:
+                event: str = func.__name__[3:]
+                msg_list = [f"{error['loc'][0]}: {error['msg']}" for error in e.errors()]
+                self.logger.error(
+                    f"Encountered an error while validating '{event}' data. Error "
+                    f"msg: {', '.join(msg_list)}"
+                )
+                raise
+            return await func(self, validated_data, *args)
+        return wrapper
+    return decorator
+
+
 class Events(AsyncEventHandler):
     """A class holding all the events coming from event-dispatcher
 
@@ -149,29 +174,6 @@ class Events(AsyncEventHandler):
             self._dispatcher.connected
             and monotonic() - self._last_heartbeat < 30.0
         )
-
-    def validate_payload(
-            self,
-            data: dict,
-            model_cls: Type[gv.BaseModel],
-    ) -> dict:
-        if not data:
-            event = inspect.stack()[1].function.lstrip("on_")
-            self.logger.error(
-                f"Encountered an error while validating '{event}' data. Error "
-                f"msg: Empty data."
-            )
-            raise ValidationError
-        try:
-            return model_cls(**data).model_dump()
-        except ValidationError as e:
-            event = inspect.stack()[1].function.lstrip("on_")
-            msg_list = [f"{error['loc'][0]}: {error['msg']}" for error in e.errors()]
-            self.logger.error(
-                f"Encountered an error while validating '{event}' data. Error "
-                f"msg: {', '.join(msg_list)}."
-            )
-            raise
 
     # ---------------------------------------------------------------------------
     #   Background jobs
@@ -393,6 +395,7 @@ class Events(AsyncEventHandler):
             "Engine registration successful, sending initial ecosystems info.")
         await self.send_initialization_data()
 
+    @validate_payload(RootModel[str])
     async def on_camera_token(self, camera_token: str) -> None:
         self.logger.info("Received camera token from Ouranos.")
         self.camera_token = camera_token
@@ -424,13 +427,13 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     #   Events to modify managements and actuators state
     # ---------------------------------------------------------------------------
-    async def on_turn_light(self, message: gv.TurnActuatorPayloadDict) -> None:
-        message["actuator"] = gv.HardwareType.light
-        await self.on_turn_actuator(message)
+    @validate_payload(gv.TurnActuatorPayload)
+    async def on_turn_light(self, data: gv.TurnActuatorPayloadDict) -> None:
+        data["actuator"] = gv.HardwareType.light
+        await self.on_turn_actuator(data)
 
-    async def on_turn_actuator(self, message: gv.TurnActuatorPayloadDict) -> None:
-        data: gv.TurnActuatorPayloadDict = self.validate_payload(
-            message, gv.TurnActuatorPayload)
+    @validate_payload(gv.TurnActuatorPayload)
+    async def on_turn_actuator(self, data: gv.TurnActuatorPayloadDict) -> None:
         ecosystem_uid: str = data["ecosystem_uid"]
         self.logger.debug(
             f"Received 'turn_actuator' event to turn ecosystem '{ecosystem_uid}'"
@@ -439,15 +442,11 @@ class Events(AsyncEventHandler):
             await self.ecosystems[ecosystem_uid].turn_actuator(
                 actuator=data["actuator"],
                 mode=data["mode"],
-                countdown=message.get("countdown", 0.0),
+                countdown=data.get("countdown", 0.0),
             )
 
-    async def on_change_management(
-            self,
-            message: gv.ManagementConfigPayloadDict,
-    ) -> None:
-        data: gv.ManagementConfigPayloadDict = self.validate_payload(
-            message, gv.ManagementConfigPayload)
+    @validate_payload(gv.ManagementConfigPayload)
+    async def on_change_management(self, data: gv.ManagementConfigPayloadDict) -> None:
         ecosystem_uid: str = data["uid"]
         if ecosystem_uid in self.ecosystems:
             for management, status in data["data"].items():
@@ -501,9 +500,8 @@ class Events(AsyncEventHandler):
 
             return get_function(base_obj, crud_link.func_or_attr_name)
 
-    async def on_crud(self, message: gv.CrudPayloadDict) -> None:
-        # Validate the payload
-        data: gv.CrudPayloadDict = self.validate_payload(message, gv.CrudPayload)
+    @validate_payload(gv.CrudPayload)
+    async def on_crud(self, data: gv.CrudPayloadDict) -> None:
         # Verify it is the intended recipient
         engine_uid = data["routing"]["engine_uid"]
         if engine_uid != self.engine.uid:
@@ -587,12 +585,12 @@ class Events(AsyncEventHandler):
                 payload_dict: gv.BufferedActuatorsStatePayloadDict = payload.model_dump()
                 await self.emit(event="buffered_actuators_data", data=payload_dict)
 
-    async def on_buffered_data_ack(self, message: gv.RequestResultDict) -> None:
+    @validate_payload(gv.RequestResult)
+    async def on_buffered_data_ack(self, data: gv.RequestResultDict) -> None:
         if not self.use_db:
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'.")
-        data: gv.RequestResultDict = self.validate_payload(message, gv.RequestResult)
         from gaia.database.models import ActuatorBuffer, DataBufferMixin, SensorBuffer
 
         async with self.db.scoped_session() as session:
