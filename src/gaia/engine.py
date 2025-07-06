@@ -58,7 +58,6 @@ class Engine(metaclass=SingletonMeta):
             self._virtual_world = VirtualWorld(self, **virtual_world_cfg)
         self._message_broker: AsyncDispatcher | None = None
         self._event_handler: Events | None = None
-        self._message_broker_started: bool = False
         self._db: AsyncSQLAlchemyWrapper | None = None
         self._db_started: bool = False
         self.plugins_initialized: bool = False
@@ -163,16 +162,16 @@ class Engine(metaclass=SingletonMeta):
     async def start_message_broker(self) -> None:
         self.logger.info("Starting the event dispatcher.")
         await self.message_broker.start(retry=True, block=False)
-        self._message_broker_started = True
 
     async def stop_message_broker(self) -> None:
         self.logger.info("Stopping the event dispatcher.")
         await self.message_broker.stop()
-        self._message_broker_started = False
 
     @property
     def message_broker_started(self) -> bool:
-        return self._message_broker_started
+        if self._message_broker is None:
+            return False
+        return self._message_broker.running
 
     @property
     def message_broker(self) -> AsyncDispatcher:
