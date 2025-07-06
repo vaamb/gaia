@@ -1,5 +1,6 @@
 from asyncio import create_task, sleep, wait_for
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 
@@ -85,10 +86,13 @@ async def test_engine_message_broker(engine: Engine):
     assert isinstance(engine.event_handler, EventHandler)
 
     # Test message broker start and stop
-    await engine.start_message_broker()
-    assert engine.message_broker_started
-    await engine.stop_message_broker()
-    assert not engine.message_broker_started
+    with patch.object(engine.message_broker._connected, "is_set", return_value=True):
+        await engine.start_message_broker()
+        # Give time for the message broker to start
+        await sleep(0.1)
+        assert engine.message_broker_started
+        await engine.stop_message_broker()
+        assert not engine.message_broker_started
 
 
 @pytest.mark.asyncio
