@@ -300,7 +300,7 @@ async def events_handler(
         mock_dispatcher: MockDispatcher,
 ) -> YieldFixture[Events]:
     events_handler = Events(ecosystem.engine)
-    await mock_dispatcher.register_event_handler(events_handler)
+    mock_dispatcher.register_event_handler(events_handler)
     ecosystem.engine.event_handler = events_handler
 
     try:
