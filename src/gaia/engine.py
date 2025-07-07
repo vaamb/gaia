@@ -156,7 +156,7 @@ class Engine(metaclass=SingletonMeta):
 
             self.message_broker = AsyncInMemoryDispatcher("gaia")
         events_handler = Events(engine=self)
-        await self.message_broker.register_event_handler(events_handler)
+        self.message_broker.register_event_handler(events_handler)
         self.event_handler = events_handler
 
     async def start_message_broker(self) -> None:
