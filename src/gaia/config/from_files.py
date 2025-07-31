@@ -23,7 +23,8 @@ import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
 
 from gaia.config import BaseConfig, configure_logging, GaiaConfig, GaiaConfigHelper
-from gaia.exceptions import EcosystemNotFound, HardwareNotFound, UndefinedParameter
+from gaia.exceptions import (
+    EcosystemNotFound, HardwareNotFound, PlantNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
@@ -140,6 +141,7 @@ class EcosystemConfigValidator(gv.BaseModel):
     environment: EnvironmentConfigValidator = Field(
         default_factory=EnvironmentConfigValidator)
     IO: dict[str, gv.AnonymousHardwareConfig] = Field(default_factory=dict)
+    plants: dict[str, gv.AnonymousPlantConfig] = Field(default_factory=dict)
 
 
 class EcosystemConfigDict(TypedDict):
@@ -148,6 +150,7 @@ class EcosystemConfigDict(TypedDict):
     management: gv.ManagementConfigDict
     environment: EnvironmentConfigDict
     IO: dict[str, gv.AnonymousHardwareConfigDict]
+    plants: dict[str, gv.AnonymousPlantConfigDict]
 
 
 class RootEcosystemsConfigValidator(RootModel):
@@ -1513,8 +1516,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             and self.IO_dict[uid]["level"] in level
         ]
 
-    def _create_new_IO_uid(self) -> str:
-        used_ids = set(self.IO_dict.keys())
+    def _create_new_short_uid(self) -> str:
+        used_ids = {*self.IO_dict.keys(), *self.plants_dict.keys()}
         while True:
             uid = create_uid(uid_length=16)
             if uid not in used_ids:
@@ -1576,7 +1579,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param plants: list: the name of the plant linked to the hardware
         :param multiplexer_model: str: the model of the multiplexer used if there is one
         """
-        uid = self._create_new_IO_uid()
+        uid = self._create_new_short_uid()
         hardware_dict = gv.HardwareConfigDict(**{
             "uid": uid,
             "name": name,
@@ -1655,6 +1658,108 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def supported_hardware() -> list:
         return [h for h in hardware_models]
 
+    """Plants-related methods"""
+    @property
+    def plants_dict(self) -> dict[str, gv.AnonymousPlantConfigDict]:
+        """
+        Returns the plants present in the ecosystem
+        """
+        try:
+            return self.__dict["plants"]
+        except KeyError:  # pragma: no cover
+            self.__dict["plants"] = {}
+            return self.__dict["plants"]
+
+    def create_new_plant(
+            self,
+            *,
+            name: str,
+            species: str,
+            sowing_date: datetime | None = None,
+            hardware: list[str] | None = None,
+    ) -> None:
+        """
+        Create a new hardware
+        :param name: str, the name of the hardware to create
+        :param species: str: the species of the plant to create
+        :param sowing_date: datetime: the sowing date of the plant to create
+        :param hardware: list: the name of the hardware linked to the plant
+        """
+        uid = self._create_new_short_uid()
+        plant_dict = gv.PlantConfigDict(**{
+            "uid": uid,
+            "name": name,
+            "species": species,
+            "sowing_date": sowing_date,
+            "hardware": hardware,
+        })
+        try:
+            plant_dict = gv.PlantConfig(**plant_dict).model_dump()
+        except pydantic.ValidationError as e:
+            raise ValueError(
+                f"Invalid hardware information provided. "
+                f"ERROR msg(s): `{format_pydantic_error(e)}`"
+            )
+        uid = plant_dict.pop("uid")
+        self.plants_dict.update({uid: plant_dict})
+
+    def update_plant(
+            self,
+            uid: str,
+            **updating_values: gv.AnonymousPlantConfigDict,
+    ) -> None:
+        if uid not in self.plants_dict:
+            raise PlantNotFound(
+                f"No plant with uid '{uid}' found in the plant config."
+            )
+        plant_dict = self.plants_dict[uid].copy()
+        plant_dict: gv.PlantConfigDict = cast(gv.PlantConfigDict, plant_dict)
+        plant_dict["uid"] = uid
+        plant_dict.update(
+            {
+                key: value
+                for key, value in updating_values.items()
+                if value is not gv.missing
+            }
+        )
+        try:
+            plant_dict = gv.PlantConfig(**plant_dict).model_dump()
+        except pydantic.ValidationError as e:
+            raise ValueError(
+                f"Invalid hardware information provided. "
+                f"ERROR msg(s): `{format_pydantic_error(e)}`"
+            )
+        uid = plant_dict.pop("uid")
+        self.plants_dict[uid] = plant_dict
+
+    def delete_plant(self, uid: str) -> None:
+        """
+        Delete a hardware from the config
+        :param uid: str, the uid of the hardware to delete
+        """
+        try:
+            del self.plants_dict[uid]
+        except KeyError:
+            raise PlantNotFound(
+                f"No plant with uid '{uid}' found in the plant config."
+            )
+
+    def get_plant_uid(self, name: str) -> str:
+        for uid, plant in self.plants_dict.items():
+            if plant["name"] == name:
+                return uid
+        raise PlantNotFound(
+            f"No plant with name '{name}' found in the plant config."
+        )
+
+    def get_plant_config(self, uid: str) -> gv.PlantConfig:
+        try:
+            plant_config = self.plants_dict[uid]
+            return gv.PlantConfig(uid=uid, **plant_config)
+        except KeyError:
+            raise PlantNotFound(
+                f"No plant with uid '{uid}' found in the plant config."
+            )
 
 # ---------------------------------------------------------------------------
 #   Functions to interact with the module
