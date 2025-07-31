@@ -186,6 +186,13 @@ class Ecosystem:
         ]
 
     @property
+    def plants(self) -> list[gv.PlantConfig]:
+        return [
+            gv.PlantConfig(uid=key, **value)
+            for key, value in self.config.plants_dict.items()
+        ]
+
+    @property
     def virtual_self(self) -> VirtualEcosystem:
         if self._virtual_self is None:
             raise AttributeError(

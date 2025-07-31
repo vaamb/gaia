@@ -14,6 +14,10 @@ class HardwareNotFound(NotFound):
     pass
 
 
+class PlantNotFound(NotFound):
+    pass
+
+
 class NoSubroutineNeeded(RuntimeError):
     pass
 
