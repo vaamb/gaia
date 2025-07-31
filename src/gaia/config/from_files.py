@@ -1601,12 +1601,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             uid: str,
             **updating_values: gv.AnonymousHardwareConfigDict,
     ) -> None:
-        base_hardware_dict = self.IO_dict.get(uid)
-        if base_hardware_dict is None:
+        if uid not in self.IO_dict:
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
             )
-        hardware_dict = base_hardware_dict.copy()
+        hardware_dict = self.IO_dict[uid].copy()
         hardware_dict: gv.HardwareConfigDict = \
             cast(gv.HardwareConfigDict, hardware_dict)
         hardware_dict["uid"] = uid
