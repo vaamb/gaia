@@ -47,6 +47,7 @@ PayloadName = Literal[
     "nycthemeral_config",
     "nycthemeral_info",
     "places_list",
+    "plants",
     "sensors_data",
 ]
 
@@ -64,6 +65,7 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "nycthemeral_config": gv.NycthemeralCycleConfigPayload,
     "nycthemeral_info": gv.NycthemeralCycleInfoPayload,
     "places_list": gv.PlacesPayload,
+    "plants": gv.PlantConfigPayload,
     "sensors_data": gv.SensorsDataPayload,
 }
 
@@ -336,6 +338,7 @@ class Events(AsyncEventHandler):
         await self.send_payload("nycthemeral_info", uids)
         await self.send_payload("climate", uids)
         await self.send_payload("hardware", uids)
+        await self.send_payload("plants", uids)
         await self.send_payload("actuators_data", uids)
 
     # ---------------------------------------------------------------------------
