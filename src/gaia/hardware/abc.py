@@ -15,7 +15,7 @@ from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
-from gaia.hardware.utils import get_i2c, is_raspi
+from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
