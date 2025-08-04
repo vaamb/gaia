@@ -165,7 +165,7 @@ class Address:
                     multiplexer_channel = int(multiplexer_components[1])
                 except (ValueError, IndexError) as e:
                     raise InvalidAddressError(
-                        f"Invalid multiplexed I2C address format. Expected format: "
+                        "Invalid multiplexed I2C address format. Expected format: "
                         "'I2C_<multiplexer_addr>#<channel>@<device_addr>'"
                     ) from e
             else:
