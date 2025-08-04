@@ -339,11 +339,9 @@ class EngineConfig(metaclass=SingletonMeta):
     def _validate_IO_dict(
             ecosystems_config_dict: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
-        for ecosystem_name, ecosystem_dict in ecosystems_config_dict.items():
+        for ecosystem_dict in ecosystems_config_dict.values():
             validated_IO_dict: dict[str, gv.AnonymousHardwareConfigDict] = {}
-            addresses_used = [
-                hardware["name"] for hardware in ecosystem_dict["IO"].values()
-            ]
+            addresses_used: list[str] = []
             for IO_uid, IO_dict in ecosystem_dict["IO"].items():
                 validated_hardware = EcosystemConfig.validate_hardware_dict(
                     hardware_dict={"uid": IO_uid, **IO_dict},
@@ -353,6 +351,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 )
                 validated_hardware.pop("uid")
                 validated_IO_dict[IO_uid] = validated_hardware
+                addresses_used.append(validated_hardware["address"])
             ecosystem_dict["IO"] = validated_IO_dict
         return ecosystems_config_dict
 
