@@ -114,42 +114,55 @@ async def test_on_registration_ack(
 
     responses = events_handler._dispatcher.emit_store
 
-    places_list = responses[0]
+    response_number = 0
+    places_list = responses[response_number]
     assert places_list["event"] == "places_list"
     assert places_list["data"]["uid"] == engine_uid
     assert places_list["data"]["data"][0]["name"] == place_name
     assert places_list["data"]["data"][0]["coordinates"] == (place_latitude, place_longitude)
 
-    base_info = responses[1]
+    response_number += 1
+
+    base_info = responses[response_number]
     assert base_info["event"] == "base_info"
     assert base_info["data"][0]["uid"] == ecosystem_uid
     assert base_info["data"][0]["data"]["engine_uid"] == engine_uid
     assert base_info["data"][0]["data"]["uid"] == ecosystem_uid
     assert base_info["data"][0]["data"]["name"] == ecosystem_name
 
-    management = responses[2]
+    response_number += 1
+
+    management = responses[response_number]
     assert management["event"] == "management"
     assert management["data"][0]["uid"] == ecosystem_uid
     for man, value in management["data"][0]["data"].items():
         assert gv.ManagementFlags[man]
         assert value is False
 
-    chaos_parameters = responses[3]
+    response_number += 1
+
+    chaos_parameters = responses[response_number]
     assert chaos_parameters["event"] == "chaos_parameters"
     assert chaos_parameters["data"][0]["uid"] == ecosystem_uid
 
-    nycthemeral_info = responses[4]
+    response_number += 1
+
+    nycthemeral_info = responses[response_number]
     assert nycthemeral_info["event"] == "nycthemeral_info"
     assert nycthemeral_info["data"][0]["uid"] == ecosystem_uid
     assert nycthemeral_info["data"][0]["data"]["lighting"] == lighting_method
     assert nycthemeral_info["data"][0]["data"]["day"] == lighting_start
     assert nycthemeral_info["data"][0]["data"]["night"] == lighting_stop
 
-    climate = responses[5]
+    response_number += 1
+
+    climate = responses[response_number]
     assert climate["event"] == "climate"
     assert climate["data"][0]["uid"] == ecosystem_uid
 
-    hardware = responses[6]
+    response_number += 1
+
+    hardware = responses[response_number]
     assert hardware["event"] == "hardware"
     assert hardware["data"][0]["uid"] == ecosystem_uid
     for h in hardware["data"][0]["data"]:
@@ -162,7 +175,15 @@ async def test_on_registration_ack(
         assert h["type"] == IO_dict[hardware_uid]["type"]
         assert h["level"] == IO_dict[hardware_uid]["level"]
 
-    actuators_data = responses[7]
+    response_number += 1
+
+    plants = responses[response_number]
+    assert plants["event"] == "plants"
+    assert plants["data"][0]["uid"] == ecosystem_uid
+
+    response_number += 1
+
+    actuators_data = responses[response_number]
     assert actuators_data["event"] == "actuators_data"
     assert actuators_data["data"][0]["uid"] == ecosystem_uid
     for actuator_record in actuators_data["data"][0]["data"]:
@@ -173,7 +194,9 @@ async def test_on_registration_ack(
         assert actuator_record[2] == gv.ActuatorMode.automatic
         assert actuator_record[3] is False
 
-    initialized_event = responses[8]
+    response_number += 1
+
+    initialized_event = responses[response_number]
     assert initialized_event["event"] == "initialization_data_sent"
 
 
