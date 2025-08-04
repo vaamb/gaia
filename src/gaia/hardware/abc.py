@@ -5,8 +5,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 import textwrap
-import typing as t
-from typing import Any, Literal, Self
+from typing import Any, ClassVar, Literal, Self, TYPE_CHECKING
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -14,14 +13,13 @@ from anyio.to_thread import run_sync
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
-from gaia.dependencies.camera import check_dependencies, cv2, SerializableImage
+from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
-from gaia.utils import (
-    pin_bcm_to_board, pin_board_to_bcm, pin_translation)
+from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
-if t.TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.template import SubroutineTemplate
 
     if is_raspi():
@@ -30,7 +28,13 @@ if t.TYPE_CHECKING:  # pragma: no cover
         from gaia.hardware._compatibility import Pin
 
 
+class InvalidAddressError(ValueError):
+    """Raised when an invalid address is provided."""
+    pass
+
+
 class Measure(Enum):
+    """Enum representing different types of measurements that can be taken by hardware."""
     absolute_humidity = "absolute_humidity"
     aqi = "AQI"
     capacitive = "capacitive"
@@ -41,7 +45,7 @@ class Measure(Enum):
     moisture = "moisture"
     temperature = "temperature"
     tvoc = "TVOC"
-    # Camera
+    # Camera-specific measures
     mpri = "MPRI"
     ndrgi = "NDRGI"
     vari = "VARI"
@@ -49,6 +53,7 @@ class Measure(Enum):
 
 
 class Unit(Enum):
+    """Enum representing different units of measurement."""
     celsius_degree = "°C"
     lux = "lux"
     gram_per_cubic_m = "g.m-3"
@@ -57,11 +62,8 @@ class Unit(Enum):
     RWC = "RWC"
 
 
-class PinNumberError(ValueError):
-    pass
-
-
 class AddressType(Enum):
+    """Enum representing different types of hardware addresses."""
     GPIO = "GPIO"
     I2C = "I2C"
     SPI = "SPI"
@@ -75,6 +77,17 @@ def str_to_hex(address: str) -> int:
 
 
 class Address:
+    """Represents a hardware address with support for different connection types.
+
+    This class handles different types of hardware addresses including GPIO, I2C, SPI,
+    and supports multiplexed connections.
+
+    Attributes:
+        type: The type of address (GPIO, I2C, SPI, PICAMERA).
+        main: The main address or pin number.
+        multiplexer_address: The address of the multiplexer if used.
+        multiplexer_channel: The channel number on the multiplexer if used.
+    """
     __slots__ = ("type", "main", "multiplexer_address", "multiplexer_channel")
 
     type: AddressType
@@ -83,62 +96,90 @@ class Address:
     multiplexer_channel: int | None
 
     def __init__(self, address_string: str) -> None:
-        """
-        :param address_string: properly written address. cf the _hint method
-                               to see different address formats possible
+        """Initialize an Address from a string representation.
 
-        If any error arises while trying to create an Address, use `Address._hint()`
+        Args:
+            address_string: String representation of the address.
+
+        Raises:
+            InvalidAddressError: For invalid GPIO pin numbers.
+
+        Example:
+            # GPIO address
+            addr = Address("GPIO_17")
+
+            # I2C address without multiplexer
+            addr = Address("I2C_0x10")
+
+            # I2C address with multiplexer
+            addr = Address("I2C_0x70#1_0x10")
         """
         address_components = address_string.split("_", maxsplit=1)
-        address_type = address_components[0]
+        address_type = address_components[0].lower()
         try:
             address_number = address_components[1]
         except IndexError:
             address_number = None
 
         # The hardware is using a standard GPIO pin
-        if address_type.lower() in ("board", "bcm", "gpio"):
-            # Get the pin number in the proper format and make sure it is valid
-            pin_number = int(address_number)
-            if address_type.lower() == "board":
+        if address_type in {"board", "bcm", "gpio"}:
+            # Get the pin number in the proper format and validate it
+            try:
+                pin_number = int(address_number)
+            except ValueError as e:
+                raise InvalidAddressError(f"Invalid pin number: {address_number}") from e
+
+            if address_type == "board":
                 # Translate the pin number from "board" to "BCM" format
-                if pin_number not in pin_board_to_bcm:  # pragma: no cover
-                    raise PinNumberError("The pin is not a valid GPIO pin")
+                if pin_number not in pin_board_to_bcm:
+                    raise InvalidAddressError(f"Board pin {pin_number} is not a valid GPIO pin")
                 pin_number = pin_translation(pin_number, "to_BCM")
             else:
-                if pin_number not in pin_bcm_to_board:  # pragma: no cover
-                    raise PinNumberError("The pin is not a valid GPIO pin")
-            # Init the data
+                if pin_number not in pin_bcm_to_board:
+                    raise InvalidAddressError(f"BCM pin {pin_number} is not a valid GPIO pin")
+
             self.type = AddressType.GPIO
             self.main = pin_number
-            self.multiplexer_address = None  # No multiplexing possible with gpio
-            self.multiplexer_channel = None  # No multiplexing possible with gpio
+            self.multiplexer_address = None
+            self.multiplexer_channel = None
 
         # The hardware is using the I2C protocol
-        elif address_type.lower() == "i2c":
+        elif address_type == "i2c":
             i2c_components = address_number.split("@")
             if len(i2c_components) == 1:
-                # The hardware does not use a multiplexer; format "I2C_0x10"
-                main = str_to_hex(i2c_components[0])
+                # Format: "I2C_0x10", no multiplexer used
+                try:
+                    main = str_to_hex(i2c_components[0])
+                except ValueError as e:
+                    raise InvalidAddressError(f"Invalid I2C address: {i2c_components[0]}") from e
                 multiplexer_address = None
                 multiplexer_channel = None
             elif len(i2c_components) == 2:
-                # The hardware is using a multiplexer; format "I2C_0x70#1_0x10"
-                main = str_to_hex(i2c_components[1])
-                multiplexer_components = i2c_components[0].split("#")
-                multiplexer_address = str_to_hex(multiplexer_components[0])
-                multiplexer_channel = int(multiplexer_components[1])
+                # Format: "I2C_0x70#1_0x10"
+                try:
+                    main = str_to_hex(i2c_components[1])
+                    multiplexer_components = i2c_components[0].split("#")
+                    if len(multiplexer_components) != 2:
+                        raise ValueError
+                    multiplexer_address = str_to_hex(multiplexer_components[0])
+                    multiplexer_channel = int(multiplexer_components[1])
+                except (ValueError, IndexError) as e:
+                    raise InvalidAddressError(
+                        "Invalid multiplexed I2C address format. Expected format: "
+                        "'I2C_<multiplexer_addr>#<channel>@<device_addr>'"
+                    ) from e
             else:
-                raise ValueError(self._hint())
+                raise InvalidAddressError(f"Invalid address type: {address_type}. {self._hint()}")
             self.type = AddressType.I2C
             self.main = main
             self.multiplexer_address = multiplexer_address
             self.multiplexer_channel = multiplexer_channel
 
         # The hardware is using the SPI protocol
-        elif address_type.lower() == "spi":
-            raise ValueError("SPI address is not currently supported.")
+        elif address_type == "spi":
+            raise NotImplementedError("SPI address type is not currently supported.")
 
+        # The hardware is a Pi Camera
         elif address_type.lower() == "picamera":
             self.type = AddressType.PICAMERA
             self.main = None
@@ -147,54 +188,63 @@ class Address:
 
         # The address is not valid
         else:
-            raise ValueError("Address type is not valid.")
+            raise InvalidAddressError(f"Invalid address type: {address_type}. {self._hint()}")
 
-    def __repr__(self) -> str:  # pragma: no cover
+    def __repr__(self) -> str:
         if self.type == AddressType.PICAMERA:
             return f"{self.type.value}"
-        elif self.type == AddressType.GPIO:
-            rep_f = int
-        elif self.type == AddressType.I2C:
-            rep_f = hex
-        elif self.type == AddressType.SPI:
-            rep_f = hex
-        else:
-            raise TypeError
-        if self.multiplexer_address:
+
+        rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
+
+        if self.is_multiplexed:
             return (
                 f"{self.type.value}_{rep_f(self.multiplexer_address)}#"
                 f"{self.multiplexer_channel}@{rep_f(self.main)}"
             )
-        else:
-            return f"{self.type.value}_{rep_f(self.main)}"
+        return f"{self.type.value}_{rep_f(self.main)}"
 
     @staticmethod
     def _hint() -> str:
-        msg = """\
-        Different types of address can be used: "GPIO" (using board or bcm
-        numbers), "I2C" and "SPI" (currently not implemented).
+        """Provide usage hints for address formatting.
 
-        Here are some examples for the different address types:
-        GPIO:
-            Board numbers: "BOARD_37"
-                    where "37" is the pin number using the board notation
-            BCM/GPIO numbers: "BCM_27"  == "GPIO_27"
-                    where "32" is the pin number using the gpio notation
-        I2C:
-            Without a multiplexer: "I2C_0x10"
-                    where "0x10" is the address of the hardware in hexadecimal
-            With a multiplexer: "I2C_0x70@1_0x10"
-                    where "0x70" is the address of the multiplexer in hexadecimal,
-                    "1" the channel used and "0x10" the address of the hardware
-                    in hexadecimal
-        SPI:
-            Not implemented yet
+        Returns:
+            str: Formatted help text explaining the address format options.
         """
-        return textwrap.dedent(msg)
+        return textwrap.dedent("""
+            Different types of address can be used: "GPIO" (using board or bcm
+            numbers), "I2C" and "SPI" (currently not implemented).
+
+            Here are some examples for the different address types:
+            
+            GPIO:
+                Board numbers: "BOARD_37"
+                        where "37" is the pin number using the board notation
+                BCM/GPIO numbers: "BCM_27"  == "GPIO_27"
+                        where "32" is the pin number using the gpio notation
+                        
+            I2C:
+                Without a multiplexer: "I2C_0x10"
+                        where "0x10" is the address of the hardware in hexadecimal
+                With a multiplexer: "I2C_0x70#1@0x10"
+                        where "0x70" is the address of the multiplexer in hexadecimal,
+                        "1" the channel used and "0x10" the address of the hardware
+                        in hexadecimal
+                        
+            SPI:
+                Not implemented yet
+        """)
 
     @property
     def is_multiplexed(self) -> bool:
-        return self.multiplexer_address is not None
+        """Check if this address uses a multiplexer.
+
+        Returns:
+            bool: True if the address uses a multiplexer, False otherwise.
+        """
+        return (
+            self.multiplexer_address is not None
+            and self.multiplexer_channel is not None
+        )
 
 
 class _MetaHardware(type):
@@ -543,13 +593,14 @@ class PlantLevelHardware(Hardware):
 
 
 class BaseSensor(Hardware):
-    measures_available: dict[Measure, Unit | None] | None = None
+    measures_available: ClassVar[dict[Measure, Unit | None]] = None
 
     def __init__(self, *args, **kwargs) -> None:
         if self.measures_available is None:
             raise NotImplementedError(
                 "'cls.measures_available' should be a dict with 'measure: unit' "
-                "as entries.")
+                "as entries."
+            )
         kwargs["type"] = gv.HardwareType.sensor
         super().__init__(*args, **kwargs)
         self._device: Any | None = None
