@@ -83,6 +83,15 @@ hardware_uid = sensor_uid
 hardware_info = sensor_info
 
 
+plant_uid = "bQE9vYe46B0maQ91"
+plant_info: gv.AnonymousPlantConfigDict = {
+    "name": "plant",
+    "species": "plant",
+    "sowing_date": None,
+    "hardware": [hardware_uid],
+}
+
+
 sun_times = {
     "twilight_begin": time(6, 15),
     "sunrise": time(7, 0),
@@ -132,5 +141,6 @@ ecosystem_info = {
             "climate": {},
         },
         "IO": IO_dict,
+        "plants": {},
     },
 }
