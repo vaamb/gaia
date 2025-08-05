@@ -2,8 +2,10 @@ from asyncio import sleep
 from datetime import datetime, timezone
 from math import isclose
 from time import monotonic
+from unittest.mock import AsyncMock, patch
 import uuid
 
+from pydantic import ValidationError
 import pytest
 from sqlalchemy import delete
 
@@ -12,7 +14,7 @@ import gaia_validators as gv
 from gaia import Ecosystem, EngineConfig
 from gaia.config.from_files import PrivateConfigValidator
 from gaia.database.models import ActuatorBuffer, SensorBuffer
-from gaia.events import Events as Events_
+from gaia.events import Events as Events_, validate_payload
 
 from ..data import (
     ecosystem_name,
@@ -35,10 +37,103 @@ class Events(Events_):
 
 
 @pytest.mark.asyncio
+async def test_validate_payload(events_handler: Events):
+    # Test valid payload
+    valid_data = {"uid": "test_uid", "data": {"health": True}}
+    invalid_data = {"data": {"health": True}}  # missing 'uid'
+
+    class EventTest:
+        logger = events_handler.logger
+
+        @validate_payload(gv.ManagementConfigPayload)
+        async def test_validate(self, validated_data):
+            pass
+
+    event_test = EventTest()
+
+    # Test empty data
+    with pytest.raises(ValidationError):
+        await event_test.test_validate(None)
+
+    # Test invalid data
+    with pytest.raises(ValidationError):
+        await event_test.test_validate(invalid_data)
+
+    # Test valid data
+    await event_test.test_validate(valid_data)
+
+
+@pytest.mark.asyncio
 async def test_on_pong(events_handler: Events):
     await events_handler.on_pong()
 
     assert isclose(events_handler._last_heartbeat, monotonic(), abs_tol=0.01)
+
+
+def test_filter_uids(events_handler: Events, ecosystem: Ecosystem):
+    # Test with None (should return all uids)
+    result = events_handler.filter_uids()
+    assert len(result) == 1
+    assert ecosystem_uid in result
+
+    # Test with specific uid
+    result = events_handler.filter_uids(ecosystem_uid)
+    assert result == [ecosystem_uid]
+
+    result = events_handler.filter_uids([ecosystem_uid])
+    assert result == [ecosystem_uid]
+
+    # Test with list of uids
+    result = events_handler.filter_uids([ecosystem_uid, "nonexistent_uid"])
+    assert result == [ecosystem_uid]  # Only existing uid should be returned
+
+
+@pytest.mark.asyncio
+async def test_get_payload(events_handler: Events, ecosystem: Ecosystem):
+    # Test getting a valid payload
+    payload_name = "management"
+    ecosystem_uids = [ecosystem_uid]
+
+    # Test with ecosystem payload
+    result = events_handler.get_payload(payload_name, ecosystem_uids)
+    assert isinstance(result, list)
+    assert result[0]["uid"] == ecosystem_uid
+
+    # Test with engine payload (places_list)
+    result = events_handler.get_payload("places_list")
+    assert isinstance(result, dict)
+    assert "uid" in result
+    assert "data" in result
+
+
+@pytest.mark.asyncio
+async def test_send_payload(events_handler: Events, ecosystem: Ecosystem):
+    # Test sending a valid payload
+    payload_name = "management"
+    ecosystem_uids = [ecosystem_uid]
+
+    # Mock the emit method to test if it's called correctly
+    original_emit = events_handler.emit
+    mock_emit = AsyncMock()
+    events_handler.emit = mock_emit
+
+    try:
+        await events_handler.send_payload(payload_name, ecosystem_uids)
+
+        # Check that emit was called with the correct parameters
+        mock_emit.assert_called_once()
+        event = mock_emit.call_args[0][0]
+        assert event == payload_name
+        payload = mock_emit.call_args[1]["data"]
+        assert isinstance(payload, list)
+        assert payload[0]["uid"] == ecosystem_uid
+        mgt = ecosystem.management.model_dump()
+        mgt.pop("dummy")
+        assert payload[0]["data"] == mgt
+
+    finally:
+        # Restore original emit method
+        events_handler.emit = original_emit
 
 
 @pytest.mark.asyncio
@@ -68,6 +163,19 @@ async def test_on_register(events_handler: Events):
 
     assert response["event"] == "register_engine"
     assert response["data"]["engine_uid"] == engine_uid
+
+
+@pytest.mark.asyncio
+async def test_on_camera_token(events_handler: Events):
+    test_token = "test_camera_token_123"
+
+    await events_handler.on_camera_token(test_token)
+
+    assert events_handler.camera_token == test_token
+
+    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+        assert "Received camera token from Ouranos" in logs
+
 
 
 @pytest.mark.asyncio
@@ -360,3 +468,39 @@ async def test_send_picture_arrays(events_handler: Events, ecosystem: Ecosystem)
     assert response["namespace"] == "aggregator-stream"
     assert response["event"] == "picture_arrays"
     assert isinstance(response["data"], (bytes, bytearray))
+
+
+@pytest.mark.asyncio
+async def test_upload_picture_arrays_no_token(events_handler: Events):
+    events_handler.camera_token = None
+
+    await events_handler.upload_picture_arrays()
+
+    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+        assert "No camera token found, cannot send picture arrays" in logs
+
+
+@pytest.mark.asyncio
+@patch('aiohttp.ClientSession')
+async def test_upload_picture_arrays(mock_session, events_handler: Events, ecosystem: Ecosystem):
+    # Setup test data
+    test_token = "test_token_123"
+    events_handler.camera_token = test_token
+
+    # Mock the response
+    mock_response = AsyncMock()
+    mock_response.json.return_value = {"status": "success"}
+    mock_session.return_value.__aenter__.return_value.post.return_value.__aenter__.return_value = mock_response
+
+    # Enable camera and take a picture
+    pictures_subroutine = ecosystem.subroutines["pictures"]
+    pictures_subroutine.config.set_management("camera", True)
+    pictures_subroutine.enable()
+    await pictures_subroutine.start()
+    await pictures_subroutine.routine()
+
+    # Test the upload
+    await events_handler.upload_picture_arrays()
+
+    # Verify the request was made with the correct token
+    assert mock_session.call_args[1]["headers"]["token"] == test_token
