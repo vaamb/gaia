@@ -1,132 +1,279 @@
 #!/bin/bash
 
-echo "Installing Gaia"
+# Exit on error, unset variables, and pipeline errors
+set -euo pipefail
 
-# Enable I2C, SPI and camera
-echo "Enabling I2C, SPI and camera"
+# Constants
+readonly MIN_PYTHON_VERSION="3.11"
+readonly GAIA_VERSION="0.9.0"
+readonly GAIA_REPO="https://github.com/vaamb/gaia.git"
+
+# Colors for output
+readonly RED='\033[0;31m'
+readonly YELLOW='\033[1;33m'
+readonly GREEN='\033[0;32m'
+readonly LIGHT_YELLOW='\033[93m'
+readonly NC='\033[0m' # No Color
+
+# Function to log messages
+log() {
+    case "$1" in
+        "INFO")
+            echo -e "${LIGHT_YELLOW}$2${NC}"
+            ;;
+        "WARN")
+            echo -e "${YELLOW}Warning: $2${NC}"
+            ;;
+        "ERROR")
+            echo -e "${RED}Error: $2${NC}"
+            exit 1
+            ;;
+        "SUCCESS")
+            echo -e "${GREEN}$2${NC} "
+            ;;
+        *)
+            echo -e "$1"
+            ;;
+    esac
+}
+
+log "INFO" "Installing Gaia"
+
+# Check if running as root
+if [ "${EUID}" -eq 0 ]; then
+    log "WARN" "Running as root is not recommended. Please run as a regular user with sudo privileges."
+    read -p "Continue anyway? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log "INFO" "Installation cancelled by user."
+        exit 1
+    fi
+fi
+
+# Function to check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+
+# Check system requirements
+log "INFO" "Checking system requirements..."
+
+# Check for required commands
+for cmd in git python3 systemctl; do
+    if ! command_exists "${cmd}"; then
+        log "ERROR" "$cmd is required but not installed."
+    fi
+done
+
+# Check Python version
+python3 -c "import sys; exit(0) if sys.version_info >= (${MIN_PYTHON_VERSION//./,}) else exit(1)" ||
+    log "ERROR" "Python ${MIN_PYTHON_VERSION} or higher is required"
+
+log "SUCCESS" "System requirements met"
+
+
+# Enable hardware interfaces
+log "INFO" "Configuring hardware interfaces..."
+
+# Backup original config
+local config_file="/boot/config.txt"
+local config_backup="${config_file}.bak.$(date +%Y%m%d%H%M%S)"
+
+if [ ! -f "${config_file}" ]; then
+    log "WARN" "${config_file} not found. This might not be a Raspberry Pi."
+fi
+
+# Create backup
+if [ ! -f "${config_backup}" ]; then
+    sudo cp "${config_file}" "${config_backup}"
+    log "INFO" "Created backup of ${config_file} as ${config_backup}"
+fi
+
+# Function to add configuration
+add_config() {
+    local pattern=$1
+    local line=$2
+
+    if ! grep -q "^${pattern}" "${config_file}"; then
+        echo "${line}" >> "${config_file}";
+    fi
+}
 
 # Enable I2C
-if [ $(grep -ic "^dtparam=i2c_arm=on" /boot/config.txt) -eq 0 ]; then
-  echo "dtparam=i2c_arm=on" >> /boot/config.txt;
+# Enable I2C kernel module
+if [ -f /etc/modules ]; then
+    if ! grep -q "^i2c-dev" /etc/modules; then
+        echo "i2c-dev" >> /etc/modules;
+    fi
 fi
 
-if [ -f /etc/modules ]; then
-  if [ $(grep -ic "^i2c-dev" /etc/modules) -eq 0 ]; then
-    echo "i2c-dev" >> /etc/modules;
-  fi
-fi
+add_config "dtparam=i2c_arm=" "dtparam=i2c_arm=on"
 
 # Enable 1-Wire
-if [ $(grep -ic "^dtoverlay=w1-gpio" /boot/config.txt) -eq 0 ]; then
-  echo "dtoverlay=w1-gpio" >> /boot/config.txt;
-fi
+add_config "dtoverlay=w1-gpio" "dtoverlay=w1-gpio"
 
 # Enable camera
-if [ $(grep -ic "^gpu_mem=" /boot/config.txt) -eq 0 ]; then
-  echo "gpu_mem=128" >> /boot/config.txt;
+add_config "gpu_mem=" "gpu_mem=128"
+add_config "start_x=" "start_x=1"
+
+log "SUCCESS" "Hardware interfaces configured. A reboot may be required for changes to take effect."
+
+
+# Install system dependencies
+log "INFO" "Installing system dependencies..."
+
+local deps=(
+    "libffi-dev"
+    "libssl-dev"
+    "python3-venv"
+    "python3-pip"
+)
+
+sudo apt update
+if ! sudo apt install -y "${deps[@]}"; then
+    log "ERROR" "Failed to install system dependencies."
 fi
 
-if [ $(grep -ic "^start_x=1" /boot/config.txt) -eq 0 ]; then
-  echo "start_x=1" >> /boot/config.txt;
-fi
+log "INFO" "System dependencies installed successfully."
 
-echo "I2C, SPI and camera enabled";
+# Create Gaia directory
+GAIA_DIR="${PWD}/gaia"
+mkdir -p "${GAIA_DIR}" || log "ERROR" "Failed to create directory: ${GAIA_DIR}"
+cd "${GAIA_DIR}" || log "ERROR" "Failed to change to directory: ${GAIA_DIR}"
 
-echo "Installing some Python-unrelated packages";
+# Create required subdirectories
+for dir in logs scripts lib; do
+    mkdir -p "${GAIA_DIR}/${dir}" ||
+        log "ERROR" "Failed to create directory: ${GAIA_DIR}/${dir}"
+done
 
-sudo apt update > /dev/null;
-sudo apt install -y libffi-dev libssl-dev > /dev/null;
-
-echo "Creating Gaia directory";
-
-# Create Gaia dir and sub dirs
-mkdir -p "gaia"; cd "gaia"
-GAIA_DIR=$PWD
-
+# Setup Python virtual environment
+log "INFO" "Creating Python virtual environment..."
 if [ ! -d "python_venv" ]; then
-  echo "Creating a python virtual environment"
-  python3 -m venv python_venv
-fi
-source python_venv/bin/activate
-
-mkdir -p "logs"
-mkdir -p "scripts"
-mkdir -p "lib"; cd "lib"
-
-# Get Gaia and install the package
-if [ ! -d "gaia" ]; then
-  echo "Getting Gaia repository"
-  git clone --branch stable https://github.com/vaamb/gaia.git "gaia" > /dev/null
-  if [ $? = 0 ] ; then
-    cd "gaia"
-  else
-    echo "Failed to get Gaia repository from git";
-    exit 2
-  fi
-  echo "Updating pip setuptools and wheel"
-  pip install --upgrade pip setuptools wheel
+    python3 -m venv "${GAIA_DIR}/python_venv" ||
+        log "ERROR" "Failed to create Python virtual environment"
 else
-  echo "Detecting an existing installation, you should update it if needed. Stopping"
-  exit 1
+    log "WARN" "Virtual environment already exists at ${GAIA_DIR}/python_venv"
 fi
-echo "Installing Gaia and its dependencies"
-pip install -e .
-deactivate
+log "SUCCESS" "Python virtual environment created successfully."
 
-# Make Gaia scripts easily available
-cp main.py $GAIA_DIR/
-cp -r scripts/ $GAIA_DIR/
 
-cd "$GAIA_DIR/scripts/"
-chmod +x start.sh stop.sh update.sh
+# Activate virtual environment
+# shellcheck source=/dev/null
+source "${GAIA_DIR}/python_venv/bin/activate" ||
+    log "ERROR" "Failed to activate Python virtual environment"
 
-if [ $(grep -ic "#>>>Gaia variables>>>" $HOME/.profile) -eq 1 ]; then
-  sed -i "/#>>>Gaia variables>>>/,/#<<<Gaia variables<<</d" $HOME/.profile;
+# Get Gaia repository
+log "INFO" "Cloning Gaia repository..."
+if [ ! -d "${GAIA_DIR}/lib/gaia" ]; then
+    if ! git clone --branch "${GAIA_VERSION}" "${GAIA_REPO}" \
+            "${GAIA_DIR}/lib/gaia" > /dev/null 2>&1; then
+        log "ERROR" "Failed to clone Gaia repository"
+    fi
+
+    cd "${GAIA_DIR}/lib/gaia" ||
+        log "ERROR" "Failed to enter Gaia directory"
+else
+    log "ERROR" "Gaia installation detected at ${GAIA_DIR}/lib/gaia. Please update using the update script."
 fi
 
-echo "
+log "INFO" "Updating Python packaging tools..."
+pip install --upgrade pip setuptools wheel ||
+    log "ERROR" "Failed to update Python packaging tools"
+
+# Install Gaia
+log "INFO" "Installing Gaia and its dependencies..."
+pip install -e . || log "ERROR" "Failed to install Gaia and its dependencies"
+
+log "SUCCESS" "Gaia installed successfully"
+
+
+# Copy scripts
+cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
+    log "ERROR" "Failed to copy scripts"
+chmod +x "${GAIA_DIR}/scripts/"*.sh
+
+# Update .profile
+log "INFO" "Updating shell profile..."
+
+# Remove existing Gaia section if it exists
+if grep -q "#>>>Gaia variables>>>" "${HOME}/.profile"; then
+    sed -i "/#>>>Gaia variables>>>/,/#<<<Gaia variables<<</d" "${HOME}/.profile"
+fi
+
+cat >> "${HOME}/.profile" << EOF
 #>>>Gaia variables>>>
 # Gaia root directory
-export GAIA_DIR=$GAIA_DIR
+export GAIA_DIR="${GAIA_DIR}"
 
-# Gaia utility function to start and stop the main application
+# Gaia utility function to manage the application
 gaia() {
   case \$1 in
-    start) \$GAIA_DIR/scripts/start.sh ;;
-    stop) \$GAIA_DIR/scripts/stop.sh ;;
-    stdout) tail \$GAIA_DIR/logs/stdout ;;
-    update) \$GAIA_DIR/scripts/update.sh ;;
-    *) echo 'Need an argument in start, stop, stdout or update' ;;
+    start) "\${GAIA_DIR}/scripts/start.sh" ;;
+    stop) "\${GAIA_DIR}/scripts/stop.sh" ;;
+    restart) "\${GAIA_DIR}/scripts/stop.sh" && "\${GAIA_DIR}/scripts/start.sh" ;;
+    status) systemctl --user status gaia.service ;;
+    logs) tail -f "\${GAIA_DIR}/logs/stdout" ;;
+    update) "\${GAIA_DIR}/scripts/update.sh" ;;
+    *) echo "Usage: gaia {start|stop|restart|status|logs|update}" ;;
   esac
 }
-complete -W 'start stop stdout update' gaia
+complete -W "start stop restart status logs update" gaia
 #<<<Gaia variables<<<
-" >> $HOME/.profile;
+EOF
 
-source $HOME/.profile
+log "SUCCESS" "Shell profile updated successfully"
 
-# Create the service file
-echo "[Unit]
-Description=Gaia greenhouse service
+# shellcheck source=/dev/null
+source "${HOME}/.profile"
+
+# Create systemd service file
+log "INFO" "Setting up systemd service..."
+SERVICE_FILE="${GAIA_DIR}/scripts/gaia.service"
+
+cat > "${SERVICE_FILE}" << EOF
+[Unit]
+Description=Gaia Service
+After=network.target
 
 [Service]
-Environment=GAIA_DIR=$GAIA_DIR
+Environment=GAIA_DIR="${GAIA_DIR}"
 Type=simple
-User=$USER
+User=${USER}
+WorkingDirectory=${GAIA_DIR}
 Restart=always
-RestartSec=3
-ExecStart=$GAIA_DIR/scripts/start.sh
-ExecStop=$GAIA_DIR/scripts/stop.sh
+RestartSec=10
+ExecStart=${GAIA_DIR}/scripts/start.sh
+ExecStop=${GAIA_DIR}/scripts/stop.sh
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=gaia
 
 [Install]
 WantedBy=multi-user.target
-" > $GAIA_DIR/scripts/gaia.service
+EOF
 
-sudo cp $GAIA_DIR/scripts/gaia.service /etc/systemd/system/
-sudo systemctl daemon-reload
+# Install service
+if ! sudo cp "${SERVICE_FILE}" "/etc/systemd/system/gaia.service"; then
+    log "WARN" "Failed to copy service file. You may need to run with sudo."
+else
+    sudo systemctl daemon-reload ||
+        log "WARN" "Failed to reload systemd daemon"
+fi
 
-echo "Gaia installed."
-echo "It might be required to install extra python packages depending on the hardware used."
-echo "To do so, install the required packages as indicated in the log files or in the docs and restart Gaia."
-echo "To start Gaia, either use \`gaia start\` or go to the gaia directory, activate the virtual environment and run \`python main.py\`"
-echo "Alternatively, you can start gaia as a service with \`sudo systemctl start gaia.service \` and enable it to run at startup with \`sudo systemctl enable gaia.service \`"
+log "SUCCESS" "Systemd service set up successfully"
+
+# Installation complete
+log "SUCCESS"    "\nInstallation completed successfully!"
+echo -e "\nTo get started:"
+echo -e "1. Source your profile: ${YELLOW}source ~/.profile${NC}"
+echo -e "2. Start Gaia: ${YELLOW}gaia start${NC}"
+echo -e "\nOther useful commands:"
+echo -e "  gaia stop     # Stop the service"
+echo -e "  gaia restart  # Restart the service"
+echo -e "  gaia status   # Check service status"
+echo -e "  gaia logs     # View logs"
+echo -e "\nTo run as a system service:"
+echo -e "  sudo systemctl start gaia.service"
+echo -e "  sudo systemctl enable gaia.service  # Start on boot"
