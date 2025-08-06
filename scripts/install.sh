@@ -197,62 +197,14 @@ chmod +x "${GAIA_DIR}/scripts/"*.sh
 # Update .profile
 log "INFO" "Updating shell profile..."
 
-# Remove existing Gaia section if it exists
-if grep -q "#>>>Gaia variables>>>" "${HOME}/.profile"; then
-    sed -i "/#>>>Gaia variables>>>/,/#<<<Gaia variables<<</d" "${HOME}/.profile"
-fi
+${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
+    log "ERROR" "Failed to update shell profile"
 
-cat >> "${HOME}/.profile" << EOF
-#>>>Gaia variables>>>
-# Gaia root directory
-export GAIA_DIR="${GAIA_DIR}"
-
-# Gaia utility function to manage the application
-gaia() {
-  case \$1 in
-    start) "\${GAIA_DIR}/scripts/start.sh" ;;
-    stop) "\${GAIA_DIR}/scripts/stop.sh" ;;
-    restart) "\${GAIA_DIR}/scripts/stop.sh" && "\${GAIA_DIR}/scripts/start.sh" ;;
-    status) systemctl --user status gaia.service ;;
-    logs) tail -f "\${GAIA_DIR}/logs/stdout" ;;
-    update) "\${GAIA_DIR}/scripts/update.sh" ;;
-    *) echo "Usage: gaia {start|stop|restart|status|logs|update}" ;;
-  esac
-}
-complete -W "start stop restart status logs update" gaia
-#<<<Gaia variables<<<
-EOF
-
-log "SUCCESS" "Shell profile updated successfully"
-
-# shellcheck source=/dev/null
-source "${HOME}/.profile"
-
-# Create systemd service file
-log "INFO" "Setting up systemd service..."
+info "Setting up systemd service..."
 SERVICE_FILE="${GAIA_DIR}/scripts/gaia.service"
 
-cat > "${SERVICE_FILE}" << EOF
-[Unit]
-Description=Gaia Service
-After=network.target
-
-[Service]
-Environment=GAIA_DIR="${GAIA_DIR}"
-Type=simple
-User=${USER}
-WorkingDirectory=${GAIA_DIR}
-Restart=always
-RestartSec=10
-ExecStart=${GAIA_DIR}/scripts/start.sh
-ExecStop=${GAIA_DIR}/scripts/stop.sh
-StandardOutput=syslog
-StandardError=syslog
-SyslogIdentifier=gaia
-
-[Install]
-WantedBy=multi-user.target
-EOF
+${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${SERVICE_FILE}" ||
+    log "ERROR" "Failed to generate systemd service"
 
 # Install service
 if ! sudo cp "${SERVICE_FILE}" "/etc/systemd/system/gaia.service"; then
