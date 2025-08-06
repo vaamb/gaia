@@ -175,6 +175,32 @@ update_repo "${GAIA_DIR}/lib/gaia"
 # Deactivate virtual environment
 deactivate 2>/dev/null || true
 
+# Update scripts
+cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
+    log "ERROR" "Failed to copy scripts"
+chmod +x "${GAIA_DIR}/scripts/"*.sh
+
+# Update .profile
+log "INFO" "Updating shell profile..."
+
+${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
+    log "ERROR" "Failed to update shell profile"
+
+# Regenerate systemd service
+log "INFO" "Updating systemd service..."
+SERVICE_FILE="${GAIA_DIR}/scripts/gaia.service"
+
+${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${SERVICE_FILE}" ||
+    log "ERROR" "Failed to generate systemd service"
+
+# Update service
+if ! sudo cp "${SERVICE_FILE}" "/etc/systemd/system/gaia.service"; then
+    log "WARN" "Failed to copy service file. You may need to run with sudo."
+else
+    sudo systemctl daemon-reload ||
+        log "WARN" "Failed to reload systemd daemon"
+fi
+
 log "SUCCESS" "\nUpdate complete!"
 
 # Show final instructions
