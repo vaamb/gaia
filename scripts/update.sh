@@ -7,16 +7,17 @@ set -euo pipefail
 readonly LOG_FILE="/tmp/gaia_update_${date +%Y%m%d_%H%M%S}.log"
 
 # Constants for log levels
-readonly INFO = INFO
-readonly WARN = WARN
-readonly ERROR = ERROR
-readonly SUCCESS = SUCCESS
+readonly INFO=INFO
+readonly WARN=WARN
+readonly ERROR=ERROR
+readonly SUCCESS=SUCCESS
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+readonly RED='\033[38;5;001m'
+readonly GREEN='\033[38;5;002m'
+readonly YELLOW='\033[38;5;220m'
+readonly LIGHT_YELLOW='\033[38;5;011m'
+readonly NC='\033[0m' # No Color
 
 # Default values
 DRY_RUN=false

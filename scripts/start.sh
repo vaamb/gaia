@@ -39,6 +39,8 @@ mkdir -p "${GAIA_DIR}/logs" || error_exit "Failed to create logs directory"
 # Redirect all output to log file
 exec > >(tee -a "${GAIA_DIR}/logs/gaia.log") 2>&1
 
+trap '' HUP
+
 # Function to check if Gaia is running
 is_running() {
     if pgrep -f "python3 -m gaia" > /dev/null; then
@@ -75,13 +77,13 @@ info "$(date) - Starting Gaia..."
 info "Logging to: ${GAIA_DIR}/logs/gaia.log"
 
 # Run Gaia in the background and log the PID
-nohup python3 -m gaia > "${GAIA_DIR}/logs/gaia.log" 2>&1 &
+python3 -m gaia
 GAIA_PID=$!
 
 echo "$GAIA_PID" > "${GAIA_DIR}/gaia.pid"
 
 # Verify that Gaia started successfully
-sleep 2
+sleep 5
 if ! kill -0 "$GAIA_PID" 2>/dev/null; then
     error_exit "Failed to start Gaia. Check the logs at ${GAIA_DIR}/logs/gaia.log for details.
 $(tail -n 20 "${GAIA_DIR}/logs/gaia.log")"
