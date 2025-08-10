@@ -3,6 +3,15 @@
 # Exit on error, unset variable, and pipefail
 set -euo pipefail
 
+# Default values
+readonly LOG_FILE="/tmp/gaia_update_${date +%Y%m%d_%H%M%S}.log"
+
+# Constants for log levels
+readonly INFO = INFO
+readonly WARN = WARN
+readonly ERROR = ERROR
+readonly SUCCESS = SUCCESS
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,6 +21,35 @@ NC='\033[0m' # No Color
 # Default values
 DRY_RUN=false
 FORCE_UPDATE=false
+
+# Function to log messages
+log() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    case "$1" in
+        INFO)
+            echo -e "${LIGHT_YELLOW}$2${NC}"
+            echo -e "[${timestamp}] [INFO] $2" >> "${LOG_FILE}"
+            ;;
+        WARN)
+            echo -e "${YELLOW}Warning: $2${NC}"
+            echo -e "[${timestamp}] [WARNING] $2" >> "${LOG_FILE}"
+            ;;
+        ERROR)
+            echo -e "${RED}Error: $2${NC}"
+            echo -e "[${timestamp}] [ERROR] $2" >> "${LOG_FILE}"
+            exit 1
+            ;;
+        SUCCESS)
+            echo -e "${GREEN}$2${NC}"
+            echo -e "[${timestamp}] [SUCCESS] $2" >> "${LOG_FILE}"
+            ;;
+        *)
+            echo -e "$1"
+            echo -e "[${timestamp}] $1" >> "${LOG_FILE}"
+            ;;
+    esac
+}
 
 # Function to display help
 show_help() {
@@ -38,54 +76,32 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         *)
-            log "ERROR" "Unknown option: $1"
+            log ERROR "Unknown option: $1"
             ;;
     esac
 done
 
-# Function to log messages
-log() {
-    case "$1" in
-        "INFO")
-            echo -e "${LIGHT_YELLOW}$2${NC}"
-            ;;
-        "WARN")
-            echo -e "${YELLOW}Warning: $2${NC}"
-            ;;
-        "ERROR")
-            echo -e "${RED}Error: $2${NC}"
-            exit 1
-            ;;
-        "SUCCESS")
-            echo -e "${GREEN}$2${NC} "
-            ;;
-        *)
-            echo -e "$1"
-            ;;
-    esac
-}
-
 # Check if GAIA_DIR is set
 if [[ -z "${GAIA_DIR:-}" ]]; then
-    log "ERROR" "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
+    log ERROR "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
 fi
 
 # Check if the directory exists
 if [[ ! -d "$GAIA_DIR" ]]; then
-    log "ERROR" "Gaia directory not found at $GAIA_DIR. Please check your installation."
+    log ERROR "Gaia directory not found at $GAIA_DIR. Please check your installation."
 fi
 
-cd "$GAIA_DIR" || log "ERROR" "Failed to change to Gaia directory: $GAIA_DIR"
+cd "$GAIA_DIR" || log ERROR "Failed to change to Gaia directory: $GAIA_DIR"
 
 # Check if virtual environment exists
 if [[ ! -d "python_venv" ]]; then
-    log "ERROR" "Python virtual environment not found. Please run the install script first."
+    log ERROR "Python virtual environment not found. Please run the install script first."
 fi
 
 # Activate virtual environment
 # shellcheck source=/dev/null
 if ! source "python_venv/bin/activate"; then
-    log "ERROR" "Failed to activate Python virtual environment"
+    log ERROR "Failed to activate Python virtual environment"
 fi
 
 # Function to update a single repository
@@ -93,10 +109,10 @@ update_repo() {
     local repo_dir="$1"
     local repo_name=$(basename "$repo_dir")
 
-    log "INFO" "\nChecking $repo_name..."
+    log INFO "\nChecking $repo_name..."
 
     if [[ ! -d "$repo_dir/.git" ]]; then
-        log "WARN" "$repo_dir is not a git repository. Skipping."
+        log WARN "$repo_dir is not a git repository. Skipping."
         return 1
     fi
 
@@ -109,14 +125,14 @@ update_repo() {
     has_changes=$(git status --porcelain)
 
     if [[ -n "$has_changes" ]]; then
-        log "WARN" "$repo_name has uncommitted changes. Stashing them..."
+        log WARN "$repo_name has uncommitted changes. Stashing them..."
         if [[ "$DRY_RUN" == false ]]; then
             git stash save "Stashed by Gaia update script"
         fi
     fi
 
     # Fetch all updates
-    log "INFO" "Fetching updates for $repo_name..."
+    log INFO "Fetching updates for $repo_name..."
     if [[ "$DRY_RUN" == false ]]; then
         git fetch --all --tags --prune
     fi
@@ -131,43 +147,43 @@ update_repo() {
     log "Latest version:  $latest_tag"
 
     if [[ "$current_tag" == "$latest_tag" && "$FORCE_UPDATE" == false ]]; then
-        log "WARN" "$repo_name is already at the latest version. Use -f to force update."
+        log WARN "$repo_name is already at the latest version. Use -f to force update."
         return 0
     fi
 
     if [[ "$DRY_RUN" == true ]]; then
-        log "INFO" "[DRY RUN] Would update $repo_name from $current_tag to $latest_tag"
+        log INFO "[DRY RUN] Would update $repo_name from $current_tag to $latest_tag"
         return 0
     fi
 
     # Checkout the latest tag
-    log "INFO" "Updating $repo_name to $latest_tag..."
+    log INFO "Updating $repo_name to $latest_tag..."
     git checkout "$latest_tag"
 
     # Install the package in development mode
     if [[ -f "pyproject.toml" ]]; then
-        log "INFO" "Installing $repo_name..."
+        log INFO "Installing $repo_name..."
         pip install -e .
     fi
 
     # Return to the original branch if not on a detached HEAD
     if [[ "$current_branch" != "HEAD" ]]; then
-        log "INFO" "Returning to branch $current_branch..."
+        log INFO "Returning to branch $current_branch..."
         git checkout "$current_branch"
 
         # Apply stashed changes if any
         if [[ -n "$has_changes" ]]; then
-            log "INFO" "Restoring stashed changes..."
+            log INFO "Restoring stashed changes..."
             git stash pop
         fi
     fi
 
-    log "SUCCESS" "$repo_name updated to $latest_tag"
+    log SUCCESS "$repo_name updated to $latest_tag"
     return 0
 }
 
 # Main update process
-log "INFO" "Starting Gaia update..."
+log INFO "Starting Gaia update..."
 
 # Update gaia
 update_repo "${GAIA_DIR}/lib/gaia"
@@ -177,31 +193,31 @@ deactivate 2>/dev/null || true
 
 # Update scripts
 cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
-    log "ERROR" "Failed to copy scripts"
+    log ERROR "Failed to copy scripts"
 chmod +x "${GAIA_DIR}/scripts/"*.sh
 
 # Update .profile
-log "INFO" "Updating shell profile..."
+log INFO "Updating shell profile..."
 
 ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
-    log "ERROR" "Failed to update shell profile"
+    log ERROR "Failed to update shell profile"
 
 # Regenerate systemd service
-log "INFO" "Updating systemd service..."
+log INFO "Updating systemd service..."
 SERVICE_FILE="${GAIA_DIR}/scripts/gaia.service"
 
 ${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${SERVICE_FILE}" ||
-    log "ERROR" "Failed to generate systemd service"
+    log ERROR "Failed to generate systemd service"
 
 # Update service
 if ! sudo cp "${SERVICE_FILE}" "/etc/systemd/system/gaia.service"; then
-    log "WARN" "Failed to copy service file. You may need to run with sudo."
+    log WARN "Failed to copy service file. You may need to run with sudo."
 else
     sudo systemctl daemon-reload ||
-        log "WARN" "Failed to reload systemd daemon"
+        log WARN "Failed to reload systemd daemon"
 fi
 
-log "SUCCESS" "\nUpdate complete!"
+log SUCCESS "\nUpdate complete!"
 
 # Show final instructions
 if [[ "$DRY_RUN" == false ]]; then
