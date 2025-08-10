@@ -3,54 +3,14 @@
 # Exit on error, unset variable, and pipefail
 set -euo pipefail
 
-# Default values
-readonly LOG_FILE="/tmp/gaia_update_${date +%Y%m%d_%H%M%S}.log"
-
-# Constants for log levels
-readonly INFO=INFO
-readonly WARN=WARN
-readonly ERROR=ERROR
-readonly SUCCESS=SUCCESS
-
-# Colors for output
-readonly RED='\033[38;5;001m'
-readonly GREEN='\033[38;5;002m'
-readonly YELLOW='\033[38;5;220m'
-readonly LIGHT_YELLOW='\033[38;5;011m'
-readonly NC='\033[0m' # No Color
+# Load logging functions
+readonly DATETIME=$(date +%Y%m%d_%H%M%S)
+readonly LOG_FILE="/tmp/gaia_update_${DATETIME}.log"
+. "./logging.sh"
 
 # Default values
 DRY_RUN=false
 FORCE_UPDATE=false
-
-# Function to log messages
-log() {
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-
-    case "$1" in
-        INFO)
-            echo -e "${LIGHT_YELLOW}$2${NC}"
-            echo -e "[${timestamp}] [INFO] $2" >> "${LOG_FILE}"
-            ;;
-        WARN)
-            echo -e "${YELLOW}Warning: $2${NC}"
-            echo -e "[${timestamp}] [WARNING] $2" >> "${LOG_FILE}"
-            ;;
-        ERROR)
-            echo -e "${RED}Error: $2${NC}"
-            echo -e "[${timestamp}] [ERROR] $2" >> "${LOG_FILE}"
-            exit 1
-            ;;
-        SUCCESS)
-            echo -e "${GREEN}$2${NC}"
-            echo -e "[${timestamp}] [SUCCESS] $2" >> "${LOG_FILE}"
-            ;;
-        *)
-            echo -e "$1"
-            echo -e "[${timestamp}] $1" >> "${LOG_FILE}"
-            ;;
-    esac
-}
 
 # Function to display help
 show_help() {
