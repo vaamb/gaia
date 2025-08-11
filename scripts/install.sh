@@ -173,6 +173,8 @@ install_gaia() {
     # Install Gaia
     log INFO "Installing Gaia and its dependencies..."
     pip install -e . || log ERROR "Failed to install Gaia and its dependencies"
+    deactivate ||
+        log ERROR "Failed to deactivate virtual environment"
 }
 
 copy_scripts() {
