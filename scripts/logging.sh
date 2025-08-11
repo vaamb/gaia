@@ -1,4 +1,5 @@
 if [ -z "$LOG_FILE" ]; then
+  echo "LOG_FILE environment variable is not set."
   exit 1 # Exit if LOG_FILE is not set
 fi
 
@@ -43,3 +44,5 @@ log() {
             ;;
     esac
 }
+
+log INFO "Log file: ${LOG_FILE}"
