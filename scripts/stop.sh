@@ -8,15 +8,6 @@ readonly DATETIME=$(date +%Y%m%d_%H%M%S)
 readonly LOG_FILE="/tmp/gaia_stop_${DATETIME}.log"
 . "./logging.sh"
 
-# Function to check if Gaia is running
-is_running() {
-    if pgrep -f "python3 -m gaia" > /dev/null; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 # Check if GAIA_DIR is set
 if [[ -z "${GAIA_DIR:-}" ]]; then
     log ERROR "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
@@ -31,9 +22,17 @@ fi
 mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
 
 # Log stop attempt
-log INFO "$(date) - Attempting to stop Gaia..."
+log INFO "Attempting to stop Gaia..."
 
 # Check if Gaia is running
+is_running() {
+    if pgrep -f "gaia" > /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 if ! is_running; then
     log INFO "No running instance of Gaia found."
 
@@ -47,7 +46,7 @@ if ! is_running; then
 fi
 
 # Get the PID of the running process
-GAIA_PID=$(pgrep -f "python3 -m gaia")
+GAIA_PID=$(pgrep -f "gaia")
 
 if [[ -z "$GAIA_PID" ]]; then
     log ERROR "Could not determine Gaia process ID"
@@ -63,7 +62,6 @@ if kill -15 "$GAIA_PID" 2>/dev/null; then
         sleep 1
         echo -n "."
     done
-    echo
 
     # Check if process is still running
     if kill -0 "$GAIA_PID" 2>/dev/null; then
@@ -78,11 +76,11 @@ if kill -15 "$GAIA_PID" 2>/dev/null; then
 
     # Verify the process was actually stopped
     if is_running; then
-        log ERROR "Failed to stop Gaia. Process still running with PID: $(pgrep -f "python3 -m gaia")"
+        log ERROR "Failed to stop Gaia. Process still running with PID: ${GAIA_PID}."
     fi
 
     log SUCCESS "Gaia stopped successfully."
     exit 0
 else
-    log ERROR "Failed to send stop signal to Gaia (PID: $GAIA_PID). You may need to run with sudo."
+    log ERROR "Failed to send stop signal to Gaia (PID: ${GAIA_PID}). You may need to run with sudo."
 fi

@@ -21,23 +21,9 @@ fi
 # Create logs directory if it doesn't exist
 mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
 
-# Redirect all output to log file
-exec > >(tee -a "${GAIA_DIR}/logs/gaia.log") 2>&1
-
-trap '' HUP
-
-# Function to check if Gaia is running
-is_running() {
-    if pgrep -f "python3 -m gaia" > /dev/null; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 # Check if already running
-if is_running; then
-    PID=$(pgrep -f "python3 -m gaia")
+if pgrep -f "gaia" > /dev/null; then
+    PID=$(pgrep -f "gaia" | head -n 1)
     log WARN "Gaia is already running with PID $PID"
     log INFO "If you want to restart, please run: gaia restart"
     exit 0
@@ -58,23 +44,30 @@ if ! source "python_venv/bin/activate"; then
 fi
 
 # Start Gaia
-log INFO "$(date) - Starting Gaia..."
-log INFO "Logging to: ${GAIA_DIR}/logs/gaia.log"
+log INFO "Starting Gaia..."
 
 # Run Gaia in the background and log the PID
-python3 -m gaia
-GAIA_PID=$!
+nohup python3 -m gaia  > "${GAIA_DIR}/logs/stdout" 2>&1 &
+log INFO "Gaia stdout and stderr output redirected to ${GAIA_DIR}/logs/stdout"
 
+deactivate ||
+        log ERROR "Failed to deactivate virtual environment"
+
+GAIA_PID=$!
 echo "$GAIA_PID" > "${GAIA_DIR}/gaia.pid"
 
 # Verify that Gaia started successfully
-sleep 5
+sleep 2
+
+# Check if process is still running
 if ! kill -0 "$GAIA_PID" 2>/dev/null; then
-    log ERROR "Failed to start Gaia. Check the logs at ${GAIA_DIR}/logs/gaia.log for details.
-$(tail -n 20 "${GAIA_DIR}/logs/gaia.log")"
+    # Process died, check error log
+    log ERROR "Process failed to start."
+    # Clean up PID file
+    [[ -f "${GAIA_DIR}/gaia.pid" ]] && rm -f "${GAIA_DIR}/gaia.pid"
+    exit 1
 fi
 
-log INFO "Gaia started successfully with PID $GAIA_PID"
-log INFO "To view logs: tail -f ${GAIA_DIR}/logs/gaia.log"
+log SUCCESS "Gaia started successfully with PID $GAIA_PID"
 
 exit 0
