@@ -25,15 +25,33 @@ mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
 # Log stop attempt
 log INFO "Attempting to stop Gaia..."
 
-# Check if Gaia is running
-is_running() {
-    if pgrep -f "gaia" > /dev/null; then
-        return 0
+# Function to check if Ouranos is running
+get_gaia_pid() {
+    # Prefer PID file when available
+    if [[ -f "${OURANOS_DIR}/gaia.pid" ]]; then
+        local pid
+        pid=$(cat "${OURANOS_DIR}/gaia.pid" 2>/dev/null || echo "")
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            echo "$pid"
+        fi
+    # Fallback to strict process match
     else
-        return 1
+        pgrep -f "python3 -m gaia" | head -n1
     fi
 }
 
+is_running() {
+    # Check if Ouranos is running
+    local pid
+    pid=$(get_gaia_pid)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Check if Gaia is running
 if ! is_running; then
     log INFO "No running instance of Gaia found."
 
@@ -47,7 +65,7 @@ if ! is_running; then
 fi
 
 # Get the PID of the running process
-GAIA_PID=$(pgrep -f "gaia")
+GAIA_PID=$(get_gaia_pid)
 
 if [[ -z "$GAIA_PID" ]]; then
     log ERROR "Could not determine Gaia process ID"
@@ -59,9 +77,10 @@ log INFO "Stopping Gaia (PID: $GAIA_PID)..."
 if kill -15 "$GAIA_PID" 2>/dev/null; then
     # Wait for the process to terminate
     TIMEOUT=10  # seconds
+    sleep .5
     while (( TIMEOUT-- > 0 )) && kill -0 "$GAIA_PID" 2>/dev/null; do
-        sleep 1
         echo -n "."
+        sleep 1
     done
 
     # Check if process is still running

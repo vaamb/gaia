@@ -23,8 +23,8 @@ fi
 mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
 
 # Check if already running
-if pgrep -f "gaia" > /dev/null; then
-    PID=$(pgrep -f "gaia" | head -n 1)
+if pgrep -f "python3 -m gaia" > /dev/null; then
+    PID=$(pgrep -f "python3 -m gaia" | head -n 1)
     log WARN "Gaia is already running with PID $PID"
     log INFO "If you want to restart, please run: gaia restart"
     exit 0
@@ -52,7 +52,7 @@ nohup python3 -m gaia  > "${GAIA_DIR}/logs/stdout" 2>&1 &
 log INFO "Gaia stdout and stderr output redirected to ${GAIA_DIR}/logs/stdout"
 
 deactivate ||
-        log ERROR "Failed to deactivate virtual environment"
+    log ERROR "Failed to deactivate virtual environment"
 
 GAIA_PID=$!
 echo "$GAIA_PID" > "${GAIA_DIR}/gaia.pid"
