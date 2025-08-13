@@ -6,7 +6,8 @@ set -euo pipefail
 # Load logging functions
 readonly DATETIME=$(date +%Y%m%d_%H%M%S)
 readonly LOG_FILE="/tmp/gaia_start_${DATETIME}.log"
-. "./logging.sh"
+readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+. "${SCRIPT_DIR}/logging.sh"
 
 # Check if GAIA_DIR is set
 if [[ -z "${GAIA_DIR:-}" ]]; then
