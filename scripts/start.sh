@@ -23,8 +23,8 @@ fi
 mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
 
 # Check if already running
-if pgrep -f "python3 -m gaia" > /dev/null; then
-    PID=$(pgrep -f "python3 -m gaia" | head -n 1)
+if pgrep -x "gaia" > /dev/null; then
+    PID=$(pgrep -x "gaia" | head -n 1)
     log WARN "Gaia is already running with PID $PID"
     log INFO "If you want to restart, please run: gaia restart"
     exit 0
