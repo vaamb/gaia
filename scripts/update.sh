@@ -9,6 +9,8 @@ readonly LOG_FILE="/tmp/gaia_update_${DATETIME}.log"
 readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 . "${SCRIPT_DIR}/logging.sh"
 
+readonly BACKUP_DIR="/tmp/gaia_backup_${DATETIME}"
+
 # Default values
 DRY_RUN=false
 FORCE_UPDATE=false
@@ -43,28 +45,30 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Check if GAIA_DIR is set
-if [[ -z "${GAIA_DIR:-}" ]]; then
-    log ERROR "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
-fi
+check_requirements() {
+    # Check if GAIA_DIR is set
+    if [[ -z "${GAIA_DIR:-}" ]]; then
+        log ERROR "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
+    fi
 
-# Check if the directory exists
-if [[ ! -d "$GAIA_DIR" ]]; then
-    log ERROR "Gaia directory not found at $GAIA_DIR. Please check your installation."
-fi
+    # Check if the directory exists
+    if [[ ! -d "$GAIA_DIR" ]]; then
+        log ERROR "Gaia directory not found at $GAIA_DIR. Please check your installation."
+    fi
 
-cd "$GAIA_DIR" || log ERROR "Failed to change to Gaia directory: $GAIA_DIR"
+    cd "$GAIA_DIR" || log ERROR "Failed to change to Gaia directory: $GAIA_DIR"
 
-# Check if virtual environment exists
-if [[ ! -d "python_venv" ]]; then
-    log ERROR "Python virtual environment not found. Please run the install script first."
-fi
+    # Check if virtual environment exists
+    if [[ ! -d "python_venv" ]]; then
+        log ERROR "Python virtual environment not found. Please run the install script first."
+    fi
+}
 
-# Activate virtual environment
-# shellcheck source=/dev/null
-if ! source "python_venv/bin/activate"; then
-    log ERROR "Failed to activate Python virtual environment"
-fi
+create_backup() {
+    # Create backup directory
+    cp -r "$GAIA_DIR" "$BACKUP_DIR" ||
+        log ERROR "Failed to create backup directory: $BACKUP_DIR"
+}
 
 # Function to update a single repository
 update_repo() {
@@ -144,50 +148,137 @@ update_repo() {
     return 0
 }
 
-# Main update process
-log INFO "Starting Gaia update..."
+update_packages() {
+    # In dry-run, don't activate venv or install; just show intended repo changes
+    if [[ "${DRY_RUN}" == true ]]; then
+        update_repo "${GAIA_DIR}/lib/gaia"
+        return 0
+    fi
 
-# Update gaia
-update_repo "${GAIA_DIR}/lib/gaia"
+    # Activate virtual environment
+    # shellcheck source=/dev/null
+    if ! source "python_venv/bin/activate"; then
+        log ERROR "Failed to activate Python virtual environment"
+    fi
 
-# Deactivate virtual environment
-deactivate 2>/dev/null || true
+    # Update package
+    update_repo "${GAIA_DIR}/lib/gaia"
+
+    # Deactivate virtual environment
+    deactivate 2>/dev/null || true
+}
 
 # Update scripts
 cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
     log ERROR "Failed to copy scripts"
 chmod +x "${GAIA_DIR}/scripts/"*.sh
 
-# Update .profile
-log INFO "Updating shell profile..."
+update_scripts() {
+    # Update scripts
+    cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
+        log ERROR "Failed to copy scripts"
+    chmod +x "${GAIA_DIR}/scripts/"*.sh
+}
 
-${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
-    log ERROR "Failed to update shell profile"
+update_profile() {
+    ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
+        log ERROR "Failed to update shell profile"
+}
 
-# Regenerate systemd service
-log INFO "Updating systemd service..."
-SERVICE_FILE="${GAIA_DIR}/scripts/gaia.service"
+update_service() {
+    local service_file="${GAIA_DIR}/scripts/gaia.service"
 
-${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${SERVICE_FILE}" ||
-    log ERROR "Failed to generate systemd service"
+    ${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${service_file}" ||
+        log ERROR "Failed to generate systemd service"
 
-# Update service
-if ! sudo cp "${SERVICE_FILE}" "/etc/systemd/system/gaia.service"; then
-    log WARN "Failed to copy service file. You may need to run with sudo."
-else
-    sudo systemctl daemon-reload ||
-        log WARN "Failed to reload systemd daemon"
-fi
+    # Update service
+    if ! sudo cp "${service_file}" "/etc/systemd/system/gaia.service"; then
+        log WARN "Failed to copy service file. You may need to run with sudo."
+    else
+        sudo systemctl daemon-reload ||
+            log WARN "Failed to reload systemd daemon"
+    fi
+}
 
-log SUCCESS "\nUpdate complete!"
+# Cleanup function to run on exit
+cleanup() {
+    local exit_code=$?
 
-# Show final instructions
-if [[ "$DRY_RUN" == false ]]; then
-    echo -e "\nTo apply the updates, please restart the Gaia service with one of these commands:"
-    echo -e "  ${YELLOW}gaia restart${NC}    # If using the gaia command"
-    echo -e "  ${YELLOW}sudo systemctl restart gaia.service${NC}  # If using systemd"
-else
-    echo -e "\nThis was a dry run. No changes were made. Use ${YELLOW}$0${NC} without --dry-run to perform the updates."
-fi
+    if [ ${exit_code} -ne 0 ]; then
+        log WARN "Update failed. Check the log file for details: ${LOG_FILE}"
+        if [[ -d "${BACKUP_DIR}" && "${DRY_RUN}" == false ]]; then
+            log WARN "Attempting rollback from backup..."
+            rm -rf "${GAIA_DIR}"
+            cp -r "${BACKUP_DIR}" "${GAIA_DIR}"
+        fi
+    else
+        if [[ -d "${BACKUP_DIR}" ]]; then
+            rm -rf "${BACKUP_DIR}"
+        fi
+        log SUCCESS "Update completed successfully!"
+    fi
 
-exit 0
+    # Reset terminal colors
+    echo -e "${NC}"
+    exit ${exit_code}
+}
+
+main () {
+    # Set up trap for cleanup on exit
+    trap cleanup EXIT
+
+    log INFO "Starting Gaia update..."
+
+    log INFO "Checking system requirements..."
+    check_requirements
+    log SUCCESS "System requirements met"
+
+    if [[ "${DRY_RUN}" == false ]]; then
+        log INFO "Creating backup..."
+        create_backup
+        log SUCCESS "Backup created at ${BACKUP_DIR}"
+    else
+        log INFO "Dry run mode: no changes will be made. Showing intended operations."
+    fi
+
+    log INFO "Updating Gaia packages..."
+    update_packages
+    log SUCCESS "Packages updated successfully"
+
+    if [[ "${DRY_RUN}" == false ]]; then
+        log INFO "Making scripts more easily accessible..."
+        update_scripts
+    else
+        log INFO "Dry run: skipping scripts update"
+    fi
+
+    if [[ "${DRY_RUN}" == false ]]; then
+        log INFO "Updating shell profile..."
+        update_profile
+        log SUCCESS "Profile updated successfully"
+    else
+        log INFO "Dry run: skipping profile update"
+    fi
+
+    if [[ "${DRY_RUN}" == false ]]; then
+        log INFO "Updating systemd service..."
+        update_service
+        log SUCCESS "Systemd service updated successfully"
+    else
+        log INFO "Dry run: skipping systemd service update"
+    fi
+
+    # Display completion message
+
+    if [[ "$DRY_RUN" == false ]]; then
+        echo -e "\nTo apply the updates, please restart the Gaia service with one of these commands:"
+        echo -e "  ${YELLOW}gaia restart${NC}    # If using the gaia command"
+        echo -e "  ${YELLOW}sudo systemctl restart gaia.service${NC}  # If using systemd"
+    else
+        echo -e "\nThis was a dry run. No changes were made. Use ${YELLOW}$0${NC} without --dry-run to perform the updates."
+    fi
+
+    exit 0
+}
+
+main "$@"
