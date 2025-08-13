@@ -1,4 +1,15 @@
-GAIA_DIR=${1}
+#!/bin/bash
+
+# Exit on error, unset variable, and pipefail
+set -euo pipefail
+
+INSTALL_DIR="${1:-}"
+
+# Validate argument
+if [[ -z "${INSTALL_DIR}" ]]; then
+  echo "Usage: $0 <ouranos_install_dir>" >&2
+  exit 1
+fi
 
 # Remove existing Gaia section if it exists
 if grep -q "#>>>Gaia variables>>>" "${HOME}/.profile"; then
@@ -8,7 +19,7 @@ fi
 cat >> "${HOME}/.profile" << EOF
 #>>>Gaia variables>>>
 # Gaia root directory
-export GAIA_DIR="${GAIA_DIR}"
+export GAIA_DIR="${INSTALL_DIR}"
 
 # Gaia utility function to manage the application
 gaia() {
