@@ -36,7 +36,7 @@ get_gaia_pid() {
         fi
     # Fallback to strict process match
     else
-        pgrep -f "python3 -m gaia" | head -n1
+        pgrep -x "gaia" | head -n1
     fi
 }
 
