@@ -28,12 +28,13 @@ gaia() {
     stop) "\${GAIA_DIR}/scripts/stop.sh" ;;
     restart) "\${GAIA_DIR}/scripts/stop.sh" && "\${GAIA_DIR}/scripts/start.sh" ;;
     status) systemctl --user status gaia.service ;;
-    logs) tail -f "\${GAIA_DIR}/logs/stdout" ;;
+    logs) tail -f "\${GAIA_DIR}/logs/gaia.log" ;;
+    stdout) tail -f "\${GAIA_DIR}/logs/stdout" ;;
     update) "\${GAIA_DIR}/scripts/update.sh" ;;
     *) echo "Usage: gaia {start|stop|restart|status|logs|update}" ;;
   esac
 }
-complete -W "start stop restart status logs update" gaia
+complete -W "start stop restart status logs stdout update" gaia
 #<<<Gaia variables<<<
 EOF
 
