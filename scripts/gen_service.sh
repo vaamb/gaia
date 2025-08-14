@@ -8,7 +8,7 @@ SERVICE_FILE="${2:-}"
 
 # Validate arguments
 if [[ -z "${INSTALL_DIR}" || -z "${SERVICE_FILE}" ]]; then
-  echo "Usage: $0 <ouranos_install_dir> <service_file_path>" >&2
+  echo "Usage: $0 <gaia_install_dir> <service_file_path>" >&2
   exit 1
 fi
 

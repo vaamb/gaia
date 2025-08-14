@@ -28,9 +28,9 @@ log INFO "Attempting to stop Gaia..."
 # Function to check if Ouranos is running
 get_gaia_pid() {
     # Prefer PID file when available
-    if [[ -f "${OURANOS_DIR}/gaia.pid" ]]; then
+    if [[ -f "${GAIA_DIR}/gaia.pid" ]]; then
         local pid
-        pid=$(cat "${OURANOS_DIR}/gaia.pid" 2>/dev/null || echo "")
+        pid=$(cat "${GAIA_DIR}/gaia.pid" 2>/dev/null || echo "")
         if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
             echo "$pid"
         fi

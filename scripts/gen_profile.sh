@@ -7,7 +7,7 @@ INSTALL_DIR="${1:-}"
 
 # Validate argument
 if [[ -z "${INSTALL_DIR}" ]]; then
-  echo "Usage: $0 <ouranos_install_dir>" >&2
+  echo "Usage: $0 <gaia_install_dir>" >&2
   exit 1
 fi
 
