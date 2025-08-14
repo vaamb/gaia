@@ -18,7 +18,7 @@ Gaia is still in development and might not work properly.
 Installation
 ------------
 
-Gaia is written in Python (v. >= 3.7) and requires some extra dependencies,
+Gaia is written in Python (v. >= 3.11) and requires some extra dependencies,
 some that might not be shipped with Python.
 
 Make sure you have them before trying to install Gaia.
