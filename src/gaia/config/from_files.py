@@ -1553,8 +1553,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 "'EcosystemConfig.supported_hardware()' to see supported hardware."
             )
         hardware_cls = hardware_models[hardware_config.model]
+        uid, hardware_config.uid = hardware_config.uid, "validation"
         hardware = hardware_cls.from_hardware_config(hardware_config, None)
-        return hardware.dict_repr(shorten)
+        validated = hardware.dict_repr(shorten)
+        validated["uid"] = uid
+        return validated
 
     def create_new_hardware(
             self,
