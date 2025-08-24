@@ -257,7 +257,8 @@ class _MetaHardware(type):
         except KeyError:
             hardware = cls.__new__(cls, *args, **kwargs)
             hardware.__init__(*args, **kwargs)
-            cls.instances[uid] = hardware
+            if uid != "validation":
+                cls.instances[uid] = hardware
             return hardware
 
 
@@ -304,7 +305,7 @@ class Hardware(metaclass=_MetaHardware):
             type: gv.HardwareType,
             model: str,
             measures: list[gv.Measure] | None = None,
-            plants: list[str] or None = None,
+            plants: list[str] | None = None,
             multiplexer_model: str | None = None,
             subroutine: SubroutineTemplate | None = None,
     ) -> None:
