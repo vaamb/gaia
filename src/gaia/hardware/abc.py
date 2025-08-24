@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from enum import Enum
 from pathlib import Path
 import textwrap
@@ -290,6 +290,7 @@ class Hardware(metaclass=_MetaHardware):
         "_model",
         "_multiplexer",
         "_name",
+        "_pattern",
         "_plants",
         "_subroutine",
         "_type",
@@ -307,6 +308,7 @@ class Hardware(metaclass=_MetaHardware):
             measures: list[gv.Measure] | None = None,
             plants: list[str] | None = None,
             multiplexer_model: str | None = None,
+            pattern: str | None = None,
             subroutine: SubroutineTemplate | None = None,
     ) -> None:
         self._subroutine: SubroutineTemplate | None
@@ -340,6 +342,7 @@ class Hardware(metaclass=_MetaHardware):
             self._multiplexer = None
         self._measures: dict[Measure, Unit | None] = self._format_measures(measures)
         self._plants = plants
+        self._pattern = pattern
 
     def __repr__(self) -> str:  # pragma: no cover
         return (
@@ -350,7 +353,7 @@ class Hardware(metaclass=_MetaHardware):
     @classmethod
     def from_unclean(
             cls,
-            subroutine: "SubroutineTemplate" | None,
+            subroutine: SubroutineTemplate | None,
             uid: str,
             address: str,
             level: gv.HardwareLevel | gv.HardwareLevelNames,
@@ -360,6 +363,7 @@ class Hardware(metaclass=_MetaHardware):
             measures: list[str] | None = None,
             plants: list[str] | None = None,
             multiplexer_model: str | None = None,
+            pattern: str | None = None,
     ) -> Self:
         name: str = name or uid
         validated = gv.HardwareConfig(
@@ -372,6 +376,7 @@ class Hardware(metaclass=_MetaHardware):
             measures=measures,
             plants=plants,
             multiplexer_model=multiplexer_model,
+            pattern=pattern,
         )
         return cls.from_hardware_config(validated, subroutine)
 
@@ -379,7 +384,7 @@ class Hardware(metaclass=_MetaHardware):
     def from_hardware_config(
             cls,
             hardware_config: gv.HardwareConfig,
-            subroutine: "SubroutineTemplate" | None,
+            subroutine: SubroutineTemplate | None,
     ) -> Self:
         return cls(
             subroutine=subroutine,
@@ -392,6 +397,7 @@ class Hardware(metaclass=_MetaHardware):
             measures=hardware_config.measures,
             plants=hardware_config.plants,
             multiplexer_model=hardware_config.multiplexer_model,
+            pattern=hardware_config.pattern,
         )
 
     def _format_measures(
@@ -417,7 +423,7 @@ class Hardware(metaclass=_MetaHardware):
         return _MetaHardware.instances.get(uid)
 
     @property
-    def subroutine(self) -> "SubroutineTemplate" | None:
+    def subroutine(self) -> SubroutineTemplate | None:
         return self._subroutine
 
     @property
@@ -491,6 +497,7 @@ class Hardware(metaclass=_MetaHardware):
             measures=self._measures,
             plants=self._plants,
             multiplexer_model=self.multiplexer_model,
+            pattern=self._pattern,
         ).model_dump(exclude_defaults=shorten)
         if base.get("measures"):
             base["measures"] = [
@@ -511,7 +518,7 @@ class gpioHardware(Hardware):
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
-        self._pin: "Pin" | None = None
+        self._pin: Pin | None = None
 
     @staticmethod
     def _get_pin(address) -> "Pin":
