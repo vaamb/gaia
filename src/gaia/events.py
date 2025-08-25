@@ -39,7 +39,6 @@ PayloadName = Literal[
     "base_info",
     "chaos_parameters",
     "climate",
-    "environmental_parameters",
     "hardware",
     "health_data",
     "light_data",
@@ -57,7 +56,6 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "base_info": gv.BaseInfoConfigPayload,
     "chaos_parameters": gv.ChaosParametersPayload,
     "climate": gv.ClimateConfigPayload,
-    "environmental_parameters": gv.EnvironmentConfigPayload,
     "hardware": gv.HardwareConfigPayload,
     "health_data": gv.HealthDataPayload,
     "light_data": gv.LightDataPayload,
@@ -333,7 +331,6 @@ class Events(AsyncEventHandler):
         uids = self.filter_uids(ecosystem_uids)
         await self.send_payload("base_info", uids)
         await self.send_payload("management", uids)
-        # await self.send_payload("environmental_parameters", uids)
         await self.send_payload("chaos_parameters", uids)
         await self.send_payload("nycthemeral_info", uids)
         await self.send_payload("climate", uids)
