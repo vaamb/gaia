@@ -151,11 +151,6 @@ class Ecosystem:
         }
 
     @property
-    def environmental_parameters(self) -> gv.EnvironmentConfig:
-        environment_dict = self.config.environment
-        return gv.EnvironmentConfig(**environment_dict)
-
-    @property
     def chaos_parameters(self) -> gv.ChaosParameters:
         return self.config.chaos_parameters
 
