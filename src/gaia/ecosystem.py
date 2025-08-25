@@ -53,10 +53,17 @@ class _EcosystemPayloads:
         )
 
     @property
-    def climate(self) -> list[gv.ClimateConfigDict]:
+    def climate(self) -> list[gv.ClimateConfig]:
         return [
-            gv.ClimateConfigDict(parameter=key, **value)
+            gv.ClimateConfig(parameter=key, **value)
             for key, value in self.config.climate.items()
+        ]
+
+    @property
+    def weather(self) -> list[gv.WeatherConfig]:
+        return [
+            gv.WeatherConfig(parameter=key, **value)
+            for key, value in self.config.weather.items()
         ]
 
     @property
