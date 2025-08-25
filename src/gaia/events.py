@@ -47,6 +47,7 @@ PayloadName = Literal[
     "places_list",
     "plants",
     "sensors_data",
+    "weather",
 ]
 
 
@@ -62,6 +63,7 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "places_list": gv.PlacesPayload,
     "plants": gv.PlantConfigPayload,
     "sensors_data": gv.SensorsDataPayload,
+    "weather": gv.WeatherConfigPayload,
 }
 
 
@@ -83,6 +85,9 @@ CrudEventName = Literal[
     "create_climate_parameter",
     "update_climate_parameter",
     "delete_climate_parameter",
+    "create_weather_parameter",
+    "update_weather_parameter",
+    "delete_weather_parameter",
     "create_hardware",
     "update_hardware",
     "delete_hardware",
@@ -109,6 +114,12 @@ crud_links_dict: dict[CrudEventName, CrudLinks] = {
         "update_climate_parameter", "climate"),
     "delete_climate_parameter": CrudLinks(
         "delete_climate_parameter", "climate"),
+    "create_weather_parameter": CrudLinks(
+        "set_weather_parameter", "weather"),
+    "update_weather_parameter": CrudLinks(
+        "update_weather_parameter", "weather"),
+    "delete_weather_parameter": CrudLinks(
+        "delete_weather_parameter", "weather"),
     # Hardware creation, deletion and update
     "create_hardware": CrudLinks("create_new_hardware", "hardware"),
     "update_hardware": CrudLinks("update_hardware", "hardware"),
@@ -331,6 +342,7 @@ class Events(AsyncEventHandler):
         await self.send_payload("chaos_parameters", uids)
         await self.send_payload("nycthemeral_info", uids)
         await self.send_payload("climate", uids)
+        await self.send_payload("weather", uids)
         await self.send_payload("hardware", uids)
         await self.send_payload("plants", uids)
         await self.send_payload("actuators_data", uids)
