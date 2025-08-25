@@ -103,7 +103,7 @@ class Light(SubroutineTemplate[Switch]):
         self._pid = None
 
     def get_hardware_needed_uid(self) -> set[str]:
-        actuator_couples = self.config.get_actuator_couples()
+        actuator_couples = self.config.get_climate_actuators()
         actuator_group: str = actuator_couples[gv.ClimateParameter.light].increase
         return set(self.ecosystem.get_hardware_group_uids(actuator_group))
 
@@ -125,7 +125,7 @@ class Light(SubroutineTemplate[Switch]):
 
     """Routine specific methods"""
     def get_actuator_handler(self) -> ActuatorHandler:
-        actuator_couples = self.config.get_actuator_couples()
+        actuator_couples = self.config.get_climate_actuators()
         actuator_group: str = actuator_couples[gv.ClimateParameter.light].increase
         return self.ecosystem.actuator_hub.get_handler(actuator_group)
 

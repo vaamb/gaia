@@ -198,7 +198,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
         # Check if there are regulators available and map them with climate parameters
         rv: dict[str, gv.ClimateParameter] = {}
-        actuator_couples = self.config.get_actuator_couples()
+        actuator_couples = self.config.get_climate_actuators()
         for climate_param in regulated_parameters:
             actuator_couple: gv.ActuatorCouple = actuator_couples[climate_param]
             for actuator_type in actuator_couple:
