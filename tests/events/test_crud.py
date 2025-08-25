@@ -364,7 +364,7 @@ async def test_create_climate_parameter(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = \
+    data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
     environment_parameter = verified.data[0]
@@ -428,7 +428,7 @@ async def test_update_climate_parameter(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = \
+    data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
     environment_parameter = verified.data[0]
@@ -476,7 +476,7 @@ async def test_delete_climate_parameter(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = \
+    data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
     assert len(verified.data) == 0
@@ -501,7 +501,7 @@ async def test_create_hardware(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = \
+    data_update: list[gv.HardwareConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
     hardware: gv.HardwareConfig = verified.data[0]
@@ -550,7 +550,7 @@ async def test_update_hardware(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = \
+    data_update: list[gv.HardwareConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
     hardware: gv.HardwareConfig = verified.data[2]
@@ -587,7 +587,7 @@ async def test_delete_hardware(events_handler: Events):
 
     assert_success(events_handler)
 
-    data_update: list[gv.EnvironmentConfigDict] = \
+    data_update: list[gv.HardwareConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
     assert len(verified.data) == len(IO_dict) - 1
