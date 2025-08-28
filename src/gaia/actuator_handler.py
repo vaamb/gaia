@@ -709,8 +709,10 @@ class ActuatorHub:
         self.ecosystem: Ecosystem = ecosystem
         self.logger = logging.getLogger(
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
-        self._pids = {}
-        self._actuator_handlers = {}
+        self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
+            WeakValueDictionary()
+        self._actuator_handlers: WeakValueDictionary[gv.HardwareType, ActuatorHandler] = \
+            WeakValueDictionary()
 
     def get_pid(
             self,
