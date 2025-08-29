@@ -23,6 +23,7 @@ import gaia_validators as gv
 from gaia import Ecosystem, EcosystemConfig, Engine
 from gaia.config.from_files import ConfigType
 from gaia.dependencies.camera import SerializableImagePayload
+from gaia.ecosystem import _EcosystemPayloads
 from gaia.utils import humanize_list, local_ip_address
 
 
@@ -41,9 +42,7 @@ PayloadName = Literal[
     "climate",
     "hardware",
     "health_data",
-    "light_data",
     "management",
-    "nycthemeral_config",
     "nycthemeral_info",
     "places_list",
     "plants",
@@ -58,9 +57,7 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "climate": gv.ClimateConfigPayload,
     "hardware": gv.HardwareConfigPayload,
     "health_data": gv.HealthDataPayload,
-    "light_data": gv.LightDataPayload,
     "management": gv.ManagementConfigPayload,
-    "nycthemeral_config": gv.NycthemeralCycleConfigPayload,
     "nycthemeral_info": gv.NycthemeralCycleInfoPayload,
     "places_list": gv.PlacesPayload,
     "plants": gv.PlantConfigPayload,
@@ -248,7 +245,7 @@ class Events(AsyncEventHandler):
             ecosystem_uids: str | list[str] | None = None,
     ) -> list[gv.EcosystemPayloadDict] | None:
         # Check that the event is possible
-        if not hasattr(Ecosystem, payload_name):
+        if not hasattr(_EcosystemPayloads, payload_name):
             self.logger.error(f"Payload for event '{payload_name}' is not defined.")
             return None
         # Get the data
@@ -257,7 +254,7 @@ class Events(AsyncEventHandler):
         self.logger.debug(
             f"Getting '{payload_name}' payload for {humanize_list(uids)}.")
         for uid in uids:
-            data = getattr(self.ecosystems[uid], payload_name)
+            data = getattr(self.ecosystems[uid]._payloads, payload_name)
             if isinstance(data, gv.Empty):
                 continue
             payload_class = payload_classes_dict[payload_name]
