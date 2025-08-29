@@ -153,49 +153,6 @@ class Ecosystem:
         return self._engine.event_handler
 
     @property
-    def subroutines_started(self) -> set[SubroutineNames]:
-        return set([  # noqa
-            subroutine_name
-            for subroutine_name, subroutine in self.subroutines.items()
-            if subroutine.started
-        ])
-
-    @property
-    def lighting_method(self) -> gv.LightMethod:
-        return self.config.lighting_method
-
-    async def set_lighting_method(
-            self,
-            value: gv.LightMethod,
-            send_info: bool = True,
-    ) -> None:
-        await self.config.set_lighting_method(value)
-        if send_info and self.engine.message_broker_started:
-            try:
-                await self.engine.event_handler.send_payload_if_connected(
-                    "nycthemeral_info", ecosystem_uids=[self.uid])
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
-                )
-
-    @property
-    def light_info(self) -> gv.LightData:
-        return gv.LightData.from_lighting_hours(
-            self.config.lighting_hours, self.config.lighting_method)
-
-    light_data = light_info
-
-    @property
-    def manageable_subroutines(self) -> dict:
-        """Return a dict with the manageability status of the subroutines."""
-        return {
-            subroutine_name: subroutine.manageable
-            for subroutine_name, subroutine in self.subroutines.items()
-        }
-
-    @property
     def virtual_self(self) -> VirtualEcosystem:
         if self._virtual_self is None:
             raise AttributeError(
@@ -305,6 +262,22 @@ class Ecosystem:
                     f"'{subroutine}'. ERROR msg: `{e.__class__.__name__} :{e}`."
                 )
 
+    @property
+    def subroutines_started(self) -> set[SubroutineNames]:
+        return set([  # noqa
+            subroutine_name
+            for subroutine_name, subroutine in self.subroutines.items()
+            if subroutine.started
+        ])
+
+    @property
+    def manageable_subroutines(self) -> dict:
+        """Return a dict with the manageability status of the subroutines."""
+        return {
+            subroutine_name: subroutine.manageable
+            for subroutine_name, subroutine in self.subroutines.items()
+        }
+
     async def start(self):
         """Start the Ecosystem
 
@@ -342,6 +315,22 @@ class Ecosystem:
             self.logger.error("Failed to stop the ecosystem.")
             raise Exception(f"Failed to stop ecosystem {self.name}")
         self._started = False
+
+    async def set_lighting_method(
+            self,
+            value: gv.LightMethod,
+            send_info: bool = True,
+    ) -> None:
+        await self.config.set_lighting_method(value)
+        if send_info and self.engine.message_broker_started:
+            try:
+                await self.engine.event_handler.send_payload_if_connected(
+                    "nycthemeral_info", ecosystem_uids=[self.uid])
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while sending light data. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                )
 
     # Actuator
     @property
