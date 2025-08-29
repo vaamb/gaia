@@ -254,7 +254,6 @@ class Events(AsyncEventHandler):
         self.logger.debug(
             f"Getting '{payload_name}' payload for {humanize_list(uids)}.")
         for uid in uids:
-            x = 1
             data = getattr(self.ecosystems[uid]._payloads, payload_name)
             if isinstance(data, gv.Empty):
                 continue
