@@ -127,7 +127,7 @@ async def test_send_payload(events_handler: Events, ecosystem: Ecosystem):
         payload = mock_emit.call_args[1]["data"]
         assert isinstance(payload, list)
         assert payload[0]["uid"] == ecosystem_uid
-        mgt = ecosystem.management.model_dump()
+        mgt = ecosystem._payloads.management.model_dump()
         mgt.pop("dummy")
         assert payload[0]["data"] == mgt
 

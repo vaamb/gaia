@@ -20,6 +20,64 @@ if typing.TYPE_CHECKING:  # pragma: no cover
     from gaia.events import Events
 
 
+class _EcosystemPayloads:
+    def __init__(self, ecosystem: Ecosystem) -> None:
+        self.ecosystem = ecosystem
+        self.config = ecosystem.config
+
+    @property
+    def base_info(self) -> gv.BaseInfoConfig:
+        return gv.BaseInfoConfig(
+            uid=self.config.uid,
+            name=self.config.name,
+            status=self.ecosystem.started,
+            engine_uid=self.ecosystem.engine.uid,
+        )
+
+    @property
+    def management(self) -> gv.ManagementConfig:
+        return gv.ManagementConfig(**self.config.managements)
+
+    @property
+    def chaos_parameters(self) -> gv.ChaosParameters:
+        return self.config.chaos_parameters
+
+    @property
+    def nycthemeral_info(self) -> gv.NycthemeralCycleInfo:
+        return gv.NycthemeralCycleInfo(
+            **self.config.nycthemeral_cycle,
+            **self.config.lighting_hours.model_dump(),
+        )
+
+    @property
+    def climate(self) -> list[gv.ClimateConfigDict]:
+        return [
+            gv.ClimateConfigDict(parameter=key, **value)
+            for key, value in self.config.climate.items()
+        ]
+
+    @property
+    def hardware(self) -> list[gv.HardwareConfig]:
+        hardware_dict = self.config.IO_dict
+        return [
+            gv.HardwareConfig(uid=key, **value)
+            for key, value in hardware_dict.items()
+        ]
+
+    @property
+    def plants(self) -> list[gv.PlantConfig]:
+        return [
+            gv.PlantConfig(uid=key, **value)
+            for key, value in self.config.plants_dict.items()
+        ]
+
+    @property
+    def actuators_record(self) -> list[gv.ActuatorStateRecord]:
+        return self.ecosystem.actuator_hub.as_records()
+
+    actuators_data = actuators_record
+
+
 class Ecosystem:
     """An Ecosystem class that manages subroutines
 
@@ -32,7 +90,7 @@ class Ecosystem:
     def __init__(
             self,
             ecosystem_id: str,
-            engine: "Engine" | None = None,
+            engine: Engine | None = None,
     ) -> None:
         if engine is None:
             from gaia import Engine
@@ -43,6 +101,7 @@ class Ecosystem:
             self.engine.config.get_ecosystem_config(ecosystem_id)
         self._uid: str = self.config.uid
         self._name: str = self.config.name
+        self._payloads: _EcosystemPayloads = _EcosystemPayloads(self)
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{self._name.replace(' ', '_')}")
         self.logger.info("Initializing the ecosystem.")
@@ -86,11 +145,11 @@ class Ecosystem:
         return self._config
 
     @property
-    def engine(self) -> "Engine":
+    def engine(self) -> Engine:
         return self._engine
 
     @property
-    def event_handler(self) -> "Events":
+    def event_handler(self) -> Events:
         return self._engine.event_handler
 
     @property
@@ -100,15 +159,6 @@ class Ecosystem:
             for subroutine_name, subroutine in self.subroutines.items()
             if subroutine.started
         ])
-
-    @property
-    def base_info(self) -> gv.BaseInfoConfig:
-        return gv.BaseInfoConfig(
-            uid=self.uid,
-            name=self.name,
-            status=self.started,
-            engine_uid=self.engine.uid,
-        )
 
     @property
     def lighting_method(self) -> gv.LightMethod:
@@ -138,54 +188,12 @@ class Ecosystem:
     light_data = light_info
 
     @property
-    def management(self) -> gv.ManagementConfig:
-        """Return a dict with the functionalities management status."""
-        return gv.ManagementConfig(**self.config.managements)
-
-    @property
     def manageable_subroutines(self) -> dict:
         """Return a dict with the manageability status of the subroutines."""
         return {
             subroutine_name: subroutine.manageable
             for subroutine_name, subroutine in self.subroutines.items()
         }
-
-    @property
-    def chaos_parameters(self) -> gv.ChaosParameters:
-        return self.config.chaos_parameters
-
-    @property
-    def nycthemeral_config(self) -> gv.NycthemeralCycleConfig:
-        return gv.NycthemeralCycleConfig(**self.config.nycthemeral_cycle)
-
-    @property
-    def nycthemeral_info(self) -> gv.NycthemeralCycleInfo:
-        return gv.NycthemeralCycleInfo(
-            **self.config.nycthemeral_cycle,
-            **self.config.lighting_hours.model_dump(),
-        )
-
-    @property
-    def climate(self) -> list[gv.ClimateConfigDict]:
-        return [
-            gv.ClimateConfigDict(parameter=key, **value)
-            for key, value in self.config.climate.items()
-        ]
-
-    @property
-    def hardware(self) -> list[gv.HardwareConfig]:
-        hardware_dict = self.config.IO_dict
-        return [
-            gv.HardwareConfig(uid=key, **value)
-            for key, value in hardware_dict.items()
-        ]
-
-    @property
-    def plants(self) -> list[gv.PlantConfig]:
-        return [
-            gv.PlantConfig(uid=key, **value)
-            for key, value in self.config.plants_dict.items()
-        ]
 
     @property
     def virtual_self(self) -> VirtualEcosystem:
@@ -337,8 +345,8 @@ class Ecosystem:
 
     # Actuator
     @property
-    def actuators_data(self) -> list[gv.ActuatorStateRecord]:
-        return self.actuator_hub.as_records()
+    def actuators_state(self) -> dict[gv.HardwareType, gv.ActuatorStateDict]:
+        return self.actuator_hub.as_dict()
 
     async def turn_actuator(
             self,
