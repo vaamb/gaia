@@ -5,7 +5,7 @@ set -euo pipefail
 
 # Version requirements
 readonly MIN_PYTHON_VERSION="3.11"
-readonly GAIA_VERSION="0.9.0"
+readonly GAIA_VERSION="0.10.0"
 readonly GAIA_REPO="https://github.com/vaamb/gaia.git"
 
 # Default values
@@ -77,13 +77,14 @@ configure_hardware() {
     local config_file="/boot/config.txt"
     local config_backup="${config_file}.bak.$(date +%Y%m%d%H%M%S)"
 
+    IS_RASPI=true
     if [ ! -f "${config_file}" ]; then
         log WARN "${config_file} not found. This might not be a Raspberry Pi."
         IS_RASPI=false
     fi
 
     # Create backup
-    if [ IS_RASPI ] && [ ! -f "${config_backup}" ]; then
+    if [ ${IS_RASPI} ] && [ ! -f "${config_backup}" ]; then
         sudo cp "${config_file}" "${config_backup}"
         log INFO "Created backup of ${config_file} as ${config_backup}"
     fi
