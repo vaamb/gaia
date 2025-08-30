@@ -11,7 +11,7 @@ from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, NonValidSubroutine
 from gaia.hardware import hardware_models
-from gaia.hardware.abc import  Dimmer, Hardware, Switch
+from gaia.hardware.abc import  BaseSensor, Dimmer, Hardware, Switch
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
@@ -295,6 +295,9 @@ class Ecosystem:
         hardware_config = self.config.get_hardware_config(hardware_uid)
         try:
             model: str = hardware_config.model
+            if isinstance(model, BaseSensor) and self.engine.config.app_config.VIRTUALIZATION:
+                if not model.startswith("virtual"):
+                    hardware_config.model = f"virtual{model}"
             if model not in hardware_models:
                 raise HardwareNotFound(
                     f"{model} is not in the list of the hardware available."
