@@ -27,11 +27,10 @@ class _SensorFuture(Task):
     hardware_uid: str
 
 
-class Sensors(SubroutineTemplate):
+class Sensors(SubroutineTemplate[BaseSensor]):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = sensor_models
-        self.hardware: dict[str, BaseSensor]
         loop_period = float(self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
         self._slow_sensor_futures: set[_SensorFuture] = set()
@@ -106,34 +105,19 @@ class Sensors(SubroutineTemplate):
         self.ecosystem.engine.scheduler.remove_job(
             f"{self.ecosystem.uid}-sensors_routine")
         self._sending_data_task = None
-        self.hardware = {}
 
     """API calls"""
-    async def add_hardware(self, hardware_config: gv.HardwareConfig) -> BaseSensor:
-        model = hardware_config.model
-        if self.ecosystem.engine.config.app_config.VIRTUALIZATION:
-            if not model.startswith("virtual"):
-                hardware_config.model = f"virtual{model}"
-        hardware = await super().add_hardware(hardware_config)
-        if self.ecosystem.get_subroutine_status("light"):
-            light_subroutine: Light = self.ecosystem.subroutines["light"]
-            light_subroutine.reset_light_sensors()
-        return hardware
-
-    async def remove_hardware(self, hardware_uid: str) -> None:
-        await super().remove_hardware(hardware_uid)
-        if self.ecosystem.get_subroutine_status("light"):
-            light_subroutine: Light = self.ecosystem.subroutines["light"]
-            light_subroutine.reset_light_sensors()
-
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids(gv.HardwareType.sensor))
 
-    async def refresh_hardware(self) -> None:
-        await super().refresh_hardware()
+    async def refresh(self) -> None:
+        await super().refresh()
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine: "Climate" = self.ecosystem.subroutines["climate"]
-            await climate_subroutine.refresh_hardware()
+            climate_subroutine: Climate = self.ecosystem.subroutines["climate"]
+            await climate_subroutine.refresh()
+        if self.ecosystem.get_subroutine_status("light"):
+            light_subroutine: Light = self.ecosystem.subroutines["light"]
+            light_subroutine.reset_light_sensors()
 
     @property
     def sensors_data(self) -> gv.SensorsData | gv.Empty:

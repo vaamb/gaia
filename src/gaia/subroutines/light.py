@@ -29,11 +29,10 @@ DEFAULT_CLIMATE_CFG = gv.ClimateConfig(**{
 })
 
 
-class Light(SubroutineTemplate):
+class Light(SubroutineTemplate[Switch]):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
-        self.hardware: dict[str, "Switch"]
         self._loop_period: float = float(
             self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
         self._task: Task | None = None
@@ -74,11 +73,11 @@ class Light(SubroutineTemplate):
     async def _start(self) -> None:
         pid = self.get_pid()
         pid.reset()
+        async with self.actuator_handler.update_status_transaction(activation=True):
+            self.actuator_handler.activate()
         self.logger.info(
             f"Starting the light loop. It will run every "
             f"{self._loop_period:.2f} s.")
-        async with self.actuator_handler.update_status_transaction(activation=True):
-            self.actuator_handler.activate()
         self._task = asyncio.create_task(
             self.routine_task(), name=f"{self.ecosystem.uid}-light-routine")
 
@@ -89,20 +88,11 @@ class Light(SubroutineTemplate):
         async with self.actuator_handler.update_status_transaction(activation=True):
             self.actuator_handler.deactivate()
 
-    async def add_hardware(self, hardware_config: gv.HardwareConfig) -> Switch | Dimmer:
-        hardware = await super().add_hardware(hardware_config)
-        self.reset_any_dimmable_light()
-        return hardware
-
-    async def remove_hardware(self, hardware_uid: str) -> None:
-        await super().remove_hardware(hardware_uid)
-        self.reset_any_dimmable_light()
-
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids(gv.HardwareType.light))
 
-    async def refresh_hardware(self) -> None:
-        await super().refresh_hardware()
+    async def refresh(self) -> None:
+        await super().refresh()
         actuator_handler = self.ecosystem.actuator_hub.get_handler(
             gv.HardwareType.light)
         actuator_handler.reset_cached_actuators()
