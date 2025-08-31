@@ -748,15 +748,42 @@ class ActuatorHub:
             self._actuator_handlers[actuator_type] = actuator_handler
             return actuator_handler
 
-    def as_dict(self) -> dict[gv.HardwareType.actuator, gv.ActuatorStateDict]:
-        return {
-            actuator_type.name: handler.as_dict()
-            for actuator_type, handler in self._actuator_handlers.items()
+    def as_dict(self) -> dict[gv.HardwareType, gv.ActuatorStateDict]:
+        default_state_dict = {
+            "active": False,
+            "status": False,
+            "level": None,
+            "mode": gv.ActuatorMode.automatic,
         }
+
+        rv = {}
+        for actuator_type in actuator_to_parameter.keys():
+            if actuator_type in self._actuator_handlers:
+                rv[actuator_type.name] = self._actuator_handlers[actuator_type].as_dict()
+            else:
+                rv[actuator_type.name] = default_state_dict
+        return rv
 
     def as_records(self) -> list[gv.ActuatorStateRecord]:
         now = datetime.now(timezone.utc)
-        return [
-            handler.as_record(now)
-            for handler in self._actuator_handlers.values()
-        ]
+
+        def get_default_record(
+                hardware_type: gv.HardwareType,
+                timestamp: datetime,
+        ) -> gv.ActuatorStateRecord:
+            return gv.ActuatorStateRecord(
+                type=hardware_type,
+                active=False,
+                mode=gv.ActuatorMode.automatic,
+                status=False,
+                level=None,
+                timestamp=timestamp,
+            )
+
+        rv = []
+        for actuator_type in actuator_to_parameter.keys():
+            if actuator_type in self._actuator_handlers:
+                rv.append(self._actuator_handlers[actuator_type].as_record(now))
+            else:
+                rv.append(get_default_record(actuator_type, now))
+        return rv
