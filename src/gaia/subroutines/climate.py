@@ -86,9 +86,9 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         return hardware_needed
 
     async def refresh(self) -> None:
-        await super().refresh()
         previously_activated: set[gv.HardwareType] = self._actuators_activated
         self.update_expected_actuators()
+        await super().refresh()
         currently_activated: set[gv.HardwareType] = set(self._expected_actuators.keys())
         to_activate = currently_activated - previously_activated
         for actuator_type in to_activate:
