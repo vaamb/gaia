@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Task
-from datetime import datetime
 from math import ceil
 from time import monotonic
 from typing import TypedDict
@@ -13,7 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 import gaia_validators as gv
 
-from gaia.dependencies.camera import np, SerializableImage
+from gaia.dependencies.camera import SerializableImage
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
 from gaia.array_utils import (
@@ -32,15 +31,14 @@ _null_scored_image: ScoredImage = {
 }
 
 
-class Pictures(SubroutineTemplate):
+class Pictures(SubroutineTemplate[Camera]):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = camera_models
-        self.hardware: dict[str, Camera]
         # Frequencies
         app_config = self.ecosystem.engine.config.app_config
-        picture_period: int = app_config.PICTURE_TAKING_PERIOD
-        sending_period: int = app_config.PICTURE_SENDING_PERIOD
+        picture_period: float = app_config.PICTURE_TAKING_PERIOD
+        sending_period: float = app_config.PICTURE_SENDING_PERIOD
         self._loop_period: float = float(picture_period)
         self._sending_ratio: int = ceil(sending_period / picture_period)
         self._sending_counter: int = 0
@@ -194,13 +192,13 @@ class Pictures(SubroutineTemplate):
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids(IO_type=gv.HardwareType.camera))
 
-    async def refresh_hardware(self) -> None:
-        await super().refresh_hardware()
+    async def refresh(self) -> None:
+        await super().refresh()
         await self._load_background_arrays()
 
     async def reset_background_array(self, camera_uid: str) -> None:
         array_path = self._cache_dir / f"{camera_uid}-background.pkl"
-        camera: Camera = self.hardware[camera_uid]
+        camera = self.hardware[camera_uid]
         image: SerializableImage = await camera.get_image()
         image.to_grayscale(inplace=True)
         await run_sync(image.dump_array, array_path)

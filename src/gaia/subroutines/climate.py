@@ -22,11 +22,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
 MISSES_BEFORE_STOP = 5
 
 
-class Climate(SubroutineTemplate):
+class Climate(SubroutineTemplate[Dimmer | Switch]):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
-        self.hardware: dict[str, Dimmer | Switch]
         self._expected_actuators: dict[gv.HardwareType, gv.ClimateParameter] = {}
         self._actuators_activated: set[gv.HardwareType] = set()
         # Routine parameters
@@ -79,17 +78,17 @@ class Climate(SubroutineTemplate):
                 actuator_handler.deactivate()
 
     def get_hardware_needed_uid(self) -> set[str]:
-        self.update_expected_actuators()
+        #self.update_expected_actuators()
         hardware_needed: set[str] = set()
         for actuator_type in self.expected_actuators:
             extra = set(self.config.get_IO_group_uids(actuator_type))
             hardware_needed = hardware_needed | extra
         return hardware_needed
 
-    async def refresh_hardware(self) -> None:
+    async def refresh(self) -> None:
         previously_activated: set[gv.HardwareType] = self._actuators_activated
         self.update_expected_actuators()
-        await super().refresh_hardware()
+        await super().refresh()
         currently_activated: set[gv.HardwareType] = set(self._expected_actuators.keys())
         to_activate = currently_activated - previously_activated
         for actuator_type in to_activate:

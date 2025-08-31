@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import logging
 import typing
+from typing import Type
 
 import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
-from gaia.exceptions import NonValidSubroutine
+from gaia.exceptions import HardwareNotFound, NonValidSubroutine
+from gaia.hardware import hardware_models
+from gaia.hardware.abc import  BaseSensor, Dimmer, Hardware, Switch
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
@@ -111,6 +114,7 @@ class Ecosystem:
             virtual_eco_cfg: dict = virtual_cfg.get("ecosystems", {}).get(self.uid, {})
             self._virtual_self = VirtualEcosystem(
                 self.engine.virtual_world, self.uid, **virtual_eco_cfg)
+        self._hardware: dict[str, Hardware] = {}
         self._alarms: list = []
         self.actuator_hub: ActuatorHub = ActuatorHub(self)
         self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
@@ -163,6 +167,7 @@ class Ecosystem:
     def virtualized(self) -> bool:
         return self._virtual_self is not None
 
+    # Subroutines management
     async def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
 
@@ -241,7 +246,7 @@ class Ecosystem:
         # Then update the already running subroutines
         for subroutine in self.subroutines_started:
             try:
-                await self.subroutines[subroutine].refresh_hardware()
+                await self.subroutines[subroutine].refresh()
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while refreshing the hardware of "
@@ -278,6 +283,64 @@ class Ecosystem:
             for subroutine_name, subroutine in self.subroutines.items()
         }
 
+    # Hardware management
+    @property
+    def hardware(self) -> dict[str, Hardware]:
+        return self._hardware
+
+    async def add_hardware(
+            self,
+            hardware_uid: str,
+    ) -> Hardware:
+        hardware_config = self.config.get_hardware_config(hardware_uid)
+        try:
+            model: str = hardware_config.model
+            if isinstance(model, BaseSensor) and self.engine.config.app_config.VIRTUALIZATION:
+                if not model.startswith("virtual"):
+                    hardware_config.model = f"virtual{model}"
+            if model not in hardware_models:
+                raise HardwareNotFound(
+                    f"{model} is not in the list of the hardware available."
+                )
+            hardware_class: Type[Hardware] = hardware_models[model]
+            hardware: Hardware = hardware_class.from_hardware_config(hardware_config, self)
+            if isinstance(hardware, Switch):
+                await hardware.turn_off()
+            if isinstance(hardware, Dimmer):
+                await hardware.set_pwm_level(0)
+            self.logger.debug(f"Hardware {hardware.name} has been set up.")
+            self.hardware[hardware.uid] = hardware
+            return hardware
+        except Exception as e:
+            uid = hardware_config.uid
+            self.logger.error(
+                f"Encountered an exception while setting up hardware '{uid}'. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
+
+    async def remove_hardware(self, hardware_uid: str) -> None:
+        if not self.hardware.get(hardware_uid):
+            error_msg = f"Hardware '{hardware_uid}' not found."
+            self.logger.error(error_msg)
+            raise HardwareNotFound(error_msg)
+
+        hardware = self.hardware[hardware_uid]
+        if isinstance(hardware, Switch):
+            await hardware.turn_off()
+        if isinstance(hardware, Dimmer):
+            await hardware.set_pwm_level(0)
+        del self.hardware[hardware_uid]
+        self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
+
+    async def refresh_hardware(self) -> None:
+        hardware_needed: set[str] = set(self.config.IO_dict.keys())
+        hardware_existing: set[str] = set(self.hardware.keys())
+        for hardware_uid in hardware_needed - hardware_existing:
+            await self.add_hardware(hardware_uid)
+        for hardware_uid in hardware_existing - hardware_needed:
+            await self.remove_hardware(hardware_uid)
+
+    # Ecosystem management
     async def start(self):
         """Start the Ecosystem
 
@@ -286,12 +349,18 @@ class Ecosystem:
         """
         if self.started:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
+        self.logger.info("Starting the ecosystem.")
+        # Update config
         await self.config.update_chaos_time_window()
         await self.refresh_lighting_hours()
-        self.logger.info("Starting the ecosystem.")
+        # Start the virtual ecosystem
         if self.virtualized:
             self.virtual_self.start()
+        # Mount all the hardware
+        await self.refresh_hardware()
+        # Refresh subroutines
         await self.refresh_subroutines()
+        # Send ecosystems info
         if self.engine.message_broker_started and self.event_handler.registered:
             await self.event_handler.send_ecosystems_info(self.uid)
         self.logger.debug("Ecosystem successfully started.")

@@ -24,17 +24,6 @@ def test_hardware_needed(sensors_subroutine: Sensors):
 
 
 @pytest.mark.asyncio
-async def test_add_hardware(sensors_subroutine: Sensors, engine_config: EngineConfig):
-    await sensors_subroutine.add_hardware(
-        gv.HardwareConfig(uid=sensor_uid, **sensor_info))
-
-    await sensors_subroutine.add_hardware(
-        gv.HardwareConfig(uid=heater_uid, **heater_info))
-    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "not in the list of the hardware available." in logs
-
-
-@pytest.mark.asyncio
 async def test_routine(sensors_subroutine: Sensors):
     # Rely on the correct implementation of virtualDHT22
 

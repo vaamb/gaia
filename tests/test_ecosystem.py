@@ -2,10 +2,10 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia import Ecosystem, EcosystemConfig, Engine
-from gaia.exceptions import NonValidSubroutine
+from gaia import Ecosystem, EcosystemConfig, Engine, EngineConfig
+from gaia.exceptions import HardwareNotFound, NonValidSubroutine
 
-from .data import ecosystem_uid, ecosystem_name
+from .data import ecosystem_uid, ecosystem_name, hardware_info, hardware_uid
 from .utils import get_logs_content
 
 
@@ -57,6 +57,20 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
 
     with pytest.raises(NonValidSubroutine, match=r"is not valid."):
         await ecosystem.enable_subroutine("WrongSubroutine")
+
+
+@pytest.mark.asyncio
+async def test_hardware(ecosystem: Ecosystem, engine_config: EngineConfig):
+    await ecosystem.add_hardware(hardware_uid)
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
+        assert f"Hardware {hardware_info['name']} has been set up." in logs
+
+    await ecosystem.remove_hardware(hardware_uid)
+    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
+        assert f"Hardware {hardware_info['name']} has been dismounted." in logs
+
+    with pytest.raises(HardwareNotFound, match=f"Hardware '{hardware_uid}' not found."):
+        await ecosystem.remove_hardware(hardware_uid)
 
 
 def test_actuators_data(ecosystem: "Ecosystem"):

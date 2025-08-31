@@ -20,7 +20,7 @@ from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
 if TYPE_CHECKING:  # pragma: no cover
-    from gaia.subroutines.template import SubroutineTemplate
+    from gaia import Ecosystem
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -285,13 +285,13 @@ class Hardware(metaclass=_MetaHardware):
     __slots__ = (
         "__weakref__",
         "_address_book",
+        "_ecosystem",
         "_level",
         "_measures",
         "_model",
         "_multiplexer",
         "_name",
         "_plants",
-        "_subroutine",
         "_type",
         "_uid",
     )
@@ -307,13 +307,13 @@ class Hardware(metaclass=_MetaHardware):
             measures: list[gv.Measure] | None = None,
             plants: list[str] | None = None,
             multiplexer_model: str | None = None,
-            subroutine: SubroutineTemplate | None = None,
+            ecosystem: Ecosystem | None = None,
     ) -> None:
-        self._subroutine: SubroutineTemplate | None
-        if subroutine is None:
-            self._subroutine = None
+        self._ecosystem: Ecosystem | None
+        if ecosystem is None:
+            self._ecosystem = None
         else:
-            self._subroutine = subroutine
+            self._ecosystem = ecosystem
         self._uid: str = uid
         self._name: str = name
         self._level: gv.HardwareLevel = level
@@ -350,7 +350,7 @@ class Hardware(metaclass=_MetaHardware):
     @classmethod
     def from_unclean(
             cls,
-            subroutine: "SubroutineTemplate" | None,
+            ecosystem: Ecosystem | None,
             uid: str,
             address: str,
             level: gv.HardwareLevel | gv.HardwareLevelNames,
@@ -373,16 +373,16 @@ class Hardware(metaclass=_MetaHardware):
             plants=plants,
             multiplexer_model=multiplexer_model,
         )
-        return cls.from_hardware_config(validated, subroutine)
+        return cls.from_hardware_config(validated, ecosystem)
 
     @classmethod
     def from_hardware_config(
             cls,
             hardware_config: gv.HardwareConfig,
-            subroutine: "SubroutineTemplate" | None,
+            ecosystem: Ecosystem | None,
     ) -> Self:
         return cls(
-            subroutine=subroutine,
+            ecosystem=ecosystem,
             uid=hardware_config.uid,
             name=hardware_config.name,
             address=hardware_config.address,
@@ -417,14 +417,14 @@ class Hardware(metaclass=_MetaHardware):
         return _MetaHardware.instances.get(uid)
 
     @property
-    def subroutine(self) -> "SubroutineTemplate" | None:
-        return self._subroutine
+    def ecosystem(self) -> Ecosystem | None:
+        return self._ecosystem
 
     @property
     def ecosystem_uid(self) -> str | None:
-        if self._subroutine is None:
+        if self._ecosystem is None:
             return None
-        return self._subroutine.ecosystem.uid
+        return self._ecosystem.uid
 
     @property
     def uid(self) -> str:
@@ -511,10 +511,10 @@ class gpioHardware(Hardware):
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
-        self._pin: "Pin" | None = None
+        self._pin: Pin | None = None
 
     @staticmethod
-    def _get_pin(address) -> "Pin":
+    def _get_pin(address) -> Pin:
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -528,7 +528,7 @@ class gpioHardware(Hardware):
         return Pin(address)
 
     @property
-    def pin(self) -> "Pin":
+    def pin(self) -> Pin:
         if self._pin is None:
             self._pin = self._get_pin(self._address_book.primary.main)
         return self._pin
@@ -702,15 +702,15 @@ class Camera(Hardware):
     @property
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
-            if self.subroutine is None:
+            if self.ecosystem is None:
                 from gaia.config import GaiaConfigHelper
 
                 config_cls = GaiaConfigHelper.get_config()
                 base_dir = Path(config_cls.DIR)
                 self._camera_dir = base_dir / "camera/orphan_camera"
             else:
-                base_dir = self.subroutine.ecosystem.engine.config.base_dir
-                self._camera_dir = base_dir / f"camera/{self.subroutine.ecosystem.name}"
+                base_dir = self.ecosystem.engine.config.base_dir
+                self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
             if not self._camera_dir.exists():
                 self._camera_dir.mkdir(parents=True)
         return self._camera_dir

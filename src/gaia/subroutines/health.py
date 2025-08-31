@@ -38,11 +38,10 @@ class _PartialHealthRecord(TypedDict):
     value: float
 
 
-class Health(SubroutineTemplate):
+class Health(SubroutineTemplate[Camera]):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = camera_models
-        self.hardware: dict[str, Camera]
         # Picture size
         app_config = self.ecosystem.engine.config.app_config
         self._picture_size: tuple[int, int] = app_config.PICTURE_SIZE
@@ -146,7 +145,6 @@ class Health(SubroutineTemplate):
         # Get the pictures
         images: dict[str, SerializableImage] = {}
         for camera_uid, camera in self.hardware.items():
-            camera: Camera
             images[camera_uid] = await camera.get_image(size=self._picture_size)
         # Turn the lights back to their previous state
         if light_subroutine.started:
@@ -182,7 +180,7 @@ class Health(SubroutineTemplate):
             camera_uid: str,
             image: SerializableImage,
     ) -> list[gv.HealthRecord]:
-        camera: Camera = self.hardware[camera_uid]
+        camera = self.hardware[camera_uid]
         measures = camera.measures
         now = datetime.now().astimezone(timezone.utc).replace(microsecond=0)
         futures = [

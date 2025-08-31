@@ -586,7 +586,7 @@ class Engine(metaclass=SingletonMeta):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file.
 
         :param send_info: If `True`, will try to send the ecosystem info to
-          Ouranos if possible.
+                          Ouranos if possible.
         """
         self.logger.info("Refreshing the ecosystems ...")
         expected_to_run = set(self.config.get_ecosystems_expected_to_run())
@@ -638,6 +638,7 @@ class Engine(metaclass=SingletonMeta):
         else:
             self.logger.debug("No need to refresh any ecosystem.")
         for ecosystem_uid in started_before:
+            await self.ecosystems[ecosystem_uid].refresh_hardware()
             await self.ecosystems[ecosystem_uid].refresh_subroutines()
             await self.ecosystems[ecosystem_uid].refresh_lighting_hours(send_info=False)
         # Delete the ecosystems which were created and are no longer on the

@@ -40,19 +40,9 @@ def test_target(climate_subroutine: Climate):
 
 
 def test_hardware_needed(climate_subroutine: Climate):
+    climate_subroutine.update_expected_actuators()
     uids = climate_subroutine.get_hardware_needed_uid()
     assert uids == {heater_uid}
-
-
-@pytest.mark.asyncio
-async def test_add_hardware(climate_subroutine: Climate, engine_config: EngineConfig):
-    await climate_subroutine.add_hardware(
-        gv.HardwareConfig(uid=heater_uid, **heater_info))
-
-    await climate_subroutine.add_hardware(
-        gv.HardwareConfig(uid=sensor_uid, **sensor_info))
-    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "not in the list of the hardware available." in logs
 
 
 @pytest.mark.asyncio
@@ -132,13 +122,11 @@ async def test_safe_stop_from_sensors(
 @pytest.mark.asyncio
 async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors):
     # Sensors data are required ...
-    await sensors_subroutine.refresh_hardware()
     await sensors_subroutine.routine()
     assert not isinstance(sensors_subroutine.sensors_data, gv.Empty)
 
     climate_subroutine.enable()
     await climate_subroutine.start()
-    await climate_subroutine.refresh_hardware()
 
     climate_subroutine.update_expected_actuators()
 

@@ -552,6 +552,12 @@ class ActuatorHandler:
         self._timer.modify_countdown(-delta_time)
         self._any_status_change = True
 
+    async def reset(self) -> None:
+        self._check_update_status_transaction()
+        await self.set_mode(gv.ActuatorMode.automatic)
+        await self.set_status(False)
+        self.reset_timer()
+
     async def _turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
             await self.set_mode(gv.ActuatorMode.automatic)

@@ -171,6 +171,8 @@ async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     with get_logs_content(engine.config.logs_dir / "gaia.log"):
         pass  # Clear logs
 
+    await ecosystem.refresh_hardware()
+
     try:
         yield ecosystem
     finally:
@@ -261,10 +263,6 @@ async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Dummy]:
 
 @pytest_asyncio.fixture(scope="function")
 async def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
-    hardware_config = gv.HardwareConfig(uid=light_uid, **light_info)
-    light_subroutine = ecosystem.subroutines["light"]
-    await light_subroutine.add_hardware(hardware_config)
-
     light_handler: ActuatorHandler = ecosystem.get_actuator_handler("light")
     light_handler.activate()
 
