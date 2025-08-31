@@ -40,7 +40,7 @@ def test_target(climate_subroutine: Climate):
 
 
 def test_hardware_needed(climate_subroutine: Climate):
-    climate_subroutine.update_expected_actuators()
+    climate_subroutine.compute_expected_actuators()
     uids = climate_subroutine.get_hardware_needed_uid()
     assert uids == {heater_uid}
 
@@ -128,7 +128,7 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
     climate_subroutine.enable()
     await climate_subroutine.start()
 
-    climate_subroutine.update_expected_actuators()
+    climate_subroutine.compute_expected_actuators()
 
     await climate_subroutine.routine()
 
