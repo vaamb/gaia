@@ -66,7 +66,7 @@ async def test_hardware_models():
 
         # Test hardware
         try:
-            hardware = hardware_cls.from_unclean(subroutine=None, **hardware_cfg)
+            hardware = hardware_cls.from_unclean(ecosystem=None, **hardware_cfg)
             if isinstance(hardware, gpioHardware):
                 assert hardware.pin
             if isinstance(hardware, i2cHardware):

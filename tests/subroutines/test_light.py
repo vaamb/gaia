@@ -62,16 +62,6 @@ def test_hardware_needed(light_subroutine: Light):
 
 
 @pytest.mark.asyncio
-async def test_add_hardware(light_subroutine: Light, engine_config: EngineConfig):
-    await light_subroutine.add_hardware(gv.HardwareConfig(uid=light_uid, **light_info))
-
-    await light_subroutine.add_hardware(
-        gv.HardwareConfig(uid=sensor_uid, **sensor_info))
-    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert "not in the list of the hardware available." in logs
-
-
-@pytest.mark.asyncio
 async def test_turn_light(light_subroutine: Light):
     with pytest.raises(RuntimeError, match=r"Light subroutine is not started"):
         await light_subroutine.turn_light(gv.ActuatorModePayload.on)

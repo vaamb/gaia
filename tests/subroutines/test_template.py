@@ -59,29 +59,6 @@ def test_properties(dummy_subroutine: Dummy, ecosystem: Ecosystem):
 
 
 @pytest.mark.asyncio
-async def test_hardware(dummy_subroutine: Dummy, engine_config: EngineConfig):
-    assert dummy_subroutine.hardware_choices == {}
-
-    hardware_config = gv.HardwareConfig(uid=hardware_uid, **hardware_info)
-
-    with pytest.raises(RuntimeError, match=r"No 'hardware_choices' available."):
-        await dummy_subroutine.add_hardware(hardware_config)
-
-    dummy_subroutine.hardware_choices = {virtualDHT22.__name__: virtualDHT22}
-
-    await dummy_subroutine.add_hardware(hardware_config)
-    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert f"Hardware {hardware_config.name} has been set up." in logs
-
-    await dummy_subroutine.remove_hardware(hardware_uid)
-    with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-        assert f"Hardware {hardware_config.name} has been dismounted." in logs
-
-    with pytest.raises(HardwareNotFound, match=f"Hardware '{hardware_uid}' not found."):
-        await dummy_subroutine.remove_hardware(hardware_uid)
-
-
-@pytest.mark.asyncio
 async def test_subroutine(dummy_subroutine: Dummy):
     with pytest.raises(RuntimeError, match=r"subroutine has to be started"):
         await dummy_subroutine.routine()
