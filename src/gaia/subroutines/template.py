@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import logging
 import typing as t
 from time import monotonic
-from typing import Type
+from typing import Generic, Type, TypeVar
 
 import gaia_validators as gv
 
@@ -17,8 +17,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.ecosystem import Ecosystem
 
 
-class SubroutineTemplate(ABC):
-    def __init__(self, ecosystem: "Ecosystem") -> None:
+HARDWARE_TYPE = TypeVar("HARDWARE_TYPE")
+
+
+class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         """Base class to manage an ecosystem subroutine"""
         self._ecosystem: "Ecosystem" = ecosystem
         self.name: str = self.__class__.__name__.lower()
@@ -26,11 +28,13 @@ class SubroutineTemplate(ABC):
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{eco_name}.{self.name}")
         self.logger.debug("Initializing ...")
-        self.hardware: dict[str, Hardware] = {}
-        self._hardware_choices: dict[str, Type[Hardware]] = {}
+        self.hardware: dict[str, Type[HARDWARE_TYPE]] = {}
+        self._hardware_choices: dict[str, Type[Type[HARDWARE_TYPE]]] = {}
         self._started: bool = False
 
     def _finish__init__(self) -> None:
+        if not self._hardware_choices:
+            raise ValueError("No hardware choices specified.")
         self.logger.debug("Initialization successfully.")
 
     def __repr__(self) -> str:  # pragma: no cover
@@ -82,11 +86,11 @@ class SubroutineTemplate(ABC):
         return self._compute_if_manageable()
 
     @property
-    def hardware_choices(self) -> dict[str, Type[Hardware]]:
+    def hardware_choices(self) -> dict[str, Type[HARDWARE_TYPE]]:
         return self._hardware_choices
 
     @hardware_choices.setter
-    def hardware_choices(self, choices: dict[str, Type[Hardware]]) -> None:
+    def hardware_choices(self, choices: dict[str, Type[HARDWARE_TYPE]]) -> None:
         self._hardware_choices = choices
 
     async def routine(self) -> None:
