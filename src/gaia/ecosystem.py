@@ -246,7 +246,7 @@ class Ecosystem:
         # Then update the already running subroutines
         for subroutine in self.subroutines_started:
             try:
-                await self.subroutines[subroutine].refresh_hardware()
+                await self.subroutines[subroutine].refresh()
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while refreshing the hardware of "
