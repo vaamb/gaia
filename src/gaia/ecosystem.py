@@ -80,6 +80,10 @@ class _EcosystemPayloads:
 
     actuators_data = actuators_record
 
+    @property
+    def sensors_data(self) -> gv.SensorsData | gv.Empty:
+        return self.ecosystem.sensors_data
+
 
 class Ecosystem:
     """An Ecosystem class that manages subroutines
