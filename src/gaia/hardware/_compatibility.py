@@ -5,8 +5,8 @@ import time
 from typing import Any
 
 from gaia.config import GaiaConfigHelper
+from gaia.ecosystem import Ecosystem
 from gaia.hardware.utils import hardware_logger
-from gaia.subroutines.template import SubroutineTemplate
 from gaia.virtual import VirtualEcosystem
 
 
@@ -107,12 +107,12 @@ class CompatibilityDevice:
     def __init__(
             self,
             *args,
-            subroutine: SubroutineTemplate | None = None,
+            ecosystem: Ecosystem | None = None,
             **kwargs,
     ) -> None:
         self.virtual_ecosystem: VirtualEcosystem | None
-        if subroutine is not None:
-            self.virtual_ecosystem = subroutine.ecosystem.virtual_self
+        if ecosystem is not None:
+            self.virtual_ecosystem = ecosystem.virtual_self
         else:
             self.virtual_ecosystem = None
 

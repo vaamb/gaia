@@ -20,8 +20,7 @@ from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, subroutine_names)
 from gaia.utils import SingletonMeta, yaml
 
-from .data import (
-    ecosystem_info, ecosystem_name, engine_uid, light_info, light_uid)
+from .data import ecosystem_info, ecosystem_name, engine_uid
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content, MockDispatcher
 
