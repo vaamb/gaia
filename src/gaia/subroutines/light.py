@@ -193,7 +193,7 @@ class Light(SubroutineTemplate[Switch]):
         expected_status = actuator_handler.compute_expected_status(pid.last_output)
         if expected_status:
             await actuator_handler.turn_on()
-            await actuator_handler.set_level(abs(pid.last_output))
+            await actuator_handler.set_level(pid.last_output)
         else:
             await actuator_handler.turn_off()
             await actuator_handler.set_level(0.0)
