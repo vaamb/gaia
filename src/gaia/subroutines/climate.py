@@ -32,6 +32,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         self._loop_period: float = max(loop_period, 10.0)
         self._actuator_handlers: dict[gv.HardwareType, ActuatorHandler] = {}
         self._pids: dict[gv.ClimateParameter, HystericalPID] = {}
+        self._activated_actuators: set[gv.HardwareType] = set()
         self._sensor_miss: int = 0
         self._finish__init__()
 
@@ -67,15 +68,39 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         self.logger.info(
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
+        # Mount actuator handlers
+        regulated_parameters = set()
+        for actuator_type in gv.HardwareType.climate_actuator:
+            regulated_parameters.add(actuator_to_parameter[actuator_type])
+            actuator_handler = self.get_actuator_handler(actuator_type)
+            self.actuator_handlers[actuator_type] = actuator_handler
+        # Activate the required actuators
+        expected_actuators = self.compute_expected_actuators()
+        for actuator_type in expected_actuators:
+            actuator_handler = self.actuator_handlers[actuator_type]
+            async with actuator_handler.update_status_transaction(activation=True):
+                actuator_handler.activate()
+            self._activated_actuators.add(actuator_type)
+            actuator_handler.reset_cached_actuators()
+        # Mount PID controllers
         for climate_parameter in self.regulated_parameters:
             pid = self.get_pid(climate_parameter)
             pid.reset()
             self.pids[climate_parameter] = pid
 
     async def _stop(self) -> None:
-        for actuator_handler in self._actuator_handlers.values():
-            async with actuator_handler.update_status_transaction(activation=True):
-                actuator_handler.deactivate()
+        # Dismount PID controllers
+        for climate_parameter in [*self.pids.keys()]:
+            pid = self.pids[climate_parameter]
+            pid.reset()
+            del self.pids[climate_parameter]
+        # Dismount actuator handlers
+        for actuator_type in [*self.actuator_handlers.keys()]:
+            actuator_handler = self.actuator_handlers[actuator_type]
+            if actuator_type in self._activated_actuators:
+                async with actuator_handler.update_status_transaction(activation=True):
+                    actuator_handler.deactivate()
+            del self.actuator_handlers[actuator_type]
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
@@ -86,22 +111,23 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         return hardware_needed
 
     async def refresh(self) -> None:
-        previously_activated: set[gv.HardwareType] = set(self.actuator_handlers)
         # Refresh hardware
         await super().refresh()
-        # Update actuator handlers
+        # Update actuator handlers active status
         currently_expected: set[gv.HardwareType] = set(self.compute_expected_actuators())
-        to_activate = currently_expected - previously_activated
-        for actuator_type in to_activate:
-            actuator_handler = self.get_actuator_handler(actuator_type)
-            actuator_handler.activate()
+        # Reset cached actuators
+        for actuator_type, actuator_handler in self.actuator_handlers.items():
             actuator_handler.reset_cached_actuators()
-            self.actuator_handlers[actuator_type] = actuator_handler
-        to_deactivate = previously_activated - currently_expected
-        for actuator_type in to_deactivate:
-            actuator_handler = self.actuator_handlers[actuator_type]
-            actuator_handler.deactivate()
-            del self.actuator_handlers[actuator_type]
+            if not actuator_handler.active and actuator_type in currently_expected:
+                async with actuator_handler.update_status_transaction(activation=True):
+                    actuator_handler.activate()
+                self._activated_actuators.add(actuator_type)
+            elif actuator_handler.active and actuator_type not in currently_expected:
+                async with actuator_handler.update_status_transaction(activation=True):
+                    if actuator_handler.mode is gv.ActuatorMode.automatic:
+                        await actuator_handler.reset()
+                    actuator_handler.deactivate()
+                self._activated_actuators.remove(actuator_type)
 
     """Routine specific methods"""
     def get_actuator_handler(self, actuator_type: gv.HardwareType) -> ActuatorHandler:
@@ -175,12 +201,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     @property
     def regulated_parameters(self) -> list[gv.ClimateParameter]:
-        if not self.started:
-            return []
-        return [*set(
-            actuator_to_parameter[actuator_type]
-            for actuator_type in self.actuator_handlers.keys()
-        )]
+        expected_actuators = self.compute_expected_actuators()
+        return [*set(expected_actuators.values())]
 
     # Routine specific methods
     def _check_misses(self) -> bool:
@@ -289,7 +311,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     async def turn_climate_actuator(
         self,
-        climate_actuator: gv.HardwareType.climate_actuator | str,
+        climate_actuator: gv.HardwareType | str,
         turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
         countdown: float = 0.0,
     ) -> None:
