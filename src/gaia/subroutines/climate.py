@@ -113,11 +113,11 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
     async def refresh(self) -> None:
         # Refresh hardware
         await super().refresh()
-        # Update actuator handlers active status
         currently_expected: set[gv.HardwareType] = set(self.compute_expected_actuators())
-        # Reset cached actuators
         for actuator_type, actuator_handler in self.actuator_handlers.items():
+            # Reset cached actuators
             actuator_handler.reset_cached_actuators()
+            # Update actuator handlers active status if required
             if not actuator_handler.active and actuator_type in currently_expected:
                 async with actuator_handler.update_status_transaction(activation=True):
                     actuator_handler.activate()
