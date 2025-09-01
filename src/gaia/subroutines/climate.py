@@ -201,6 +201,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     @property
     def regulated_parameters(self) -> list[gv.ClimateParameter]:
+        if not self.started:
+            return []
         expected_actuators = self.compute_expected_actuators()
         return [*set(expected_actuators.values())]
 
