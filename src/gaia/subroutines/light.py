@@ -31,13 +31,19 @@ DEFAULT_CLIMATE_CFG = gv.ClimateConfig(**{
 
 class Light(SubroutineTemplate[Switch]):
     def __init__(self, *args, **kwargs) -> None:
+        # Parent template
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
+        # Subroutine specific
+        self._light_sensors: list[LightSensor] | None = None
+        self._any_dimmable_light: bool | None = None
+        # Actuator handler
+        self._actuator_handler: ActuatorHandler | None = None
+        self._pid: HystericalPID | None = None
+        # Background task
         self._loop_period: float = float(
             self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
         self._task: Task | None = None
-        self._light_sensors: list[LightSensor] | None = None
-        self._any_dimmable_light: bool | None = None
         self._finish__init__()
 
     """SubroutineTemplate methods"""
@@ -71,10 +77,14 @@ class Light(SubroutineTemplate[Switch]):
             return False
 
     async def _start(self) -> None:
-        pid = self.get_pid()
-        pid.reset()
+        # Initialize actuator handler and PID
+        self._actuator_handler = self.get_actuator_handler()
+        self._pid = self.get_pid()
+        self.pid.reset()
+        # Activate actuator handler
         async with self.actuator_handler.update_status_transaction(activation=True):
             self.actuator_handler.activate()
+        # Start light routine
         self.logger.info(
             f"Starting the light loop. It will run every "
             f"{self._loop_period:.2f} s.")
@@ -83,10 +93,15 @@ class Light(SubroutineTemplate[Switch]):
 
     async def _stop(self) -> None:
         self.logger.info("Stopping light loop.")
+        # Stop light routine
         self._task.cancel()
         self._task = None
+        # Deactivate actuator handler
         async with self.actuator_handler.update_status_transaction(activation=True):
             self.actuator_handler.deactivate()
+        # Reset actuator handler and PID
+        self._actuator_handler = None
+        self._pid = None
 
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.config.get_IO_group_uids(gv.HardwareType.light))
@@ -100,12 +115,25 @@ class Light(SubroutineTemplate[Switch]):
         self.reset_any_dimmable_light()
 
     """Routine specific methods"""
+    def get_actuator_handler(self) -> ActuatorHandler:
+        return self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
+
     @property
     def actuator_handler(self) -> ActuatorHandler:
-        return self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
+        if self._actuator_handler is None:
+            raise ValueError(
+                "actuator_handler is not defined in non-started Light subroutine")
+        return self._actuator_handler
 
     def get_pid(self) -> HystericalPID:
         return self.ecosystem.actuator_hub.get_pid(gv.ClimateParameter.light)
+
+    @property
+    def pid(self) -> HystericalPID:
+        if self._pid is None:
+            raise ValueError(
+                "pid is not defined in non-started Light subroutine")
+        return self._pid
 
     @property
     def light_sensors(self) -> list[LightSensor]:

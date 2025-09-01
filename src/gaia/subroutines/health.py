@@ -136,10 +136,13 @@ class Health(SubroutineTemplate[Camera]):
         """
         # If webcam: turn it off and restart after
         light_subroutine: Light = self.ecosystem.subroutines["light"]
-        light_mode = light_subroutine.actuator_handler.mode
-        light_status = light_subroutine.actuator_handler.status
+        light_started = light_subroutine.started
+        light_mode: gv.ActuatorMode = gv.ActuatorMode.automatic
+        light_status: bool = False
         # Turn the lights on
-        if light_subroutine.started:
+        if light_started:
+            light_mode = light_subroutine.actuator_handler.mode
+            light_status = light_subroutine.actuator_handler.status
             self.logger.info("Turning on the light(s) to take a 'health' picture.")
             await light_subroutine.turn_light(gv.ActuatorModePayload.on)
         # Get the pictures
@@ -147,7 +150,7 @@ class Health(SubroutineTemplate[Camera]):
         for camera_uid, camera in self.hardware.items():
             images[camera_uid] = await camera.get_image(size=self._picture_size)
         # Turn the lights back to their previous state
-        if light_subroutine.started:
+        if light_started:
             self.logger.info("Turning back the light subroutine to its previous state.")
             if light_mode is gv.ActuatorMode.automatic:
                 await light_subroutine.turn_light(gv.ActuatorModePayload.automatic)

@@ -3,6 +3,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem, EcosystemConfig, Engine, EngineConfig
+from gaia.actuator_handler import actuator_to_parameter
 from gaia.exceptions import HardwareNotFound, NonValidSubroutine
 
 from .data import ecosystem_uid, ecosystem_name, hardware_info, hardware_uid
@@ -75,6 +76,7 @@ async def test_hardware(ecosystem: Ecosystem, engine_config: EngineConfig):
 
 def test_actuators_data(ecosystem: "Ecosystem"):
     actuator_states = ecosystem.actuator_hub.as_dict()
+    assert len(actuator_states) == len(actuator_to_parameter)
     for actuator in actuator_states.values():
         assert not actuator["active"]
         assert not actuator["status"]

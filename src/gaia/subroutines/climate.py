@@ -7,7 +7,8 @@ from typing import Sequence
 
 import gaia_validators as gv
 
-from gaia.actuator_handler import ActuatorCouple, actuator_couples, HystericalPID
+from gaia.actuator_handler import (
+    ActuatorCouple, actuator_couples, actuator_to_parameter, HystericalPID)
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import BaseSensor, Dimmer, Switch
@@ -26,11 +27,12 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hardware_choices = actuator_models
-        self._expected_actuators: dict[gv.HardwareType, gv.ClimateParameter] = {}
-        self._actuators_activated: set[gv.HardwareType] = set()
         # Routine parameters
         loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
+        self._actuator_handlers: dict[gv.HardwareType, ActuatorHandler] = {}
+        self._pids: dict[gv.ClimateParameter, HystericalPID] = {}
+        self._activated_actuators: set[gv.HardwareType] = set()
         self._sensor_miss: int = 0
         self._finish__init__()
 
@@ -52,8 +54,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             )
 
     def _compute_if_manageable(self) -> bool:
-        self.update_expected_actuators()
-        if not self._expected_actuators:
+        if not self.compute_expected_actuators():
             self.logger.warning(
                 "No parameters that could be regulated were found. "
                 "Disabling Climate subroutine."
@@ -67,44 +68,84 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         self.logger.info(
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
+        # Mount actuator handlers
+        regulated_parameters = set()
+        for actuator_type in gv.HardwareType.climate_actuator:
+            regulated_parameters.add(actuator_to_parameter[actuator_type])
+            actuator_handler = self.get_actuator_handler(actuator_type)
+            self.actuator_handlers[actuator_type] = actuator_handler
+        # Activate the required actuators
+        expected_actuators = self.compute_expected_actuators()
+        for actuator_type in expected_actuators:
+            actuator_handler = self.actuator_handlers[actuator_type]
+            async with actuator_handler.update_status_transaction(activation=True):
+                actuator_handler.activate()
+            self._activated_actuators.add(actuator_type)
+            actuator_handler.reset_cached_actuators()
+        # Mount PID controllers
         for climate_parameter in self.regulated_parameters:
-            pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
+            pid = self.get_pid(climate_parameter)
             pid.reset()
+            self.pids[climate_parameter] = pid
 
     async def _stop(self) -> None:
-        for actuator_type in self._actuators_activated:
-            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-            async with actuator_handler.update_status_transaction(activation=True):
-                actuator_handler.deactivate()
+        # Dismount PID controllers
+        for climate_parameter in [*self.pids.keys()]:
+            pid = self.pids[climate_parameter]
+            pid.reset()
+            del self.pids[climate_parameter]
+        # Dismount actuator handlers
+        for actuator_type in [*self.actuator_handlers.keys()]:
+            actuator_handler = self.actuator_handlers[actuator_type]
+            if actuator_type in self._activated_actuators:
+                async with actuator_handler.update_status_transaction(activation=True):
+                    actuator_handler.deactivate()
+            del self.actuator_handlers[actuator_type]
 
     def get_hardware_needed_uid(self) -> set[str]:
-        #self.update_expected_actuators()
         hardware_needed: set[str] = set()
-        for actuator_type in self.expected_actuators:
+        expected_actuators = self.compute_expected_actuators()
+        for actuator_type in expected_actuators:
             extra = set(self.config.get_IO_group_uids(actuator_type))
             hardware_needed = hardware_needed | extra
         return hardware_needed
 
     async def refresh(self) -> None:
-        previously_activated: set[gv.HardwareType] = self._actuators_activated
-        self.update_expected_actuators()
+        # Refresh hardware
         await super().refresh()
-        currently_activated: set[gv.HardwareType] = set(self._expected_actuators.keys())
-        to_activate = currently_activated - previously_activated
-        for actuator_type in to_activate:
-            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-            actuator_handler.activate()
+        currently_expected: set[gv.HardwareType] = set(self.compute_expected_actuators())
+        for actuator_type, actuator_handler in self.actuator_handlers.items():
+            # Reset cached actuators
             actuator_handler.reset_cached_actuators()
-            self._actuators_activated.add(actuator_type)
-        to_deactivate = previously_activated - currently_activated
-        for actuator_type in to_deactivate:
-            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
-            actuator_handler.deactivate()
-            self._actuators_activated.remove(actuator_type)
+            # Update actuator handlers active status if required
+            if not actuator_handler.active and actuator_type in currently_expected:
+                async with actuator_handler.update_status_transaction(activation=True):
+                    actuator_handler.activate()
+                self._activated_actuators.add(actuator_type)
+            elif actuator_handler.active and actuator_type not in currently_expected:
+                async with actuator_handler.update_status_transaction(activation=True):
+                    if actuator_handler.mode is gv.ActuatorMode.automatic:
+                        await actuator_handler.reset()
+                    actuator_handler.deactivate()
+                self._activated_actuators.remove(actuator_type)
 
     """Routine specific methods"""
+    def get_actuator_handler(self, actuator_type: gv.HardwareType) -> ActuatorHandler:
+        return self.ecosystem.actuator_hub.get_handler(actuator_type)
+
+    @property
+    def actuator_handlers(self) -> dict[gv.HardwareType, ActuatorHandler]:
+        return self._actuator_handlers
+
+    def get_pid(self, climate_parameter: gv.ClimateParameter) -> HystericalPID:
+        return self.ecosystem.actuator_hub.get_pid(climate_parameter)
+
+    @property
+    def pids(self) -> dict[gv.ClimateParameter, HystericalPID]:
+        return self._pids
+
     # Climate parameters and actuators management
-    def _compute_expected_actuators(self) -> dict[gv.HardwareType, gv.ClimateParameter]:
+    def compute_expected_actuators(self) -> dict[gv.HardwareType, gv.ClimateParameter]:
         regulated_parameters: list[gv.ClimateParameter] = [
             gv.ClimateParameter.temperature,
             gv.ClimateParameter.humidity,
@@ -158,18 +199,12 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             return {}
         return rv
 
-    def update_expected_actuators(self) -> None:
-        self._expected_actuators = self._compute_expected_actuators()
-
-    @property
-    def expected_actuators(self) -> dict[gv.HardwareType, gv.ClimateParameter]:
-        return self._expected_actuators
-
     @property
     def regulated_parameters(self) -> list[gv.ClimateParameter]:
         if not self.started:
             return []
-        return [*set(self._expected_actuators.values())]
+        expected_actuators = self.compute_expected_actuators()
+        return [*set(expected_actuators.values())]
 
     # Routine specific methods
     def _check_misses(self) -> bool:
@@ -225,7 +260,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             climate_parameter: gv.ClimateParameter,
             sensors_average: dict[str, float],
     ) -> None:
-        pid: HystericalPID = self.ecosystem.actuator_hub.get_pid(climate_parameter)
+        pid: HystericalPID = self.pids[climate_parameter]
         target, hysteresis = self.compute_target(climate_parameter)
         pid.target = target
         pid.hysteresis = hysteresis
@@ -249,8 +284,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             return
         for climate_parameter in self.regulated_parameters:
             self._update_pid(climate_parameter, sensors_average)
-        for actuator_type in self._expected_actuators:
-            actuator_handler = self.ecosystem.actuator_hub.get_handler(actuator_type)
+        for actuator_type in self.compute_expected_actuators():
+            actuator_handler = self.actuator_handlers[actuator_type]
             async with actuator_handler.update_status_transaction():
                 await self._update_actuator_handler(actuator_handler)
 
@@ -278,7 +313,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     async def turn_climate_actuator(
         self,
-        climate_actuator: gv.HardwareType.climate_actuator | str,
+        climate_actuator: gv.HardwareType | str,
         turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
         countdown: float = 0.0,
     ) -> None:
