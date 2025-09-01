@@ -107,3 +107,5 @@ async def test_virtual_sensor(ecosystem: Ecosystem):
         ecosystem.virtual_self.measure()
         temperature_virtual = ecosystem.virtual_self.temperature
         assert math.isclose(temperature_sensor, temperature_virtual, rel_tol=0.05)
+
+    sensor._measures = measures
