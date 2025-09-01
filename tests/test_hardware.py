@@ -1,15 +1,20 @@
+import math
 from typing import Type
 
 import pytest
 
 import gaia_validators as gv
 
+from gaia import Ecosystem
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
-    BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
-    PlantLevelHardware, Switch)
+    BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware, Measure,
+    PlantLevelHardware, Switch, Unit)
 from gaia.hardware.camera import PiCamera
+from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
+
+from .data import sensor_uid
 
 
 @pytest.mark.asyncio
@@ -86,3 +91,19 @@ async def test_hardware_models():
             print(f"Test succeeded for hardware '{hardware}'")
         except Exception as e:
             raise Exception(f"Error while testing {hardware_cls}.") from e
+
+
+@pytest.mark.asyncio
+async def test_virtual_sensor(ecosystem: Ecosystem):
+    sensor: virtualDHT22 = ecosystem.hardware[sensor_uid]
+    measures, sensor._measures = sensor.measures, {Measure.temperature: Unit.celsius_degree}
+
+    # Virtual ecosystem measure is cached for 5 seconds and virtualized sensors
+    # will use this value. However, non-virtualized sensors will output random
+    # values that will eventually be out of range of the virtual ecosystem.
+    for _ in range(5):
+        record = await sensor.get_data()
+        temperature_sensor = record[0].value
+        ecosystem.virtual_self.measure()
+        temperature_virtual = ecosystem.virtual_self.temperature
+        assert math.isclose(temperature_sensor, temperature_virtual, rel_tol=0.05)
