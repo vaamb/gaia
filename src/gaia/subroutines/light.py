@@ -139,9 +139,8 @@ class Light(SubroutineTemplate[Switch]):
         if self._light_sensors is None:
             self._light_sensors = [
                 hardware
-                for hardware in Hardware.get_mounted().values()
-                if hardware.ecosystem_uid == self.ecosystem.uid
-                and isinstance(hardware, LightSensor)
+                for hardware in self.ecosystem.hardware.values()
+                if isinstance(hardware, LightSensor)
             ]
         return self._light_sensors
 

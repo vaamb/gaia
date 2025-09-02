@@ -7,18 +7,19 @@ import pytest
 
 import gaia_validators as gv
 
+from gaia import Ecosystem
 from gaia.actuator_handler import ActuatorHandler, Timer
 from gaia.events import Events
-from gaia.hardware import gpioDimmable, gpioSwitch, Hardware
+from gaia.hardware import gpioDimmable, gpioSwitch
 
-from .data import ecosystem_uid, light_uid
+from .data import ecosystem_uid
 
 
-def get_lights() -> list[gpioDimmable | gpioSwitch]:
+def get_lights(ecosystem: Ecosystem) -> list[gpioDimmable | gpioSwitch]:
     return [  # type: ignore
         hardware
-        for hardware in Hardware.get_mounted().values()
-        if hardware.uid == light_uid
+        for hardware in ecosystem.hardware.values()
+        if hardware.type == gv.HardwareType.light
     ]
 
 
@@ -42,7 +43,7 @@ async def test_timer():
 async def test_status(light_handler: ActuatorHandler):
     # Test default status
     assert not light_handler.status
-    for light in get_lights():
+    for light in get_lights(light_handler.ecosystem):
         light: gpioSwitch
         assert light.pin.value() == 0
 
@@ -50,7 +51,7 @@ async def test_status(light_handler: ActuatorHandler):
     async with light_handler.update_status_transaction():
         await light_handler.set_status(True)
     assert light_handler.status
-    for light in get_lights():
+    for light in get_lights(light_handler.ecosystem):
         light: gpioSwitch
         assert light.pin.value() == 1
 
@@ -58,7 +59,7 @@ async def test_status(light_handler: ActuatorHandler):
     async with light_handler.update_status_transaction():
         await light_handler.set_status(False)
     assert not light_handler.status
-    for light in get_lights():
+    for light in get_lights(light_handler.ecosystem):
         light: gpioSwitch
         assert light.pin.value() == 0
 
@@ -67,7 +68,7 @@ async def test_status(light_handler: ActuatorHandler):
 async def test_level(light_handler: ActuatorHandler):
     # Test default level
     assert light_handler.level is None
-    for light in get_lights():
+    for light in get_lights(light_handler.ecosystem):
         light: gpioDimmable
         assert light.dimmer.duty_cycle == 0
 
@@ -75,7 +76,7 @@ async def test_level(light_handler: ActuatorHandler):
     async with light_handler.update_status_transaction():
         await light_handler.set_level(42)
     assert light_handler.level == 42
-    for light in get_lights():
+    for light in get_lights(light_handler.ecosystem):
         light: gpioDimmable
         assert light.dimmer.duty_cycle > 0.0
 
@@ -83,7 +84,7 @@ async def test_level(light_handler: ActuatorHandler):
     async with light_handler.update_status_transaction():
         await light_handler.set_level(0)
     assert light_handler.level == 0
-    for light in get_lights():
+    for light in get_lights(light_handler.ecosystem):
         light: gpioDimmable
         assert light.dimmer.duty_cycle == 0.0
 
