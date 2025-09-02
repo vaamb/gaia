@@ -380,8 +380,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     addresses_used=addresses_used,
                     check_address=True,
                 )
-                # TODO: split compound addresses
-                addresses_used.append(IO_dict["address"])
+                addresses_used.extend(IO_dict["address"].split("&"))
 
     def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
@@ -1577,7 +1576,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         if hardware_config.address.lower() == "i2c_default":
             check_address = False
-        if check_address and hardware_config.address in addresses_used:
+        if (
+                check_address
+                and any(address in addresses_used for address in hardware_config.address.split("&"))
+        ):
             raise ValueError(f"Address {hardware_config.address} already used.")
         if hardware_config.model not in hardware_models:
             raise ValueError(
