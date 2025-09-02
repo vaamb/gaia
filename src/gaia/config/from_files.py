@@ -353,7 +353,8 @@ class EngineConfig(metaclass=SingletonMeta):
                 )
                 raise e
             else:
-                self._ecosystems_config_dict = self._validate_IO_dict(validated)
+                self.validate_hardware_dicts(validated)
+                self._ecosystems_config_dict = validated
                 self._dump_config(cfg_type)
         elif cfg_type == ConfigType.private:
             with open(config_path, "r") as file:
@@ -370,24 +371,17 @@ class EngineConfig(metaclass=SingletonMeta):
                 self._private_config = validated
 
     @staticmethod
-    def _validate_IO_dict(
-            ecosystems_config_dict: dict[str, EcosystemConfigDict],
-    ) -> dict[str, EcosystemConfigDict]:
+    def validate_hardware_dicts(ecosystems_config_dict: dict[str, EcosystemConfigDict]) -> None:
         for ecosystem_dict in ecosystems_config_dict.values():
-            validated_IO_dict: dict[str, gv.AnonymousHardwareConfigDict] = {}
             addresses_used: list[str] = []
             for IO_uid, IO_dict in ecosystem_dict["IO"].items():
-                validated_hardware = EcosystemConfig.validate_hardware_dict(
+                EcosystemConfig.validate_hardware_dict(
                     hardware_dict={"uid": IO_uid, **IO_dict},
                     addresses_used=addresses_used,
                     check_address=True,
-                    shorten=True,
                 )
-                validated_hardware.pop("uid")
-                validated_IO_dict[IO_uid] = validated_hardware
-                addresses_used.append(validated_hardware["address"])
-            ecosystem_dict["IO"] = validated_IO_dict
-        return ecosystems_config_dict
+                # TODO: split compound addresses
+                addresses_used.append(IO_dict["address"])
 
     def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
@@ -1573,8 +1567,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             hardware_dict: gv.HardwareConfigDict,
             addresses_used: list,
             check_address: bool = True,
-            shorten: bool = False,
-    ) -> gv.HardwareConfigDict:
+    ) -> None:
         try:
             hardware_config = gv.HardwareConfig(**hardware_dict)
         except pydantic.ValidationError as e:
@@ -1593,10 +1586,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         hardware_cls = hardware_models[hardware_config.model]
         uid, hardware_config.uid = hardware_config.uid, "validation"
-        hardware = hardware_cls.from_hardware_config(hardware_config, None)
-        validated = hardware.dict_repr(shorten)
-        validated["uid"] = uid
-        return validated
+        hardware_cls.from_hardware_config(hardware_config, None)
 
     def create_new_hardware(
             self,
@@ -1635,9 +1625,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "plants": plants,
             "multiplexer_model": multiplexer_model,
         })
-        hardware_dict = self.validate_hardware_dict(
-            hardware_dict, self._used_addresses(), shorten=True)
-        hardware_dict.pop("uid")
+        self.validate_hardware_dict(hardware_dict, self._used_addresses())
+        uid = hardware_dict.pop("uid")
         self.IO_dict.update({uid: hardware_dict})
 
     def update_hardware(
@@ -1663,9 +1652,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         check_address = (
             "address" in updating_values
         )  # Don't check address if not trying to update it
-        hardware_dict = self.validate_hardware_dict(
-            hardware_dict, self._used_addresses(), check_address, shorten=True)
-        hardware_dict.pop("uid")
+        self.validate_hardware_dict(
+            hardware_dict, self._used_addresses(), check_address)
+        uid = hardware_dict.pop("uid")
         self.IO_dict[uid] = hardware_dict
 
     def delete_hardware(self, uid: str) -> None:
