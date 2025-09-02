@@ -1506,7 +1506,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         IO_type: gv.HardwareType,
         level: gv.HardwareLevel | list[gv.HardwareLevel] | None = None,
     ) -> list[str]:
-        level = level or [l for l in gv.HardwareLevel]
+        level = level or [lvl for lvl in gv.HardwareLevel]
         if not isinstance(level, list):
             level = [level]
         return [
