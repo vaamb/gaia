@@ -108,9 +108,8 @@ class Light(SubroutineTemplate[Switch]):
 
     async def refresh(self) -> None:
         await super().refresh()
-        actuator_handler = self.ecosystem.actuator_hub.get_handler(
-            gv.HardwareType.light)
-        actuator_handler.reset_cached_actuators()
+        if self._actuator_handler:
+            self.actuator_handler.reset_cached_actuators()
         self.reset_light_sensors()
         self.reset_any_dimmable_light()
 
