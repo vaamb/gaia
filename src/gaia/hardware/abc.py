@@ -493,7 +493,7 @@ class Hardware(metaclass=_MetaHardware):
         return None
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
-        base = gv.HardwareConfig(
+        return gv.HardwareConfig(
             uid=self._uid,
             name=self._name,
             address=self.address_repr,
@@ -505,12 +505,6 @@ class Hardware(metaclass=_MetaHardware):
             plants=self._plants,
             multiplexer_model=self.multiplexer_model,
         ).model_dump(exclude_defaults=shorten)
-        if base.get("measures"):
-            base["measures"] = [
-                f"{measure.value}|{unit.value if unit is not None else ''}"
-                for measure, unit in self._measures.items()
-            ]
-        return base
 
 
 class gpioHardware(Hardware):
