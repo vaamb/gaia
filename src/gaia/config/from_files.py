@@ -1574,13 +1574,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid hardware information provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
-        if hardware_config.address.lower() == "i2c_default":
-            check_address = False
-        if (
-                check_address
-                and any(address in addresses_used for address in hardware_config.address.split("&"))
-        ):
-            raise ValueError(f"Address {hardware_config.address} already used.")
         if hardware_config.model not in hardware_models:
             raise ValueError(
                 "This hardware model is not supported. Use "
@@ -1588,7 +1581,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         hardware_cls = hardware_models[hardware_config.model]
         hardware_config.uid = "validation"
-        hardware_cls.from_hardware_config(hardware_config, None)
+        hardware = hardware_cls.from_hardware_config(hardware_config, None)
+        # Replace default address with the actual address
+        hardware_dict["address"] = hardware.address_repr
+        if (
+                check_address
+                and any(address in addresses_used for address in hardware_config.address.split("&"))
+        ):
+            raise ValueError(f"Address {hardware_config.address} already used.")
 
     def create_new_hardware(
             self,
