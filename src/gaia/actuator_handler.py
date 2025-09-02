@@ -361,9 +361,8 @@ class ActuatorHandler:
         if self._actuators is None:
             self._actuators = [
                 hardware
-                for hardware in Hardware.get_mounted().values()
-                if hardware.ecosystem_uid == self.ecosystem.uid
-                and hardware.type == self.type
+                for hardware in self.ecosystem.hardware.values()
+                if self.type.name in hardware.groups
             ]
         return self._actuators
 
