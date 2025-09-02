@@ -394,19 +394,19 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # TODO: shorten dicts used ?
         config_path = self.get_file_path(cfg_type)
+        if cfg_type == ConfigType.ecosystems:
+            # Exclude some defaults to shorten the config file
+            cfg = deepcopy(self.ecosystems_config_dict)
+            for uid in cfg:
+                cfg[uid]["IO"] = validate_from_root_model(
+                    cfg[uid]["IO"], RootIOValidator, exclude_defaults=True)
+                cfg[uid]["environment"]["climate"] = validate_from_root_model(
+                    cfg[uid]["environment"]["climate"], RootClimateValidator, exclude_defaults=True)
+                cfg[uid]["plants"] = validate_from_root_model(
+                    cfg[uid]["plants"], RootPlantsValidator, exclude_defaults=True)
+        else:
+            cfg = self._private_config
         with open(config_path, "w") as file:
-            if cfg_type == ConfigType.ecosystems:
-                # Exclude some defaults to shorten the config file
-                cfg = deepcopy(self.ecosystems_config_dict)
-                for uid in cfg:
-                    cfg[uid]["IO"] = validate_from_root_model(
-                        cfg[uid]["IO"], RootIOValidator, exclude_defaults=True)
-                    cfg[uid]["environment"]["climate"] = validate_from_root_model(
-                        cfg[uid]["environment"]["climate"], RootClimateValidator, exclude_defaults=True)
-                    cfg[uid]["plants"] = validate_from_root_model(
-                        cfg[uid]["plants"], RootPlantsValidator, exclude_defaults=True)
-            else:
-                cfg = self._private_config
             yaml.dump(cfg, file)
 
     async def _create_ecosystems_config_file(self):
