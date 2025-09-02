@@ -1504,15 +1504,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def get_IO_group_uids(
         self,
         IO_type: gv.HardwareType,
-        level: tuple[gv.HardwareLevel] = (
-            gv.HardwareLevel.environment,
-            gv.HardwareLevel.plants,
-        ),
+        level: gv.HardwareLevel | list[gv.HardwareLevel] | None = None,
     ) -> list[str]:
+        level = level or [lvl for lvl in gv.HardwareLevel]
+        if not isinstance(level, list):
+            level = [level]
         return [
             uid
             for uid in self.IO_dict
-            if self.IO_dict[uid]["type"] == IO_type
+            if self.IO_dict[uid]["type"] in IO_type
             and self.IO_dict[uid]["level"] in level
         ]
 
