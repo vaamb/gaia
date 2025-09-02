@@ -102,16 +102,17 @@ class Health(SubroutineTemplate[Camera]):
                 f"{self.ecosystem.name} is not managing light subroutine, be "
                 f"sure the ecosystem receive sufficient and consistent light "
                 f"when the subroutine is run.")
-        self.ecosystem.engine.scheduler.add_job(
-            func=self.routine,
+        await self.ecosystem.engine.scheduler.add_schedule(
+            func_or_task_id=self.routine,
             id=f"{self.ecosystem.uid}-health_routine",
-            trigger=CronTrigger(hour=h, minute=m, jitter=5.0),
+            trigger=CronTrigger(hour=h, minute=m),
+            max_jitter=5.0,
             misfire_grace_time=15 * 60,
         )
 
     async def _stop(self) -> None:
         self.logger.info("Stopping health subroutine.")
-        self.ecosystem.engine.scheduler.remove_job(
+        await self.ecosystem.engine.scheduler.remove_schedule(
             f"{self.ecosystem.uid}-health_routine")
         self._sending_data_task = None
 

@@ -143,6 +143,7 @@ async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
         pass  # Clear logs
 
     try:
+        await engine.scheduler.__aenter__()
         yield engine
     finally:
         if engine.started:

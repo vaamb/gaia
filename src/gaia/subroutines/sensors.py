@@ -88,13 +88,11 @@ class Sensors(SubroutineTemplate[BaseSensor]):
         self.logger.info(
             f"Starting the sensors loop. It will run every "
             f"{self._loop_period:.1f} s.")
-        self.ecosystem.engine.scheduler.add_job(
-            func=self.routine,
+        await self.ecosystem.engine.scheduler.add_schedule(
+            func_or_task_id=self.routine,
             id=f"{self.ecosystem.uid}-sensors_routine",
-            trigger=IntervalTrigger(
-                seconds=self._loop_period,
-                jitter=self._loop_period / 10,
-            ),
+            trigger=IntervalTrigger(seconds=self._loop_period),
+            max_jitter=self._loop_period / 10,
         )
         self.logger.debug("Sensors loop successfully started.")
 
@@ -102,7 +100,7 @@ class Sensors(SubroutineTemplate[BaseSensor]):
         self.logger.info("Stopping sensors loop.")
         if self.ecosystem.get_subroutine_status("climate"):
             await self.ecosystem.stop_subroutine("climate")
-        self.ecosystem.engine.scheduler.remove_job(
+        await self.ecosystem.engine.scheduler.remove_schedule(
             f"{self.ecosystem.uid}-sensors_routine")
         self._sending_data_task = None
 
