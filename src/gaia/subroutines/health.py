@@ -85,9 +85,9 @@ class Health(SubroutineTemplate[Camera]):
             return False
         cameras_uid = self.config.get_IO_group_uids(gv.HardwareType.camera)
         for camera_uid in cameras_uid:
-            camera_dict = self.config.get_hardware_config(camera_uid)
-            measures_name = [measure.name for measure in camera_dict.measures]
-            indices_name = [index.value for index in indices.keys()]
+            camera_cfg = self.config.get_hardware_config(camera_uid)
+            measures_name = [measure.name.lower() for measure in camera_cfg.measures]
+            indices_name = [index.value.lower() for index in indices.keys()]
             if any(measure in indices_name for measure in measures_name):
                 return True
         self.logger.warning("No health camera detected.")
