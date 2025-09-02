@@ -239,7 +239,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._engine: Engine | None = None
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
-        self._sun_times: [str, SunTimesCacheData] = {}
+        self._sun_times: dict[str, SunTimesCacheData] = {}
         self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
         self._config_files_checksum: dict[Path, H] = {}
@@ -1046,7 +1046,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_management(
             self,
-            management: gv.ManagementNames | gv.ManagementFlags,
+            management: str | gv.ManagementFlags,
     ) -> bool:
         validated_management = safe_enum_from_name(gv.ManagementFlags, management)
         # If management has dependencies, load them
@@ -1062,11 +1062,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def set_management(
             self,
-            management: gv.ManagementNames | gv.ManagementFlags,
+            management: str | gv.ManagementFlags,
             value: bool,
     ) -> None:
         validated_management = safe_enum_from_name(gv.ManagementFlags, management)
-        management_name: gv.ManagementNames = validated_management.name
+        management_name: str = validated_management.name
         if validated_management >= 256 and value:
             composite_name = f"{validated_management.name}_enabled"
             composite_mgmt = safe_enum_from_name(gv.ManagementFlags, composite_name)
@@ -1078,7 +1078,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"{dep}. This might lead to issues if it is not enabled.")
         self.__dict["management"][management_name] = value
 
-    def get_subroutines_enabled(self) -> list[gv.ManagementNames]:
+    def get_subroutines_enabled(self) -> list[str]:
         return [
             subroutine
             for subroutine in subroutine_dict
@@ -1476,7 +1476,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_climate_parameter(
             self,
-            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            parameter: str | gv.ClimateParameter,
     ) -> gv.ClimateConfig:
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
@@ -1490,7 +1490,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def set_climate_parameter(
             self,
-            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            parameter: str | gv.ClimateParameter,
             **value: gv.AnonymousClimateConfigDict,
     ) -> None:
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
@@ -1505,7 +1505,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def update_climate_parameter(
             self,
-            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            parameter: str | gv.ClimateParameter,
             **value: gv.AnonymousClimateConfigDict,
     ) -> None:
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
@@ -1518,7 +1518,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def delete_climate_parameter(
             self,
-            parameter: gv.ClimateParameter | gv.ClimateParameterNames,
+            parameter: str | gv.ClimateParameter,
     ) -> None:
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
@@ -1604,8 +1604,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             name: str,
             address: str,
             model: str,
-            type: gv.HardwareTypeNames,
-            level: gv.HardwareLevelNames,
+            type: str | gv.HardwareType,
+            level: str | gv.HardwareLevel,
             groups: list[str] | set[str] | None = None,
             measures: list | None = None,
             plants: list | None = None,
