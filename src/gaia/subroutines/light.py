@@ -140,7 +140,7 @@ class Light(SubroutineTemplate[Switch]):
             self._light_sensors = [
                 hardware
                 for hardware in self.ecosystem.hardware.values()
-                and isinstance(hardware, LightSensor)
+                if isinstance(hardware, LightSensor)
             ]
         return self._light_sensors
 
