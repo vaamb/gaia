@@ -286,6 +286,7 @@ class Hardware(metaclass=_MetaHardware):
         "__weakref__",
         "_address_book",
         "_ecosystem",
+        "_groups",
         "_level",
         "_measures",
         "_model",
@@ -304,6 +305,7 @@ class Hardware(metaclass=_MetaHardware):
             level: gv.HardwareLevel,
             type: gv.HardwareType,
             model: str,
+            groups: set[str] | list[str] | None = None,
             measures: list[gv.Measure] | None = None,
             plants: list[str] | None = None,
             multiplexer_model: str | None = None,
@@ -318,6 +320,7 @@ class Hardware(metaclass=_MetaHardware):
         self._name: str = name
         self._level: gv.HardwareLevel = level
         self._type: gv.HardwareType = type
+        self._groups: set[str] = set(groups) if groups else set()
         self._model: str = model
         self._name: str = name
         address_list: list = address.split("&")
@@ -353,9 +356,10 @@ class Hardware(metaclass=_MetaHardware):
             ecosystem: Ecosystem | None,
             uid: str,
             address: str,
-            level: gv.HardwareLevel | gv.HardwareLevelNames,
-            type: gv.HardwareType | gv.HardwareTypeNames,
+            level: str | gv.HardwareLevel,
+            type: str | gv.HardwareType,
             model: str,
+            groups: list[str] | set[str] | None = None,
             name: str | None = None,
             measures: list[str] | None = None,
             plants: list[str] | None = None,
@@ -368,6 +372,7 @@ class Hardware(metaclass=_MetaHardware):
             address=address,
             type=type,
             level=level,
+            groups=groups,
             model=model,
             measures=measures,
             plants=plants,
@@ -388,6 +393,7 @@ class Hardware(metaclass=_MetaHardware):
             address=hardware_config.address,
             level=hardware_config.level,
             type=hardware_config.type,
+            groups=hardware_config.groups,
             model=hardware_config.model,
             measures=hardware_config.measures,
             plants=hardware_config.plants,
@@ -463,6 +469,12 @@ class Hardware(metaclass=_MetaHardware):
         return self._type
 
     @property
+    def groups(self) -> set[str]:
+        if "__type__" in self._groups:
+            return self._groups - {"__type__"} | {self._type.name}
+        return self._groups
+
+    @property
     def measures(self) -> dict[Measure, Unit | None]:
         return self._measures
 
@@ -487,6 +499,7 @@ class Hardware(metaclass=_MetaHardware):
             address=self.address_repr,
             type=self._type,
             level=self._level,
+            groups=self._groups,
             model=self._model,
             measures=self._measures,
             plants=self._plants,
