@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from asyncio import Condition, Event, Lock, sleep, Task
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
 import hashlib
@@ -17,7 +18,7 @@ from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
 import pydantic
-from pydantic import Field, field_validator, RootModel
+from pydantic import Field, field_serializer, field_validator, RootModel
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
@@ -42,15 +43,9 @@ def _to_dt(_time: time) -> datetime:
     return datetime.combine(_date, _time)
 
 
-def format_pydantic_error(error: pydantic.ValidationError) -> str:
-    errors = error.errors()
-    return ". ".join([
-        f"{e['type'].replace('_', ' ').upper()} at parameter '{e['loc'][0]}', " \
-        f"input '{e['input']}' is not valid."
-        for e in errors
-    ])
-
-
+# ---------------------------------------------------------------------------
+#   Enums
+# ---------------------------------------------------------------------------
 class ConfigType(Enum):
     ecosystems = "ecosystems.cfg"
     private = "private.cfg"
@@ -60,6 +55,9 @@ class CacheType(Enum):
     chaos = "chaos.json"
 
 
+# ---------------------------------------------------------------------------
+#   Utility functions
+# ---------------------------------------------------------------------------
 H = TypeVar("H", int, bytes, str)
 
 
@@ -78,6 +76,34 @@ def _file_checksum(file_path: Path, _buffer_size: int = 4096) -> H:
             return digest_obj.digest()
     except FileNotFoundError:  # pragma: no cover
         return b"\x00"
+
+
+# ---------------------------------------------------------------------------
+#   Pydantic utility functions
+# ---------------------------------------------------------------------------
+def format_pydantic_error(error: pydantic.ValidationError) -> str:
+    errors = error.errors()
+    return ". ".join([
+        f"{e['type'].replace('_', ' ').upper()} at parameter '{e['loc'][0]}', " \
+        f"input '{e['input']}' is not valid."
+        for e in errors
+    ])
+
+
+D = TypeVar("D", bound=dict)
+
+
+def validate_from_root_model(
+        unvalidated_data: D,
+        root_model: Type[RootModel],
+        *,
+        exclude_defaults: bool = False,
+) -> D:
+    return (
+        root_model
+            .model_validate(unvalidated_data)
+            .model_dump(exclude_defaults=exclude_defaults)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -109,8 +135,13 @@ class PrivateConfigDict(TypedDict):
 # ---------------------------------------------------------------------------
 #   Ecosystem config models
 # ---------------------------------------------------------------------------
-# Custom models for Climate and Environment configs as some of their
-#  parameters are used as keys in ecosystems.cfg
+class EcosystemBaseUpdateDict(TypedDict):
+    name: str
+    status: bool
+
+
+# Custom EnvironmentConfig and EcosystemConfig models as ecosystems.cfg uses
+#  uid: anonymous config dicts rather than config lists
 class EnvironmentConfigValidator(gv.BaseModel):
     chaos: gv.ChaosConfig = Field(default_factory=gv.ChaosConfig)
     nycthemeral_cycle: gv.NycthemeralCycleConfig = Field(
@@ -118,20 +149,11 @@ class EnvironmentConfigValidator(gv.BaseModel):
     climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfig] = \
         Field(default_factory=dict)
 
-    @field_validator("climate", mode="before")
-    def dict_to_climate(cls, value: dict):
-        return {k: gv.AnonymousClimateConfig(**v) for k, v in value.items()}
-
 
 class EnvironmentConfigDict(TypedDict):
     chaos: gv.ChaosConfigDict
     nycthemeral_cycle: gv.NycthemeralCycleConfigDict
     climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
-
-
-class EcosystemBaseUpdateDict(TypedDict):
-    name: str
-    status: bool
 
 
 class EcosystemConfigValidator(gv.BaseModel):
@@ -155,6 +177,19 @@ class EcosystemConfigDict(TypedDict):
 
 class RootEcosystemsConfigValidator(RootModel):
     root: dict[str, EcosystemConfigValidator]
+
+
+# Custom models to shorten climate, IO and plants configs when dumping to YAML
+class RootClimateValidator(RootModel):
+    root: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
+
+
+class RootIOValidator(RootModel):
+    root: dict[str, gv.AnonymousHardwareConfig]
+
+
+class RootPlantsValidator(RootModel):
+    root: dict[str, gv.AnonymousPlantConfig]
 
 
 # ---------------------------------------------------------------------------
@@ -308,13 +343,9 @@ class EngineConfig(metaclass=SingletonMeta):
         config_path = self.get_file_path(cfg_type)
         if cfg_type == ConfigType.ecosystems:
             with open(config_path, "r") as file:
-                unvalidated = yaml.load(file)
+                unvalidated: dict[str, EcosystemConfigDict] = yaml.load(file)
             try:
-                validated: dict[str, EcosystemConfigDict] = (
-                    RootEcosystemsConfigValidator
-                    .model_validate(unvalidated)
-                    .model_dump()
-                )
+                validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
             except pydantic.ValidationError as e:  # pragma: no cover
                 self.logger.error(
                     f"Could not validate ecosystems configuration file. "
@@ -365,7 +396,15 @@ class EngineConfig(metaclass=SingletonMeta):
         config_path = self.get_file_path(cfg_type)
         with open(config_path, "w") as file:
             if cfg_type == ConfigType.ecosystems:
-                cfg = self.ecosystems_config_dict
+                # Exclude some defaults to shorten the config file
+                cfg = deepcopy(self.ecosystems_config_dict)
+                for uid in cfg:
+                    cfg[uid]["IO"] = validate_from_root_model(
+                        cfg[uid]["IO"], RootIOValidator, exclude_defaults=True)
+                    cfg[uid]["environment"]["climate"] = validate_from_root_model(
+                        cfg[uid]["environment"]["climate"], RootClimateValidator, exclude_defaults=True)
+                    cfg[uid]["plants"] = validate_from_root_model(
+                        cfg[uid]["plants"], RootPlantsValidator, exclude_defaults=True)
             else:
                 cfg = self._private_config
             yaml.dump(cfg, file)
