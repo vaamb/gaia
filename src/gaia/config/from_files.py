@@ -181,7 +181,7 @@ class RootEcosystemsConfigValidator(RootModel):
 
 # Custom models to shorten climate, IO and plants configs when dumping to YAML
 class RootClimateValidator(RootModel):
-    root: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
+    root: dict[gv.ClimateParameter, gv.AnonymousClimateConfig]
 
 
 class RootIOValidator(RootModel):
