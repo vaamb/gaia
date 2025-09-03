@@ -18,7 +18,7 @@ from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
 import pydantic
-from pydantic import Field, field_serializer, field_validator, RootModel
+from pydantic import Field, field_validator, model_serializer, RootModel
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
@@ -184,8 +184,18 @@ class RootClimateValidator(RootModel):
     root: dict[gv.ClimateParameter, gv.AnonymousClimateConfig]
 
 
+class _SerializableMeasure(gv.Measure):
+    @model_serializer
+    def serialize_model(self) -> str:
+        return f"{self.name}|{self.unit if self.unit is not None else ''}"
+
+
+class _SerializableAnonymousHardwareConfig(gv.AnonymousHardwareConfig):
+    measures: list[_SerializableMeasure] = Field(default_factory=list, validation_alias="measure")
+
+
 class RootIOValidator(RootModel):
-    root: dict[str, gv.AnonymousHardwareConfig]
+    root: dict[str, _SerializableAnonymousHardwareConfig]
 
 
 class RootPlantsValidator(RootModel):
