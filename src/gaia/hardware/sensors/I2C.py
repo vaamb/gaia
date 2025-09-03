@@ -36,8 +36,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 #   I2C sensors
 # ---------------------------------------------------------------------------
 class AHT20(TempHumSensor, i2cSensor):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, default_address=0x38, **kwargs)
+    default_address = 0x38
 
     def _get_device(self) -> "AHTx0":
         if is_raspi():  # pragma: no cover
@@ -64,6 +63,7 @@ class AHT20(TempHumSensor, i2cSensor):
 
 
 class ENS160(i2cSensor):
+    default_address = 0x53
     measures_available = {
         Measure.aqi: None,
         Measure.eco2: Unit.ppm,
@@ -71,7 +71,7 @@ class ENS160(i2cSensor):
     }
 
     def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, default_address=0x53, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def _get_device(self) -> "_ENS160":
         if is_raspi():  # pragma: no cover
@@ -148,12 +148,13 @@ class ENS160(i2cSensor):
 
 
 class VEML7700(i2cSensor, LightSensor):
+    default_address = 0x10
     measures_available = {
         Measure.light: Unit.lux,
     }
 
     def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, default_address=0x10, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def _get_device(self) -> "_VEML7700":
         if is_raspi():  # pragma: no cover
@@ -197,12 +198,13 @@ class VEML7700(i2cSensor, LightSensor):
 
 
 class VCNL4040(i2cSensor, LightSensor):
+    default_address = 0x60
     measures_available = {
         Measure.light: Unit.lux,
     }
 
     def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, default_address=0x60, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def _get_device(self) -> "_VCNL4040":
         if is_raspi():  # pragma: no cover
@@ -246,12 +248,13 @@ class VCNL4040(i2cSensor, LightSensor):
 
 
 class CapacitiveSensor(i2cSensor):
+    default_address = 0x36
     measures_available = {
         Measure.capacitive: None,
     }
 
     def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, default_address=0x36, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def _get_device(self) -> "Seesaw":
         if is_raspi():  # pragma: no cover

@@ -262,7 +262,7 @@ class _MetaHardware(type):
             return hardware
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class AddressBook:
     primary: Address
     secondary: Address | None = None
@@ -571,6 +571,8 @@ class Dimmer(Hardware):
 
 
 class i2cHardware(Hardware):
+    default_address: ClassVar[int | None] = None
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if not self._address_book.primary.type == AddressType.I2C:  # pragma: no cover
@@ -579,6 +581,19 @@ class i2cHardware(Hardware):
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
                 "to use a specific address"
             )
+
+        def inject_default_address(address: Address) -> Address:
+            # Using default address if address is 0
+            if address.main == 0x0:
+                address.main = self.default_address
+            if address.is_multiplexed:
+                if address.multiplexer_address == 0x0:
+                    address.multiplexer_address = self.multiplexer.address
+            return address
+
+        self._address_book.primary = inject_default_address(self.address_book.primary)
+        if self.address_book.secondary is not None:
+            self._address_book.secondary = inject_default_address(self.address_book.secondary)
 
     def _get_i2c(self, address_type: AddressBookType = "primary"):
         if self.multiplexer is not None:
@@ -601,7 +616,7 @@ class PlantLevelHardware(Hardware):
 
 
 class BaseSensor(Hardware):
-    measures_available: ClassVar[dict[Measure, Unit | None]] = None
+    measures_available: ClassVar[dict[Measure, Unit | None] | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
         if self.measures_available is None:
@@ -669,13 +684,6 @@ class gpioSensor(BaseSensor, gpioHardware):
 
 
 class i2cSensor(BaseSensor, i2cHardware):
-    def __init__(self, *args, default_address: int | None = None, **kwargs) -> None:
-        if default_address is not None:
-            address = kwargs["address"]
-            if "def" in address:
-                kwargs["address"] = f"I2C_{hex(default_address)}"
-        super().__init__(*args, **kwargs)
-
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
 

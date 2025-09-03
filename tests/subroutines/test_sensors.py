@@ -2,11 +2,9 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia import EngineConfig
 from gaia.subroutines import Sensors
 
-from ..data import heater_info, heater_uid, i2c_sensor_uid, sensor_info, sensor_uid
-from ..utils import get_logs_content
+from ..data import i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid
 
 
 def test_manageable(sensors_subroutine: Sensors):
@@ -20,7 +18,7 @@ def test_manageable(sensors_subroutine: Sensors):
 
 def test_hardware_needed(sensors_subroutine: Sensors):
     uids = sensors_subroutine.get_hardware_needed_uid()
-    assert uids == {i2c_sensor_uid, sensor_uid}
+    assert uids == {i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid}
 
 
 @pytest.mark.asyncio
