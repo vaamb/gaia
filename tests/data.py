@@ -27,11 +27,24 @@ sensor_info: gv.AnonymousHardwareConfigDict = {
 }
 
 
-i2c_sensor_uid = "xWQ9uF1bplKs0nk7"
-i2c_sensor_info: gv.AnonymousHardwareConfigDict = {
-    "name": "VirtualI2CSensor",
-    "address": "I2C_0x70#1@0x10",
+i2c_sensor_veml7700_uid = "xWQ9uF1bplKs0nk7"
+i2c_sensor_veml7700_info: gv.AnonymousHardwareConfigDict = {
+    "name": "VirtualI2CSensor_VEML7700",
+    "address": "I2C_0x70#0@default",
     "model": "virtualVEML7700",
+    "type": gv.HardwareType.sensor,
+    "level": gv.HardwareLevel.environment,
+    "measures": ["light"],
+    "plants": [],
+    "multiplexer_model": "TCA9548A",
+}
+
+
+i2c_sensor_ens160_uid = "EUvJqfXvbZ4uZa5J"
+ir2c_sensor_ens160_info: gv.AnonymousHardwareConfigDict = {
+    "name": "VirtualI2CSensor_ENS160",
+    "address": "I2C_0x70#1@default",
+    "model": "virtualENS160",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
     "measures": ["light"],
@@ -108,7 +121,8 @@ IO_dict = {
     light_uid: light_info,
     heater_uid: heater_info,
     sensor_uid: sensor_info,
-    i2c_sensor_uid: i2c_sensor_info,
+    i2c_sensor_veml7700_uid: i2c_sensor_veml7700_info,
+    i2c_sensor_ens160_uid: ir2c_sensor_ens160_info,
     camera_uid: camera_info,
 }
 

@@ -14,7 +14,7 @@ from gaia.hardware.camera import PiCamera
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
 
-from .data import sensor_uid
+from .data import i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid
 
 
 @pytest.mark.asyncio
@@ -109,3 +109,14 @@ async def test_virtual_sensor(ecosystem: Ecosystem):
         assert math.isclose(temperature_sensor, temperature_virtual, rel_tol=0.05)
 
     sensor._measures = measures
+
+
+def test_i2c_address_injection(ecosystem: Ecosystem):
+    for hardware_uid in (i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid):
+        hardware = ecosystem.hardware[hardware_uid]
+        assert hardware.address_book.primary.main not in ("default", "def", 0x0)
+        assert hardware.address_book.primary.multiplexer_address != 0x0
+
+        if hardware.address_book.secondary is not None:
+            assert hardware.address_book.secondary.main not in ("default", "def", 0x0)
+            assert hardware.address_book.secondary.multiplexer_address != 0x0
