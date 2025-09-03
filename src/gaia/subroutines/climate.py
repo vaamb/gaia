@@ -69,9 +69,9 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
         # Mount actuator handlers
-        regulated_parameters = set()
+        controllable_parameters = set()
         for actuator_type in gv.HardwareType.climate_actuator:
-            regulated_parameters.add(actuator_to_parameter[actuator_type])
+            controllable_parameters.add(actuator_to_parameter[actuator_type])
             actuator_handler = self.get_actuator_handler(actuator_type)
             self.actuator_handlers[actuator_type] = actuator_handler
         # Activate the required actuators
@@ -83,7 +83,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             self._activated_actuators.add(actuator_type)
             actuator_handler.reset_cached_actuators()
         # Mount PID controllers
-        for climate_parameter in self.regulated_parameters:
+        for climate_parameter in controllable_parameters:
             pid = self.get_pid(climate_parameter)
             pid.reset()
             self.pids[climate_parameter] = pid
