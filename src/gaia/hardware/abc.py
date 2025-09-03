@@ -571,7 +571,15 @@ class Dimmer(Hardware):
 
 
 class i2cHardware(Hardware):
+    default_address: ClassVar[int | None] = None
+
     def __init__(self, *args, **kwargs) -> None:
+        address: str = kwargs["address"]
+        if (
+                address.lower() in ("i2c_default", "i2c_def", "i2c_0")
+                and self.default_address is not None
+        ):
+            kwargs["address"] = f"I2C_{hex(self.default_address)}"
         super().__init__(*args, **kwargs)
         if not self._address_book.primary.type == AddressType.I2C:  # pragma: no cover
             raise ValueError(
@@ -601,7 +609,7 @@ class PlantLevelHardware(Hardware):
 
 
 class BaseSensor(Hardware):
-    measures_available: ClassVar[dict[Measure, Unit | None]] = None
+    measures_available: ClassVar[dict[Measure, Unit | None] | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
         if self.measures_available is None:
@@ -669,13 +677,6 @@ class gpioSensor(BaseSensor, gpioHardware):
 
 
 class i2cSensor(BaseSensor, i2cHardware):
-    def __init__(self, *args, default_address: int | None = None, **kwargs) -> None:
-        if default_address is not None:
-            address = kwargs["address"]
-            if "def" in address:
-                kwargs["address"] = f"I2C_{hex(default_address)}"
-        super().__init__(*args, **kwargs)
-
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
