@@ -1586,7 +1586,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_dict["address"] = hardware.address_repr
         if (
                 check_address
-                and any(address in addresses_used for address in hardware_config.address.split("&"))
+                and any(address in addresses_used for address in hardware.address_repr.split("&"))
         ):
             raise ValueError(f"Address {hardware_config.address} already used.")
 
