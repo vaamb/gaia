@@ -262,7 +262,7 @@ class _MetaHardware(type):
             return hardware
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class AddressBook:
     primary: Address
     secondary: Address | None = None
@@ -574,12 +574,6 @@ class i2cHardware(Hardware):
     default_address: ClassVar[int | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
-        address: str = kwargs["address"]
-        if (
-                address.lower() in ("i2c_default", "i2c_def", "i2c_0")
-                and self.default_address is not None
-        ):
-            kwargs["address"] = f"I2C_{hex(self.default_address)}"
         super().__init__(*args, **kwargs)
         if not self._address_book.primary.type == AddressType.I2C:  # pragma: no cover
             raise ValueError(
@@ -587,6 +581,19 @@ class i2cHardware(Hardware):
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
                 "to use a specific address"
             )
+
+        def inject_default_address(address: Address) -> Address:
+            # Using default address if address is 0
+            if address.main == 0x0:
+                address.main = self.default_address
+            if address.is_multiplexed:
+                if address.multiplexer_address == 0x0:
+                    address.multiplexer_address = self.multiplexer.address
+            return address
+
+        self._address_book.primary = inject_default_address(self.address_book.primary)
+        if self.address_book.secondary is not None:
+            self._address_book.secondary = inject_default_address(self.address_book.secondary)
 
     def _get_i2c(self, address_type: AddressBookType = "primary"):
         if self.multiplexer is not None:
