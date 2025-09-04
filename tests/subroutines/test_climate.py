@@ -2,16 +2,15 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia import EngineConfig
+from gaia import Ecosystem
 from gaia.subroutines.sensors import Sensors
 from gaia.subroutines.climate import Climate
 
-from ..data import heater_info, heater_uid, sensor_info, sensor_uid
-from ..utils import get_logs_content
+from ..data import heater_uid
 
 
 @pytest.mark.asyncio
-async def test_manageable(climate_subroutine: Climate):
+async def test_manageable(ecosystem: Ecosystem, climate_subroutine: Climate):
     assert climate_subroutine.manageable
 
     # Make sure sensors subroutine is required
@@ -31,6 +30,7 @@ async def test_manageable(climate_subroutine: Climate):
 
     # Make sure a regulator is needed
     climate_subroutine.ecosystem.config.delete_hardware(heater_uid)
+    await ecosystem.refresh_hardware()
     assert not climate_subroutine.manageable
 
 

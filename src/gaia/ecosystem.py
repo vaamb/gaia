@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing
-from typing import Type
+from typing import cast, Type
 
 import gaia_validators as gv
 
@@ -291,6 +291,21 @@ class Ecosystem:
     @property
     def hardware(self) -> dict[str, Hardware]:
         return self._hardware
+
+    def get_hardware_group_uids(
+        self,
+        hardware_group: str | gv.HardwareType,
+    ) -> list[str]:
+        # Format hardware group
+        if isinstance(hardware_group, gv.HardwareType):
+            hardware_group = cast(str, hardware_group.name)
+        hardware_group: str
+        # Return the UIDs of the hardware that belong to the hardware group
+        return [
+            uid
+            for uid, hardware in self.hardware.items()
+            if hardware_group in hardware.groups
+        ]
 
     async def add_hardware(
             self,

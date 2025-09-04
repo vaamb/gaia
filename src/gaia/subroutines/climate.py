@@ -106,7 +106,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         hardware_needed: set[str] = set()
         expected_actuators = self.compute_expected_actuators()
         for actuator_type in expected_actuators:
-            extra = set(self.config.get_IO_group_uids(actuator_type))
+            extra = set(self.ecosystem.get_hardware_group_uids(actuator_type))
             hardware_needed = hardware_needed | extra
         return hardware_needed
 
@@ -191,7 +191,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             for actuator_type in actuator_couple:
                 if (
                         actuator_type is not None
-                        and self.config.get_IO_group_uids(actuator_type)
+                        and self.ecosystem.get_hardware_group_uids(actuator_type)
                 ):
                     rv[actuator_type] = climate_param
         if not rv:

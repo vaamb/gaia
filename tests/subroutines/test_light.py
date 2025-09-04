@@ -4,17 +4,18 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia import EngineConfig
+from gaia import Ecosystem
 from gaia.subroutines import Light, Sensors
 
-from ..data import light_info, light_uid, sensor_info, sensor_uid
-from ..utils import get_logs_content
+from ..data import light_uid
 
 
-def test_manageable(light_subroutine: Light):
+@pytest.mark.asyncio
+async def test_manageable(ecosystem: Ecosystem, light_subroutine: Light):
     assert light_subroutine.manageable
 
-    light_subroutine.ecosystem.config.delete_hardware(light_uid)
+    ecosystem.config.delete_hardware(light_uid)
+    await ecosystem.refresh_hardware()
 
     assert not light_subroutine.manageable
 

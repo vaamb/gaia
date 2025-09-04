@@ -65,7 +65,7 @@ class Light(SubroutineTemplate[Switch]):
 
     def _compute_if_manageable(self) -> bool:
         if all((
-                self.config.get_IO_group_uids(gv.HardwareType.light),
+                self.ecosystem.get_hardware_group_uids(gv.HardwareType.light),
                 bool(self.config.lighting_hours.morning_start),
         )):
             return True
@@ -104,7 +104,7 @@ class Light(SubroutineTemplate[Switch]):
         self._pid = None
 
     def get_hardware_needed_uid(self) -> set[str]:
-        return set(self.config.get_IO_group_uids(gv.HardwareType.light))
+        return set(self.ecosystem.get_hardware_group_uids(gv.HardwareType.light))
 
     async def refresh(self) -> None:
         await super().refresh()

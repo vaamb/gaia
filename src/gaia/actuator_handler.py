@@ -415,9 +415,9 @@ class ActuatorHandler:
             )
 
     def _check_actuator_available(self) -> None:
-        if not self.ecosystem.config.get_IO_group_uids(self.type):
+        if not self.ecosystem.get_hardware_group_uids(self.type):
             raise RuntimeError(
-                f"No actuator '{self.type.name}' available in the config file."
+                f"No actuator '{self.type.name}' available."
             )
 
     def _check_active(self) -> None:
