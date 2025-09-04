@@ -112,6 +112,10 @@ class Sensors(SubroutineTemplate[BaseSensor]):
 
     async def refresh(self) -> None:
         await super().refresh()
+        # Make sure the routine is still running
+        if not self.started:
+            return
+        # Refresh climate and light subroutines if they are running
         if self.ecosystem.get_subroutine_status("climate"):
             climate_subroutine: Climate = self.ecosystem.subroutines["climate"]
             await climate_subroutine.refresh()

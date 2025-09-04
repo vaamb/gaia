@@ -194,6 +194,10 @@ class Pictures(SubroutineTemplate[Camera]):
 
     async def refresh(self) -> None:
         await super().refresh()
+        # Make sure the routine is still running
+        if not self.started:
+            return
+        # Load required background arrays
         await self._load_background_arrays()
 
     async def reset_background_array(self, camera_uid: str) -> None:

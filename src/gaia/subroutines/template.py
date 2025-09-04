@@ -115,6 +115,13 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
             hardware.model in self.hardware_choices
             for hardware in self.hardware.values()
         ])
+        # Make sure the routine is still manageable
+        if not self._compute_if_manageable():
+            self.logger.warning(
+                f"The {self.name.capitalize()} subroutine is not manageable and "
+                f"will stop.")
+            await self.stop()
+            return
 
     async def start(self) -> None:
         if self.started:

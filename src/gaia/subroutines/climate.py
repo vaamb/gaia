@@ -30,8 +30,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         # Routine parameters
         loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
-        self._actuator_handlers: dict[gv.HardwareType, ActuatorHandler] = {}
-        self._pids: dict[gv.ClimateParameter, HystericalPID] = {}
+        self._actuator_handlers: dict[gv.HardwareType, ActuatorHandler] | None = None
+        self._pids: dict[gv.ClimateParameter, HystericalPID] | None = None
         self._activated_actuators: set[gv.HardwareType] = set()
         self._sensor_miss: int = 0
         self._finish__init__()
@@ -69,6 +69,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
         # Mount actuator handlers
+        self._actuator_handlers = {}
         controllable_parameters = set()
         for actuator_type in gv.HardwareType.climate_actuator:
             controllable_parameters.add(actuator_to_parameter[actuator_type])
@@ -83,24 +84,22 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             self._activated_actuators.add(actuator_type)
             actuator_handler.reset_cached_actuators()
         # Mount PID controllers
+        self._pids = {}
         for climate_parameter in controllable_parameters:
             pid = self.get_pid(climate_parameter)
             pid.reset()
             self.pids[climate_parameter] = pid
 
     async def _stop(self) -> None:
-        # Dismount PID controllers
-        for climate_parameter in [*self.pids.keys()]:
-            pid = self.pids[climate_parameter]
-            pid.reset()
-            del self.pids[climate_parameter]
-        # Dismount actuator handlers
+        # Deactivate activated actuator handlers
         for actuator_type in [*self.actuator_handlers.keys()]:
-            actuator_handler = self.actuator_handlers[actuator_type]
             if actuator_type in self._activated_actuators:
+                actuator_handler = self.actuator_handlers[actuator_type]
                 async with actuator_handler.update_status_transaction(activation=True):
                     actuator_handler.deactivate()
-            del self.actuator_handlers[actuator_type]
+        # Reset actuator handlers and PIDs
+        self._actuator_handlers = None
+        self._pids = None
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
@@ -113,6 +112,12 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
     async def refresh(self) -> None:
         # Refresh hardware
         await super().refresh()
+        # Make sure the routine is still running
+        if not self.started:
+            return
+        # Make sure PIDs are in sync with actuator handlers
+        assert self._pids is not None
+        # Activate, deactivate and reset actuator handlers if required
         currently_expected: set[gv.HardwareType] = set(self.compute_expected_actuators())
         for actuator_type, actuator_handler in self.actuator_handlers.items():
             # Reset cached actuators
@@ -128,6 +133,9 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
                         await actuator_handler.reset()
                     actuator_handler.deactivate()
                 self._activated_actuators.remove(actuator_type)
+        # Reset PIDs
+        for pid in self.pids.values():
+            pid.reset()
 
     """Routine specific methods"""
     def get_actuator_handler(self, actuator_type: gv.HardwareType) -> ActuatorHandler:
@@ -135,6 +143,9 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     @property
     def actuator_handlers(self) -> dict[gv.HardwareType, ActuatorHandler]:
+        if self._actuator_handlers is None:
+            raise ValueError(
+                "actuator_handlers is not defined in non-started Climate subroutine")
         return self._actuator_handlers
 
     def get_pid(self, climate_parameter: gv.ClimateParameter) -> HystericalPID:
@@ -142,6 +153,9 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     @property
     def pids(self) -> dict[gv.ClimateParameter, HystericalPID]:
+        if self._pids is None:
+            raise ValueError(
+                "pids is not defined in non-started Climate subroutine")
         return self._pids
 
     # Climate parameters and actuators management
