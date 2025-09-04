@@ -2,16 +2,20 @@ import pytest
 
 import gaia_validators as gv
 
+from gaia import Ecosystem
 from gaia.subroutines import Sensors
 
 from ..data import i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid
 
 
-def test_manageable(sensors_subroutine: Sensors):
+@pytest.mark.asyncio
+async def test_manageable(ecosystem: Ecosystem, sensors_subroutine: Sensors):
     assert sensors_subroutine.manageable
 
     for hardware_uid in sensors_subroutine.get_hardware_needed_uid():
-        sensors_subroutine.ecosystem.config.delete_hardware(hardware_uid)
+        ecosystem.config.delete_hardware(hardware_uid)
+
+    await ecosystem.refresh_hardware()
 
     assert not sensors_subroutine.manageable
 

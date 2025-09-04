@@ -147,7 +147,7 @@ class Pictures(SubroutineTemplate[Camera]):
                 f"'PICTURE_SIZE'.")
 
     def _compute_if_manageable(self) -> bool:
-        if not self.config.get_IO_group_uids(gv.HardwareType.camera):
+        if not self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera):
             self.logger.warning("No Camera detected, disabling Picture subroutine.")
             return False
         if not self.ecosystem.engine.message_broker_started:
@@ -190,7 +190,7 @@ class Pictures(SubroutineTemplate[Camera]):
         ]
 
     def get_hardware_needed_uid(self) -> set[str]:
-        return set(self.config.get_IO_group_uids(IO_type=gv.HardwareType.camera))
+        return set(self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera))
 
     async def refresh(self) -> None:
         await super().refresh()

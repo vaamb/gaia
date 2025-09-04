@@ -1,14 +1,17 @@
 import pytest
 
+from gaia import Ecosystem
 from gaia.subroutines import Pictures
 
 from ..data import camera_uid
 
 
-def test_manageable(pictures_subroutine: Pictures):
+@pytest.mark.asyncio
+async def test_manageable(ecosystem: Ecosystem, pictures_subroutine: Pictures):
     assert pictures_subroutine.manageable
 
-    pictures_subroutine.ecosystem.config.delete_hardware(camera_uid)
+    ecosystem.config.delete_hardware(camera_uid)
+    await ecosystem.refresh_hardware()
 
     assert not pictures_subroutine.manageable
 

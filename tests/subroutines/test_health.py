@@ -2,6 +2,7 @@ import pytest
 
 import gaia_validators as gv
 
+from gaia import Ecosystem
 from gaia.hardware.abc import Measure
 from gaia.subroutines import Health, Light
 
@@ -9,17 +10,21 @@ from ..data import camera_uid
 from ..utils import get_logs_content
 
 
-def test_manageable(health_subroutine: Health):
+@pytest.mark.asyncio
+async def test_manageable(ecosystem: Ecosystem, health_subroutine: Health):
     camera_cfg = health_subroutine.config.IO_dict[camera_uid].copy()
     assert health_subroutine.manageable
 
     health_subroutine.config.IO_dict[camera_uid]["measures"] = []
+    await ecosystem.refresh_hardware()
     assert not health_subroutine.manageable
 
     health_subroutine.config.IO_dict[camera_uid] = camera_cfg
+    await ecosystem.refresh_hardware()
     assert health_subroutine.manageable
 
     health_subroutine.config.delete_hardware(camera_uid)
+    await ecosystem.refresh_hardware()
     assert not health_subroutine.manageable
 
 

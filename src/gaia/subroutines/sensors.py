@@ -78,7 +78,7 @@ class Sensors(SubroutineTemplate[BaseSensor]):
             await self.trigger_climate_routine()
 
     def _compute_if_manageable(self) -> bool:
-        if self.config.get_IO_group_uids(gv.HardwareType.sensor):
+        if self.ecosystem.get_hardware_group_uids(gv.HardwareType.sensor):
             return True
         else:
             self.logger.warning("No sensor detected.")
@@ -108,7 +108,7 @@ class Sensors(SubroutineTemplate[BaseSensor]):
 
     """API calls"""
     def get_hardware_needed_uid(self) -> set[str]:
-        return set(self.config.get_IO_group_uids(gv.HardwareType.sensor))
+        return set(self.ecosystem.get_hardware_group_uids(gv.HardwareType.sensor))
 
     async def refresh(self) -> None:
         await super().refresh()

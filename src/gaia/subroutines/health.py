@@ -83,7 +83,7 @@ class Health(SubroutineTemplate[Camera]):
             self.logger.warning(
                 "Health subroutine does not have all the dependencies installed.")
             return False
-        cameras_uid = self.config.get_IO_group_uids(gv.HardwareType.camera)
+        cameras_uid = self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera)
         for camera_uid in cameras_uid:
             camera_cfg = self.config.get_hardware_config(camera_uid)
             measures_name = [measure.name.lower() for measure in camera_cfg.measures]
@@ -116,7 +116,7 @@ class Health(SubroutineTemplate[Camera]):
         self._sending_data_task = None
 
     def get_hardware_needed_uid(self) -> set[str]:
-        return set(self.config.get_IO_group_uids(IO_type=gv.HardwareType.camera))
+        return set(self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera))
 
     """Routine specific methods"""
     @property

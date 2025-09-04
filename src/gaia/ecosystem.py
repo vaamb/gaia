@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing
-from typing import Type
+from typing import cast, Type
 
 import gaia_validators as gv
 
@@ -288,9 +288,35 @@ class Ecosystem:
         }
 
     # Hardware management
+    def _check_hardware_is_up_to_date(self) -> None:
+        if not self.started:
+            return
+        hardware_needed: set[str] = set(self.config.IO_dict.keys())
+        hardware_existing: set[str] = set(self._hardware.keys())
+        if hardware_needed != hardware_existing:
+            self.logger.warning(
+                "The hardware is not up to date. Run `ecosystem.refresh_hardware()` "
+                "to update it.")
+
     @property
     def hardware(self) -> dict[str, Hardware]:
+        self._check_hardware_is_up_to_date()
         return self._hardware
+
+    def get_hardware_group_uids(
+        self,
+        hardware_group: str | gv.HardwareType,
+    ) -> list[str]:
+        # Format hardware group
+        if isinstance(hardware_group, gv.HardwareType):
+            hardware_group = cast(str, hardware_group.name)
+        hardware_group: str
+        # Return the UIDs of the hardware that belong to the hardware group
+        return [
+            uid
+            for uid, hardware in self.hardware.items()
+            if hardware_group in hardware.groups
+        ]
 
     async def add_hardware(
             self,
