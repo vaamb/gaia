@@ -288,8 +288,19 @@ class Ecosystem:
         }
 
     # Hardware management
+    def _check_hardware_is_up_to_date(self) -> None:
+        if not self.started:
+            return
+        hardware_needed: set[str] = set(self.config.IO_dict.keys())
+        hardware_existing: set[str] = set(self._hardware.keys())
+        if hardware_needed != hardware_existing:
+            self.logger.warning(
+                "The hardware is not up to date. Run `ecosystem.refresh_hardware()` "
+                "to update it.")
+
     @property
     def hardware(self) -> dict[str, Hardware]:
+        self._check_hardware_is_up_to_date()
         return self._hardware
 
     def get_hardware_group_uids(
