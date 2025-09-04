@@ -108,8 +108,17 @@ class Light(SubroutineTemplate[Switch]):
 
     async def refresh(self) -> None:
         await super().refresh()
-        if self._actuator_handler:
-            self.actuator_handler.reset_cached_actuators()
+        # Make sure the routine is still running
+        if not self.started:
+            return
+        # Make sure PID is in sync with actuator handler
+        assert self._pid is not None
+        # No need to activate or deactivate actuator handler: it is done in
+        #  during start and stop and if there isn't linked actuator, the subroutine
+        #  will stop.
+        # Reset actuator handler, PID and light sensors
+        self.actuator_handler.reset_cached_actuators()
+        self.pid.reset()
         self.reset_light_sensors()
         self.reset_any_dimmable_light()
 
