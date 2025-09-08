@@ -163,19 +163,17 @@ class Pictures(SubroutineTemplate[Camera]):
             f"{self._sending_ratio} iteration(s).")
         self.logger.info("Loading background image(s).")
         await self._load_background_arrays()
-        self.ecosystem.engine.scheduler.add_job(
-            func=self.routine,
+        await self.ecosystem.engine.scheduler.add_schedule(
+            func_or_task_id=self.routine,
             id=f"{self.ecosystem.uid}-picture_routine",
-            trigger=IntervalTrigger(
-                seconds=self._loop_period,
-                jitter=self._loop_period / 10,
-            ),
+            trigger=IntervalTrigger(seconds=self._loop_period),
+            max_jitter=self._loop_period / 10,
         )
         self.logger.debug("Picture loop successfully started.")
 
     async def _stop(self) -> None:
         self.logger.info("Stopping picture loop.")
-        self.ecosystem.engine.scheduler.remove_job(
+        await self.ecosystem.engine.scheduler.remove_schedule(
             f"{self.ecosystem.uid}-picture_routine")
         self._sending_data_task = None
 
