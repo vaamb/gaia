@@ -298,9 +298,10 @@ async def test_on_registration_ack(
         actuator_record: gv.ActuatorStateRecord
         actuator_type = gv.HardwareType(actuator_record[0])
         assert actuator_type & gv.HardwareType.actuator
-        assert actuator_record[1] is False
-        assert actuator_record[2] == gv.ActuatorMode.automatic
-        assert actuator_record[3] is False
+        assert actuator_record[1] == actuator_type.name
+        assert actuator_record[2] is False
+        assert actuator_record[3] == gv.ActuatorMode.automatic
+        assert actuator_record[4] is False
 
     response_number += 1
 

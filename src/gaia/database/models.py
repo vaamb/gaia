@@ -200,6 +200,11 @@ class SensorBuffer(BaseSensorRecord, DataBufferMixin):
         )
 
 
+def _get_actuator_group(context):
+    params = context.get_current_parameters()
+    return str(params["type"])
+
+
 class BaseActuatorRecord(Base):
     __abstract__ = True
     __table_args__ = (
@@ -212,6 +217,7 @@ class BaseActuatorRecord(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     ecosystem_uid: Mapped[str] = mapped_column(sa.String(length=8))
     type: Mapped[gv.HardwareType] = mapped_column()
+    group: Mapped[str] = mapped_column(sa.String(length=16), default=_get_actuator_group)
     timestamp: Mapped[datetime] = mapped_column(UtcDateTime)
     active: Mapped[bool] = mapped_column()
     mode: Mapped[gv.ActuatorMode] = mapped_column(default=gv.ActuatorMode.automatic)
@@ -223,6 +229,7 @@ class BaseActuatorRecord(Base):
         return {
             "ecosystem_uid": self.ecosystem_uid,
             "type": self.type,
+            "group": self.group,
             "active": self.active,
             "mode": self.mode,
             "status": self.status,
