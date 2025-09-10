@@ -22,6 +22,11 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 MISSES_BEFORE_STOP = 5
 
+REGULABLE_PARAMETERS: list[gv.ClimateParameter] = [
+    gv.ClimateParameter.temperature,
+    gv.ClimateParameter.humidity,
+]
+
 
 class Climate(SubroutineTemplate[Dimmer | Switch]):
     def __init__(self, *args, **kwargs) -> None:
@@ -70,22 +75,20 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             f"{self._loop_period:.1f} s.")
         # Mount actuator handlers
         self._actuator_handlers = {}
-        controllable_parameters = set()
         for actuator_type in gv.HardwareType.climate_actuator:
-            controllable_parameters.add(actuator_to_parameter[actuator_type])
             actuator_handler = self.get_actuator_handler(actuator_type)
             self.actuator_handlers[actuator_type] = actuator_handler
         # Activate the required actuators
         expected_actuators = self.compute_expected_actuators()
-        for actuator_type in expected_actuators:
-            actuator_handler = self.actuator_handlers[actuator_type]
-            async with actuator_handler.update_status_transaction(activation=True):
-                actuator_handler.activate()
-            self._activated_actuators.add(actuator_type)
+        for actuator_type, actuator_handler in self.actuator_handlers.items():
+            if actuator_type in expected_actuators:
+                async with actuator_handler.update_status_transaction(activation=True):
+                    actuator_handler.activate()
+                self._activated_actuators.add(actuator_type)
             actuator_handler.reset_cached_actuators()
         # Mount PID controllers
         self._pids = {}
-        for climate_parameter in controllable_parameters:
+        for climate_parameter in REGULABLE_PARAMETERS:
             pid = self.get_pid(climate_parameter)
             pid.reset()
             self.pids[climate_parameter] = pid
@@ -160,10 +163,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     # Climate parameters and actuators management
     def compute_expected_actuators(self) -> dict[gv.HardwareType, gv.ClimateParameter]:
-        regulated_parameters: list[gv.ClimateParameter] = [
-            gv.ClimateParameter.temperature,
-            gv.ClimateParameter.humidity,
-        ]
+        regulated_parameters: list[gv.ClimateParameter] = REGULABLE_PARAMETERS.copy()
 
         # Make sure the sensor subroutine is running
         if not self.ecosystem.get_subroutine_status("sensors"):
