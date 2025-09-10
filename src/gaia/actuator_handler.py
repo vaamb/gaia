@@ -322,6 +322,7 @@ class ActuatorHandler:
         "actuator_hub",
         "direction",
         "ecosystem",
+        "group",
         "logger",
         "type",
     )
@@ -331,12 +332,14 @@ class ActuatorHandler:
             actuator_hub: ActuatorHub,
             actuator_type: gv.HardwareType,
             actuator_direction: Direction,
+            actuator_group: str | None = None,
     ) -> None:
-        assert actuator_type in gv.HardwareType.actuator
+        assert actuator_type & gv.HardwareType.actuator
         assert actuator_direction in (Direction.decrease, Direction.increase)
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
         self.type: gv.HardwareType = actuator_type
+        self.group: str = actuator_group or self.type.name
         self.direction: Direction = actuator_direction
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
@@ -387,6 +390,7 @@ class ActuatorHandler:
     def as_record(self, timestamp: datetime) -> gv.ActuatorStateRecord:
         return gv.ActuatorStateRecord(
             type=self.type,
+            group=self.group,
             active=self.active,
             mode=self.mode,
             status=self.status,
@@ -772,6 +776,7 @@ class ActuatorHub:
         ) -> gv.ActuatorStateRecord:
             return gv.ActuatorStateRecord(
                 type=hardware_type,
+                group=hardware_type.name,
                 active=False,
                 mode=gv.ActuatorMode.automatic,
                 status=False,
