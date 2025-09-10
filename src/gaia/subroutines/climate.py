@@ -7,8 +7,7 @@ from typing import Sequence
 
 import gaia_validators as gv
 
-from gaia.actuator_handler import (
-    ActuatorCouple, actuator_couples, actuator_to_parameter, HystericalPID)
+from gaia.actuator_handler import actuator_couples, HystericalPID
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import BaseSensor, Dimmer, Switch
@@ -201,7 +200,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         # Check if there are regulators available and map them with climate parameters
         rv: dict[gv.HardwareType, gv.ClimateParameter] = {}
         for climate_param in regulated_parameters:
-            actuator_couple: ActuatorCouple = actuator_couples[climate_param]
+            actuator_couple: gv.ActuatorCouple = actuator_couples[climate_param]
             for actuator_type in actuator_couple:
                 if (
                         actuator_type is not None

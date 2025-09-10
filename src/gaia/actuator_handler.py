@@ -4,19 +4,17 @@ import asyncio
 from asyncio import Future, Lock, Task, TimerHandle, CancelledError
 from contextlib import asynccontextmanager
 import enum
-import dataclasses
 from datetime import datetime, timezone
 from functools import partial
 import logging
 import time
 import typing
-from typing import Awaitable, Callable, ItemsView, Iterable, Literal, NamedTuple, Type
+from typing import Awaitable, Callable, Literal, NamedTuple, Type
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
-from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, Hardware, Switch
+from gaia.hardware.abc import Dimmer, Switch
 
 
 if typing.TYPE_CHECKING:
@@ -24,37 +22,19 @@ if typing.TYPE_CHECKING:
     from gaia.database.models import ActuatorBuffer, ActuatorRecord
 
 
-@dataclasses.dataclass(frozen=True)
-class ActuatorCouple:
-    increase: gv.HardwareType | None
-    decrease: gv.HardwareType | None
-
-    def __iter__(self) -> Iterable[gv.HardwareType | None]:
-        return iter((self.increase, self.decrease))
-
-    def __getitem__(self, key: str) -> gv.HardwareType | None:
-        try:
-            return getattr(self, key)
-        except AttributeError:
-            raise KeyError(f"{key}")
-
-    def items(self) -> ItemsView[str, gv.HardwareType | None]:
-        return self.__dict__.items()
-
-
-actuator_couples: dict[gv.ClimateParameter: ActuatorCouple] = {
-    gv.ClimateParameter.temperature: ActuatorCouple(
-        gv.HardwareType.heater, gv.HardwareType.cooler),
-    gv.ClimateParameter.humidity: ActuatorCouple(
-        gv.HardwareType.humidifier, gv.HardwareType.dehumidifier),
-    gv.ClimateParameter.light: ActuatorCouple(
-        gv.HardwareType.light, None),
-    gv.ClimateParameter.wind: ActuatorCouple(
-        gv.HardwareType.fan, None)
+actuator_couples: dict[gv.ClimateParameter: gv.ActuatorCouple] = {
+    gv.ClimateParameter.temperature: gv.ActuatorCouple(
+        increase=gv.HardwareType.heater, decrease=gv.HardwareType.cooler),
+    gv.ClimateParameter.humidity: gv.ActuatorCouple(
+        increase=gv.HardwareType.humidifier, decrease=gv.HardwareType.dehumidifier),
+    gv.ClimateParameter.light: gv.ActuatorCouple(
+        increase=gv.HardwareType.light, decrease=None),
+    gv.ClimateParameter.wind: gv.ActuatorCouple(
+        increase=gv.HardwareType.fan, decrease=None),
 }
 
 
-actuator_to_parameter: dict[gv.HardwareType, gv.ClimateParameter] = {
+actuator_to_parameter: dict[str, gv.ClimateParameter] = {
     actuator: climate_parameter
     for climate_parameter, actuator_couple in actuator_couples.items()
     for actuator in actuator_couple
@@ -62,7 +42,7 @@ actuator_to_parameter: dict[gv.HardwareType, gv.ClimateParameter] = {
 }
 
 
-actuator_to_direction: dict[gv.HardwareType, Literal["increase", "decrease"]] = {
+actuator_to_direction: dict[str, Literal["increase", "decrease"]] = {
     actuator: direction
     for climate_parameter, actuator_couple in actuator_couples.items()
     for actuator, direction in zip(actuator_couple, ("increase", "decrease"))
@@ -146,7 +126,7 @@ class HystericalPID:
         if self._direction is not None:
             return self._direction
         direction: Direction = Direction.none
-        actuator_couple: ActuatorCouple = actuator_couples[self.climate_parameter]
+        actuator_couple: gv.ActuatorCouple = actuator_couples[self.climate_parameter]
         for direction_name, actuator_type in actuator_couple.items():
             if actuator_type is None:
                 continue
@@ -376,7 +356,7 @@ class ActuatorHandler:
         pid.reset_direction()
 
     def get_associated_pid(self) -> HystericalPID:
-        climate_parameter = actuator_to_parameter[self.type]
+        climate_parameter = actuator_to_parameter[self.type.name]
         return self.actuator_hub.get_pid(climate_parameter)
 
     def as_dict(self) -> gv.ActuatorStateDict:
@@ -714,7 +694,7 @@ class ActuatorHub:
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
             WeakValueDictionary()
-        self._actuator_handlers: WeakValueDictionary[gv.HardwareType, ActuatorHandler] = \
+        self._actuator_handlers: WeakValueDictionary[str, ActuatorHandler] = \
             WeakValueDictionary()
 
     def get_pid(
@@ -742,11 +722,11 @@ class ActuatorHub:
             actuator_type: gv.HardwareType,
     ) -> ActuatorHandler:
         actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
-        assert actuator_type in gv.HardwareType.actuator
+        assert actuator_type & gv.HardwareType.actuator
         try:
             return self._actuator_handlers[actuator_type]
         except KeyError:
-            direction_name = actuator_to_direction[actuator_type]
+            direction_name = actuator_to_direction[actuator_type.name]
             actuator_handler = ActuatorHandler(self, actuator_type, Direction[direction_name])
             self._actuator_handlers[actuator_type] = actuator_handler
             return actuator_handler
@@ -762,9 +742,9 @@ class ActuatorHub:
         rv = {}
         for actuator_type in actuator_to_parameter.keys():
             if actuator_type in self._actuator_handlers:
-                rv[actuator_type.name] = self._actuator_handlers[actuator_type].as_dict()
+                rv[actuator_type] = self._actuator_handlers[actuator_type].as_dict()
             else:
-                rv[actuator_type.name] = default_state_dict
+                rv[actuator_type] = default_state_dict
         return rv
 
     def as_records(self) -> list[gv.ActuatorStateRecord]:
@@ -785,9 +765,10 @@ class ActuatorHub:
             )
 
         rv = []
-        for actuator_type in actuator_to_parameter.keys():
-            if actuator_type in self._actuator_handlers:
-                rv.append(self._actuator_handlers[actuator_type].as_record(now))
+        for actuator_str in actuator_to_parameter.keys():
+            if actuator_str in self._actuator_handlers:
+                rv.append(self._actuator_handlers[actuator_str].as_record(now))
             else:
+                actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_str)
                 rv.append(get_default_record(actuator_type, now))
         return rv
