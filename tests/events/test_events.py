@@ -2,6 +2,7 @@ from asyncio import sleep
 from datetime import datetime, timezone
 from math import isclose
 from time import monotonic
+from typing import cast
 from unittest.mock import AsyncMock, patch
 import uuid
 
@@ -330,8 +331,8 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         pass  # To clean up logs
 
-    actuator = gv.HardwareType.light
-    handler = ecosystem.actuator_hub.get_handler(actuator)
+    actuator_name: str = cast(str, gv.HardwareType.light.name)
+    handler = ecosystem.actuator_hub.get_handler(actuator_name)
     mode = handler.mode
     current_state = handler.status
     countdown = 0.5
@@ -339,7 +340,7 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
     payload_mode = gv.ActuatorModePayload.on
     turn_actuator_payload = gv.TurnActuatorPayloadDict(**{
         "ecosystem_uid": ecosystem_uid,
-        "actuator": actuator,
+        "actuator": gv.HardwareType[actuator_name],
         "mode": payload_mode,
         "countdown": countdown,
     })
@@ -347,10 +348,10 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
 
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         assert "Received 'turn_actuator' event" in logs
-        assert actuator.name in logs
+        assert actuator_name in logs
         assert payload_mode.name in logs
 
-    handler = ecosystem.actuator_hub.get_handler(actuator)
+    handler = ecosystem.actuator_hub.get_handler(actuator_name)
     assert handler.status is current_state
     assert handler.mode is mode
     assert isclose(handler.countdown, countdown, abs_tol=0.01)

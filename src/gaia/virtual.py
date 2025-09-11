@@ -5,6 +5,7 @@ import logging
 import math
 from time import monotonic
 import typing
+from typing import cast
 
 import gaia_validators as gv
 
@@ -288,14 +289,18 @@ class VirtualEcosystem:
     def status(self) -> bool:
         return self._start_time is not None
 
-    def get_actuator_status(self, actuator_type: gv.HardwareType.actuator) -> bool:
-        return self.ecosystem.actuator_hub.get_handler(actuator_type).status
+    def get_actuator_status(self, actuator_type: gv.HardwareType) -> bool:
+        assert actuator_type & gv.HardwareType.actuator
+        actuator_group: str = cast(str, actuator_type.name)
+        return self.ecosystem.actuator_hub.get_handler(actuator_group).status
 
     def get_actuator_level(
             self,
-            actuator_type: gv.HardwareType.actuator,
+            actuator_type: gv.HardwareType,
     ) -> float | None:
-        return self.ecosystem.actuator_hub.get_handler(actuator_type).level
+        assert actuator_type & gv.HardwareType.actuator
+        actuator_group: str = cast(str, actuator_type.name)
+        return self.ecosystem.actuator_hub.get_handler(actuator_group).level
 
     def measure(self, now: float | None = None) -> None:
         if not self._start_time:
