@@ -15,6 +15,12 @@ actuator_couples: dict[gv.ClimateParameter: gv.ActuatorCouple] = {
 }
 
 
+assert all([
+    climate_parameter in actuator_couples
+    for climate_parameter in gv.ClimateParameter
+])
+
+
 actuator_to_parameter: dict[str, gv.ClimateParameter] = {
     actuator: climate_parameter
     for climate_parameter, actuator_couple in actuator_couples.items()
