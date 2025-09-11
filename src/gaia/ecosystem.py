@@ -433,12 +433,12 @@ class Ecosystem:
 
     # Actuator
     @property
-    def actuators_state(self) -> dict[gv.HardwareType, gv.ActuatorStateDict]:
+    def actuators_state(self) -> dict[str, gv.ActuatorStateDict]:
         return self.actuator_hub.as_dict()
 
     async def turn_actuator(
             self,
-            actuator: gv.HardwareType.actuator | gv.HardwareTypeNames,
+            actuator: gv.HardwareType,
             mode: gv.ActuatorModePayload | str = gv.ActuatorModePayload.automatic,
             countdown: float = 0.0,
     ) -> None:
@@ -452,7 +452,7 @@ class Ecosystem:
         """
         validated_actuator: gv.HardwareType = \
             gv.safe_enum_from_name(gv.HardwareType, actuator)
-        assert validated_actuator in gv.HardwareType.actuator
+        assert validated_actuator & gv.HardwareType.actuator
         validated_mode: gv.ActuatorModePayload = \
             gv.safe_enum_from_name(gv.ActuatorModePayload, mode)
         try:
@@ -463,11 +463,12 @@ class Ecosystem:
                         turn_to=validated_mode, countdown=countdown)
                 else:
                     raise ValueError("Light subroutine is not running")
-            elif validated_actuator in gv.HardwareType.climate_actuator:
+            elif validated_actuator & gv.HardwareType.climate_actuator:
                 if self.get_subroutine_status("climate"):
                     climate_subroutine: Climate = self.subroutines["climate"]
+                    actuator_group = cast(str, validated_actuator.name)
                     await climate_subroutine.turn_climate_actuator(
-                        climate_actuator=validated_actuator,
+                        actuator_group=actuator_group,
                         turn_to=validated_mode,
                         countdown=countdown,
                     )
@@ -486,9 +487,9 @@ class Ecosystem:
 
     def get_actuator_handler(
             self,
-            actuator_type: gv.HardwareType.actuator | gv.HardwareTypeNames,
+            actuator_group: str,
     ) -> ActuatorHandler:
-        return self.actuator_hub.get_handler(actuator_type)
+        return self.actuator_hub.get_handler(actuator_group)
 
     # Sensors
     @property

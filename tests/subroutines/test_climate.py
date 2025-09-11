@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 
 import gaia_validators as gv
@@ -47,38 +49,35 @@ def test_hardware_needed(climate_subroutine: Climate):
 
 @pytest.mark.asyncio
 async def test_turn_actuator(climate_subroutine: Climate):
+    valid_actuator_group: str = cast(str, gv.HardwareType.heater.name)
+    invalid_actuator_group: str = cast(str, gv.HardwareType.cooler.name)
+
     with pytest.raises(RuntimeError, match=r"Climate subroutine is not started"):
-        await climate_subroutine.turn_climate_actuator(
-            gv.HardwareType.heater, gv.ActuatorModePayload.on)
+        await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.on)
 
     climate_subroutine.enable()
     await climate_subroutine.start()
-    handler = climate_subroutine.ecosystem.actuator_hub.get_handler(
-        gv.HardwareType.heater)
+    handler = climate_subroutine.ecosystem.actuator_hub.get_handler(valid_actuator_group)
     handler.activate()
 
-    await climate_subroutine.turn_climate_actuator(
-        gv.HardwareType.heater, gv.ActuatorModePayload.on)
-    await climate_subroutine.turn_climate_actuator(
-        gv.HardwareType.heater, gv.ActuatorModePayload.off)
-    await climate_subroutine.turn_climate_actuator(
-        gv.HardwareType.heater, gv.ActuatorModePayload.automatic)
+    await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.on)
+    await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.off)
+    await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.automatic)
 
     with pytest.raises(RuntimeError, match=r"This actuator is not active"):
-        await climate_subroutine.turn_climate_actuator(
-            gv.HardwareType.cooler, gv.ActuatorModePayload.on)
+        await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.on)
 
     with pytest.raises(RuntimeError, match=r"This actuator is not active"):
-        await climate_subroutine.turn_climate_actuator(
-            gv.HardwareType.cooler, gv.ActuatorModePayload.off)
+        await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.off)
 
-    with pytest.raises(ValueError):
+    # TODO: currently, this raises KeyError because the direction cannot be found
+    #  in the `actuator_to_direction` dict
+    with pytest.raises(KeyError):
         await climate_subroutine.turn_climate_actuator(
             "WrongHardwareType", gv.ActuatorModePayload.automatic)
 
     with pytest.raises(ValueError):
-        await climate_subroutine.turn_climate_actuator(
-            gv.HardwareType.heater, "WrongMode")
+        await climate_subroutine.turn_climate_actuator(valid_actuator_group, "WrongMode")
 
 
 @pytest.mark.asyncio

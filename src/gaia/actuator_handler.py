@@ -9,7 +9,7 @@ from functools import partial
 import logging
 import time
 import typing
-from typing import Awaitable, Callable, Literal, NamedTuple, Type
+from typing import Awaitable, cast, Callable, Literal, NamedTuple, Type
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
@@ -130,8 +130,7 @@ class HystericalPID:
         for direction_name, actuator_type in actuator_couple.items():
             if actuator_type is None:
                 continue
-            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(
-                actuator_type)
+            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(actuator_type)
             if actuator_handler.get_linked_actuators():
                 direction = direction | Direction[direction_name]
         self._direction = direction
@@ -719,19 +718,26 @@ class ActuatorHub:
 
     def get_handler(
             self,
-            actuator_type: gv.HardwareType,
+            actuator_group: str | gv.HardwareType,
     ) -> ActuatorHandler:
-        actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
-        assert actuator_type & gv.HardwareType.actuator
+        # TODO: check that `actuator_group` is actually defined in the config
+        if isinstance(actuator_group, gv.HardwareType):
+            assert actuator_group & gv.HardwareType.actuator
+            actuator_group: str = cast(str, actuator_group.name)
         try:
-            return self._actuator_handlers[actuator_type]
+            return self._actuator_handlers[actuator_group]
         except KeyError:
-            direction_name = actuator_to_direction[actuator_type.name]
-            actuator_handler = ActuatorHandler(self, actuator_type, Direction[direction_name])
-            self._actuator_handlers[actuator_type] = actuator_handler
+            try:
+                actuator_type = gv.HardwareType[actuator_group]
+            except KeyError:
+                actuator_type = gv.HardwareType.actuator
+            direction_name = actuator_to_direction[actuator_group]
+            direction = Direction[direction_name]
+            actuator_handler = ActuatorHandler(self, actuator_type, direction, actuator_group)
+            self._actuator_handlers[actuator_group] = actuator_handler
             return actuator_handler
 
-    def as_dict(self) -> dict[gv.HardwareType, gv.ActuatorStateDict]:
+    def as_dict(self) -> dict[str, gv.ActuatorStateDict]:
         default_state_dict = {
             "active": False,
             "status": False,
