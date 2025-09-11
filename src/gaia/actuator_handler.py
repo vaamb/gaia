@@ -14,40 +14,13 @@ from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
+from gaia.config import defaults
 from gaia.hardware.abc import Dimmer, Switch
 
 
 if typing.TYPE_CHECKING:
     from gaia import Ecosystem
     from gaia.database.models import ActuatorBuffer, ActuatorRecord
-
-
-actuator_couples: dict[gv.ClimateParameter: gv.ActuatorCouple] = {
-    gv.ClimateParameter.temperature: gv.ActuatorCouple(
-        increase=gv.HardwareType.heater, decrease=gv.HardwareType.cooler),
-    gv.ClimateParameter.humidity: gv.ActuatorCouple(
-        increase=gv.HardwareType.humidifier, decrease=gv.HardwareType.dehumidifier),
-    gv.ClimateParameter.light: gv.ActuatorCouple(
-        increase=gv.HardwareType.light, decrease=None),
-    gv.ClimateParameter.wind: gv.ActuatorCouple(
-        increase=gv.HardwareType.fan, decrease=None),
-}
-
-
-actuator_to_parameter: dict[str, gv.ClimateParameter] = {
-    actuator: climate_parameter
-    for climate_parameter, actuator_couple in actuator_couples.items()
-    for actuator in actuator_couple
-    if actuator is not None
-}
-
-
-actuator_to_direction: dict[str, Literal["increase", "decrease"]] = {
-    actuator: direction
-    for climate_parameter, actuator_couple in actuator_couples.items()
-    for actuator, direction in zip(actuator_couple, ("increase", "decrease"))
-    if actuator is not None
-}
 
 
 class PIDParameters(NamedTuple):
@@ -126,7 +99,7 @@ class HystericalPID:
         if self._direction is not None:
             return self._direction
         direction: Direction = Direction.none
-        actuator_couple: gv.ActuatorCouple = actuator_couples[self.climate_parameter]
+        actuator_couple: gv.ActuatorCouple = defaults.actuator_couples[self.climate_parameter]
         for direction_name, actuator_type in actuator_couple.items():
             if actuator_type is None:
                 continue
@@ -355,7 +328,7 @@ class ActuatorHandler:
         pid.reset_direction()
 
     def get_associated_pid(self) -> HystericalPID:
-        climate_parameter = actuator_to_parameter[self.type.name]
+        climate_parameter = defaults.actuator_to_parameter[self.type.name]
         return self.actuator_hub.get_pid(climate_parameter)
 
     def as_dict(self) -> gv.ActuatorStateDict:
@@ -731,7 +704,7 @@ class ActuatorHub:
                 actuator_type = gv.HardwareType[actuator_group]
             except KeyError:
                 actuator_type = gv.HardwareType.actuator
-            direction_name = actuator_to_direction[actuator_group]
+            direction_name = defaults.actuator_to_direction[actuator_group]
             direction = Direction[direction_name]
             actuator_handler = ActuatorHandler(self, actuator_type, direction, actuator_group)
             self._actuator_handlers[actuator_group] = actuator_handler
@@ -746,7 +719,7 @@ class ActuatorHub:
         }
 
         rv = {}
-        for actuator_type in actuator_to_parameter.keys():
+        for actuator_type in defaults.actuator_to_parameter.keys():
             if actuator_type in self._actuator_handlers:
                 rv[actuator_type] = self._actuator_handlers[actuator_type].as_dict()
             else:
@@ -771,7 +744,7 @@ class ActuatorHub:
             )
 
         rv = []
-        for actuator_str in actuator_to_parameter.keys():
+        for actuator_str in defaults.actuator_to_parameter.keys():
             if actuator_str in self._actuator_handlers:
                 rv.append(self._actuator_handlers[actuator_str].as_record(now))
             else:
