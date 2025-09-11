@@ -2,5 +2,6 @@ from __future__ import annotations
 
 from gaia.config._utils import configure_logging, GaiaConfig, GaiaConfigHelper
 from gaia.config.base import BaseConfig
+from gaia.config import defaults
 from gaia.config.from_files import (
     CacheType, ConfigType, EcosystemConfig, EngineConfig, get_IDs as get_ecosystem_IDs)
