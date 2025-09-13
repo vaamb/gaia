@@ -3,7 +3,7 @@ from typing import Literal
 import gaia_validators as gv
 
 
-actuator_couples: dict[gv.ClimateParameter: gv.ActuatorCouple] = {
+actuator_couples: dict[gv.ClimateParameter, gv.ActuatorCouple] = {
     gv.ClimateParameter.temperature: gv.ActuatorCouple(
         increase=gv.HardwareType.heater, decrease=gv.HardwareType.cooler),
     gv.ClimateParameter.humidity: gv.ActuatorCouple(
