@@ -1478,6 +1478,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.environment["climate"] = {}
             return self.environment["climate"]
 
+    def has_climate_parameter(self, parameter: str | gv.ClimateParameter) -> bool:
+        parameter: gv.ClimateParameter = safe_enum_from_name(gv.ClimateParameter, parameter)
+        return parameter in self.climate
+
     def get_climate_parameter(
             self,
             parameter: str | gv.ClimateParameter,
