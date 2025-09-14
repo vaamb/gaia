@@ -132,7 +132,10 @@ humidity_cfg: gv.AnonymousClimateConfigDict = {
     "night": 40.0,
     "hysteresis": 5.0,
     "alarm": None,
-    "linked_actuators": None,
+    "linked_actuators": {
+        "increase": "fogger",
+        "decrease": "dehumidifier",
+    },
 }
 
 
@@ -141,10 +144,7 @@ wind_cfg: gv.AnonymousClimateConfigDict = {
     "night": 15.0,
     "hysteresis": 2.0,
     "alarm": None,
-    "linked_actuators": {
-        "increase": "wind_up",
-        "decrease": "wind_down",
-    },
+    "linked_actuators": None,
 }
 
 
