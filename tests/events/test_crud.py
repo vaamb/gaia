@@ -563,9 +563,11 @@ async def test_update_hardware(events_handler: Events):
     data_update: list[gv.HardwareConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
-    hardware: gv.HardwareConfig = verified.data[2]
-    assert hardware.address == valid_hardware_info["address"]
-    assert hardware.model == valid_hardware_info["model"]
+    for hardware in verified.data:
+        if hardware.uid != hardware_uid:
+            continue
+        assert hardware.address == valid_hardware_info["address"]
+        assert hardware.model == valid_hardware_info["model"]
 
 
 @pytest.mark.asyncio
