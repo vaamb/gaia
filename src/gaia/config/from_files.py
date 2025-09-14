@@ -23,7 +23,8 @@ from pydantic import Field, field_validator, model_serializer, RootModel
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
 
-from gaia.config import BaseConfig, configure_logging, GaiaConfig, GaiaConfigHelper
+from gaia.config import (
+    BaseConfig, configure_logging, defaults, GaiaConfig, GaiaConfigHelper)
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, PlantNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
@@ -1484,12 +1485,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             data = self.climate[parameter]
-            return gv.ClimateConfig(parameter=parameter, **data)
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
             )
+        else:
+            return gv.ClimateConfig(parameter=parameter, **data)
 
     def set_climate_parameter(
             self,
@@ -1530,6 +1532,27 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
+
+    def get_linked_actuators(
+            self,
+            climate_parameter: str | gv.ClimateParameter,
+    ) -> gv.ActuatorCouple:
+        climate_cfg = self.get_climate_parameter(climate_parameter)
+        if climate_cfg.linked_actuators is None:
+            return defaults.actuator_couples[climate_parameter]
+        return climate_cfg.linked_actuators
+
+    def get_valid_actuator_groups(self) -> set[str]:
+        rv = set()
+        for parameter in gv.ClimateParameter:
+            try:
+                actuators = self.get_linked_actuators(parameter)
+            except UndefinedParameter:
+                actuators = defaults.actuator_couples[parameter]
+            rv.update([actuators.increase, actuators.decrease])
+        if None in rv:
+            rv.remove(None)
+        return rv
 
     """Parameters related to IO"""
     @property
