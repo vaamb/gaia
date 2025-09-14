@@ -1533,7 +1533,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
 
-    def get_linked_actuators(
+    def get_linked_actuator_group(
             self,
             climate_parameter: str | gv.ClimateParameter,
     ) -> gv.ActuatorCouple:
@@ -1546,7 +1546,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         rv = set()
         for parameter in gv.ClimateParameter:
             try:
-                actuators = self.get_linked_actuators(parameter)
+                actuators = self.get_linked_actuator_group(parameter)
             except UndefinedParameter:
                 actuators = defaults.actuator_couples[parameter]
             rv.update([actuators.increase, actuators.decrease])
