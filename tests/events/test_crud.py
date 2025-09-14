@@ -3,6 +3,7 @@ from datetime import time
 import pytest
 
 import gaia_validators as gv
+from gaia_validators import safe_enum_from_name
 
 from gaia.events import Events as Events_
 
@@ -369,9 +370,9 @@ async def test_create_climate_parameter(events_handler: Events):
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
 
-    # There are several climate parameters, only checked the updated one
     for data in verified.data:
-        if data.parameter != parameter:
+        # Some other parameters were already present in the config
+        if data.parameter.name in climate_dict:
             continue
         assert data.parameter == parameter
         assert data.day == day
@@ -437,9 +438,9 @@ async def test_update_climate_parameter(events_handler: Events):
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
 
-    # There are several climate parameters, only checked the updated one
     for data in verified.data:
-        if data.parameter != parameter:
+        # Some other parameters were already present in the config
+        if data.parameter.name in climate_dict:
             continue
         assert data.parameter == parameter
         assert data.day == day
