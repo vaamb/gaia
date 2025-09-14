@@ -127,6 +127,33 @@ IO_dict = {
 }
 
 
+humidity_cfg: gv.AnonymousClimateConfigDict = {
+    "day": 45.0,
+    "night": 40.0,
+    "hysteresis": 5.0,
+    "alarm": None,
+    "linked_actuators": None,
+}
+
+
+wind_cfg: gv.AnonymousClimateConfigDict = {
+    "day": 75.0,
+    "night": 15.0,
+    "hysteresis": 2.0,
+    "alarm": None,
+    "linked_actuators": {
+        "increase": "wind_up",
+        "decrease": "wind_down",
+    },
+}
+
+
+climate_dict: dict[str, gv.AnonymousClimateConfigDict] = {
+    "humidity": humidity_cfg,
+    "wind": wind_cfg,
+}
+
+
 ecosystem_info = {
     ecosystem_uid: {
         "name": ecosystem_name,
@@ -152,7 +179,7 @@ ecosystem_info = {
                 "night": lighting_stop,
                 "lighting": lighting_method,
             },
-            "climate": {},
+            "climate": climate_dict,
         },
         "IO": IO_dict,
         "plants": {},

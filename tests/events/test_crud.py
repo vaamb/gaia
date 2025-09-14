@@ -6,7 +6,8 @@ import gaia_validators as gv
 
 from gaia.events import Events as Events_
 
-from ..data import ecosystem_uid, engine_uid, hardware_info, hardware_uid, IO_dict
+from ..data import (
+    climate_dict, ecosystem_uid, engine_uid, hardware_info, hardware_uid, IO_dict)
 from ..utils import get_logs_content, MockDispatcher
 
 
@@ -367,11 +368,15 @@ async def test_create_climate_parameter(events_handler: Events):
     data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
-    environment_parameter = verified.data[0]
-    assert environment_parameter.parameter == parameter
-    assert environment_parameter.day == day
-    assert environment_parameter.night == night
-    assert environment_parameter.hysteresis == hysteresis
+
+    # There are several climate parameters, only checked the updated one
+    for data in verified.data:
+        if data.parameter != parameter:
+            continue
+        assert data.parameter == parameter
+        assert data.day == day
+        assert data.night == night
+        assert data.hysteresis == hysteresis
 
 
 @pytest.mark.asyncio
@@ -431,11 +436,15 @@ async def test_update_climate_parameter(events_handler: Events):
     data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
-    environment_parameter = verified.data[0]
-    assert environment_parameter.parameter == parameter
-    assert environment_parameter.day == day
-    assert environment_parameter.night == night
-    assert environment_parameter.hysteresis == hysteresis
+
+    # There are several climate parameters, only checked the updated one
+    for data in verified.data:
+        if data.parameter != parameter:
+            continue
+        assert data.parameter == parameter
+        assert data.day == day
+        assert data.night == night
+        assert data.hysteresis == hysteresis
 
 
 @pytest.mark.asyncio
@@ -479,7 +488,7 @@ async def test_delete_climate_parameter(events_handler: Events):
     data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
-    assert len(verified.data) == 0
+    assert len(verified.data) == len(climate_dict)
 
 
 @pytest.mark.asyncio
