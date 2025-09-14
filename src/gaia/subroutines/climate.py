@@ -173,10 +173,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             return {}
 
         # Check if climate parameters are available in the config file
-        for climate_param in regulated_parameters:
-            try:
-                self.config.get_climate_parameter(climate_param.name)
-            except UndefinedParameter:
+        for climate_param in [*regulated_parameters]:
+            if not self.config.has_climate_parameter(climate_param):
                 regulated_parameters.remove(climate_param)
         if not regulated_parameters:
             self.logger.warning("No climate parameter found.")
