@@ -21,6 +21,7 @@ sensor_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualDHT22",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
+    "groups": None,
     "measures": ["temperature", "humidity"],
     "plants": [],
     "multiplexer_model": None,
@@ -34,6 +35,7 @@ i2c_sensor_veml7700_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualVEML7700",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
+    "groups": None,
     "measures": ["light"],
     "plants": [],
     "multiplexer_model": "TCA9548A",
@@ -47,6 +49,7 @@ ir2c_sensor_ens160_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualENS160",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
+    "groups": None,
     "measures": ["light"],
     "plants": [],
     "multiplexer_model": "TCA9548A",
@@ -60,6 +63,7 @@ light_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualgpioDimmable",
     "type": gv.HardwareType.light,
     "level": gv.HardwareLevel.environment,
+    "groups": None,
     "measures": [],
     "plants": [],
     "multiplexer_model": None,
@@ -73,6 +77,21 @@ heater_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualgpioDimmable",
     "type": gv.HardwareType.heater,
     "level": gv.HardwareLevel.environment,
+    "groups": None,
+    "measures": [],
+    "plants": [],
+    "multiplexer_model": None,
+}
+
+
+humidifier_uid = "QsyOTQEyAgmGDvTk"
+humidifier_info: gv.AnonymousHardwareConfigDict = {
+    "name": "VirtualHumidifier",
+    "address": "GPIO_20",
+    "model": "virtualgpioSwitch",
+    "type": gv.HardwareType.humidifier,
+    "level": gv.HardwareLevel.environment,
+    "groups": ["fogger"],
     "measures": [],
     "plants": [],
     "multiplexer_model": None,
@@ -86,6 +105,7 @@ camera_info: gv.AnonymousHardwareConfigDict = {
     "model": "PiCamera",
     "type": gv.HardwareType.camera,
     "level": gv.HardwareLevel.environment,
+    "groups": None,
     "measures": ["mpri"],
     "plants": [],
     "multiplexer_model": None,
@@ -94,6 +114,17 @@ camera_info: gv.AnonymousHardwareConfigDict = {
 
 hardware_uid = sensor_uid
 hardware_info = sensor_info
+
+
+IO_dict = {
+    sensor_uid: sensor_info,
+    i2c_sensor_veml7700_uid: i2c_sensor_veml7700_info,
+    i2c_sensor_ens160_uid: ir2c_sensor_ens160_info,
+    light_uid: light_info,
+    heater_uid: heater_info,
+    humidifier_uid: humidifier_info,
+    camera_uid: camera_info,
+}
 
 
 plant_uid = "bQE9vYe46B0maQ91"
@@ -115,16 +146,6 @@ sun_times = {
 lighting_start = time(8, 00)
 lighting_stop = time(20, 00)
 lighting_method = gv.LightingMethod.fixed
-
-
-IO_dict = {
-    light_uid: light_info,
-    heater_uid: heater_info,
-    sensor_uid: sensor_info,
-    i2c_sensor_veml7700_uid: i2c_sensor_veml7700_info,
-    i2c_sensor_ens160_uid: ir2c_sensor_ens160_info,
-    camera_uid: camera_info,
-}
 
 
 humidity_cfg: gv.AnonymousClimateConfigDict = {

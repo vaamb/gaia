@@ -8,11 +8,14 @@ from gaia import Ecosystem
 from gaia.subroutines.sensors import Sensors
 from gaia.subroutines.climate import Climate
 
-from ..data import heater_uid
+from ..data import heater_uid, humidifier_uid
 
 
 @pytest.mark.asyncio
 async def test_manageable(ecosystem: Ecosystem, climate_subroutine: Climate):
+    # Save config
+    climate_config = ecosystem.config.climate
+
     assert climate_subroutine.manageable
 
     # Make sure sensors subroutine is required
@@ -23,7 +26,7 @@ async def test_manageable(ecosystem: Ecosystem, climate_subroutine: Climate):
     assert climate_subroutine.manageable
 
     # Make sure a climate parameter is needed
-    climate_subroutine.ecosystem.config.delete_climate_parameter("temperature")
+    ecosystem.config.environment["climate"] = {}
     assert not climate_subroutine.manageable
 
     climate_subroutine.ecosystem.config.set_climate_parameter(
@@ -35,6 +38,9 @@ async def test_manageable(ecosystem: Ecosystem, climate_subroutine: Climate):
     await ecosystem.refresh_hardware()
     assert not climate_subroutine.manageable
 
+    # Restore config
+    ecosystem.config.environment["climate"] = climate_config
+
 
 def test_target(climate_subroutine: Climate):
     # TODO
@@ -44,7 +50,7 @@ def test_target(climate_subroutine: Climate):
 def test_hardware_needed(climate_subroutine: Climate):
     climate_subroutine.compute_expected_actuators()
     uids = climate_subroutine.get_hardware_needed_uid()
-    assert uids == {heater_uid}
+    assert uids == {heater_uid, humidifier_uid}
 
 
 @pytest.mark.asyncio
@@ -94,7 +100,7 @@ async def test_regulated_parameters(climate_subroutine: Climate):
     climate_subroutine.enable()
     await climate_subroutine.start()
     parameters = climate_subroutine.regulated_parameters
-    assert parameters == ["temperature"]  # depends on hardware available
+    assert set(parameters) == {gv.ClimateParameter.temperature, gv.ClimateParameter.humidity}  # depends on hardware available
 
 
 @pytest.mark.asyncio
