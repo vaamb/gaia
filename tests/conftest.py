@@ -299,7 +299,7 @@ async def events_handler(
     events_handler = Events(ecosystem.engine)
     mock_dispatcher.register_event_handler(events_handler)
     ecosystem.engine.event_handler = events_handler
-
+    mock_dispatcher.clear_store()
     try:
         yield events_handler
     finally:

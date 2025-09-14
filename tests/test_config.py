@@ -285,6 +285,31 @@ class TestEcosystemConfigClimate:
         with pytest.raises(UndefinedParameter):
             ecosystem_config.delete_climate_parameter("temperature")
 
+    def test_get_linked_actuators(self, ecosystem_config: EcosystemConfig):
+        # Test with a parameter that has an actuator override
+        linked_actuators = ecosystem_config.get_linked_actuators(gv.ClimateParameter.wind)
+        assert linked_actuators.increase == "wind_up"
+        assert linked_actuators.decrease == "wind_down"
+
+        # Test with a parameter that uses default actuators
+        linked_actuators = ecosystem_config.get_linked_actuators(gv.ClimateParameter.humidity)
+        assert linked_actuators.increase == "humidifier"
+        assert linked_actuators.decrease == "dehumidifier"
+
+        # Test with an unused parameter
+        with pytest.raises(UndefinedParameter):
+            ecosystem_config.get_linked_actuators(gv.ClimateParameter.light)
+
+    def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
+        valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()
+
+        assert valid_actuator_groups == {
+            # Overridden
+            "wind_up", "wind_down",
+            # Default
+            "heater", "cooler", "humidifier", "dehumidifier", "light",
+        }
+
 
 class TestEcosystemConfigHardware:
     def test_create_fail_address(self, ecosystem_config: EcosystemConfig):
