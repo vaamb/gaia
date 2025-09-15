@@ -1,3 +1,4 @@
+from datetime import time
 from typing import cast
 
 import pytest
@@ -8,7 +9,7 @@ from gaia import Ecosystem
 from gaia.subroutines.sensors import Sensors
 from gaia.subroutines.climate import Climate
 
-from ..data import heater_uid, humidifier_uid
+from ..data import heater_uid, humidifier_uid, temperature_cfg
 
 
 @pytest.mark.asyncio
@@ -43,12 +44,18 @@ async def test_manageable(ecosystem: Ecosystem, climate_subroutine: Climate):
 
 
 def test_target(climate_subroutine: Climate):
-    # TODO
-    pass
+    day = time(hour=12)
+    target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, day)
+    assert target[0] == temperature_cfg["day"]
+    assert target[1] == temperature_cfg["hysteresis"]
+
+    night = time(hour=22)
+    target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, night)
+    assert target[0] == temperature_cfg["night"]
+    assert target[1] == temperature_cfg["hysteresis"]
 
 
 def test_hardware_needed(climate_subroutine: Climate):
-    climate_subroutine.compute_expected_actuators()
     uids = climate_subroutine.get_hardware_needed_uid()
     assert uids == {heater_uid, humidifier_uid}
 
@@ -133,8 +140,9 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
     climate_subroutine.enable()
     await climate_subroutine.start()
 
-    climate_subroutine.compute_expected_actuators()
+    assert climate_subroutine.ecosystem.climate_parameters_regulated() == {
+        gv.ClimateParameter.temperature,
+        gv.ClimateParameter.humidity,
+    }
 
     await climate_subroutine.routine()
-
-    assert climate_subroutine.ecosystem.climate_parameters_regulated()

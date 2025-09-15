@@ -169,7 +169,17 @@ wind_cfg: gv.AnonymousClimateConfigDict = {
 }
 
 
+temperature_cfg: gv.AnonymousClimateConfigDict = {
+    "day": 42.0,
+    "night": 21.0,
+    "hysteresis": 2.0,
+    "alarm": None,
+    "linked_actuators": None,
+}
+
+
 climate_dict: dict[str, gv.AnonymousClimateConfigDict] = {
+    # Temperature is injected to the climate subroutine
     "humidity": humidity_cfg,
     "wind": wind_cfg,
 }
