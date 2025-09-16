@@ -296,7 +296,7 @@ class ActuatorHandler:
         self.direction: Direction = actuator_direction
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
-            f"gaia.engine.{eco_name}.actuators.{self.type.name}")
+            f"gaia.engine.{eco_name}.actuators.{self.group}")
         self._active: int = 0
         self._status: bool = False
         self._level: float | None = None
@@ -311,14 +311,14 @@ class ActuatorHandler:
 
     def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
-        return f"ActuatorHandler({uid}, actuator_type={self.type.name})"
+        return f"ActuatorHandler({uid}, actuator_group={self.group})"
 
     def get_linked_actuators(self) -> list[Switch | Dimmer]:
         if self._actuators is None:
             self._actuators = [
                 hardware
                 for hardware in self.ecosystem.hardware.values()
-                if self.type.name in hardware.groups
+                if self.group in hardware.groups
             ]
         return self._actuators
 
@@ -422,7 +422,7 @@ class ActuatorHandler:
         self._set_mode(validated_value)
         self._any_status_change = True
         self.logger.info(
-            f"{self.type.name.capitalize()} has been set to "
+            f"{self.group.capitalize()} has been set to "
             f"'{self.mode.name}' mode.")
 
     def _set_mode(self, value: gv.ActuatorMode) -> None:
@@ -442,7 +442,7 @@ class ActuatorHandler:
         await self._set_status(value)
         self._any_status_change = True
         self.logger.info(
-            f"{self.type.name.capitalize()} has been turned "
+            f"{self.group.capitalize()} has been turned "
             f"{'on' if self.status else 'off'}.")
 
     async def _set_status(self, value: bool) -> None:
@@ -450,7 +450,7 @@ class ActuatorHandler:
         actuators_linked = self.get_linked_actuators()
         if not actuators_linked:
             raise RuntimeError(
-                f"{self.type.name.capitalize()} handler cannot be turned "
+                f"{self.group.capitalize()} handler cannot be turned "
                 f"{'on' if self.status else 'off'} as it has no actuator linked "
                 f"to it."
             )
@@ -478,7 +478,7 @@ class ActuatorHandler:
         await self._set_level(pwm_level)
         #self._any_status_change = True
         self.logger.debug(
-            f"{self.type.name.capitalize()}'s level has been set to {pwm_level}%.")
+            f"{self.group.capitalize()}'s level has been set to {pwm_level}%.")
 
     async def _set_level(self, pwm_level: float) -> None:
         self._level = pwm_level
@@ -535,7 +535,7 @@ class ActuatorHandler:
                 await self.set_status(False)
         if self._any_status_change:
             self.logger.info(
-                f"{self.type.name.capitalize()} has been turned to "
+                f"{self.group.capitalize()} has been turned to "
                 f"'{turn_to.name}'.")
 
     async def _transactional_turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
@@ -552,13 +552,13 @@ class ActuatorHandler:
             gv.ActuatorModePayload, turn_to)
         if self._timer is not None:
             self.logger.warning(
-                f"{self.type.name.capitalize()}'s timer already set, resetting "
+                f"{self.group.capitalize()}'s timer already set, resetting "
                 f"it for {turn_to.name}."
             )
             self.reset_timer()
         if countdown:
             self.logger.info(
-                f"{self.type.name.capitalize()} will be turned to "
+                f"{self.group.capitalize()} will be turned to "
                 f"'{turn_to.name}' in {countdown} seconds.")
             callback = partial(self._transactional_turn_to, turn_to)
             self._timer = Timer(callback, countdown)
@@ -639,7 +639,7 @@ class ActuatorHandler:
                 "will be cancelled to start a new one."
             )
             self._sending_data_task.cancel()
-        task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_data"
+        task_name = f"{self.ecosystem.uid}-{self.group}_actuator-send_data"
         self._sending_data_task = asyncio.create_task(
             self.send_actuator_state(data), name=task_name)
 
