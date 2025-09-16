@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import typing as t
-from typing import cast, Type, TypedDict, TypeVar
+from typing import cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -1536,6 +1536,25 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
+
+    def get_actuator_couples(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+        return {
+            **defaults.actuator_couples,
+            **{
+                climate_parameter: gv.ActuatorCouple(
+                    increase=climate_cfg["linked_actuators"]["increase"],
+                    decrease=climate_cfg["linked_actuators"]["decrease"],
+                )
+                for climate_parameter, climate_cfg in self.climate.items()
+                if climate_cfg["linked_actuators"] is not None
+            }
+        }
+
+    def get_actuator_to_parameter(self) -> dict[str, gv.ClimateParameter]:
+        return defaults.get_actuator_to_parameter(self.get_actuator_couples())
+
+    def get_actuator_to_direction(self) -> dict[str, Literal["increase", "decrease"]]:
+        return defaults.get_actuator_to_direction(self.get_actuator_couples())
 
     def get_linked_actuator_group(
             self,
