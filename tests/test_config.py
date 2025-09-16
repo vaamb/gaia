@@ -285,20 +285,18 @@ class TestEcosystemConfigClimate:
         with pytest.raises(UndefinedParameter):
             ecosystem_config.delete_climate_parameter("temperature")
 
-    def test_get_linked_actuators(self, ecosystem_config: EcosystemConfig):
+    def test_actuator_couples(self, ecosystem_config: EcosystemConfig):
+        actuator_couples = ecosystem_config.get_actuator_couples()
+
         # Test with a parameter that has an actuator override
-        linked_actuators = ecosystem_config.get_linked_actuator_group(gv.ClimateParameter.humidity)
-        assert linked_actuators.increase == "fogger"
-        assert linked_actuators.decrease == "dehumidifier"
+        actuator_couple = actuator_couples[gv.ClimateParameter.humidity]
+        assert actuator_couple.increase == "fogger"
+        assert actuator_couple.decrease == "dehumidifier"
 
         # Test with a parameter that uses default actuators
-        linked_actuators = ecosystem_config.get_linked_actuator_group(gv.ClimateParameter.wind)
-        assert linked_actuators.increase == "fan"
-        assert linked_actuators.decrease is None
-
-        # Test with an unused parameter
-        with pytest.raises(UndefinedParameter):
-            ecosystem_config.get_linked_actuator_group(gv.ClimateParameter.light)
+        actuator_couple = actuator_couples[gv.ClimateParameter.wind]
+        assert actuator_couple.increase == "fan"
+        assert actuator_couple.decrease is None
 
     def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
         valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()

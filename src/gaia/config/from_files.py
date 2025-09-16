@@ -1556,26 +1556,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def get_actuator_to_direction(self) -> dict[str, Literal["increase", "decrease"]]:
         return defaults.get_actuator_to_direction(self.get_actuator_couples())
 
-    def get_linked_actuator_group(
-            self,
-            climate_parameter: str | gv.ClimateParameter,
-    ) -> gv.ActuatorCouple:
-        climate_cfg = self.get_climate_parameter(climate_parameter)
-        if climate_cfg.linked_actuators is None:
-            return defaults.actuator_couples[climate_parameter]
-        return climate_cfg.linked_actuators
-
     def get_valid_actuator_groups(self) -> set[str]:
-        rv = set()
-        for parameter in gv.ClimateParameter:
-            try:
-                actuators = self.get_linked_actuator_group(parameter)
-            except UndefinedParameter:
-                actuators = defaults.actuator_couples[parameter]
-            rv.update([actuators.increase, actuators.decrease])
-        if None in rv:
-            rv.remove(None)
-        return rv
+        return {
+            actuator_group
+            for actuator_group in self.get_actuator_to_parameter().values()
+        }
 
     """Parameters related to IO"""
     @property
