@@ -60,6 +60,17 @@ def test_hardware_needed(climate_subroutine: Climate):
     assert uids == {heater_uid, humidifier_uid}
 
 
+def test_expected_actuators(climate_subroutine: Climate):
+    expected_actuators = climate_subroutine.compute_expected_actuators()
+
+    assert expected_actuators == {
+        # Default actuator
+        "heater": gv.ClimateParameter.temperature,
+        # Overridden actuator
+        "fogger": gv.ClimateParameter.humidity,
+    }
+
+
 @pytest.mark.asyncio
 async def test_turn_actuator(climate_subroutine: Climate):
     valid_actuator_group: str = cast(str, gv.HardwareType.heater.name)
@@ -144,5 +155,5 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
         gv.ClimateParameter.temperature,
         gv.ClimateParameter.humidity,
     }
-
+    x = 1
     await climate_subroutine.routine()

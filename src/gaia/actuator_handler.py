@@ -99,7 +99,8 @@ class HystericalPID:
         if self._direction is not None:
             return self._direction
         direction: Direction = Direction.none
-        actuator_couple: gv.ActuatorCouple = defaults.actuator_couples[self.climate_parameter]
+        actuator_couples = self.actuator_hub.ecosystem.config.get_actuator_couples()
+        actuator_couple: gv.ActuatorCouple = actuator_couples[self.climate_parameter]
         for direction_name, actuator_type in actuator_couple.items():
             if actuator_type is None:
                 continue
@@ -328,7 +329,8 @@ class ActuatorHandler:
         pid.reset_direction()
 
     def get_associated_pid(self) -> HystericalPID:
-        climate_parameter = defaults.actuator_to_parameter[self.type.name]
+        actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
+        climate_parameter = actuator_to_parameter[self.group]
         return self.actuator_hub.get_pid(climate_parameter)
 
     def as_dict(self) -> gv.ActuatorStateDict:
@@ -704,7 +706,8 @@ class ActuatorHub:
                 actuator_type = gv.HardwareType[actuator_group]
             except KeyError:
                 actuator_type = gv.HardwareType.actuator
-            direction_name = defaults.actuator_to_direction[actuator_group]
+            actuator_to_direction = self.ecosystem.config.get_actuator_to_direction()
+            direction_name = actuator_to_direction[actuator_group]
             direction = Direction[direction_name]
             actuator_handler = ActuatorHandler(self, actuator_type, direction, actuator_group)
             self._actuator_handlers[actuator_group] = actuator_handler
