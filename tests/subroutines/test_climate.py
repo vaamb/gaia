@@ -151,9 +151,21 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
     climate_subroutine.enable()
     await climate_subroutine.start()
 
-    assert climate_subroutine.ecosystem.climate_parameters_regulated() == {
+    assert set(climate_subroutine.regulated_parameters) == {
         gv.ClimateParameter.temperature,
         gv.ClimateParameter.humidity,
     }
-    x = 1
+
+    assert set(climate_subroutine.actuator_handlers) == {
+        "heater",
+        "fogger",
+    }
+
+    assert set(climate_subroutine.pids) == {
+        gv.ClimateParameter.temperature,
+        gv.ClimateParameter.humidity,
+    }
+
     await climate_subroutine.routine()
+
+    await climate_subroutine.refresh()
