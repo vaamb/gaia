@@ -1559,7 +1559,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def get_valid_actuator_groups(self) -> set[str]:
         return {
             actuator_group
-            for actuator_group in self.get_actuator_to_parameter().values()
+            for actuator_group in self.get_actuator_to_parameter().keys()
         }
 
     """Parameters related to IO"""
