@@ -382,9 +382,9 @@ async def test_create_climate_parameter(events_handler: Events):
 
 @pytest.mark.asyncio
 async def test_update_climate_parameter_failure(events_handler: Events):
-    parameter = gv.ClimateParameter.temperature
-    day = 10.0
-    night = 15.0
+    parameter = gv.ClimateParameter.light
+    day = 100000.0
+    night = 0.0
     hysteresis = None
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
@@ -402,12 +402,12 @@ async def test_update_climate_parameter_failure(events_handler: Events):
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
-    assert "No climate parameter temperature was found" in result_msg["message"]
+    assert "No climate parameter light was found" in result_msg["message"]
 
 
 @pytest.mark.asyncio
 async def test_update_climate_parameter(events_handler: Events):
-    parameter = gv.ClimateParameter.temperature
+    parameter = gv.ClimateParameter.light
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
         parameter=parameter,
         day=42.0,
@@ -450,7 +450,7 @@ async def test_update_climate_parameter(events_handler: Events):
 
 @pytest.mark.asyncio
 async def test_delete_climate_parameter_failure(events_handler: Events):
-    parameter = gv.ClimateParameter.temperature
+    parameter = gv.ClimateParameter.light
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
@@ -462,17 +462,17 @@ async def test_delete_climate_parameter_failure(events_handler: Events):
 
     result_msg = events_handler._dispatcher.emit_store[0]["data"]
     assert result_msg["status"] == gv.Result.failure
-    assert "No climate parameter temperature was found" in result_msg["message"]
+    assert "No climate parameter light was found" in result_msg["message"]
 
 
 @pytest.mark.asyncio
 async def test_delete_climate_parameter(events_handler: Events):
-    parameter = gv.ClimateParameter.temperature
+    parameter = gv.ClimateParameter.light
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
         parameter=parameter,
-        day=42.0,
-        night=21.0,
-        hysteresis=3.14,
+        day=250000.0,
+        night=0.0,
+        hysteresis=10000,
     )
 
     message = gv.CrudPayloadDict = gv.CrudPayload(

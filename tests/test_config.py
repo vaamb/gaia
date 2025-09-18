@@ -272,18 +272,18 @@ class TestEcosystemConfigClimate:
 
     def test_climate_parameters(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.get_climate_parameter("temperature")
+            ecosystem_config.get_climate_parameter("light")
         with pytest.raises(ValueError):
-            ecosystem_config.set_climate_parameter("temperature", wrong="value")
+            ecosystem_config.set_climate_parameter("light", wrong="value")
 
-        parameters = {"day": 25, "night": 20, "hysteresis": 1}
-        ecosystem_config.set_climate_parameter("temperature", **parameters)
-        assert ecosystem_config.get_climate_parameter("temperature") == gv.ClimateConfig(
-            parameter="temperature", **parameters)
+        parameters = {"day": 250000, "night": 0, "hysteresis": 10000}
+        ecosystem_config.set_climate_parameter("light", **parameters)
+        assert ecosystem_config.get_climate_parameter("light") == gv.ClimateConfig(
+            parameter="light", **parameters)
 
-        ecosystem_config.delete_climate_parameter("temperature")
+        ecosystem_config.delete_climate_parameter("light")
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.delete_climate_parameter("temperature")
+            ecosystem_config.delete_climate_parameter("light")
 
     def test_actuator_couples(self, ecosystem_config: EcosystemConfig):
         actuator_couples = ecosystem_config.get_actuator_couples()

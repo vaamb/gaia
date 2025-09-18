@@ -148,6 +148,15 @@ lighting_stop = time(20, 00)
 lighting_method = gv.LightingMethod.fixed
 
 
+temperature_cfg: gv.AnonymousClimateConfigDict = {
+    "day": 42.0,
+    "night": 21.0,
+    "hysteresis": 2.0,
+    "alarm": None,
+    "linked_actuators": None,
+}
+
+
 humidity_cfg: gv.AnonymousClimateConfigDict = {
     "day": 45.0,
     "night": 40.0,
@@ -169,17 +178,8 @@ wind_cfg: gv.AnonymousClimateConfigDict = {
 }
 
 
-temperature_cfg: gv.AnonymousClimateConfigDict = {
-    "day": 42.0,
-    "night": 21.0,
-    "hysteresis": 2.0,
-    "alarm": None,
-    "linked_actuators": None,
-}
-
-
 climate_dict: dict[str, gv.AnonymousClimateConfigDict] = {
-    # Temperature is injected to the climate subroutine
+    "temperature": temperature_cfg,
     "humidity": humidity_cfg,
     "wind": wind_cfg,
 }

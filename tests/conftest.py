@@ -184,15 +184,9 @@ async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
 async def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
     climate_subroutine: Climate = ecosystem.subroutines["climate"]
 
-    # Sensors subroutine is required ...
+    # Sensors subroutine is required
     await ecosystem.enable_subroutine("sensors")
     await ecosystem.start_subroutine("sensors")
-
-    # ... as well as a climate parameter
-    ecosystem.config.set_climate_parameter(
-        "temperature",
-        **temperature_cfg
-    )
 
     try:
         yield climate_subroutine
