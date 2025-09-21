@@ -200,7 +200,7 @@ class SensorBuffer(BaseSensorRecord, DataBufferMixin):
         )
 
 
-def _get_actuator_group(context):
+def _get_actuator_group(context) -> str:
     params = context.get_current_parameters()
     return str(params["type"])
 
