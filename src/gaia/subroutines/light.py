@@ -125,7 +125,8 @@ class Light(SubroutineTemplate[Switch]):
 
     """Routine specific methods"""
     def get_actuator_handler(self) -> ActuatorHandler:
-        actuator_group = cast(str, gv.HardwareType.light.name)
+        actuator_couples = self.config.get_actuator_couples()
+        actuator_group: str = actuator_couples[gv.ClimateParameter.light].increase
         return self.ecosystem.actuator_hub.get_handler(actuator_group)
 
     @property
