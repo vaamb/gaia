@@ -189,7 +189,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
         # Check if sensors taking regulated params are available
         for climate_param in regulated_parameters:
-            if climate_param.name not in measures:
+            measure = self._get_measure_for_parameter(climate_param)
+            if measure not in measures:
                 regulated_parameters.remove(climate_param)
         if not regulated_parameters:
             self.logger.debug("No sensor measuring regulated parameters detected.")
@@ -228,6 +229,13 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             return True
         return False
 
+    def _get_measure_for_parameter(self, parameter: gv.ClimateParameter) -> str:
+        climate_cfg = self.config.get_climate_parameter(parameter)
+        return (
+            climate_cfg.linked_measure
+            if climate_cfg.linked_measure else parameter.name
+        )
+
     async def _get_sensors_average(self) -> dict[str, float]:
         # Get the sensors average
         prior_sensor_miss = self._sensor_miss
@@ -251,7 +259,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         # Make sure we have sensors data for all the regulated parameters
         missing_parameter: bool = False
         for climate_parameter in self.regulated_parameters:
-            if not sensors_average.get(climate_parameter, False):
+            measure = self._get_measure_for_parameter(climate_parameter)
+            if not sensors_average.get(measure, False):
                 missing_parameter = True
                 self.logger.debug(
                     f"No sensor data found for {climate_parameter}, climate "
@@ -276,7 +285,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         target, hysteresis = self.compute_target(climate_parameter)
         pid.target = target
         pid.hysteresis = hysteresis
-        current_value: float | None = sensors_average.get(climate_parameter)
+        measure = self._get_measure_for_parameter(climate_parameter)
+        current_value: float | None = sensors_average.get(measure)
         pid.update_pid(current_value)
 
     async def _update_actuator_handler(self, actuator_handler: ActuatorHandler) -> None:
