@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import typing as t
-from typing import cast, Type, TypedDict, TypeVar
+from typing import cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -23,7 +23,8 @@ from pydantic import Field, field_validator, model_serializer, RootModel
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
 
-from gaia.config import BaseConfig, configure_logging, GaiaConfig, GaiaConfigHelper
+from gaia.config import (
+    BaseConfig, configure_logging, defaults, GaiaConfig, GaiaConfigHelper)
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, PlantNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
@@ -1477,6 +1478,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.environment["climate"] = {}
             return self.environment["climate"]
 
+    def has_climate_parameter(self, parameter: str | gv.ClimateParameter) -> bool:
+        parameter: gv.ClimateParameter = safe_enum_from_name(gv.ClimateParameter, parameter)
+        return parameter in self.climate
+
     def get_climate_parameter(
             self,
             parameter: str | gv.ClimateParameter,
@@ -1484,12 +1489,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             data = self.climate[parameter]
-            return gv.ClimateConfig(parameter=parameter, **data)
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
             )
+        else:
+            return gv.ClimateConfig(parameter=parameter, **data)
 
     def set_climate_parameter(
             self,
@@ -1530,6 +1536,31 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
+
+    def get_actuator_couples(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+        return {
+            **defaults.actuator_couples,
+            **{
+                climate_parameter: gv.ActuatorCouple(
+                    increase=climate_cfg["linked_actuators"]["increase"],
+                    decrease=climate_cfg["linked_actuators"]["decrease"],
+                )
+                for climate_parameter, climate_cfg in self.climate.items()
+                if climate_cfg["linked_actuators"] is not None
+            }
+        }
+
+    def get_actuator_to_parameter(self) -> dict[str, gv.ClimateParameter]:
+        return defaults.get_actuator_to_parameter(self.get_actuator_couples())
+
+    def get_actuator_to_direction(self) -> dict[str, Literal["increase", "decrease"]]:
+        return defaults.get_actuator_to_direction(self.get_actuator_couples())
+
+    def get_valid_actuator_groups(self) -> set[str]:
+        return {
+            actuator_group
+            for actuator_group in self.get_actuator_to_parameter().keys()
+        }
 
     """Parameters related to IO"""
     @property

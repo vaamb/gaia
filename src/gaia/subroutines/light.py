@@ -12,7 +12,7 @@ import gaia_validators as gv
 from gaia.actuator_handler import HystericalPID
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, Hardware, LightSensor, Switch
+from gaia.hardware.abc import Dimmer, LightSensor, Switch
 from gaia.subroutines.template import SubroutineTemplate
 from gaia.utils import is_time_between
 
@@ -124,7 +124,9 @@ class Light(SubroutineTemplate[Switch]):
 
     """Routine specific methods"""
     def get_actuator_handler(self) -> ActuatorHandler:
-        return self.ecosystem.actuator_hub.get_handler(gv.HardwareType.light)
+        actuator_couples = self.config.get_actuator_couples()
+        actuator_group: str = actuator_couples[gv.ClimateParameter.light].increase
+        return self.ecosystem.actuator_hub.get_handler(actuator_group)
 
     @property
     def actuator_handler(self) -> ActuatorHandler:

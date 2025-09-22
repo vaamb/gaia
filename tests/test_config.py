@@ -272,18 +272,41 @@ class TestEcosystemConfigClimate:
 
     def test_climate_parameters(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.get_climate_parameter("temperature")
+            ecosystem_config.get_climate_parameter("light")
         with pytest.raises(ValueError):
-            ecosystem_config.set_climate_parameter("temperature", wrong="value")
+            ecosystem_config.set_climate_parameter("light", wrong="value")
 
-        parameters = {"day": 25, "night": 20, "hysteresis": 1}
-        ecosystem_config.set_climate_parameter("temperature", **parameters)
-        assert ecosystem_config.get_climate_parameter("temperature") == gv.ClimateConfig(
-            parameter="temperature", **parameters)
+        parameters = {"day": 250000, "night": 0, "hysteresis": 10000}
+        ecosystem_config.set_climate_parameter("light", **parameters)
+        assert ecosystem_config.get_climate_parameter("light") == gv.ClimateConfig(
+            parameter="light", **parameters)
 
-        ecosystem_config.delete_climate_parameter("temperature")
+        ecosystem_config.delete_climate_parameter("light")
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.delete_climate_parameter("temperature")
+            ecosystem_config.delete_climate_parameter("light")
+
+    def test_actuator_couples(self, ecosystem_config: EcosystemConfig):
+        actuator_couples = ecosystem_config.get_actuator_couples()
+
+        # Test with a parameter that has an actuator override
+        actuator_couple = actuator_couples[gv.ClimateParameter.humidity]
+        assert actuator_couple.increase == "fogger"
+        assert actuator_couple.decrease == "dehumidifier"
+
+        # Test with a parameter that uses default actuators
+        actuator_couple = actuator_couples[gv.ClimateParameter.wind]
+        assert actuator_couple.increase == "fan"
+        assert actuator_couple.decrease is None
+
+    def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
+        valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()
+
+        assert valid_actuator_groups == {
+            # Overridden
+            "fogger",
+            # Default
+            "heater", "cooler", "dehumidifier", "light", "fan",
+        }
 
 
 class TestEcosystemConfigHardware:

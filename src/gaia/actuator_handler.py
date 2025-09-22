@@ -4,70 +4,23 @@ import asyncio
 from asyncio import Future, Lock, Task, TimerHandle, CancelledError
 from contextlib import asynccontextmanager
 import enum
-import dataclasses
 from datetime import datetime, timezone
 from functools import partial
 import logging
 import time
 import typing
-from typing import Awaitable, Callable, ItemsView, Iterable, Literal, NamedTuple, Type
+from typing import Awaitable, cast, Callable, Literal, NamedTuple, Type
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
-from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, Hardware, Switch
+from gaia.config import defaults
+from gaia.hardware.abc import Dimmer, Switch
 
 
 if typing.TYPE_CHECKING:
     from gaia import Ecosystem
     from gaia.database.models import ActuatorBuffer, ActuatorRecord
-
-
-@dataclasses.dataclass(frozen=True)
-class ActuatorCouple:
-    increase: gv.HardwareType | None
-    decrease: gv.HardwareType | None
-
-    def __iter__(self) -> Iterable[gv.HardwareType | None]:
-        return iter((self.increase, self.decrease))
-
-    def __getitem__(self, key: str) -> gv.HardwareType | None:
-        try:
-            return getattr(self, key)
-        except AttributeError:
-            raise KeyError(f"{key}")
-
-    def items(self) -> ItemsView[str, gv.HardwareType | None]:
-        return self.__dict__.items()
-
-
-actuator_couples: dict[gv.ClimateParameter: ActuatorCouple] = {
-    gv.ClimateParameter.temperature: ActuatorCouple(
-        gv.HardwareType.heater, gv.HardwareType.cooler),
-    gv.ClimateParameter.humidity: ActuatorCouple(
-        gv.HardwareType.humidifier, gv.HardwareType.dehumidifier),
-    gv.ClimateParameter.light: ActuatorCouple(
-        gv.HardwareType.light, None),
-    gv.ClimateParameter.wind: ActuatorCouple(
-        gv.HardwareType.fan, None)
-}
-
-
-actuator_to_parameter: dict[gv.HardwareType, gv.ClimateParameter] = {
-    actuator: climate_parameter
-    for climate_parameter, actuator_couple in actuator_couples.items()
-    for actuator in actuator_couple
-    if actuator is not None
-}
-
-
-actuator_to_direction: dict[gv.HardwareType, Literal["increase", "decrease"]] = {
-    actuator: direction
-    for climate_parameter, actuator_couple in actuator_couples.items()
-    for actuator, direction in zip(actuator_couple, ("increase", "decrease"))
-    if actuator is not None
-}
 
 
 class PIDParameters(NamedTuple):
@@ -146,12 +99,12 @@ class HystericalPID:
         if self._direction is not None:
             return self._direction
         direction: Direction = Direction.none
-        actuator_couple: ActuatorCouple = actuator_couples[self.climate_parameter]
+        actuator_couples = self.actuator_hub.ecosystem.config.get_actuator_couples()
+        actuator_couple: gv.ActuatorCouple = actuator_couples[self.climate_parameter]
         for direction_name, actuator_type in actuator_couple.items():
             if actuator_type is None:
                 continue
-            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(
-                actuator_type)
+            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(actuator_type)
             if actuator_handler.get_linked_actuators():
                 direction = direction | Direction[direction_name]
         self._direction = direction
@@ -322,6 +275,7 @@ class ActuatorHandler:
         "actuator_hub",
         "direction",
         "ecosystem",
+        "group",
         "logger",
         "type",
     )
@@ -331,16 +285,18 @@ class ActuatorHandler:
             actuator_hub: ActuatorHub,
             actuator_type: gv.HardwareType,
             actuator_direction: Direction,
+            actuator_group: str | None = None,
     ) -> None:
-        assert actuator_type in gv.HardwareType.actuator
+        assert actuator_type & gv.HardwareType.actuator
         assert actuator_direction in (Direction.decrease, Direction.increase)
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
         self.type: gv.HardwareType = actuator_type
+        self.group: str = actuator_group or self.type.name
         self.direction: Direction = actuator_direction
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
-            f"gaia.engine.{eco_name}.actuators.{self.type.name}")
+            f"gaia.engine.{eco_name}.actuators.{self.group}")
         self._active: int = 0
         self._status: bool = False
         self._level: float | None = None
@@ -355,14 +311,14 @@ class ActuatorHandler:
 
     def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
-        return f"ActuatorHandler({uid}, actuator_type={self.type.name})"
+        return f"ActuatorHandler({uid}, actuator_group={self.group})"
 
     def get_linked_actuators(self) -> list[Switch | Dimmer]:
         if self._actuators is None:
             self._actuators = [
                 hardware
                 for hardware in self.ecosystem.hardware.values()
-                if self.type.name in hardware.groups
+                if self.group in hardware.groups
             ]
         return self._actuators
 
@@ -373,7 +329,8 @@ class ActuatorHandler:
         pid.reset_direction()
 
     def get_associated_pid(self) -> HystericalPID:
-        climate_parameter = actuator_to_parameter[self.type]
+        actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
+        climate_parameter = actuator_to_parameter[self.group]
         return self.actuator_hub.get_pid(climate_parameter)
 
     def as_dict(self) -> gv.ActuatorStateDict:
@@ -387,6 +344,7 @@ class ActuatorHandler:
     def as_record(self, timestamp: datetime) -> gv.ActuatorStateRecord:
         return gv.ActuatorStateRecord(
             type=self.type,
+            group=self.group,
             active=self.active,
             mode=self.mode,
             status=self.status,
@@ -415,9 +373,9 @@ class ActuatorHandler:
             )
 
     def _check_actuator_available(self) -> None:
-        if not self.ecosystem.get_hardware_group_uids(self.type):
+        if not self.ecosystem.get_hardware_group_uids(self.group):
             raise RuntimeError(
-                f"No actuator '{self.type.name}' available."
+                f"No actuator '{self.group}' available."
             )
 
     def _check_active(self) -> None:
@@ -464,7 +422,7 @@ class ActuatorHandler:
         self._set_mode(validated_value)
         self._any_status_change = True
         self.logger.info(
-            f"{self.type.name.capitalize()} has been set to "
+            f"{self.group.capitalize()} has been set to "
             f"'{self.mode.name}' mode.")
 
     def _set_mode(self, value: gv.ActuatorMode) -> None:
@@ -484,7 +442,7 @@ class ActuatorHandler:
         await self._set_status(value)
         self._any_status_change = True
         self.logger.info(
-            f"{self.type.name.capitalize()} has been turned "
+            f"{self.group.capitalize()} has been turned "
             f"{'on' if self.status else 'off'}.")
 
     async def _set_status(self, value: bool) -> None:
@@ -492,7 +450,7 @@ class ActuatorHandler:
         actuators_linked = self.get_linked_actuators()
         if not actuators_linked:
             raise RuntimeError(
-                f"{self.type.name.capitalize()} handler cannot be turned "
+                f"{self.group.capitalize()} handler cannot be turned "
                 f"{'on' if self.status else 'off'} as it has no actuator linked "
                 f"to it."
             )
@@ -520,7 +478,7 @@ class ActuatorHandler:
         await self._set_level(pwm_level)
         #self._any_status_change = True
         self.logger.debug(
-            f"{self.type.name.capitalize()}'s level has been set to {pwm_level}%.")
+            f"{self.group.capitalize()}'s level has been set to {pwm_level}%.")
 
     async def _set_level(self, pwm_level: float) -> None:
         self._level = pwm_level
@@ -577,7 +535,7 @@ class ActuatorHandler:
                 await self.set_status(False)
         if self._any_status_change:
             self.logger.info(
-                f"{self.type.name.capitalize()} has been turned to "
+                f"{self.group.capitalize()} has been turned to "
                 f"'{turn_to.name}'.")
 
     async def _transactional_turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
@@ -594,13 +552,13 @@ class ActuatorHandler:
             gv.ActuatorModePayload, turn_to)
         if self._timer is not None:
             self.logger.warning(
-                f"{self.type.name.capitalize()}'s timer already set, resetting "
+                f"{self.group.capitalize()}'s timer already set, resetting "
                 f"it for {turn_to.name}."
             )
             self.reset_timer()
         if countdown:
             self.logger.info(
-                f"{self.type.name.capitalize()} will be turned to "
+                f"{self.group.capitalize()} will be turned to "
                 f"'{turn_to.name}' in {countdown} seconds.")
             callback = partial(self._transactional_turn_to, turn_to)
             self._timer = Timer(callback, countdown)
@@ -681,7 +639,7 @@ class ActuatorHandler:
                 "will be cancelled to start a new one."
             )
             self._sending_data_task.cancel()
-        task_name = f"{self.ecosystem.uid}-{self.type.name}_actuator-send_data"
+        task_name = f"{self.ecosystem.uid}-{self.group}_actuator-send_data"
         self._sending_data_task = asyncio.create_task(
             self.send_actuator_state(data), name=task_name)
 
@@ -710,8 +668,16 @@ class ActuatorHub:
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
             WeakValueDictionary()
-        self._actuator_handlers: WeakValueDictionary[gv.HardwareType, ActuatorHandler] = \
+        self._actuator_handlers: WeakValueDictionary[str, ActuatorHandler] = \
             WeakValueDictionary()
+
+    @property
+    def actuator_handlers(self) -> WeakValueDictionary[str, ActuatorHandler]:
+        return self._actuator_handlers
+
+    @property
+    def pid(self) -> WeakValueDictionary[str, HystericalPID]:
+        return self._pids
 
     def get_pid(
             self,
@@ -735,19 +701,27 @@ class ActuatorHub:
 
     def get_handler(
             self,
-            actuator_type: gv.HardwareType,
+            actuator_group: str | gv.HardwareType,
     ) -> ActuatorHandler:
-        actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_type)
-        assert actuator_type in gv.HardwareType.actuator
+        # TODO: check that `actuator_group` is actually defined in the config
+        if isinstance(actuator_group, gv.HardwareType):
+            assert actuator_group & gv.HardwareType.actuator
+            actuator_group: str = cast(str, actuator_group.name)
         try:
-            return self._actuator_handlers[actuator_type]
+            return self._actuator_handlers[actuator_group]
         except KeyError:
-            direction_name = actuator_to_direction[actuator_type]
-            actuator_handler = ActuatorHandler(self, actuator_type, Direction[direction_name])
-            self._actuator_handlers[actuator_type] = actuator_handler
+            try:
+                actuator_type = gv.HardwareType[actuator_group]
+            except KeyError:
+                actuator_type = gv.HardwareType.actuator
+            actuator_to_direction = self.ecosystem.config.get_actuator_to_direction()
+            direction_name = actuator_to_direction[actuator_group]
+            direction = Direction[direction_name]
+            actuator_handler = ActuatorHandler(self, actuator_type, direction, actuator_group)
+            self._actuator_handlers[actuator_group] = actuator_handler
             return actuator_handler
 
-    def as_dict(self) -> dict[gv.HardwareType, gv.ActuatorStateDict]:
+    def as_dict(self) -> dict[str, gv.ActuatorStateDict]:
         default_state_dict = {
             "active": False,
             "status": False,
@@ -756,11 +730,11 @@ class ActuatorHub:
         }
 
         rv = {}
-        for actuator_type in actuator_to_parameter.keys():
+        for actuator_type in defaults.actuator_to_parameter.keys():
             if actuator_type in self._actuator_handlers:
-                rv[actuator_type.name] = self._actuator_handlers[actuator_type].as_dict()
+                rv[actuator_type] = self._actuator_handlers[actuator_type].as_dict()
             else:
-                rv[actuator_type.name] = default_state_dict
+                rv[actuator_type] = default_state_dict
         return rv
 
     def as_records(self) -> list[gv.ActuatorStateRecord]:
@@ -772,6 +746,7 @@ class ActuatorHub:
         ) -> gv.ActuatorStateRecord:
             return gv.ActuatorStateRecord(
                 type=hardware_type,
+                group=hardware_type.name,
                 active=False,
                 mode=gv.ActuatorMode.automatic,
                 status=False,
@@ -780,9 +755,10 @@ class ActuatorHub:
             )
 
         rv = []
-        for actuator_type in actuator_to_parameter.keys():
-            if actuator_type in self._actuator_handlers:
-                rv.append(self._actuator_handlers[actuator_type].as_record(now))
+        for actuator_str in defaults.actuator_to_parameter.keys():
+            if actuator_str in self._actuator_handlers:
+                rv.append(self._actuator_handlers[actuator_str].as_record(now))
             else:
+                actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_str)
                 rv.append(get_default_record(actuator_type, now))
         return rv

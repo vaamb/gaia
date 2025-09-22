@@ -20,7 +20,7 @@ from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, subroutine_names)
 from gaia.utils import SingletonMeta, yaml
 
-from .data import ecosystem_info, ecosystem_name, engine_uid
+from .data import ecosystem_info, ecosystem_name, engine_uid, temperature_cfg
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content, MockDispatcher
 
@@ -184,15 +184,9 @@ async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
 async def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
     climate_subroutine: Climate = ecosystem.subroutines["climate"]
 
-    # Sensors subroutine is required ...
+    # Sensors subroutine is required
     await ecosystem.enable_subroutine("sensors")
     await ecosystem.start_subroutine("sensors")
-
-    # ... as well as a climate parameter
-    ecosystem.config.set_climate_parameter(
-        "temperature",
-        **{"day": 42.0, "night": 42.0, "hysteresis": 1.0, "alarm": 0.5}
-    )
 
     try:
         yield climate_subroutine
@@ -299,7 +293,7 @@ async def events_handler(
     events_handler = Events(ecosystem.engine)
     mock_dispatcher.register_event_handler(events_handler)
     ecosystem.engine.event_handler = events_handler
-
+    mock_dispatcher.clear_store()
     try:
         yield events_handler
     finally:
