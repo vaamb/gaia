@@ -325,7 +325,7 @@ class Ecosystem:
         hardware_config = self.config.get_hardware_config(hardware_uid)
         try:
             model: str = hardware_config.model
-            if isinstance(model, BaseSensor) and self.engine.config.app_config.VIRTUALIZATION:
+            if hardware_config.type & gv.HardwareType.sensor and self.engine.config.app_config.VIRTUALIZATION:
                 if not model.startswith("virtual"):
                     hardware_config.model = f"virtual{model}"
             if model not in hardware_models:
