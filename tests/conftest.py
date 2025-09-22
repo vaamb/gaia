@@ -19,6 +19,7 @@ from gaia.events import Events
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, subroutine_names)
 from gaia.utils import SingletonMeta, yaml
+from gaia.virtual import VirtualWorld, VirtualEcosystem
 
 from .data import ecosystem_info, ecosystem_name, engine_uid, temperature_cfg
 from .subroutines.dummy_subroutine import Dummy
@@ -152,6 +153,11 @@ async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
 
 
 @pytest_asyncio.fixture(scope="function")
+async def virtual_world(engine: Engine) -> YieldFixture[VirtualWorld]:
+    yield engine.virtual_world
+
+
+@pytest_asyncio.fixture(scope="function")
 async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfig]:
     ecosystem_config = engine_config.get_ecosystem_config(ecosystem_name)
     with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log"):
@@ -178,6 +184,12 @@ async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
         if ecosystem.started:
             await ecosystem.stop()
         del ecosystem
+
+
+@pytest_asyncio.fixture(scope="function")
+async def virtual_ecosystem(ecosystem: Ecosystem) -> YieldFixture[VirtualEcosystem]:
+    ecosystem.virtual_self.time_between_measures = -1
+    yield ecosystem.virtual_self
 
 
 @pytest_asyncio.fixture(scope="function")

@@ -364,8 +364,8 @@ class VirtualEcosystem:
         light_couple: gv.ActuatorCouple = actuator_couples[gv.ClimateParameter.light]
         light_inc = light_couple.increase
         if light_inc and self.get_actuator_status(light_inc):
-            # TODO: use light level
-            self._light += self._max_light_output
+            level = get_corrected_level(light_inc)
+            self._light += self._max_light_output * level / 100
         self._last_update = now
         self.logger.debug(
             f"Temperature: {self.temperature:2.2f} - humidity: {self.humidity:3.2f} - "
