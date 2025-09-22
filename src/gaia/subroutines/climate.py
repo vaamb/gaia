@@ -34,7 +34,6 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         self._loop_period: float = max(loop_period, 10.0)
         self._actuator_handlers: dict[str, ActuatorHandler] | None = None
         self._pids: dict[gv.ClimateParameter, HystericalPID] | None = None
-        self._activated_actuators: set[str] = set()
         self._sensor_miss: int = 0
         self._finish__init__()
 
@@ -142,7 +141,6 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         actuator_handler = self.actuator_handlers[actuator_group]
         async with actuator_handler.update_status_transaction(activation=True):
             actuator_handler.activate()
-        self._activated_actuators.add(actuator_group)
 
     async def _deactivate_actuator_handler(self, actuator_group: str) -> None:
         actuator_handler = self.actuator_handlers[actuator_group]
@@ -150,7 +148,6 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             if actuator_handler.mode is gv.ActuatorMode.automatic:
                 await actuator_handler.reset()
             actuator_handler.deactivate()
-        self._activated_actuators.remove(actuator_group)
 
     def get_pid(self, climate_parameter: gv.ClimateParameter) -> HystericalPID:
         return self.ecosystem.actuator_hub.get_pid(climate_parameter)
@@ -184,7 +181,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         # Get mounted sensors and the measures they're taking
         measures: set[str] = {
             measure.name
-            # TODO: check if sensors are mounted
+            # TODO: check if sensors are mounted.
+            #  They should be if sensors subroutine is running
             for sensor in self.ecosystem.subroutines["sensors"].hardware.values()
             for measure in sensor.measures
         }

@@ -6,7 +6,6 @@ from datetime import datetime, time
 from statistics import mean
 from time import monotonic
 import typing
-from typing import cast
 
 import gaia_validators as gv
 
