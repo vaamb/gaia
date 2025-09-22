@@ -150,9 +150,9 @@ class Pictures(SubroutineTemplate[Camera]):
         if not self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera):
             self.logger.warning("No Camera detected, disabling Picture subroutine.")
             return False
-        if not self.ecosystem.engine.message_broker_started:
+        if not self.ecosystem.engine.use_message_broker:
             self.logger.warning(
-                "The engine is not using event dispatcher, the photo taken"
+                "The engine is not using event dispatcher, the photo taken "
                 "will not be sent to Ouranos.")
         return True
 
