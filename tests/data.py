@@ -22,7 +22,7 @@ sensor_info: gv.AnonymousHardwareConfigDict = {
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
     "groups": None,
-    "measures": ["temperature", "humidity"],
+    "measures": ["temperature", "humidity", "absolute_humidity"],
     "plants": [],
     "multiplexer_model": None,
 }
@@ -154,6 +154,7 @@ temperature_cfg: gv.AnonymousClimateConfigDict = {
     "hysteresis": 2.0,
     "alarm": None,
     "linked_actuators": None,
+    "linked_measure": None,
 }
 
 
@@ -166,6 +167,7 @@ humidity_cfg: gv.AnonymousClimateConfigDict = {
         "increase": "fogger",
         "decrease": "dehumidifier",
     },
+    "linked_measure": "absolute_humidity",
 }
 
 
@@ -175,6 +177,7 @@ wind_cfg: gv.AnonymousClimateConfigDict = {
     "hysteresis": 2.0,
     "alarm": None,
     "linked_actuators": None,
+    "linked_measure": None,
 }
 
 

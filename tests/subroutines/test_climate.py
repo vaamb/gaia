@@ -143,6 +143,15 @@ async def test_safe_stop_from_sensors(
 
 
 @pytest.mark.asyncio
+async def test_get_measure_for_parameter(climate_subroutine: Climate):
+    measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.temperature)
+    assert measure == gv.ClimateParameter.temperature.name
+
+    measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.humidity)
+    assert measure == "absolute_humidity"
+
+
+@pytest.mark.asyncio
 async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors):
     # Sensors data are required ...
     await sensors_subroutine.routine()
