@@ -104,7 +104,9 @@ class Light(SubroutineTemplate[Switch]):
         self._pid = None
 
     def get_hardware_needed_uid(self) -> set[str]:
-        return set(self.ecosystem.get_hardware_group_uids(gv.HardwareType.light))
+        actuator_couples = self.config.get_actuator_couples()
+        actuator_group: str = actuator_couples[gv.ClimateParameter.light].increase
+        return set(self.ecosystem.get_hardware_group_uids(actuator_group))
 
     async def refresh(self) -> None:
         await super().refresh()
