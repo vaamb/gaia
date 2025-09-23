@@ -188,6 +188,19 @@ climate_dict: dict[str, gv.AnonymousClimateConfigDict] = {
 }
 
 
+rain_cfg: gv.AnonymousWeatherConfigDict = {
+    "pattern": "0 * * * *",
+    "duration": 30,
+    "level": 100.0,
+    "linked_actuator": "rainer",
+}
+
+
+weather_cfg: dict[str, gv.AnonymousWeatherConfigDict] = {
+    "rain": rain_cfg,
+}
+
+
 ecosystem_info = {
     ecosystem_uid: {
         "name": ecosystem_name,
@@ -214,6 +227,7 @@ ecosystem_info = {
                 "lighting": lighting_method,
             },
             "climate": climate_dict,
+            "weather": weather_cfg,
         },
         "IO": IO_dict,
         "plants": {},
