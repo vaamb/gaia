@@ -253,4 +253,4 @@ class Light(SubroutineTemplate[Switch]):
         if not self._started:
             raise RuntimeError("Light subroutine is not started")
         async with self.actuator_handler.update_status_transaction():
-            await self.actuator_handler.turn_to(turn_to, countdown)
+            await self.actuator_handler.turn_to(turn_to, countdown=countdown)

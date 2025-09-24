@@ -522,7 +522,11 @@ class ActuatorHandler:
         await self.set_status(False)
         self.reset_timer()
 
-    async def _turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
+    async def _turn_to(
+            self,
+            turn_to: gv.ActuatorModePayload,
+            level: float = 100,
+    ) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
             await self.set_mode(gv.ActuatorMode.automatic)
             outdated_expected_status = self.compute_expected_status(
@@ -534,18 +538,24 @@ class ActuatorHandler:
                 await self.set_status(True)
             else:  # turn_to == ActuatorModePayload.off
                 await self.set_status(False)
+            await self.set_level(level)
         if self._any_status_change:
             self.logger.info(
                 f"{self.group.capitalize()} has been turned to "
                 f"'{turn_to.name}'.")
 
-    async def _transactional_turn_to(self, turn_to: gv.ActuatorModePayload) -> None:
+    async def _transactional_turn_to(
+            self,
+            turn_to: gv.ActuatorModePayload,
+            level: float = 100,
+    ) -> None:
         async with self.update_status_transaction():
-            await self._turn_to(turn_to)
+            await self._turn_to(turn_to, level)
 
     async def turn_to(
             self,
             turn_to: gv.ActuatorModePayload,
+            level: float = 100,
             countdown: float | None = None,
     ) -> None:
         self._check_update_status_transaction()
@@ -561,10 +571,10 @@ class ActuatorHandler:
             self.logger.info(
                 f"{self.group.capitalize()} will be turned to "
                 f"'{turn_to.name}' in {countdown} seconds.")
-            callback = partial(self._transactional_turn_to, turn_to)
+            callback = partial(self._transactional_turn_to, turn_to, level)
             self._timer = Timer(callback, countdown)
         else:
-            await self._turn_to(turn_to)
+            await self._turn_to(turn_to, level)
 
     async def _log_actuator_state(
             self,
