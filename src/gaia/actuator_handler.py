@@ -216,8 +216,8 @@ class Timer:
     def __init__(self, callback: Awaitable | Callable, countdown: float) -> None:
         self._start_time: float = time.monotonic()
         self._countdown: float = 0.0
-        self._task: Task = asyncio.create_task(self._job(callback))
         self._future: Future = Future()
+        self._task: Task = asyncio.create_task(self._job(callback))
         self._handle: TimerHandle | None = None
         self.modify_countdown(countdown)
 
