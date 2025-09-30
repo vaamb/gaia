@@ -322,7 +322,6 @@ class ActuatorHandler:
             ]
         return self._actuators
 
-    # TODO: use when update hardware
     def reset_cached_actuators(self) -> None:
         self._actuators = None
         pid: HystericalPID = self.get_associated_pid()
