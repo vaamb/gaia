@@ -275,6 +275,7 @@ class ActuatorHandler:
         "_update_lock",
         "_updating",
         "actuator_hub",
+        "associated_pid",
         "direction",
         "ecosystem",
         "group",
@@ -288,14 +289,16 @@ class ActuatorHandler:
             actuator_type: gv.HardwareType,
             actuator_direction: Direction,
             actuator_group: str | None = None,
+            associated_pid: HystericalPID | None = None,
     ) -> None:
         assert actuator_type & gv.HardwareType.actuator
         assert actuator_direction in (Direction.decrease, Direction.increase)
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
         self.type: gv.HardwareType = actuator_type
-        self.group: str = actuator_group or self.type.name
         self.direction: Direction = actuator_direction
+        self.group: str = actuator_group or self.type.name
+        self.associated_pid: HystericalPID | None = associated_pid
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
             f"gaia.engine.{eco_name}.actuators.{self.group}")
@@ -328,13 +331,8 @@ class ActuatorHandler:
 
     def reset_cached_actuators(self) -> None:
         self._actuators = None
-        pid: HystericalPID = self.get_associated_pid()
-        pid.reset_direction()
-
-    def get_associated_pid(self) -> HystericalPID:
-        actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
-        climate_parameter = actuator_to_parameter[self.group]
-        return self.actuator_hub.get_pid(climate_parameter)
+        if self.associated_pid is not None:
+            self.associated_pid.reset_direction()
 
     def as_dict(self) -> gv.ActuatorStateDict:
         return {
@@ -430,8 +428,8 @@ class ActuatorHandler:
 
     def _set_mode(self, value: gv.ActuatorMode) -> None:
         self._mode = value
-        pid: HystericalPID = self.get_associated_pid()
-        pid.reset()
+        if self.associated_pid is not None:
+            self.associated_pid.reset()
 
     @property
     def status(self) -> bool:
@@ -720,7 +718,14 @@ class ActuatorHub:
             actuator_to_direction = self.ecosystem.config.get_actuator_to_direction()
             direction_name = actuator_to_direction[actuator_group]
             direction = Direction[direction_name]
-            actuator_handler = ActuatorHandler(self, actuator_type, direction, actuator_group)
+            actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
+            climate_parameter = actuator_to_parameter.get(actuator_group, None)
+            if climate_parameter is None:
+                pid = None
+            else:
+                pid = self.get_pid(climate_parameter)
+            actuator_handler = ActuatorHandler(
+                self, actuator_type, direction, actuator_group, pid)
             # The handler is attached to the handlers store during its init
             return actuator_handler
 

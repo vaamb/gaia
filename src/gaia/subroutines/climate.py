@@ -290,7 +290,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         pid.update_pid(current_value)
 
     async def _update_actuator_handler(self, actuator_handler: ActuatorHandler) -> None:
-        pid = actuator_handler.get_associated_pid()
+        pid = actuator_handler.associated_pid
+        assert pid is not None
         expected_status = actuator_handler.compute_expected_status(pid.last_output)
         if expected_status:
             await actuator_handler.turn_on()
