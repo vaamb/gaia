@@ -700,6 +700,22 @@ class ActuatorHub:
             # The PID is attached to the PIDs store during its init
             return pid
 
+    def _get_actuator_type(self, actuator_group: str) -> gv.HardwareType:
+        try:
+            return gv.HardwareType[actuator_group]
+        except KeyError:
+            return gv.HardwareType.actuator
+
+    def _get_actuator_direction(self, actuator_group: str) -> Direction:
+        actuator_to_direction = self.ecosystem.config.get_actuator_to_direction()
+        direction_name = actuator_to_direction[actuator_group]
+        return Direction[direction_name]
+
+    def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
+        actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
+        parameter = actuator_to_parameter[actuator_group]
+        return self.get_pid(parameter)
+
     def get_handler(
             self,
             actuator_group: str | gv.HardwareType,
@@ -711,21 +727,11 @@ class ActuatorHub:
         try:
             return self._actuator_handlers[actuator_group]
         except KeyError:
-            try:
-                actuator_type = gv.HardwareType[actuator_group]
-            except KeyError:
-                actuator_type = gv.HardwareType.actuator
-            actuator_to_direction = self.ecosystem.config.get_actuator_to_direction()
-            direction_name = actuator_to_direction[actuator_group]
-            direction = Direction[direction_name]
-            actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
-            climate_parameter = actuator_to_parameter.get(actuator_group, None)
-            if climate_parameter is None:
-                pid = None
-            else:
-                pid = self.get_pid(climate_parameter)
+            actuator_type = self._get_actuator_type(actuator_group)
+            direction = self._get_actuator_direction(actuator_group)
+            maybe_pid = self._get_actuator_pid(actuator_group)
             actuator_handler = ActuatorHandler(
-                self, actuator_type, direction, actuator_group, pid)
+                self, actuator_type, direction, actuator_group, maybe_pid)
             # The handler is attached to the handlers store during its init
             return actuator_handler
 
