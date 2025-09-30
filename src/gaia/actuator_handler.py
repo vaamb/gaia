@@ -720,7 +720,8 @@ class ActuatorHub:
             self,
             actuator_group: str | gv.HardwareType,
     ) -> ActuatorHandler:
-        # TODO: check that `actuator_group` is actually defined in the config
+        if actuator_group not in self.ecosystem.config.get_actuator_to_parameter():
+            raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
             actuator_group: str = cast(str, actuator_group.name)

@@ -94,9 +94,7 @@ async def test_turn_actuator(climate_subroutine: Climate):
     with pytest.raises(RuntimeError, match=r"This actuator is not active"):
         await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.off)
 
-    # TODO: currently, this raises KeyError because the direction cannot be found
-    #  in the `actuator_to_direction` dict
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         await climate_subroutine.turn_climate_actuator(
             "WrongHardwareType", gv.ActuatorModePayload.automatic)
 
