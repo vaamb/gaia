@@ -371,6 +371,9 @@ class Ecosystem:
             await self.remove_hardware(hardware_uid)
         for actuator_handler in self.actuator_hub.actuator_handlers.values():
             actuator_handler.reset_cached_actuators()
+        for pid in self.actuator_hub.pids.values():
+            pid.reset()
+            pid.reset_direction()
 
     # Ecosystem management
     async def start(self):
