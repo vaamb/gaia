@@ -91,7 +91,7 @@ humidifier_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualgpioSwitch",
     "type": gv.HardwareType.humidifier,
     "level": gv.HardwareLevel.environment,
-    "groups": ["fogger"],
+    "groups": ["fogger", "rainer"],
     "measures": [],
     "plants": [],
     "multiplexer_model": None,

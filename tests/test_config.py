@@ -303,7 +303,7 @@ class TestEcosystemConfigClimate:
 
         assert valid_actuator_groups == {
             # Overridden
-            "fogger",
+            "fogger", "rainer",
             # Default
             "heater", "cooler", "dehumidifier", "light", "fan",
         }
