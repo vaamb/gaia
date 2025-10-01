@@ -69,6 +69,13 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         self.logger.info(
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
+        # Mount PID controllers
+        # TODO: mount PID controllers only if required
+        self._pids = {}
+        for climate_parameter in REGULABLE_PARAMETERS:
+            pid = self.get_pid(climate_parameter)
+            pid.reset()
+            self.pids[climate_parameter] = pid
         # Mount required actuator handlers
         self._actuator_handlers = {}
         expected_actuators = self.compute_expected_actuators()
@@ -77,13 +84,6 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             self.actuator_handlers[actuator_group] = actuator_handler
             await self._activate_actuator_handler(actuator_group)
             actuator_handler.reset_cached_actuators()
-        # Mount PID controllers
-        # TODO: mount PID controllers only if required
-        self._pids = {}
-        for climate_parameter in REGULABLE_PARAMETERS:
-            pid = self.get_pid(climate_parameter)
-            pid.reset()
-            self.pids[climate_parameter] = pid
 
     async def _stop(self) -> None:
         # Deactivate activated actuator handlers

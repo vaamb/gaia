@@ -714,6 +714,11 @@ class ActuatorHub:
     def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
         actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
         parameter = actuator_to_parameter[actuator_group]
+        if parameter not in self.pids:
+            raise RuntimeError(
+                f"Trying to get an undefined PID for the actuator group "
+                f"'{actuator_group}'"
+            )
         return self.get_pid(parameter)
 
     def get_handler(

@@ -77,10 +77,9 @@ class Light(SubroutineTemplate[Switch]):
             return False
 
     async def _start(self) -> None:
-        # Initialize actuator handler and PID
-        self._actuator_handler = self.get_actuator_handler()
+        # Initialize PID and actuator handler
         self._pid = self.get_pid()
-        self.pid.reset()
+        self._actuator_handler = self.get_actuator_handler()
         # Activate actuator handler
         async with self.actuator_handler.update_status_transaction(activation=True):
             self.actuator_handler.activate()

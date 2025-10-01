@@ -43,6 +43,11 @@ class TestVirtualEcosystem:
         # Setup humidity actuator
         actuator_couples = ecosystem.config.get_actuator_couples()
         group = actuator_couples[gv.ClimateParameter.humidity].increase
+        # Climate actuators need PIDs to work
+        actuator_to_parameter = ecosystem.config.get_actuator_to_parameter()
+        climate_parameter = actuator_to_parameter[group]
+        pid = ecosystem.actuator_hub.get_pid(climate_parameter)
+        # Get the actual actuator
         actuator = ecosystem.actuator_hub.get_handler(group)
         async with actuator.update_status_transaction(activation=True):
             actuator.activate()
