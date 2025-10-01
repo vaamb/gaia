@@ -66,6 +66,8 @@ class TestVirtualEcosystem:
         async with actuator.update_status_transaction():
             actuator.deactivate()
 
+        del pid
+
     async def test_sensors_virtualization(
             self,
             virtual_ecosystem: VirtualEcosystem,
