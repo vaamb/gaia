@@ -77,6 +77,8 @@ class HystericalPID:
         self._used_regularly: bool = used_regularly
         self._last_input: float | None = None
         self._last_output: float = 0.0
+        # Attach the PID to the actuator hub PIDs store
+        self.actuator_hub.pids[climate_parameter] = self
 
     def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
@@ -273,6 +275,7 @@ class ActuatorHandler:
         "_update_lock",
         "_updating",
         "actuator_hub",
+        "associated_pid",
         "direction",
         "ecosystem",
         "group",
@@ -286,14 +289,16 @@ class ActuatorHandler:
             actuator_type: gv.HardwareType,
             actuator_direction: Direction,
             actuator_group: str | None = None,
+            associated_pid: HystericalPID | None = None,
     ) -> None:
         assert actuator_type & gv.HardwareType.actuator
         assert actuator_direction in (Direction.decrease, Direction.increase)
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
         self.type: gv.HardwareType = actuator_type
-        self.group: str = actuator_group or self.type.name
         self.direction: Direction = actuator_direction
+        self.group: str = actuator_group or self.type.name
+        self.associated_pid: HystericalPID | None = associated_pid
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
             f"gaia.engine.{eco_name}.actuators.{self.group}")
@@ -308,6 +313,8 @@ class ActuatorHandler:
         self._updating: bool = False
         self._any_status_change: bool = False
         self._sending_data_task: Task | None = None
+        # Attach the handler to the actuator hub handlers store
+        self.actuator_hub.actuator_handlers[self.group] = self
 
     def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
@@ -322,16 +329,10 @@ class ActuatorHandler:
             ]
         return self._actuators
 
-    # TODO: use when update hardware
     def reset_cached_actuators(self) -> None:
         self._actuators = None
-        pid: HystericalPID = self.get_associated_pid()
-        pid.reset_direction()
-
-    def get_associated_pid(self) -> HystericalPID:
-        actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
-        climate_parameter = actuator_to_parameter[self.group]
-        return self.actuator_hub.get_pid(climate_parameter)
+        if self.associated_pid is not None:
+            self.associated_pid.reset_direction()
 
     def as_dict(self) -> gv.ActuatorStateDict:
         return {
@@ -427,8 +428,8 @@ class ActuatorHandler:
 
     def _set_mode(self, value: gv.ActuatorMode) -> None:
         self._mode = value
-        pid: HystericalPID = self.get_associated_pid()
-        pid.reset()
+        if self.associated_pid is not None:
+            self.associated_pid.reset()
 
     @property
     def status(self) -> bool:
@@ -676,7 +677,7 @@ class ActuatorHub:
         return self._actuator_handlers
 
     @property
-    def pid(self) -> WeakValueDictionary[str, HystericalPID]:
+    def pids(self) -> WeakValueDictionary[str, HystericalPID]:
         return self._pids
 
     def get_pid(
@@ -696,29 +697,48 @@ class ActuatorHub:
                 minimum_output=-100.0,
                 maximum_output=100.0,
             )
-            self._pids[climate_parameter] = pid
+            # The PID is attached to the PIDs store during its init
             return pid
+
+    def _get_actuator_type(self, actuator_group: str) -> gv.HardwareType:
+        try:
+            return gv.HardwareType[actuator_group]
+        except KeyError:
+            return gv.HardwareType.actuator
+
+    def _get_actuator_direction(self, actuator_group: str) -> Direction:
+        actuator_to_direction = self.ecosystem.config.get_actuator_to_direction()
+        direction_name = actuator_to_direction[actuator_group]
+        return Direction[direction_name]
+
+    def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
+        actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
+        parameter = actuator_to_parameter[actuator_group]
+        if parameter not in self.pids:
+            raise RuntimeError(
+                f"Trying to get an undefined PID for the actuator group "
+                f"'{actuator_group}'"
+            )
+        return self.get_pid(parameter)
 
     def get_handler(
             self,
             actuator_group: str | gv.HardwareType,
     ) -> ActuatorHandler:
-        # TODO: check that `actuator_group` is actually defined in the config
+        if actuator_group not in self.ecosystem.config.get_actuator_to_parameter():
+            raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
             actuator_group: str = cast(str, actuator_group.name)
         try:
             return self._actuator_handlers[actuator_group]
         except KeyError:
-            try:
-                actuator_type = gv.HardwareType[actuator_group]
-            except KeyError:
-                actuator_type = gv.HardwareType.actuator
-            actuator_to_direction = self.ecosystem.config.get_actuator_to_direction()
-            direction_name = actuator_to_direction[actuator_group]
-            direction = Direction[direction_name]
-            actuator_handler = ActuatorHandler(self, actuator_type, direction, actuator_group)
-            self._actuator_handlers[actuator_group] = actuator_handler
+            actuator_type = self._get_actuator_type(actuator_group)
+            direction = self._get_actuator_direction(actuator_group)
+            maybe_pid = self._get_actuator_pid(actuator_group)
+            actuator_handler = ActuatorHandler(
+                self, actuator_type, direction, actuator_group, maybe_pid)
+            # The handler is attached to the handlers store during its init
             return actuator_handler
 
     def as_dict(self) -> dict[str, gv.ActuatorStateDict]:

@@ -268,10 +268,14 @@ async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Dummy]:
 
 @pytest_asyncio.fixture(scope="function")
 async def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
+    # We need to hold the pid associated to light handler
+    pid = ecosystem.actuator_hub.get_pid(gv.ClimateParameter.light)
     light_handler: ActuatorHandler = ecosystem.get_actuator_handler("light")
     light_handler.activate()
 
     yield light_handler
+
+    del pid
 
 
 @pytest.fixture(scope="module")
