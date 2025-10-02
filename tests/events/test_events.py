@@ -1,4 +1,5 @@
 from asyncio import sleep
+from collections import deque
 from datetime import datetime, timezone
 from math import isclose
 from time import monotonic
@@ -21,6 +22,7 @@ from ..data import (
     ecosystem_name,
     ecosystem_uid,
     engine_uid,
+    humidity_cfg,
     IO_dict,
     lighting_method,
     lighting_start,
@@ -28,7 +30,10 @@ from ..data import (
     place_latitude,
     place_longitude,
     place_name,
+    rain_cfg,
     sensor_uid,
+    temperature_cfg,
+    wind_cfg,
 )
 from ..utils import get_logs_content, MockDispatcher
 
@@ -221,60 +226,87 @@ async def test_on_registration_ack(
     with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
         assert "registration successful, sending initial ecosystems info" in logs
 
-    responses = events_handler._dispatcher.emit_store
+    responses = deque(events_handler._dispatcher.emit_store)
 
-    response_number = 0
-    places_list = responses[response_number]
-    assert places_list["event"] == "places_list"
-    assert places_list["data"]["uid"] == engine_uid
-    assert places_list["data"]["data"][0]["name"] == place_name
-    assert places_list["data"]["data"][0]["coordinates"] == (place_latitude, place_longitude)
+    def get_uid(payload):
+        return payload["data"][0]["uid"]
 
-    response_number += 1
+    def get_data(payload):
+        return payload["data"][0]["data"]
 
-    base_info = responses[response_number]
-    assert base_info["event"] == "base_info"
-    assert base_info["data"][0]["uid"] == ecosystem_uid
-    assert base_info["data"][0]["data"]["engine_uid"] == engine_uid
-    assert base_info["data"][0]["data"]["uid"] == ecosystem_uid
-    assert base_info["data"][0]["data"]["name"] == ecosystem_name
+    """Places payload"""
+    # Places is currently the only engine-level event sent on registration
+    payload = responses.popleft()
+    assert payload["event"] == "places_list"
+    assert payload["data"]["uid"] == engine_uid
+    assert payload["data"]["data"][0]["name"] == place_name
+    assert payload["data"]["data"][0]["coordinates"] == (place_latitude, place_longitude)
 
-    response_number += 1
+    """Base info payload"""
+    payload = responses.popleft()
+    assert payload["event"] == "base_info"
+    assert get_uid(payload) == ecosystem_uid
+    data = get_data(payload)
+    assert data["engine_uid"] == engine_uid
+    assert data["uid"] == ecosystem_uid
+    assert data["name"] == ecosystem_name
 
-    management = responses[response_number]
-    assert management["event"] == "management"
-    assert management["data"][0]["uid"] == ecosystem_uid
-    for man, value in management["data"][0]["data"].items():
-        assert gv.ManagementFlags[man]
+    """Management payload"""
+    payload = responses.popleft()
+    assert payload["event"] == "management"
+    assert get_uid(payload) == ecosystem_uid
+    for management, value in get_data(payload).items():
+        assert gv.ManagementFlags[management]
         assert value is False
 
-    response_number += 1
+    """Chaos parameters payload"""
+    payload = responses.popleft()
+    assert payload["event"] == "chaos_parameters"
+    assert get_uid(payload) == ecosystem_uid
 
-    chaos_parameters = responses[response_number]
-    assert chaos_parameters["event"] == "chaos_parameters"
-    assert chaos_parameters["data"][0]["uid"] == ecosystem_uid
+    """Nycthemeral data payload"""
+    payload = responses.popleft()
+    assert payload["event"] == "nycthemeral_info"
+    assert get_uid(payload) == ecosystem_uid
+    data = get_data(payload)
+    assert data["lighting"] == lighting_method
+    assert data["day"] == lighting_start
+    assert data["night"] == lighting_stop
 
-    response_number += 1
+    """Climate payload"""
+    def get_climate_cfg(
+            payload_data: list[dict],
+            climate_parameter: gv.ClimateParameter,
+    ) -> gv.AnonymousClimateConfigDict:
+        return [
+            climate_cfg
+            for climate_cfg in payload_data
+            if climate_cfg["parameter"] == climate_parameter
+        ][0]
 
-    nycthemeral_info = responses[response_number]
-    assert nycthemeral_info["event"] == "nycthemeral_info"
-    assert nycthemeral_info["data"][0]["uid"] == ecosystem_uid
-    assert nycthemeral_info["data"][0]["data"]["lighting"] == lighting_method
-    assert nycthemeral_info["data"][0]["data"]["day"] == lighting_start
-    assert nycthemeral_info["data"][0]["data"]["night"] == lighting_stop
+    payload = responses.popleft()
+    assert payload["event"] == "climate"
+    assert get_uid(payload) == ecosystem_uid
+    data = get_data(payload)
+    temperature = get_climate_cfg(data, gv.ClimateParameter.temperature)
+    assert temperature == {**temperature_cfg, "parameter": gv.ClimateParameter.temperature}
+    humidity = get_climate_cfg(data, gv.ClimateParameter.humidity)
+    assert humidity == {**humidity_cfg, "parameter": gv.ClimateParameter.humidity}
+    wind = get_climate_cfg(data, gv.ClimateParameter.wind)
+    assert wind == {**wind_cfg, "parameter": gv.ClimateParameter.wind}
 
-    response_number += 1
+    """Weather payload"""
+    payload = responses.popleft()
+    assert payload["event"] == "weather"
+    assert get_uid(payload) == ecosystem_uid
+    data = get_data(payload)
+    assert data[0] == {**rain_cfg, "parameter": gv.WeatherParameter.rain}
 
-    climate = responses[response_number]
-    assert climate["event"] == "climate"
-    assert climate["data"][0]["uid"] == ecosystem_uid
-
-    response_number += 1
-
-    hardware = responses[response_number]
-    assert hardware["event"] == "hardware"
-    assert hardware["data"][0]["uid"] == ecosystem_uid
-    for h in hardware["data"][0]["data"]:
+    """Hardware payload"""
+    payload = responses.popleft()
+    assert payload["event"] == "hardware"
+    assert get_uid(payload) == ecosystem_uid
+    for h in get_data(payload):
         h: gv.HardwareConfig
         hardware_uid = h["uid"]
         assert h["uid"] in IO_dict.keys()
@@ -284,18 +316,16 @@ async def test_on_registration_ack(
         assert h["type"] == IO_dict[hardware_uid]["type"]
         assert h["level"] == IO_dict[hardware_uid]["level"]
 
-    response_number += 1
+    """Plants payload"""
+    payload = responses.popleft()
+    assert payload["event"] == "plants"
+    assert get_uid(payload) == ecosystem_uid
 
-    plants = responses[response_number]
-    assert plants["event"] == "plants"
-    assert plants["data"][0]["uid"] == ecosystem_uid
-
-    response_number += 1
-
-    actuators_data = responses[response_number]
-    assert actuators_data["event"] == "actuators_data"
-    assert actuators_data["data"][0]["uid"] == ecosystem_uid
-    for actuator_record in actuators_data["data"][0]["data"]:
+    """Actuators state payload"""
+    payload = responses.popleft()
+    assert payload["event"] == "actuators_data"
+    assert get_uid(payload) == ecosystem_uid
+    for actuator_record in get_data(payload):
         actuator_record: gv.ActuatorStateRecord
         actuator_type = gv.HardwareType(actuator_record[0])
         assert actuator_type & gv.HardwareType.actuator
@@ -304,10 +334,11 @@ async def test_on_registration_ack(
         assert actuator_record[3] == gv.ActuatorMode.automatic
         assert actuator_record[4] is False
 
-    response_number += 1
+    """Initialization finished"""
+    payload = responses.popleft()
+    assert payload["event"] == "initialization_data_sent"
 
-    initialized_event = responses[response_number]
-    assert initialized_event["event"] == "initialization_data_sent"
+    assert len(responses) == 0
 
 
 @pytest.mark.asyncio

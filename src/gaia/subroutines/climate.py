@@ -65,7 +65,6 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             return True
 
     async def _start(self) -> None:
-        # Actuator activation is done during hardware refresh
         self.logger.info(
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
@@ -198,7 +197,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
         # Check if there are regulators available and map them with climate parameters
         rv: dict[str, gv.ClimateParameter] = {}
-        actuator_couples = self.config.get_actuator_couples()
+        actuator_couples = self.config.get_climate_actuators()
         for climate_param in regulated_parameters:
             actuator_couple: gv.ActuatorCouple = actuator_couples[climate_param]
             for actuator_type in actuator_couple:
@@ -346,7 +345,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             actuator_handler: ActuatorHandler = self.ecosystem.actuator_hub.get_handler(
                 actuator_group)
             async with actuator_handler.update_status_transaction():
-                await actuator_handler.turn_to(turn_to, countdown)
+                await actuator_handler.turn_to(turn_to, countdown=countdown)
         else:
             raise RuntimeError(
                 f"Climate subroutine is not started in ecosystem {self.ecosystem}")

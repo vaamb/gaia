@@ -149,12 +149,15 @@ class EnvironmentConfigValidator(gv.BaseModel):
         default_factory=gv.NycthemeralCycleConfig, validation_alias="sky")
     climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfig] = \
         Field(default_factory=dict)
+    weather: dict[gv.WeatherParameter, gv.AnonymousWeatherConfig] = \
+        Field(default_factory=dict)
 
 
 class EnvironmentConfigDict(TypedDict):
     chaos: gv.ChaosConfigDict
     nycthemeral_cycle: gv.NycthemeralCycleConfigDict
     climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
+    weather: dict[gv.WeatherParameter, gv.AnonymousWeatherConfigDict]
 
 
 class EcosystemConfigValidator(gv.BaseModel):
@@ -1467,6 +1470,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "time_window": self.chaos_time_window,
         })
 
+    """Climate-related parameters"""
     @property
     def climate(self) -> dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]:
         """
@@ -1479,7 +1483,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return self.environment["climate"]
 
     def has_climate_parameter(self, parameter: str | gv.ClimateParameter) -> bool:
-        parameter: gv.ClimateParameter = safe_enum_from_name(gv.ClimateParameter, parameter)
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         return parameter in self.climate
 
     def get_climate_parameter(
@@ -1537,7 +1541,73 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
 
-    def get_actuator_couples(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+    """Weather-related parameters"""
+    @property
+    def weather(self) -> dict[gv.WeatherParameter, gv.AnonymousWeatherConfigDict]:
+        """
+        Returns the weather config for the ecosystem
+        """
+        return self.environment["weather"]
+
+    def has_weather_parameter(self, parameter: str | gv.WeatherParameter) -> bool:
+        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
+        return parameter in self.weather
+
+    def get_weather_parameter(self, parameter: str | gv.WeatherParameter) -> gv.WeatherConfig:
+        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
+        try:
+            data = self.weather[parameter]
+        except KeyError:
+            raise UndefinedParameter(
+                f"No weather parameter {parameter} was found for ecosystem "
+                f"'{self.name}' in ecosystems configuration file."
+            )
+        else:
+            return gv.WeatherConfig(parameter=parameter, **data)
+
+    def set_weather_parameter(
+            self,
+            parameter: str | gv.WeatherParameter,
+            **value: gv.AnonymousWeatherConfigDict,
+    ) -> None:
+        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
+        try:
+            validated_value = gv.AnonymousWeatherConfig(**value).model_dump()
+        except pydantic.ValidationError as e:
+            raise ValueError(
+                f"Invalid weather config provided. "
+                f"ERROR msg(s): `{format_pydantic_error(e)}`."
+            )
+        self.weather[parameter] = validated_value
+
+    def update_weather_parameter(
+            self,
+            parameter: str | gv.WeatherParameter,
+            **value: gv.AnonymousWeatherConfigDict,
+    ) -> None:
+        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
+        if not self.weather.get(parameter):
+            raise UndefinedParameter(
+                f"No weather parameter {parameter} was found for ecosystem "
+                f"'{self.name}' in ecosystems configuration file."
+            )
+        self.set_weather_parameter(parameter, **value)
+
+    def delete_weather_parameter(
+            self,
+            parameter: str | gv.WeatherParameter,
+    ) -> None:
+        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
+        try:
+            del self.weather[parameter]
+        except KeyError:
+            raise UndefinedParameter(
+                f"No weather parameter {parameter} was found for ecosystem "
+                f"'{self.name}' in ecosystems configuration file"
+            )
+
+    """Actuator couples-related parameters"""
+    def get_climate_actuators(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
         return {
             **defaults.actuator_couples,
             **{
@@ -1549,6 +1619,20 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 if climate_cfg["linked_actuators"] is not None
             }
         }
+
+    def get_weather_actuators(self) -> dict[gv.WeatherParameter, gv.ActuatorCouple]:
+        return {
+            weather_parameter: gv.ActuatorCouple(
+                increase=weather_cfg["linked_actuator"] \
+                    if weather_cfg["linked_actuator"] \
+                    else weather_parameter,
+                decrease=None,
+            )
+            for weather_parameter, weather_cfg in self.weather.items()
+        }
+
+    def get_actuator_couples(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+        return self.get_climate_actuators() | self.get_weather_actuators()
 
     def get_actuator_to_parameter(self) -> dict[str, gv.ClimateParameter]:
         return defaults.get_actuator_to_parameter(self.get_actuator_couples())
