@@ -50,7 +50,7 @@ class TestEngineConfig:
             yaml.dump(engine_config.ecosystems_config_dict, cfg)
         await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
         with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-            assert "Updating ecosystems configuration" in logs
+            assert "Change in ecosystems configuration file detected" in logs
 
         # Test watchdog for private cfg
         engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
@@ -58,7 +58,7 @@ class TestEngineConfig:
             yaml.dump(engine_config.private_config, cfg)
         await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
         with get_logs_content(engine_config.logs_dir / "gaia.log") as logs:
-            assert "Updating private configuration" in logs
+            assert "Change in private configuration file detected" in logs
 
         # Stop watchdog and make sure it can only be stopped once
         engine_config.stop_watchdog()
