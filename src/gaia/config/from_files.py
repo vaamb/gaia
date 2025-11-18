@@ -356,50 +356,106 @@ class EngineConfig(metaclass=SingletonMeta):
                 "`engine_config.with config_files_lock():` block"
             )
 
-    def _load_config(self, cfg_type: ConfigType) -> None:
+    @staticmethod
+    async def _load_yaml(path: Path) -> dict:
+        def load_yaml_sync() -> dict:
+            with open(path, "r") as file:
+                data: dict = yaml.load(file)
+            return data
+
+        return await run_sync(load_yaml_sync)
+
+    async def _load_ecosystems_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
-        config_path = self.get_file_path(cfg_type)
-        if cfg_type == ConfigType.ecosystems:
-            with open(config_path, "r") as file:
-                unvalidated: dict[str, EcosystemConfigDict] = yaml.load(file)
-            try:
-                validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
-            except pydantic.ValidationError as e:  # pragma: no cover
-                self.logger.error(
-                    f"Could not validate ecosystems configuration file. "
-                    f"ERROR msg(s): `{format_pydantic_error(e)}`."
-                )
-                raise e
-            else:
-                self.validate_hardware_dicts(validated)
-                self._ecosystems_config_dict = validated
-                self._dump_config(cfg_type)
-        elif cfg_type == ConfigType.private:
-            with open(config_path, "r") as file:
-                unvalidated = yaml.load(file)
-            try:
-                validated = PrivateConfigValidator(**unvalidated).model_dump()
-            except pydantic.ValidationError as e:  # pragma: no cover
-                self.logger.error(
-                    f"Could not validate private configuration file. "
-                    f"ERROR msg(s): `{format_pydantic_error(e)}`."
-                )
-                raise e
-            else:
-                self._private_config = validated
+        # Load raw data
+        config_path = self.get_file_path(ConfigType.ecosystems)
+        unvalidated: dict[str, EcosystemConfigDict] = await self._load_yaml(config_path)
+        # Validate the data structure
+        try:
+            validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
+        except pydantic.ValidationError as e:  # pragma: no cover
+            self.logger.error(
+                f"Could not load ecosystems configuration file. "
+                f"ERROR msg(s): `{format_pydantic_error(e)}`."
+            )
+            raise e
 
-    @staticmethod
-    def validate_hardware_dicts(ecosystems_config_dict: dict[str, EcosystemConfigDict]) -> None:
-        for ecosystem_dict in ecosystems_config_dict.values():
+        # Validate the data logic
+        unfixable_error: bool = False
+        for ecosystem_uid, ecosystem_cfg in validated.items():
+            ecosystem_cfg: EcosystemConfigDict
+            # Check hardware config
+            self.logger.debug(
+                f"Checking hardware config for ecosystem {ecosystem_uid}.")
             addresses_used: list[str] = []
-            for IO_uid, IO_dict in ecosystem_dict["IO"].items():
-                EcosystemConfig.validate_hardware_dict(
-                    hardware_dict={"uid": IO_uid, **IO_dict},
-                    addresses_used=addresses_used,
-                    check_address=True,
-                )
-                addresses_used.extend(IO_dict["address"].split("&"))
+            for IO_uid, IO_dict in ecosystem_cfg["IO"].items():
+                try:
+                    EcosystemConfig.validate_hardware_dict(
+                        hardware_dict={"uid": IO_uid, **IO_dict},
+                        addresses_used=addresses_used,
+                        check_address=True,
+                    )
+                except ValueError as e:
+                    self.logger.error(
+                        f"Could not validate hardware config for hardware {IO_uid} "
+                        f"in ecosystem {ecosystem_uid}. ERROR msg(s): `{e}`.")
+                    unfixable_error = True
+                finally:
+                    addresses_used.extend(IO_dict["address"].split("&"))
+
+            # Check nycthemeral config
+            self.logger.debug(
+                f"Checking nycthemeral config for ecosystem {ecosystem_uid}.")
+            nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
+
+            span_method = safe_enum_from_name(gv.NycthemeralSpanMethod, nycthemeral_cfg["span"])
+            try:
+                EcosystemConfig.validate_nycthemeral_method(
+                    span_method, ecosystem_cfg, self.private_config["places"])
+            except ValidationError as e:
+                self.logger.warning(
+                    f"Nycthemeral span method cannot be set to '{span_method.name}' "
+                    f"for ecosystem {ecosystem_uid}. Will fall back to 'fixed'. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`")
+
+            lighting_method = safe_enum_from_name(gv.LightingMethod, nycthemeral_cfg["lighting"])
+            try:
+                EcosystemConfig.validate_nycthemeral_method(
+                    lighting_method, ecosystem_cfg, self.private_config["places"])
+            except ValidationError as e:
+                self.logger.warning(
+                    f"Lighting method cannot be set to '{lighting_method.name}' "
+                    f"for ecosystem {ecosystem_uid}. Will fall back to 'fixed'. "
+                    f"ERROR msg: `{e.__class__.__name__} :{e}`")
+
+        if unfixable_error:
+            raise ValidationError(
+                "Could not validate ecosystems config. Check the log for more "
+                "details."
+            )
+        # Set the ecosystems config dict
+        self._ecosystems_config_dict = validated
+        # Dump the config as a yaml file as it may have been modified by pydantic
+        self._dump_config(ConfigType.ecosystems)
+
+    async def _load_private_config(self) -> None:
+        # /!\ must be used with the config_files_lock acquired
+        self._check_files_lock_acquired()
+        # Load raw data
+        config_path = self.get_file_path(ConfigType.private)
+        unvalidated: PrivateConfigDict = await self._load_yaml(config_path)
+        # Validate the data structure
+        try:
+            validated = PrivateConfigValidator(**unvalidated).model_dump()
+        except pydantic.ValidationError as e:  # pragma: no cover
+            self.logger.error(
+                f"Could not validate private configuration file. "
+                f"ERROR msg(s): `{format_pydantic_error(e)}`."
+            )
+            raise e
+        # Room for possible future data logic validation
+        self._private_config = validated
 
     def _dump_config(self, cfg_type: ConfigType):
         # /!\ must be used with the config_files_lock acquired
@@ -432,38 +488,36 @@ class EngineConfig(metaclass=SingletonMeta):
 
     async def initialize_configs(self) -> None:
         # This steps needs to remain separate and explicits as it loads files
-        async with self.config_files_lock():
-            for cfg_type in ConfigType:
-                try:
-                    await run_sync(self._load_config, cfg_type)
-                except OSError:
-                    if cfg_type == ConfigType.ecosystems:
-                        self.logger.warning(
-                            "No custom `ecosystems.cfg` configuration file "
-                            "detected. Creating a default file.")
-                        await self._create_ecosystems_config_file()
-                    elif cfg_type == ConfigType.private:
-                        self.logger.warning(
-                            "No custom `private.cfg` configuration file "
-                            "detected. Creating a default file.")
-                        await self._create_private_config_file()
-                finally:
-                    file_path = self.get_file_path(cfg_type)
-                    file_checksum = await run_sync(_file_checksum, file_path)
-                    self._config_files_checksum[file_path] = file_checksum
+        # Private configs need to be loaded first so we can check nycthemeral
+        #  methods based on the private config
+        # Load private config
+        private_cfg_path: Path = self.get_file_path(ConfigType.private)
+        if private_cfg_path.exists():
+            await self.load(ConfigType.private)
+        else:
+            self.logger.warning(
+                "No custom `private.cfg` configuration file detected. "
+                "Creating a default file.")
+            async with self.config_files_lock():
+                await self._create_private_config_file()
+        file_checksum = await run_sync(_file_checksum, private_cfg_path)
+        self._config_files_checksum[private_cfg_path] = file_checksum
+        # Load ecosystems config
+        ecosystems_cfg_path: Path = self.get_file_path(ConfigType.ecosystems)
+        if ecosystems_cfg_path.exists():
+            await self.load(ConfigType.ecosystems)
+        else:
+            self.logger.warning(
+                "No custom `ecosystems.cfg` configuration file detected. "
+                "Creating a default file.")
+            async with self.config_files_lock():
+                await self._create_ecosystems_config_file()
+        file_checksum = await run_sync(_file_checksum, ecosystems_cfg_path)
+        self._config_files_checksum[ecosystems_cfg_path] = file_checksum
+        # Load chaos cache
         await self.load(CacheType.chaos)
-        for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items():
-            eco_nyct_cfg = eco_cfg_dict["environment"]["nycthemeral_cycle"]
-            ecosystem_name = self.get_IDs(ecosystem_uid).name
-            self.logger.debug(
-                f"Checking if lighting and nycthemeral span methods for "
-                f"ecosystem {ecosystem_name} are possible.")
-            lighting_method = safe_enum_from_name(
-                gv.LightingMethod, eco_nyct_cfg["lighting"])
-            self.check_nycthemeral_method_validity(ecosystem_uid, lighting_method)
-            span_method = safe_enum_from_name(
-                gv.NycthemeralSpanMethod, eco_nyct_cfg["span"])
-            self.check_nycthemeral_method_validity(ecosystem_uid, span_method)
+        # Mark as loaded
+        self.configs_loaded = True
         self.configs_loaded = True
 
     async def save(self, cfg_type: ConfigType | CacheType) -> None:
@@ -478,13 +532,21 @@ class EngineConfig(metaclass=SingletonMeta):
                 await run_sync(self._dump_chaos_memory)
 
     async def load(self, cfg_type: ConfigType | CacheType) -> None:
-        if isinstance(cfg_type, ConfigType):
-            async with self.config_files_lock():
-                self.logger.debug(f"Loading {cfg_type.name} configuration file(s).")
-                await run_sync(self._load_config, cfg_type)
-        else:
-            if cfg_type == CacheType.chaos:
+        """Load config files"""
+        match cfg_type:
+            case ConfigType.ecosystems:
+                async with self.config_files_lock():
+                    self.logger.debug(f"Loading ecosystems configuration file.")
+                    await self._load_ecosystems_config()
+            case ConfigType.private:
+                async with self.config_files_lock():
+                    self.logger.debug(f"Loading private configuration file.")
+                    await self._load_private_config()
+            case CacheType.chaos:
+                self.logger.debug(f"Loading chaos cache file.")
                 await self._load_chaos_memory()
+            case _:
+                raise ValueError(f"Unknown config type: {cfg_type}")
 
     # File watchdog
     async def _get_changed_config_files(self) -> set[ConfigType]:
@@ -503,11 +565,14 @@ class EngineConfig(metaclass=SingletonMeta):
         async with self.config_files_lock_no_reset():
             changed_configs = await self._get_changed_config_files()
             if changed_configs:
-                for config_type in changed_configs:
+                if ConfigType.private in changed_configs:
                     self.logger.info(
-                        f"Change in '{config_type.value}' detected. Updating "
-                        f"{config_type.name} configuration.")
-                    self._load_config(cfg_type=config_type)
+                        "Change in private configuration file detected. Updating it.")
+                    await self._load_private_config()
+                if ConfigType.ecosystems in changed_configs:
+                    self.logger.info(
+                        "Change in ecosystems configuration file detected. Updating it.")
+                    await self._load_ecosystems_config()
                 if ConfigType.ecosystems in changed_configs:
                     for ecosystem_config in self.ecosystems_config.values():
                         ecosystem_config.reset_caches()
@@ -823,65 +888,6 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"{humanize_list(list(places_failed))}. Some functionalities "
                 f"might not work as expected."
             )
-
-    def check_nycthemeral_method_validity(
-            self,
-            ecosystem_uid: str,
-            method: gv.LightingMethod | gv.NycthemeralSpanMethod,
-            raise_on_error: bool = False,
-    ) -> bool:
-        ecosystem_name = self.get_IDs(ecosystem_uid).name
-        if method == 0:  # Fixed, no target needed
-            return True
-        # Try to get the target
-        target: str
-        if (method & gv.LightingMethod.elongate) == gv.LightingMethod.elongate:
-            target = "home"
-        elif (method & gv.NycthemeralSpanMethod.mimic) == gv.NycthemeralSpanMethod.mimic:
-            nyct_cfg: gv.NycthemeralCycleConfigDict = \
-                self.ecosystems_config_dict[ecosystem_uid]["environment"]["nycthemeral_cycle"]
-            target = nyct_cfg.get("target")
-            if target is None:
-                msg = (
-                    f"Nycthemeral span method method for ecosystem "
-                    f"{ecosystem_name} cannot be 'mimic' as no target is "
-                    f"specified in the ecosystems configuration file."
-                )
-                if raise_on_error:
-                    raise ValueError(msg)
-                self.logger.warning(msg)
-                return False
-        else:  # pragma: no cover
-            raise ValueError(
-                "'method' should be either a valid lighting method or a valid "
-                "nycthemeral span method."
-            )
-
-        m = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
-        # Try to get the target's coordinates
-        place = self.get_place(target)
-        if place is None:
-            msg = (
-                f"{m} method for ecosystem {ecosystem_name} cannot be "
-                f"'{method.name}' as the coordinates of '{target}' are "
-                f"not provided in the private configuration file. Will fall "
-                f"back to 'fixed'."
-            )
-            if raise_on_error:
-                raise ValueError(msg)
-            self.logger.warning(msg)
-        # Try to get the target's sun times
-        sun_times = self.get_sun_times(target)
-        if sun_times is None:
-            msg = (
-                f"{m} method for ecosystem {ecosystem_name} cannot be "
-                f"'{method.name}' as the sun times of '{target}' "
-                f"weren't found. Will fall back to 'fixed'."
-            )
-            if raise_on_error:
-                raise ValueError(msg)
-            self.logger.warning(msg)
-        return True
 
     @property
     def chaos_memory(self) -> dict[str, ChaosMemory]:
