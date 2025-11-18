@@ -42,12 +42,6 @@ class ValidationError(ValueError):
     pass
 
 
-def _to_dt(_time: time) -> datetime:
-    # Transforms time to today's datetime. Needed to use timedelta
-    _date = date.today()
-    return datetime.combine(_date, _time)
-
-
 # ---------------------------------------------------------------------------
 #   Enums
 # ---------------------------------------------------------------------------
@@ -115,6 +109,12 @@ def _file_checksum(file_path: Path, _buffer_size: int = 4096) -> H:
             return digest_obj.digest()
     except FileNotFoundError:  # pragma: no cover
         return b"\x00"
+
+
+def _to_dt(_time: time) -> datetime:
+    # Transforms time to today's datetime. Needed to use timedelta
+    _date = date.today()
+    return datetime.combine(_date, _time)
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +382,7 @@ class EngineConfig(metaclass=SingletonMeta):
             return self.cache_dir / file_type.value
         raise ValueError(f"Invalid file type: {file_type}")
 
-    # Load, dump and save config
+    # Load and save configs and caches
     def _check_files_lock_acquired(self) -> None:
         if not self._config_files_lock.locked():
             raise RuntimeError(
@@ -482,6 +482,48 @@ class EngineConfig(metaclass=SingletonMeta):
         # Room for possible future data logic validation
         self._private_config = validated
 
+    async def _load_chaos_memory(self) -> None:
+        self.logger.debug("Trying to load chaos memory.")
+        chaos_path = self.get_file_path(CacheType.chaos)
+        try:
+            unvalidated = await _load_json(chaos_path)
+            try:
+                validated: dict[str, ChaosMemory] = (
+                    ChaosMemoryRootValidator
+                    .model_validate(unvalidated)
+                    .model_dump()
+                )
+            except pydantic.ValidationError:  # pragma: no cover
+                self.logger.error("Error while loading chaos.")
+                raise
+        except (FileNotFoundError, JSONDecodeError):
+            validated = {}
+        incomplete = False
+        for ecosystem_uid in self.ecosystems_config_dict:
+            if ecosystem_uid not in validated:
+                incomplete = True
+                validated.update(self._create_chaos_memory(ecosystem_uid))
+        self._chaos_memory = validated
+        if incomplete:
+            await self._dump_chaos_memory()
+
+    async def load(self, cfg_type: ConfigType | CacheType) -> None:
+        """Load config files"""
+        match cfg_type:
+            case ConfigType.ecosystems:
+                async with self.config_files_lock():
+                    self.logger.debug(f"Loading ecosystems configuration file.")
+                    await self._load_ecosystems_config()
+            case ConfigType.private:
+                async with self.config_files_lock():
+                    self.logger.debug(f"Loading private configuration file.")
+                    await self._load_private_config()
+            case CacheType.chaos:
+                self.logger.debug(f"Loading chaos cache file.")
+                await self._load_chaos_memory()
+            case _:
+                raise ValueError(f"Unknown config type: {cfg_type}")
+
     async def _dump_ecosystems_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
@@ -502,12 +544,33 @@ class EngineConfig(metaclass=SingletonMeta):
     async def _dump_private_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
-        # Get the data
-        cfg = self._private_config
-        # Dump it
+        # Dump the data
         config_path = self.get_file_path(ConfigType.private)
-        await _dump_yaml(cfg, config_path)
+        await _dump_yaml(self._private_config, config_path)
 
+    async def _dump_chaos_memory(self) -> None:
+        chaos_path = self.get_file_path(CacheType.chaos)
+        await _dump_json(self._chaos_memory, chaos_path)
+
+    async def save(self, cfg_type: ConfigType | CacheType) -> None:
+        if self.app_config.TESTING:
+            return
+        match cfg_type:
+            case ConfigType.ecosystems:
+                async with self.config_files_lock():
+                    self.logger.debug(f"Saving ecosystems configuration file.")
+                    await self._dump_ecosystems_config()
+            case ConfigType.private:
+                async with self.config_files_lock():
+                    self.logger.debug(f"Saving private configuration file.")
+                    await self._dump_private_config()
+            case CacheType.chaos:
+                self.logger.debug(f"Saving chaos cache file.")
+                await self._dump_chaos_memory()
+            case _:
+                raise ValueError(f"Unknown config type: {cfg_type}")
+
+    # Initialize configs
     async def _create_ecosystems_config_file(self):
         self._ecosystems_config_dict = {}
         self._create_ecosystem("Default Ecosystem")
@@ -531,8 +594,6 @@ class EngineConfig(metaclass=SingletonMeta):
                 "Creating a default file.")
             async with self.config_files_lock():
                 await self._create_private_config_file()
-        file_checksum = await run_sync(_file_checksum, private_cfg_path)
-        self._config_files_checksum[private_cfg_path] = file_checksum
         # Load ecosystems config
         ecosystems_cfg_path: Path = self.get_file_path(ConfigType.ecosystems)
         if ecosystems_cfg_path.exists():
@@ -543,48 +604,15 @@ class EngineConfig(metaclass=SingletonMeta):
                 "Creating a default file.")
             async with self.config_files_lock():
                 await self._create_ecosystems_config_file()
-        file_checksum = await run_sync(_file_checksum, ecosystems_cfg_path)
-        self._config_files_checksum[ecosystems_cfg_path] = file_checksum
+        # Update checksums
+        self._config_files_checksum[private_cfg_path] = \
+            await run_sync(_file_checksum, private_cfg_path)
+        self._config_files_checksum[ecosystems_cfg_path] = \
+            await run_sync(_file_checksum, ecosystems_cfg_path)
         # Load chaos cache
         await self.load(CacheType.chaos)
         # Mark as loaded
         self.configs_loaded = True
-        self.configs_loaded = True
-
-    async def save(self, cfg_type: ConfigType | CacheType) -> None:
-        if self.app_config.TESTING:
-            return
-        match cfg_type:
-            case ConfigType.ecosystems:
-                async with self.config_files_lock():
-                    self.logger.debug(f"Saving ecosystems configuration file.")
-                    await self._dump_ecosystems_config()
-            case ConfigType.private:
-                async with self.config_files_lock():
-                    self.logger.debug(f"Saving private configuration file.")
-                    await self._dump_private_config()
-            case CacheType.chaos:
-                self.logger.debug(f"Saving chaos cache file.")
-                await self._dump_chaos_memory()
-            case _:
-                raise ValueError(f"Unknown config type: {cfg_type}")
-
-    async def load(self, cfg_type: ConfigType | CacheType) -> None:
-        """Load config files"""
-        match cfg_type:
-            case ConfigType.ecosystems:
-                async with self.config_files_lock():
-                    self.logger.debug(f"Loading ecosystems configuration file.")
-                    await self._load_ecosystems_config()
-            case ConfigType.private:
-                async with self.config_files_lock():
-                    self.logger.debug(f"Loading private configuration file.")
-                    await self._load_private_config()
-            case CacheType.chaos:
-                self.logger.debug(f"Loading chaos cache file.")
-                await self._load_chaos_memory()
-            case _:
-                raise ValueError(f"Unknown config type: {cfg_type}")
 
     # File watchdog
     async def _get_changed_config_files(self) -> set[ConfigType]:
@@ -939,35 +967,6 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
-
-    async def _load_chaos_memory(self) -> None:
-        self.logger.debug("Trying to load chaos memory.")
-        chaos_path = self.get_file_path(CacheType.chaos)
-        try:
-            unvalidated = await _load_json(chaos_path)
-            try:
-                validated: dict[str, ChaosMemory] = (
-                    ChaosMemoryRootValidator
-                    .model_validate(unvalidated)
-                    .model_dump()
-                )
-            except pydantic.ValidationError:  # pragma: no cover
-                self.logger.error("Error while loading chaos.")
-                raise
-        except (FileNotFoundError, JSONDecodeError):
-            validated = {}
-        incomplete = False
-        for ecosystem_uid in self.ecosystems_config_dict:
-            if ecosystem_uid not in validated:
-                incomplete = True
-                validated.update(self._create_chaos_memory(ecosystem_uid))
-        self._chaos_memory = validated
-        if incomplete:
-            await self._dump_chaos_memory()
-
-    async def _dump_chaos_memory(self) -> None:
-        chaos_path = self.get_file_path(CacheType.chaos)
-        await _dump_json(self._chaos_memory, chaos_path)
 
     def get_chaos_memory(self, ecosystem_uid: str) -> ChaosMemory:
         if ecosystem_uid not in self.ecosystems_config_dict:
