@@ -38,6 +38,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
 
 
+class ValidationError(ValueError):
+    pass
+
+
 def _to_dt(_time: time) -> datetime:
     # Transforms time to today's datetime. Needed to use timedelta
     _date = date.today()
@@ -1173,14 +1177,51 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.mimic
         return self._nycthemeral_span_method_cache
 
+    @staticmethod
+    def validate_nycthemeral_method(
+            method: gv.LightingMethod | gv.NycthemeralSpanMethod,
+            ecosystem_dict: EcosystemConfigDict,
+            places_dict: dict[str, gv.Coordinates],
+    ) -> None:
+        if method == 0:  # Fixed, no target needed
+            return
+        # Try to get the target
+        target: str
+        if (method & gv.LightingMethod.elongate) == gv.LightingMethod.elongate:
+            target = "home"
+        elif (method & gv.NycthemeralSpanMethod.mimic) == gv.NycthemeralSpanMethod.mimic:
+            nyct_cfg: gv.NycthemeralCycleConfigDict = \
+                ecosystem_dict["environment"]["nycthemeral_cycle"]
+            target = nyct_cfg.get("target")
+            if target is None:
+                raise ValidationError(
+                    f"Nycthemeral span method method cannot be 'mimic' as no "
+                    f"target is specified in the ecosystems configuration file."
+                )
+        else:  # pragma: no cover
+            raise ValidationError(
+                "'method' should be either a valid lighting method or a valid "
+                "nycthemeral span method."
+            )
+
+        m = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
+        # Verify we have the target's coordinates
+        place = places_dict.get(target, None)
+        if place is None:
+            raise ValidationError(
+                f"{m} method cannot be '{method.name}' as the coordinates of "
+                f"'{target}' are not provided in the private configuration file."
+            )
+        # Assume the sun times can be computed
+
     async def set_nycthemeral_span_method(
             self,
             method: gv.NycthemeralSpanMethod,
             send_info: bool = True,
     ) -> None:
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
-        self.general.check_nycthemeral_method_validity(
-            self.uid, method, raise_on_error=True)
+        self.validate_nycthemeral_method(
+            method, self.__dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
@@ -1279,8 +1320,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             send_info: bool = True,
     ) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
-        self.general.check_nycthemeral_method_validity(
-            self.uid, method, raise_on_error=True)
+        self.validate_nycthemeral_method(
+            method, self.__dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
@@ -1360,15 +1401,29 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Then update info using lock as the whole dict should be transformed at the "same time"
 
         # Log warnings for issues with raw nycthemeral span method
-        self.general.check_nycthemeral_method_validity(
-            self.uid, self.nycthemeral_cycle["span"])
+        span = self.nycthemeral_cycle["span"]
+        try:
+            self.validate_nycthemeral_method(
+                span, self.__dict, self.general.private_config["places"])
+        except ValidationError as e:
+            self.logger.warning(
+                f"Nycthemeral span method cannot be set to '{span.name}'. Will "
+                f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__} :{e}`"
+            )
         # Raw nycthemeral span is silently replaced if needed
         self.nycthemeral_span_method
         self.nycthemeral_span_hours
 
         # Log warnings for issues with raw lighting method
-        self.general.check_nycthemeral_method_validity(
-            self.uid, self.nycthemeral_cycle["lighting"])
+        lighting = self.nycthemeral_cycle["lighting"]
+        try:
+            self.validate_nycthemeral_method(
+                lighting, self.__dict, self.general.private_config["places"])
+        except ValidationError as e:
+            self.logger.warning(
+                f"Lighting method cannot be set to '{lighting.name}'. Will "
+                f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__} :{e}`"
+            )
         # Raw lighting method span is silently replaced if needed
         self.lighting_method
         self.lighting_hours
