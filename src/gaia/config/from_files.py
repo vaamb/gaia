@@ -346,6 +346,7 @@ class EngineConfig(metaclass=SingletonMeta):
             return self.config_dir / file_type.value
         if isinstance(file_type, CacheType):
             return self.cache_dir / file_type.value
+        raise ValueError(f"Invalid file type: {file_type}")
 
     # Load, dump and save config
     def _check_files_lock_acquired(self) -> None:
