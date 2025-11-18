@@ -512,14 +512,14 @@ class EngineConfig(metaclass=SingletonMeta):
         match cfg_type:
             case ConfigType.ecosystems:
                 async with self.config_files_lock():
-                    self.logger.debug(f"Loading ecosystems configuration file.")
+                    self.logger.debug("Loading ecosystems configuration file.")
                     await self._load_ecosystems_config()
             case ConfigType.private:
                 async with self.config_files_lock():
-                    self.logger.debug(f"Loading private configuration file.")
+                    self.logger.debug("Loading private configuration file.")
                     await self._load_private_config()
             case CacheType.chaos:
-                self.logger.debug(f"Loading chaos cache file.")
+                self.logger.debug("Loading chaos cache file.")
                 await self._load_chaos_memory()
             case _:
                 raise ValueError(f"Unknown config type: {cfg_type}")
@@ -558,14 +558,14 @@ class EngineConfig(metaclass=SingletonMeta):
         match cfg_type:
             case ConfigType.ecosystems:
                 async with self.config_files_lock():
-                    self.logger.debug(f"Saving ecosystems configuration file.")
+                    self.logger.debug("Saving ecosystems configuration file.")
                     await self._dump_ecosystems_config()
             case ConfigType.private:
                 async with self.config_files_lock():
-                    self.logger.debug(f"Saving private configuration file.")
+                    self.logger.debug("Saving private configuration file.")
                     await self._dump_private_config()
             case CacheType.chaos:
-                self.logger.debug(f"Saving chaos cache file.")
+                self.logger.debug("Saving chaos cache file.")
                 await self._dump_chaos_memory()
             case _:
                 raise ValueError(f"Unknown config type: {cfg_type}")
@@ -1237,8 +1237,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             target = nyct_cfg.get("target")
             if target is None:
                 raise ValidationError(
-                    f"Nycthemeral span method method cannot be 'mimic' as no "
-                    f"target is specified in the ecosystems configuration file."
+                    "Nycthemeral span method method cannot be 'mimic' as no "
+                    "target is specified in the ecosystems configuration file."
                 )
         else:  # pragma: no cover
             raise ValidationError(
