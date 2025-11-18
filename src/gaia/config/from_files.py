@@ -911,6 +911,14 @@ class EngineConfig(metaclass=SingletonMeta):
 
         return await run_sync(load_json_sync)
 
+    @staticmethod
+    async def _dump_json(data: dict, path: Path) -> None:
+        def dump_json_sync() -> None:
+            with open(path, "w") as file:
+                file.write(json.dumps(data))
+
+        return await run_sync(dump_json_sync)
+
     async def _load_chaos_memory(self) -> None:
         self.logger.debug("Trying to load chaos memory.")
         chaos_path = self.get_file_path(CacheType.chaos)
@@ -934,12 +942,11 @@ class EngineConfig(metaclass=SingletonMeta):
                 validated.update(self._create_chaos_memory(ecosystem_uid))
         self._chaos_memory = validated
         if incomplete:
-            self._dump_chaos_memory()
+            await self._dump_chaos_memory()
 
-    def _dump_chaos_memory(self) -> None:
+    async def _dump_chaos_memory(self) -> None:
         chaos_path = self.get_file_path(CacheType.chaos)
-        with chaos_path.open("w") as file:
-            file.write(json.dumps(self._chaos_memory))
+        await self._dump_json(self._chaos_memory, chaos_path)
 
     def get_chaos_memory(self, ecosystem_uid: str) -> ChaosMemory:
         if ecosystem_uid not in self.ecosystems_config_dict:
