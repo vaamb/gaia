@@ -365,6 +365,14 @@ class EngineConfig(metaclass=SingletonMeta):
 
         return await run_sync(load_yaml_sync)
 
+    @staticmethod
+    async def _dump_yaml(data: dict, path: Path) -> None:
+        def dump_yaml_sync() -> None:
+            with open(path, "w") as file:
+                yaml.dump(data, file)
+
+        await run_sync(dump_yaml_sync)
+
     async def _load_ecosystems_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
@@ -437,7 +445,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
         # Dump the config as a yaml file as it may have been modified by pydantic
-        self._dump_config(ConfigType.ecosystems)
+        await self._dump_ecosystems_config()
 
     async def _load_private_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
@@ -457,34 +465,40 @@ class EngineConfig(metaclass=SingletonMeta):
         # Room for possible future data logic validation
         self._private_config = validated
 
-    def _dump_config(self, cfg_type: ConfigType):
+    async def _dump_ecosystems_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
-        # TODO: shorten dicts used ?
-        config_path = self.get_file_path(cfg_type)
-        if cfg_type == ConfigType.ecosystems:
-            # Exclude some defaults to shorten the config file
-            cfg = deepcopy(self.ecosystems_config_dict)
-            for uid in cfg:
-                cfg[uid]["IO"] = validate_from_root_model(
-                    cfg[uid]["IO"], RootIOValidator, exclude_defaults=True)
-                cfg[uid]["environment"]["climate"] = validate_from_root_model(
-                    cfg[uid]["environment"]["climate"], RootClimateValidator, exclude_defaults=True)
-                cfg[uid]["plants"] = validate_from_root_model(
-                    cfg[uid]["plants"], RootPlantsValidator, exclude_defaults=True)
-        else:
-            cfg = self._private_config
-        with open(config_path, "w") as file:
-            yaml.dump(cfg, file)
+        # Get the data
+        cfg = deepcopy(self.ecosystems_config_dict)
+        # Format it
+        for uid in cfg:
+            cfg[uid]["IO"] = validate_from_root_model(
+                cfg[uid]["IO"], RootIOValidator, exclude_defaults=True)
+            cfg[uid]["environment"]["climate"] = validate_from_root_model(
+                cfg[uid]["environment"]["climate"], RootClimateValidator, exclude_defaults=True)
+            cfg[uid]["plants"] = validate_from_root_model(
+                cfg[uid]["plants"], RootPlantsValidator, exclude_defaults=True)
+        # Dump it
+        config_path = self.get_file_path(ConfigType.ecosystems)
+        await self._dump_yaml(cfg, config_path)
+
+    async def _dump_private_config(self) -> None:
+        # /!\ must be used with the config_files_lock acquired
+        self._check_files_lock_acquired()
+        # Get the data
+        cfg = self._private_config
+        # Dump it
+        config_path = self.get_file_path(ConfigType.private)
+        await self._dump_yaml(cfg, config_path)
 
     async def _create_ecosystems_config_file(self):
         self._ecosystems_config_dict = {}
         self._create_ecosystem("Default Ecosystem")
-        await run_sync(self._dump_config, ConfigType.ecosystems)
+        await self._dump_ecosystems_config()
 
     async def _create_private_config_file(self):
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
-        await run_sync(self._dump_config, ConfigType.private)
+        await self._dump_private_config()
 
     async def initialize_configs(self) -> None:
         # This steps needs to remain separate and explicits as it loads files
@@ -523,13 +537,20 @@ class EngineConfig(metaclass=SingletonMeta):
     async def save(self, cfg_type: ConfigType | CacheType) -> None:
         if self.app_config.TESTING:
             return
-        if isinstance(cfg_type, ConfigType):
-            async with self.config_files_lock():
-                self.logger.debug(f"Updating {cfg_type.name} configuration file(s).")
-                await run_sync(self._dump_config, cfg_type)
-        else:
-            if cfg_type == CacheType.chaos:
-                await run_sync(self._dump_chaos_memory)
+        match cfg_type:
+            case ConfigType.ecosystems:
+                async with self.config_files_lock():
+                    self.logger.debug(f"Saving ecosystems configuration file.")
+                    await self._dump_ecosystems_config()
+            case ConfigType.private:
+                async with self.config_files_lock():
+                    self.logger.debug(f"Saving private configuration file.")
+                    await self._dump_private_config()
+            case CacheType.chaos:
+                self.logger.debug(f"Saving chaos cache file.")
+                await self._dump_chaos_memory()
+            case _:
+                raise ValueError(f"Unknown config type: {cfg_type}")
 
     async def load(self, cfg_type: ConfigType | CacheType) -> None:
         """Load config files"""
