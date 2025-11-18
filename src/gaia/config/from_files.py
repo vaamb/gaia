@@ -63,6 +63,40 @@ class CacheType(Enum):
 # ---------------------------------------------------------------------------
 #   Utility functions
 # ---------------------------------------------------------------------------
+async def _load_json(path: Path) -> dict:
+    def load_json_sync() -> dict:
+        with open(path, "r") as file:
+            data: dict = json.loads(file.read())
+        return data
+
+    return await run_sync(load_json_sync)
+
+
+async def _dump_json(data: dict, path: Path) -> None:
+    def dump_json_sync() -> None:
+        with open(path, "w") as file:
+            file.write(json.dumps(data))
+
+    return await run_sync(dump_json_sync)
+
+
+async def _load_yaml(path: Path) -> dict:
+    def load_yaml_sync() -> dict:
+        with open(path, "r") as file:
+            data: dict = yaml.load(file)
+        return data
+
+    return await run_sync(load_yaml_sync)
+
+
+async def _dump_yaml(data: dict, path: Path) -> None:
+    def dump_yaml_sync() -> None:
+        with open(path, "w") as file:
+            yaml.dump(data, file)
+
+    await run_sync(dump_yaml_sync)
+
+
 H = TypeVar("H", int, bytes, str)
 
 
@@ -356,29 +390,12 @@ class EngineConfig(metaclass=SingletonMeta):
                 "`engine_config.with config_files_lock():` block"
             )
 
-    @staticmethod
-    async def _load_yaml(path: Path) -> dict:
-        def load_yaml_sync() -> dict:
-            with open(path, "r") as file:
-                data: dict = yaml.load(file)
-            return data
-
-        return await run_sync(load_yaml_sync)
-
-    @staticmethod
-    async def _dump_yaml(data: dict, path: Path) -> None:
-        def dump_yaml_sync() -> None:
-            with open(path, "w") as file:
-                yaml.dump(data, file)
-
-        await run_sync(dump_yaml_sync)
-
     async def _load_ecosystems_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.ecosystems)
-        unvalidated: dict[str, EcosystemConfigDict] = await self._load_yaml(config_path)
+        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
         # Validate the data structure
         try:
             validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
@@ -452,7 +469,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.private)
-        unvalidated: PrivateConfigDict = await self._load_yaml(config_path)
+        unvalidated: PrivateConfigDict = await _load_yaml(config_path)
         # Validate the data structure
         try:
             validated = PrivateConfigValidator(**unvalidated).model_dump()
@@ -480,7 +497,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 cfg[uid]["plants"], RootPlantsValidator, exclude_defaults=True)
         # Dump it
         config_path = self.get_file_path(ConfigType.ecosystems)
-        await self._dump_yaml(cfg, config_path)
+        await _dump_yaml(cfg, config_path)
 
     async def _dump_private_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
@@ -489,7 +506,7 @@ class EngineConfig(metaclass=SingletonMeta):
         cfg = self._private_config
         # Dump it
         config_path = self.get_file_path(ConfigType.private)
-        await self._dump_yaml(cfg, config_path)
+        await _dump_yaml(cfg, config_path)
 
     async def _create_ecosystems_config_file(self):
         self._ecosystems_config_dict = {}
@@ -923,28 +940,11 @@ class EngineConfig(metaclass=SingletonMeta):
     def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
 
-    @staticmethod
-    async def _load_json(path: Path) -> dict:
-        def load_json_sync() -> dict:
-            with open(path, "r") as file:
-                data: dict = json.loads(file.read())
-            return data
-
-        return await run_sync(load_json_sync)
-
-    @staticmethod
-    async def _dump_json(data: dict, path: Path) -> None:
-        def dump_json_sync() -> None:
-            with open(path, "w") as file:
-                file.write(json.dumps(data))
-
-        return await run_sync(dump_json_sync)
-
     async def _load_chaos_memory(self) -> None:
         self.logger.debug("Trying to load chaos memory.")
         chaos_path = self.get_file_path(CacheType.chaos)
         try:
-            unvalidated = await self._load_json(chaos_path)
+            unvalidated = await _load_json(chaos_path)
             try:
                 validated: dict[str, ChaosMemory] = (
                     ChaosMemoryRootValidator
@@ -967,7 +967,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     async def _dump_chaos_memory(self) -> None:
         chaos_path = self.get_file_path(CacheType.chaos)
-        await self._dump_json(self._chaos_memory, chaos_path)
+        await _dump_json(self._chaos_memory, chaos_path)
 
     def get_chaos_memory(self, ecosystem_uid: str) -> ChaosMemory:
         if ecosystem_uid not in self.ecosystems_config_dict:
