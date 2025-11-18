@@ -484,7 +484,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 await run_sync(self._load_config, cfg_type)
         else:
             if cfg_type == CacheType.chaos:
-                await run_sync(self._load_chaos_memory)
+                await self._load_chaos_memory()
 
     # File watchdog
     async def _get_changed_config_files(self) -> set[ConfigType]:
@@ -896,21 +896,29 @@ class EngineConfig(metaclass=SingletonMeta):
     def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
 
-    def _load_chaos_memory(self) -> None:
+    @staticmethod
+    async def _load_json(path: Path) -> dict:
+        def load_json_sync() -> dict:
+            with open(path, "r") as file:
+                data: dict = json.loads(file.read())
+            return data
+
+        return await run_sync(load_json_sync)
+
+    async def _load_chaos_memory(self) -> None:
         self.logger.debug("Trying to load chaos memory.")
         chaos_path = self.get_file_path(CacheType.chaos)
         try:
-            with chaos_path.open("r") as file:
-                unvalidated = json.loads(file.read())
-                try:
-                    validated: dict[str, ChaosMemory] = (
-                        ChaosMemoryRootValidator
-                        .model_validate(unvalidated)
-                        .model_dump()
-                    )
-                except pydantic.ValidationError:  # pragma: no cover
-                    self.logger.error("Error while loading chaos.")
-                    raise
+            unvalidated = await self._load_json(chaos_path)
+            try:
+                validated: dict[str, ChaosMemory] = (
+                    ChaosMemoryRootValidator
+                    .model_validate(unvalidated)
+                    .model_dump()
+                )
+            except pydantic.ValidationError:  # pragma: no cover
+                self.logger.error("Error while loading chaos.")
+                raise
         except (FileNotFoundError, JSONDecodeError):
             validated = {}
         incomplete = False
