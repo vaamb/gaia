@@ -670,11 +670,11 @@ class EngineConfig(metaclass=SingletonMeta):
     async def _watchdog_loop(self) -> None:
         # Make private config file trackable by the file watchdog
         config_path = self.get_file_path(ConfigType.private)
-        if not config_path in self._config_files_checksum:
+        if config_path not in self._config_files_checksum:
             self._config_files_checksum[config_path] = await self._file_checksum(config_path)
         # Make ecosystems config file trackable by the file watchdog
         config_path = self.get_file_path(ConfigType.ecosystems)
-        if not config_path in self._config_files_checksum:
+        if config_path not in self._config_files_checksum:
             self._config_files_checksum[config_path] = await self._file_checksum(config_path)
 
         # Start the actual loop
