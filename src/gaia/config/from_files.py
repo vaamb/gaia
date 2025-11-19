@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import Condition, Event, Lock, sleep, Task
-from contextlib import asynccontextmanager
+from asyncio import Condition, Event, Lock, Task
+from contextlib import asynccontextmanager, suppress
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
@@ -115,6 +115,13 @@ def _to_dt(_time: time) -> datetime:
     # Transforms time to today's datetime. Needed to use timedelta
     _date = date.today()
     return datetime.combine(_date, _time)
+
+
+async def event_wait(event: Event, timeout: float | int):
+    # suppress TimeoutError because wait_for returns False in case of timeout
+    with suppress(asyncio.TimeoutError):
+        await asyncio.wait_for(event.wait(), timeout)
+    return event.is_set()
 
 
 # ---------------------------------------------------------------------------
@@ -682,7 +689,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     f"Encountered an error while running the watchdog routine. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`."
                 )
-            await sleep(sleep_period)
+            await event_wait(self._stop_event, sleep_period)
 
     def start_watchdog(self) -> None:
         if not self.configs_loaded:  # pragma: no cover
