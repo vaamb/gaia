@@ -468,8 +468,11 @@ class EngineConfig(metaclass=SingletonMeta):
             )
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
-        # Dump the config as a yaml file as it may have been modified by pydantic
+        # Dump the config as a yaml file as it may have been updated by pydantic
         await self._dump_ecosystems_config()
+        # Reset ecosystems caches
+        for ecosystem_config in self.ecosystems_config.values():
+            ecosystem_config.reset_caches()
 
     async def _load_private_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
@@ -658,8 +661,6 @@ class EngineConfig(metaclass=SingletonMeta):
                     cfg_path = self.get_file_path(ConfigType.ecosystems)
                     self._config_files_checksum[cfg_path] = \
                         await run_sync(_file_checksum, cfg_path)
-                    for ecosystem_config in self.ecosystems_config.values():
-                        ecosystem_config.reset_caches()
                 async with self.new_config:
                     self.new_config.notify_all()
                     # This unblocks the engine loop. It will then refresh
