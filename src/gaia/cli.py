@@ -4,7 +4,7 @@ import click
 import uvloop
 
 
-async def _main():
+async def main():
     """Launch Gaia"""
     from setproctitle import setproctitle
 
@@ -19,7 +19,7 @@ async def _main():
 
 
 @click.command()
-def main() -> None:
+def cli() -> None:
     # Set libcamera logging level to "WARN" to avoid spurious warnings
     os.environ["LIBCAMERA_LOG_LEVELS"] = "2"
 
@@ -28,8 +28,4 @@ def main() -> None:
 
     WorkerThread.MAX_IDLE_TIME = 60
 
-    uvloop.run(_main())
-
-
-if __name__ == "__main__":
-    main()
+    uvloop.run(main())
