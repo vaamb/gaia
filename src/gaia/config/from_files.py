@@ -634,7 +634,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     async def _watchdog_routine(self) -> None:
         # Fill config files modification dict
-        async with self.config_files_lock_no_reset():
+        async with self.config_files_lock():
             changed_configs = await self._get_changed_config_files()
             if changed_configs:
                 if ConfigType.private in changed_configs:
@@ -710,19 +710,11 @@ class EngineConfig(metaclass=SingletonMeta):
         self.logger.debug("Configuration files watchdog successfully stopped.")
 
     @asynccontextmanager
-    async def config_files_lock_no_reset(self):
-        async with self._config_files_lock:
-            yield
-
-    @asynccontextmanager
     async def config_files_lock(self):
         """A context manager that makes sure only one process access file
         content at the time"""
-        async with self.config_files_lock_no_reset():
-            try:
-                yield
-            finally:
-                await self._get_changed_config_files()
+        async with self._config_files_lock:
+            yield
 
     # API
     def _create_new_ecosystem_uid(self) -> str:
