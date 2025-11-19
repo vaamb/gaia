@@ -386,7 +386,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def _check_files_lock_acquired(self) -> None:
         if not self._config_files_lock.locked():
             raise RuntimeError(
-                "_load_config must be used within a "
+                "This method must be called within a "
                 "`engine_config.with config_files_lock():` block"
             )
 
