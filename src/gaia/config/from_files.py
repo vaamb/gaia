@@ -540,6 +540,8 @@ class EngineConfig(metaclass=SingletonMeta):
         # Dump it
         config_path = self.get_file_path(ConfigType.ecosystems)
         await _dump_yaml(cfg, config_path)
+        # Update the checksum
+        self._config_files_checksum[config_path] = await self._file_checksum(config_path)
 
     async def _dump_private_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
@@ -547,6 +549,8 @@ class EngineConfig(metaclass=SingletonMeta):
         # Dump the data
         config_path = self.get_file_path(ConfigType.private)
         await _dump_yaml(self._private_config, config_path)
+        # Update the checksum
+        self._config_files_checksum[config_path] = await self._file_checksum(config_path)
 
     async def _dump_chaos_memory(self) -> None:
         chaos_path = self.get_file_path(CacheType.chaos)
@@ -615,15 +619,17 @@ class EngineConfig(metaclass=SingletonMeta):
         self.configs_loaded = True
 
     # File watchdog
+    async def _file_checksum(self, file_path: Path) -> H:
+        # /!\ must be used with the config_files_lock acquired
+        self._check_files_lock_acquired()
+        return await run_sync(_file_checksum, file_path)
+
     async def _get_changed_config_files(self) -> set[ConfigType]:
-        config_files_checksum: dict[Path, H] = {}
         changed: set[ConfigType] = set()
-        for file_path, file_modif in self._config_files_checksum.items():
-            modif = await run_sync(_file_checksum, file_path)
-            if modif != file_modif:
+        for file_path, old_checksum in self._config_files_checksum.items():
+            new_checksum = await self._file_checksum(file_path)
+            if new_checksum != old_checksum:
                 changed.add(ConfigType(file_path.name))
-            config_files_checksum[file_path] = modif
-        self._config_files_checksum = config_files_checksum
         return changed
 
     async def _watchdog_routine(self) -> None:
@@ -635,11 +641,16 @@ class EngineConfig(metaclass=SingletonMeta):
                     self.logger.info(
                         "Change in private configuration file detected. Updating it.")
                     await self._load_private_config()
+                    cfg_path = self.get_file_path(ConfigType.private)
+                    self._config_files_checksum[cfg_path] = \
+                        await run_sync(_file_checksum, cfg_path)
                 if ConfigType.ecosystems in changed_configs:
                     self.logger.info(
                         "Change in ecosystems configuration file detected. Updating it.")
                     await self._load_ecosystems_config()
-                if ConfigType.ecosystems in changed_configs:
+                    cfg_path = self.get_file_path(ConfigType.ecosystems)
+                    self._config_files_checksum[cfg_path] = \
+                        await run_sync(_file_checksum, cfg_path)
                     for ecosystem_config in self.ecosystems_config.values():
                         ecosystem_config.reset_caches()
                 async with self.new_config:
@@ -649,6 +660,16 @@ class EngineConfig(metaclass=SingletonMeta):
                     #  and send the data if it is connected.
 
     async def _watchdog_loop(self) -> None:
+        # Make private config file trackable by the file watchdog
+        config_path = self.get_file_path(ConfigType.private)
+        if not config_path in self._config_files_checksum:
+            self._config_files_checksum[config_path] = await self._file_checksum(config_path)
+        # Make ecosystems config file trackable by the file watchdog
+        config_path = self.get_file_path(ConfigType.ecosystems)
+        if not config_path in self._config_files_checksum:
+            self._config_files_checksum[config_path] = await self._file_checksum(config_path)
+
+        # Start the actual loop
         sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
         self.logger.info(
             f"Starting the configuration files watchdog loop. It will run every "
