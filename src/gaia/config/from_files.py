@@ -422,6 +422,8 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"Checking hardware config for ecosystem {ecosystem_uid}.")
             addresses_used: list[str] = []
             for IO_uid, IO_dict in ecosystem_cfg["IO"].items():
+                self.logger.debug(
+                    f"Checking hardware {IO_uid} for ecosystem {ecosystem_uid}.")
                 try:
                     EcosystemConfig.validate_hardware_dict(
                         hardware_dict={"uid": IO_uid, **IO_dict},
@@ -433,6 +435,9 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"Could not validate hardware config for hardware {IO_uid} "
                         f"in ecosystem {ecosystem_uid}. ERROR msg(s): `{e}`.")
                     unfixable_error = True
+                else:
+                    self.logger.debug(
+                        f"Hardware {IO_uid} validated for ecosystem {ecosystem_uid}.")
                 finally:
                     addresses_used.extend(IO_dict["address"].split("&"))
 
