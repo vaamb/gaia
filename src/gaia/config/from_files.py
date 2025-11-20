@@ -417,13 +417,16 @@ class EngineConfig(metaclass=SingletonMeta):
         unfixable_error: bool = False
         for ecosystem_uid, ecosystem_cfg in validated.items():
             ecosystem_cfg: EcosystemConfigDict
+            ecosystem_name: str = ecosystem_cfg["name"]
             # Check hardware config
             self.logger.debug(
-                f"Checking hardware config for ecosystem {ecosystem_uid}.")
+                f"Checking hardware config for ecosystem {ecosystem_name}.")
             addresses_used: list[str] = []
             for IO_uid, IO_dict in ecosystem_cfg["IO"].items():
+                IO_dict: gv.HardwareConfigDict
+                IO_name: str = IO_dict["name"]
                 self.logger.debug(
-                    f"Checking hardware {IO_uid} for ecosystem {ecosystem_uid}.")
+                    f"Checking hardware {IO_name} for ecosystem {ecosystem_name}.")
                 try:
                     EcosystemConfig.validate_hardware_dict(
                         hardware_dict={"uid": IO_uid, **IO_dict},
@@ -432,18 +435,18 @@ class EngineConfig(metaclass=SingletonMeta):
                     )
                 except ValueError as e:
                     self.logger.error(
-                        f"Could not validate hardware config for hardware {IO_uid} "
-                        f"in ecosystem {ecosystem_uid}. ERROR msg(s): `{e}`.")
+                        f"Could not validate hardware config for hardware {IO_name} "
+                        f"in ecosystem {ecosystem_name}. ERROR msg(s): `{e}`.")
                     unfixable_error = True
                 else:
                     self.logger.debug(
-                        f"Hardware {IO_uid} validated for ecosystem {ecosystem_uid}.")
+                        f"Hardware {IO_name} validated for ecosystem {ecosystem_name}.")
                 finally:
                     addresses_used.extend(IO_dict["address"].split("&"))
 
             # Check nycthemeral config
             self.logger.debug(
-                f"Checking nycthemeral config for ecosystem {ecosystem_uid}.")
+                f"Checking nycthemeral config for ecosystem {ecosystem_name}.")
             nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
 
             span_method = safe_enum_from_name(gv.NycthemeralSpanMethod, nycthemeral_cfg["span"])
@@ -453,7 +456,7 @@ class EngineConfig(metaclass=SingletonMeta):
             except ValidationError as e:
                 self.logger.warning(
                     f"Nycthemeral span method cannot be set to '{span_method.name}' "
-                    f"for ecosystem {ecosystem_uid}. Will fall back to 'fixed'. "
+                    f"for ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`")
 
             lighting_method = safe_enum_from_name(gv.LightingMethod, nycthemeral_cfg["lighting"])
@@ -463,7 +466,7 @@ class EngineConfig(metaclass=SingletonMeta):
             except ValidationError as e:
                 self.logger.warning(
                     f"Lighting method cannot be set to '{lighting_method.name}' "
-                    f"for ecosystem {ecosystem_uid}. Will fall back to 'fixed'. "
+                    f"for ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
                     f"ERROR msg: `{e.__class__.__name__} :{e}`")
 
         if unfixable_error:
