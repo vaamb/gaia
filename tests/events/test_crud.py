@@ -3,12 +3,12 @@ from datetime import time
 import pytest
 
 import gaia_validators as gv
-from gaia_validators import safe_enum_from_name
 
 from gaia.events import Events as Events_
 
 from ..data import (
-    climate_dict, ecosystem_uid, engine_uid, hardware_info, hardware_uid, IO_dict)
+    climate_dict, ecosystem_uid, engine_uid, hardware_info, hardware_uid, IO_dict,
+    weather_cfg)
 from ..utils import get_logs_content, MockDispatcher
 
 
@@ -438,14 +438,17 @@ async def test_update_climate_parameter(events_handler: Events):
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
 
+    found = False
     for data in verified.data:
         # Some other parameters were already present in the config
         if data.parameter.name in climate_dict:
             continue
+        found = True
         assert data.parameter == parameter
         assert data.day == day
         assert data.night == night
         assert data.hysteresis == hysteresis
+    assert found
 
 
 @pytest.mark.asyncio
@@ -490,6 +493,143 @@ async def test_delete_climate_parameter(events_handler: Events):
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ClimateConfigPayload(**data_update[0])
     assert len(verified.data) == len(climate_dict)
+
+
+@pytest.mark.asyncio
+async def test_create_weather_event(events_handler: Events):
+    parameter = gv.WeatherParameter.fog
+    pattern = "0 7 * * *"
+    duration = 30.0
+
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.create,
+        target="weather_event",
+        data={
+            "parameter": parameter,
+            "pattern": pattern,
+            "duration": duration,
+        },
+    ).model_dump()
+
+    await events_handler.on_crud(message)
+
+    assert_success(events_handler)
+
+    data_update: list[gv.WeatherConfigPayloadDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
+    verified_payload = gv.WeatherConfigPayload(**data_update[0])
+
+    found = False
+    for data in verified_payload.data:
+        if data.parameter != parameter:
+            continue
+        found = True
+        assert data.pattern == pattern
+        assert data.duration == duration
+    assert found
+
+
+@pytest.mark.asyncio
+async def test_update_weather_event_failure(events_handler: Events):
+    parameter = gv.WeatherParameter.fog
+    pattern = "0 7 * * *"
+    duration = 30.0
+
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="weather_event",
+        data={
+            "parameter": parameter,
+            "pattern": pattern,
+            "duration": duration,
+        },
+    ).model_dump()
+
+    await events_handler.on_crud(message)
+
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+    assert result_msg["status"] == gv.Result.failure
+    assert "No weather parameter fog was found" in result_msg["message"]
+
+
+@pytest.mark.asyncio
+async def test_update_weather_event(events_handler: Events):
+    parameter = gv.WeatherParameter.rain
+    pattern = "0 7 * * *"
+    duration = 30.0
+
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.update,
+        target="weather_event",
+        data={
+            "parameter": parameter,
+            "pattern": pattern,
+            "duration": duration,
+        },
+    ).model_dump()
+
+    await events_handler.on_crud(message)
+
+    assert_success(events_handler)
+
+    data_update: list[gv.WeatherConfigPayloadDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
+    verified_payload = gv.WeatherConfigPayload(**data_update[0])
+
+    found = False
+    for data in verified_payload.data:
+        if data.parameter != parameter:
+            continue
+        found = True
+        assert data.pattern == pattern
+        assert data.duration == duration
+    assert found
+
+
+@pytest.mark.asyncio
+async def test_delete_weather_event_failure(events_handler: Events):
+    parameter = gv.WeatherParameter.fog
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.delete,
+        target="weather_event",
+        data={"parameter": parameter},
+    ).model_dump()
+
+    await events_handler.on_crud(message)
+
+    result_msg = events_handler._dispatcher.emit_store[0]["data"]
+    assert result_msg["status"] == gv.Result.failure
+    assert "No weather parameter fog was found" in result_msg["message"]
+
+
+@pytest.mark.asyncio
+async def test_delete_weather_event(events_handler: Events):
+    parameter = gv.WeatherParameter.fog
+    events_handler.ecosystems[ecosystem_uid].config.set_weather_parameter(
+        parameter=parameter,
+        pattern="0 7 * * *",
+        duration=30.0,
+    )
+
+    message = gv.CrudPayloadDict = gv.CrudPayload(
+        routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
+        action=gv.CrudAction.delete,
+        target="weather_event",
+        data={"parameter": parameter},
+    ).model_dump()
+
+    await events_handler.on_crud(message)
+
+    assert_success(events_handler)
+
+    data_update: list[gv.WeatherConfigPayloadDict] = \
+        events_handler._dispatcher.emit_store[1]["data"]
+    verified_payload = gv.WeatherConfigPayload(**data_update[0])
+    assert len(verified_payload.data) == len(weather_cfg)
 
 
 @pytest.mark.asyncio

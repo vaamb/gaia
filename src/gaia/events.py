@@ -85,9 +85,9 @@ CrudEventName = Literal[
     "create_climate_parameter",
     "update_climate_parameter",
     "delete_climate_parameter",
-    "create_weather_parameter",
-    "update_weather_parameter",
-    "delete_weather_parameter",
+    "create_weather_event",
+    "update_weather_event",
+    "delete_weather_event",
     "create_hardware",
     "update_hardware",
     "delete_hardware",
@@ -114,11 +114,11 @@ crud_links_dict: dict[CrudEventName, CrudLinks] = {
         "update_climate_parameter", "climate"),
     "delete_climate_parameter": CrudLinks(
         "delete_climate_parameter", "climate"),
-    "create_weather_parameter": CrudLinks(
+    "create_weather_event": CrudLinks(
         "set_weather_parameter", "weather"),
-    "update_weather_parameter": CrudLinks(
+    "update_weather_event": CrudLinks(
         "update_weather_parameter", "weather"),
-    "delete_weather_parameter": CrudLinks(
+    "delete_weather_event": CrudLinks(
         "delete_weather_parameter", "weather"),
     # Hardware creation, deletion and update
     "create_hardware": CrudLinks("create_new_hardware", "hardware"),
