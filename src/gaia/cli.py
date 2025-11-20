@@ -3,14 +3,15 @@ import os
 import click
 import uvloop
 
+from gaia import Engine
+from gaia.helpers import validate_configs
 
-async def _main():
+
+async def main():
     """Launch Gaia"""
     from setproctitle import setproctitle
 
     setproctitle("gaia")
-
-    from gaia import Engine
 
     gaia_engine = Engine()
     if gaia_engine.plugins_needed:
@@ -18,8 +19,13 @@ async def _main():
     await gaia_engine.run()
 
 
-@click.command()
-def main() -> None:
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx: click.Context) -> None:
+    """Welcome to GAIA, the Greenhouse Automation Intuitive App"""
+    # Don't go further if a subcommand was called
+    if ctx.invoked_subcommand is not None:
+        return
     # Set libcamera logging level to "WARN" to avoid spurious warnings
     os.environ["LIBCAMERA_LOG_LEVELS"] = "2"
 
@@ -28,8 +34,7 @@ def main() -> None:
 
     WorkerThread.MAX_IDLE_TIME = 60
 
-    uvloop.run(_main())
+    uvloop.run(main())
 
 
-if __name__ == "__main__":
-    main()
+cli.add_command(validate_configs)

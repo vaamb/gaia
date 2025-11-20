@@ -1,3 +1,3 @@
-from gaia import main
+from gaia import cli
 
-main()
+cli()

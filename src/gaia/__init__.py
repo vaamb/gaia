@@ -4,4 +4,4 @@ from gaia.config import (
     BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHelper)
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
-from gaia.main import main
+from gaia.cli import cli
