@@ -22,6 +22,7 @@ from pydantic import Field, field_validator, model_serializer, RootModel
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
+from gaia_validators.utils import get_sun_times
 
 from gaia.config import (
     BaseConfig, configure_logging, defaults, GaiaConfig, GaiaConfigHelper)
@@ -30,8 +31,7 @@ from gaia.exceptions import (
 from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
-    create_uid, get_sun_times, humanize_list, is_time_between, json,
-    SingletonMeta, yaml)
+    create_uid, humanize_list, is_time_between, json, SingletonMeta, yaml)
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -921,7 +921,7 @@ class EngineConfig(metaclass=SingletonMeta):
         sun_times = self.sun_times.get(place)
         today = date.today()
         if sun_times is None or sun_times["last_update"] < today:
-            new_sun_times = get_sun_times(coord.longitude, coord.latitude)
+            new_sun_times = get_sun_times(coord).model_dump()
             # Handle high and low latitude specificities
             if (
                 # Range of polar day in Northern hemisphere
