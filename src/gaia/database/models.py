@@ -55,6 +55,10 @@ class DataBufferMixin(Base):
     def dict_repr(self) -> dict:
         raise NotImplementedError("This method must be implemented in a subclass")  # pragma: no cover
 
+    @property
+    def tuple_repr(self) -> tuple:
+        raise NotImplementedError("This method must be implemented in a subclass")  # pragma: no cover
+
     @classmethod
     async def get_buffered_data(
             cls,
@@ -100,7 +104,7 @@ class DataBufferMixin(Base):
                 yield buffered_payload_model(
                     uuid=exchange_uuid,
                     data=[
-                        buffered_record_class(**row.dict_repr)
+                        buffered_record_class(*row.tuple_repr)
                         for row in buffered_data
                     ]
                 )
@@ -109,7 +113,7 @@ class DataBufferMixin(Base):
         except Exception as e:
             db_logger.error(
                 f"Encountered an error while retrieving buffered data for "
-                f"{cls.__name__}. ERROR msg: `{e.__class__.__name__} :{e}`.")
+                f"{cls.__name__}. ERROR msg: `{e.__class__.__name__}: {e}`.")
             await session.rollback()
             raise
 
@@ -178,6 +182,16 @@ class BaseSensorRecord(Base):
             "value": self.value,
         }
 
+    @property
+    def tuple_repr(self) -> tuple:
+        return (
+            self.ecosystem_uid,
+            self.sensor_uid,
+            self.measure,
+            self.value,
+            self.timestamp,
+        )
+
 
 class SensorRecord(BaseSensorRecord):
     __tablename__ = "sensor_records"
@@ -229,13 +243,26 @@ class BaseActuatorRecord(Base):
         return {
             "ecosystem_uid": self.ecosystem_uid,
             "type": self.type,
-            "group": self.group,
+            "group": self.group or self.type,
             "active": self.active,
             "mode": self.mode,
             "status": self.status,
             "level": self.level,
             "timestamp": self.timestamp,
         }
+
+    @property
+    def tuple_repr(self) -> tuple:
+        return (
+            self.ecosystem_uid,
+            self.type,
+            self.group or self.type,
+            self.active,
+            self.mode,
+            self.status,
+            self.level,
+            self.timestamp,
+        )
 
 
 class ActuatorRecord(BaseActuatorRecord):
