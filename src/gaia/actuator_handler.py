@@ -422,7 +422,7 @@ class ActuatorHandler:
             return
         self._set_mode(validated_value)
         self._any_status_change = True
-        self.logger.info(
+        self.logger.debug(
             f"{self.group.capitalize()} has been set to "
             f"'{self.mode.name}' mode.")
 
@@ -442,7 +442,7 @@ class ActuatorHandler:
             return
         await self._set_status(value)
         self._any_status_change = True
-        self.logger.info(
+        self.logger.debug(
             f"{self.group.capitalize()} has been turned "
             f"{'on' if self.status else 'off'}.")
 
