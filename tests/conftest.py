@@ -22,7 +22,7 @@ from gaia.subroutines import (
 from gaia.utils import SingletonMeta, yaml
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
-from .data import ecosystem_info, ecosystem_name, engine_uid, temperature_cfg
+from .data import debug_log_file, ecosystem_info, ecosystem_name, engine_uid
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content, MockDispatcher
 
@@ -120,7 +120,7 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
     app_config = deepcopy(engine_config_master.app_config)
     ecosystem_config = deepcopy(engine_config_master.ecosystems_config_dict)
     private_config = deepcopy(engine_config_master.private_config)
-    with get_logs_content(engine_config_master.logs_dir / "gaia.log"):
+    with get_logs_content(engine_config_master.logs_dir / debug_log_file):
         pass  # Clear logs
 
     try:
@@ -141,7 +141,7 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     engine = Engine(engine_config=engine_config)
-    with get_logs_content(engine_config.logs_dir / "gaia.log"):
+    with get_logs_content(engine_config.logs_dir / debug_log_file):
         pass  # Clear logs
 
     try:
@@ -161,7 +161,7 @@ async def virtual_world(engine: Engine) -> YieldFixture[VirtualWorld]:
 @pytest_asyncio.fixture(scope="function")
 async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfig]:
     ecosystem_config = engine_config.get_ecosystem_config(ecosystem_name)
-    with get_logs_content(ecosystem_config.general.logs_dir / "gaia.log"):
+    with get_logs_content(ecosystem_config.general.logs_dir / debug_log_file):
         pass  # Clear logs
 
     try:
@@ -174,7 +174,7 @@ async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[Ecosyste
 async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     ecosystem = engine.get_ecosystem(ecosystem_name)
     ecosystem.virtual_self.start()
-    with get_logs_content(engine.config.logs_dir / "gaia.log"):
+    with get_logs_content(engine.config.logs_dir / debug_log_file):
         pass  # Clear logs
 
     await ecosystem.refresh_hardware()

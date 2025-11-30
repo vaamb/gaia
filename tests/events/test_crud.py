@@ -7,8 +7,8 @@ import gaia_validators as gv
 from gaia.events import Events as Events_
 
 from ..data import (
-    climate_dict, ecosystem_uid, engine_uid, hardware_info, hardware_uid, IO_dict,
-    weather_cfg)
+    climate_dict, debug_log_file, ecosystem_uid, engine_uid, hardware_info,
+    hardware_uid, IO_dict, weather_cfg)
 from ..utils import get_logs_content, MockDispatcher
 
 
@@ -21,7 +21,7 @@ def assert_success(
         expected_events_emitted: int = 2,
         crud_result_index: int = 0
 ) -> None:
-    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
         assert "was successfully treated" in logs
     assert len(events_handler._dispatcher.emit_store) == expected_events_emitted
     emitted_msg: gv.RequestResultDict = \
@@ -40,7 +40,7 @@ async def test_wrong_engine_uid(events_handler: Events):
 
     await events_handler.on_crud(message)
 
-    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
         assert "Received a CRUD request intended to engine" in logs
 
 
@@ -56,7 +56,7 @@ async def test_missing_ecosystem_uid(events_handler: Events):
     await events_handler.on_crud(message)
 
     error_msg = "Create hardware requires the 'ecosystem_uid' field to be set."
-    with get_logs_content(events_handler.engine.config.logs_dir / "gaia.log") as logs:
+    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
         assert error_msg in logs
     emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
     assert emitted_msg["status"] == gv.Result.failure

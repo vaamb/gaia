@@ -3,6 +3,8 @@ from datetime import time
 import gaia_validators as gv
 
 
+debug_log_file = "gaia.debug.log"
+
 place_name = "home"
 place_longitude = 42.0
 place_latitude = 7.0
