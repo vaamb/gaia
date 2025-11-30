@@ -144,11 +144,6 @@ def configure_logging(config_class: GaiaConfig) -> None:
     if not log_dir.exists():
         log_dir.mkdir(parents=True)
 
-    # Prepend log_dir path to the file handler file name
-    file_handler_filename = logging_config["handlers"]["file_handler"]["filename"]
-    logging_config["handlers"]["file_handler"]["filename"] = str(
-        log_dir / file_handler_filename)
-
     if config_class.DEBUG or config_class.TESTING:
         debug_fmt = "%(asctime)s %(levelname)-7.7s: [%(filename)-20.20s:%(lineno)4d] %(name)-35.35s: %(message)s"
         logging_config["formatters"]["base_formatter"]["format"] = debug_fmt
@@ -162,6 +157,11 @@ def configure_logging(config_class: GaiaConfig) -> None:
         logging_config["loggers"]["virtual"]["level"] = "DEBUG"
         logging_config["loggers"]["dispatcher"]["level"] = "DEBUG"
         logging_config["loggers"]["apscheduler"]["level"] = "DEBUG"
+
+    # Prepend log_dir path to the file handler file name
+    file_handler_filename = logging_config["handlers"]["file_handler"]["filename"]
+    logging_config["handlers"]["file_handler"]["filename"] = str(
+        log_dir / file_handler_filename)
 
     if config_class.LOG_TO_STDOUT:
         handlers.append("stream_handler")
