@@ -19,7 +19,7 @@ _BASE_HUMIDITY = 60
 
 
 def add_noise(measure: float) -> float:
-    return measure * random.gauss(1, 0.01)
+    return measure * random.gauss(1, 0.001)
 
 
 def random_sleep(

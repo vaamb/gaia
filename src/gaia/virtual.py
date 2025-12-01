@@ -72,7 +72,7 @@ class VirtualWorld(metaclass=SingletonMeta):
         mono_clock = monotonic()
         if (
             not self._last_update
-            or mono_clock - self._last_update > 60.0
+            or mono_clock - self._last_update > 5.0
         ):
             self._compute_changes(time_now)
             self._last_update = mono_clock
@@ -178,8 +178,8 @@ class VirtualEcosystem:
             virtual_world: VirtualWorld,
             uid: str,
             dimension: tuple[float, float, float] = (0.5, 0.5, 1.0),
-            water_volume: float = 5.0,  # in liter
-            max_heater_output: float = 75.0,  # max heater output in watt
+            water_volume: float = 15.0,  # in liter
+            max_heater_output: float = 100.0,  # max heater output in watt
             max_humidifier_output: float = 0.03,  # max humidifier output in g/water per second
             max_light_output: float = 30000.0,  # max light output in lux
             start: bool = False,
