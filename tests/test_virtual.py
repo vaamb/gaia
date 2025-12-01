@@ -9,7 +9,7 @@ from gaia import Ecosystem
 from gaia.hardware.abc import BaseSensor
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
-from tests.data import sensor_uid
+from tests.data import IO_dict, sensor_uid
 
 
 @pytest.mark.asyncio
@@ -73,7 +73,10 @@ class TestVirtualEcosystem:
             virtual_ecosystem: VirtualEcosystem,
             ecosystem: Ecosystem,
     ):
+        # The hardware model should automatically be virtualized
+        assert not IO_dict[sensor_uid]["model"].startswith("virtual")
         virtual_DHT22: BaseSensor = cast(BaseSensor, ecosystem.hardware[sensor_uid])
+        assert virtual_DHT22.model.startswith("virtual")
 
         # Get sensor data for the humidity
         sensor_data: list[gv.SensorRecord] = await virtual_DHT22.get_data()
