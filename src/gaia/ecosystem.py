@@ -354,6 +354,7 @@ class Ecosystem:
                 f"Encountered an exception while setting up hardware '{uid}'. "
                 f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
+            raise
 
     async def remove_hardware(self, hardware_uid: str) -> None:
         if not self.hardware.get(hardware_uid):
