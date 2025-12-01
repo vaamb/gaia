@@ -161,22 +161,22 @@ class HystericalPID:
         target_min = self.target - self.hysteresis
         target_max = self.target + self.hysteresis
 
-        if self.last_output == 0:
-            if target_min <= current_value <= target_max:
-                self._reset_errors()
-                return 0.0
-            else:  # Out ouf targeted range, need PID
-                return None
-
-        elif self.last_output > 0:
+        if self.last_output > 0.0:
             if self.target <= current_value <= target_max:
                 self._reset_errors()
                 return 0.0
             else:  # Out ouf targeted range, need PID
                 return None
 
-        elif self.last_output < 0:
+        elif self.last_output < 0.0:
             if target_min <= current_value <= self.target:
+                self._reset_errors()
+                return 0.0
+            else:  # Out ouf targeted range, need PID
+                return None
+
+        else:  # self.last_output == 0:
+            if target_min <= current_value <= target_max:
                 self._reset_errors()
                 return 0.0
             else:  # Out ouf targeted range, need PID
