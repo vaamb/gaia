@@ -20,7 +20,7 @@ sensor_uid = "tKstp8EYJx27eQuK"
 sensor_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualGPIOSensor",
     "address": "GPIO_19",
-    "model": "virtualDHT22",
+    "model": "DHT22",  # The model should automatically be promoted to "virtualDHT22"
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
     "groups": None,
