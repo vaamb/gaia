@@ -11,7 +11,7 @@ from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, NonValidSubroutine
 from gaia.hardware import hardware_models
-from gaia.hardware.abc import  BaseSensor, Dimmer, Hardware, Switch
+from gaia.hardware.abc import Dimmer, Hardware, Switch
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
