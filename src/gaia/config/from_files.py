@@ -1853,6 +1853,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             groups: list[str] | set[str] | None = None,
             measures: list | None = None,
             plants: list | None = None,
+            active: bool = True,
             multiplexer_model: str | None = None,
     ) -> None:
         """
@@ -1864,12 +1865,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param level: str: either 'environment' or 'plants'
         :param measures: list: the list of the measures taken
         :param plants: list: the name of the plant linked to the hardware
+        :param active: bool: the status of the hardware. True (active/in use) by default.
         :param multiplexer_model: str: the model of the multiplexer used if there is one
         """
         uid = self._create_new_short_uid()
         hardware_dict = gv.HardwareConfigDict(**{
             "uid": uid,
             "name": name,
+            "active": active,
             "address": address,
             "type": type,
             "level": level,
