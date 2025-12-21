@@ -19,6 +19,7 @@ ecosystem_name = "Testing ecosystem"
 sensor_uid = "tKstp8EYJx27eQuK"
 sensor_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualGPIOSensor",
+    "active": True,
     "address": "GPIO_19",
     "model": "DHT22",  # The model should automatically be promoted to "virtualDHT22"
     "type": gv.HardwareType.sensor,
@@ -33,6 +34,7 @@ sensor_info: gv.AnonymousHardwareConfigDict = {
 i2c_sensor_veml7700_uid = "xWQ9uF1bplKs0nk7"
 i2c_sensor_veml7700_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualI2CSensor_VEML7700",
+    "active": True,
     "address": "I2C_0x70#0@default",
     "model": "virtualVEML7700",
     "type": gv.HardwareType.sensor,
@@ -47,6 +49,7 @@ i2c_sensor_veml7700_info: gv.AnonymousHardwareConfigDict = {
 i2c_sensor_ens160_uid = "EUvJqfXvbZ4uZa5J"
 ir2c_sensor_ens160_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualI2CSensor_ENS160",
+    "active": True,
     "address": "I2C_0x70#1@default",
     "model": "virtualENS160",
     "type": gv.HardwareType.sensor,
@@ -61,6 +64,7 @@ ir2c_sensor_ens160_info: gv.AnonymousHardwareConfigDict = {
 light_uid = "cpgCZFJGGYlIXlLL"
 light_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualLight",
+    "active": True,
     "address": "GPIO_5&GPIO_13",
     "model": "virtualgpioDimmable",
     "type": gv.HardwareType.light,
@@ -75,6 +79,7 @@ light_info: gv.AnonymousHardwareConfigDict = {
 heater_uid = "A0oZpCJ50D0ajfJs"
 heater_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualHeater",
+    "active": True,
     "address": "GPIO_26&GPIO_12",
     "model": "virtualgpioDimmable",
     "type": gv.HardwareType.heater,
@@ -89,6 +94,7 @@ heater_info: gv.AnonymousHardwareConfigDict = {
 humidifier_uid = "QsyOTQEyAgmGDvTk"
 humidifier_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualHumidifier",
+    "active": True,
     "address": "GPIO_20",
     "model": "virtualgpioSwitch",
     "type": gv.HardwareType.humidifier,
@@ -103,12 +109,28 @@ humidifier_info: gv.AnonymousHardwareConfigDict = {
 camera_uid = "aVxKrtCOQHeu8GpN"
 camera_info: gv.AnonymousHardwareConfigDict = {
     "name": "Camera",
+    "active": True,
     "address": "PICAMERA",
     "model": "PiCamera",
     "type": gv.HardwareType.camera,
     "level": gv.HardwareLevel.environment,
     "groups": None,
     "measures": ["mpri"],
+    "plants": [],
+    "multiplexer_model": None,
+}
+
+
+inactive_uid = "zos1YEKzdhJTc89j"
+inactive_info: gv.AnonymousHardwareConfigDict = {
+    "name": "Inactive",
+    "active": False,
+    "address": "GPIO_21",
+    "model": "gpioSwitch",
+    "type": gv.HardwareType.actuator,
+    "level": gv.HardwareLevel.environment,
+    "groups": None,
+    "measures": [],
     "plants": [],
     "multiplexer_model": None,
 }
@@ -126,6 +148,7 @@ IO_dict = {
     heater_uid: heater_info,
     humidifier_uid: humidifier_info,
     camera_uid: camera_info,
+    inactive_uid: inactive_info,
 }
 
 
