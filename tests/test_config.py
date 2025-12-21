@@ -36,43 +36,6 @@ class TestEngineConfig:
         with pytest.raises(ValueError):
             engine_config.delete_ecosystem("Already fading away")
 
-    async def test_config_files_watchdog(self, engine_config: EngineConfig):
-        # Start watchdog and make sure it can only be started once
-        engine_config.start_watchdog()
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
-            assert "Starting the configuration files watchdog" in logs
-        with pytest.raises(RuntimeError):
-            engine_config.start_watchdog()
-
-        # Test watchdog for ecosystems cfg
-        engine_config.create_ecosystem("Already fading away")
-        with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
-            yaml.dump(engine_config.ecosystems_config_dict, cfg)
-        await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
-            assert "Change in ecosystems configuration file detected" in logs
-
-        # Test watchdog for private cfg
-        engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
-        with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
-            yaml.dump(engine_config.private_config, cfg)
-        await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
-            assert "Change in private configuration file detected" in logs
-
-        # Stop watchdog and make sure it can only be stopped once
-        engine_config.stop_watchdog()
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
-            assert "Stopping the configuration files watchdog" in logs
-        with pytest.raises(RuntimeError):
-            engine_config.stop_watchdog()
-
-        # Restore config files
-        with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
-            yaml.dump(ecosystem_info, cfg)
-        with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
-            yaml.dump({}, cfg)
-
     async def test_save_and_load(self, engine_config: EngineConfig):
         ecosystems_cfg = engine_config.ecosystems_config
         private_config = engine_config.private_config
@@ -114,6 +77,47 @@ class TestEngineConfig:
         engine_config.home_coordinates = (4, 2)
         assert engine_config.home_coordinates.latitude == 4.0
         assert engine_config.home_coordinates.longitude == 2.0
+
+
+@pytest.mark.asyncio
+class TestWatchdog:
+    pytest.mark.asyncio(loop_scope="function")
+    async def test_config_files_watchdog(self, engine_config: EngineConfig):
+        # Start watchdog and make sure it can only be started once
+        engine_config.start_watchdog()
+        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+            assert "Starting the configuration files watchdog" in logs
+        with pytest.raises(RuntimeError):
+            engine_config.start_watchdog()
+
+        # Test watchdog for ecosystems cfg
+        engine_config.create_ecosystem("Already fading away")
+        with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
+            yaml.dump(engine_config.ecosystems_config_dict, cfg)
+        await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
+        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+            assert "Change in ecosystems configuration file detected" in logs
+
+        # Test watchdog for private cfg
+        engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
+        with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
+            yaml.dump(engine_config.private_config, cfg)
+        await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
+        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+            assert "Change in private configuration file detected" in logs
+
+        # Stop watchdog and make sure it can only be stopped once
+        engine_config.stop_watchdog()
+        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+            assert "Stopping the configuration files watchdog" in logs
+        with pytest.raises(RuntimeError):
+            engine_config.stop_watchdog()
+
+        # Restore config files
+        with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
+            yaml.dump(ecosystem_info, cfg)
+        with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
+            yaml.dump({}, cfg)
 
 
 # ---------------------------------------------------------------------------
