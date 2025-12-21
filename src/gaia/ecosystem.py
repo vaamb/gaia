@@ -298,7 +298,10 @@ class Ecosystem:
     def _check_hardware_is_up_to_date(self) -> None:
         if not self.started:
             return
-        hardware_needed: set[str] = set(self.config.IO_dict.keys())
+        hardware_needed: set[str] = set(
+            hardware_uid for hardware_uid in self.config.IO_dict.keys()
+            if self.config.IO_dict[hardware_uid]["active"]
+        )
         hardware_existing: set[str] = set(self._hardware.keys())
         if hardware_needed != hardware_existing:
             self.logger.warning(
@@ -307,6 +310,7 @@ class Ecosystem:
 
     @property
     def hardware(self) -> dict[str, Hardware]:
+        """Return the hardware mounted (/active) in the ecosystem."""
         self._check_hardware_is_up_to_date()
         return self._hardware
 
