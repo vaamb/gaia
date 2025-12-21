@@ -248,9 +248,9 @@ class Address:
 
 
 class _MetaHardware(type):
-    instances: WeakValueDictionary[str, "Hardware"] = WeakValueDictionary()
+    instances: WeakValueDictionary[str, Hardware] = WeakValueDictionary()
 
-    def __call__(cls, *args, **kwargs) -> "Hardware":
+    def __call__(cls, *args, **kwargs) -> Hardware:
         uid = kwargs["uid"]
         try:
             return cls.instances[uid]
@@ -284,6 +284,7 @@ class Hardware(metaclass=_MetaHardware):
     """
     __slots__ = (
         "__weakref__",
+        "_active",
         "_address_book",
         "_ecosystem",
         "_groups",
@@ -305,9 +306,11 @@ class Hardware(metaclass=_MetaHardware):
             level: gv.HardwareLevel,
             type: gv.HardwareType,
             model: str,
+            *,
             groups: set[str] | list[str] | None = None,
             measures: list[gv.Measure] | None = None,
             plants: list[str] | None = None,
+            active: bool = True,
             multiplexer_model: str | None = None,
             ecosystem: Ecosystem | None = None,
     ) -> None:
@@ -318,6 +321,7 @@ class Hardware(metaclass=_MetaHardware):
             self._ecosystem = ecosystem
         self._uid: str = uid
         self._name: str = name
+        self._active: bool = active
         self._level: gv.HardwareLevel = level
         self._type: gv.HardwareType = type
         self._groups: set[str] = set(groups) if groups else set()
@@ -363,12 +367,14 @@ class Hardware(metaclass=_MetaHardware):
             name: str | None = None,
             measures: list[str] | None = None,
             plants: list[str] | None = None,
+            active: bool = True,
             multiplexer_model: str | None = None,
     ) -> Self:
         name: str = name or uid
         validated = gv.HardwareConfig(
             uid=uid,
             name=name,
+            active=active,
             address=address,
             type=type,
             level=level,
@@ -390,6 +396,7 @@ class Hardware(metaclass=_MetaHardware):
             ecosystem=ecosystem,
             uid=hardware_config.uid,
             name=hardware_config.name,
+            active=hardware_config.active,
             address=hardware_config.address,
             level=hardware_config.level,
             type=hardware_config.type,
@@ -443,6 +450,14 @@ class Hardware(metaclass=_MetaHardware):
     @name.setter
     def name(self, new_name: str) -> None:
         self._name = new_name
+
+    @property
+    def active(self) -> bool:
+        return self._active
+
+    @active.setter
+    def active(self, new_active: bool) -> None:
+        self._active = new_active
 
     @property
     def address_book(self) -> AddressBook:

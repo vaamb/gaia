@@ -371,7 +371,10 @@ class Ecosystem:
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
     async def refresh_hardware(self) -> None:
-        hardware_needed: set[str] = set(self.config.IO_dict.keys())
+        hardware_needed: set[str] = set(
+            hardware_uid for hardware_uid in self.config.IO_dict.keys()
+            if self.config.IO_dict[hardware_uid]["active"]
+        )
         hardware_existing: set[str] = set(self.hardware.keys())
         for hardware_uid in hardware_needed - hardware_existing:
             await self.add_hardware(hardware_uid)
