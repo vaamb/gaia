@@ -43,7 +43,7 @@ class TestWeatherSubroutine:
 
         # Rainer is the actuator group for the rain parameter
         actuator_group = weather_subroutine.get_actuator_group_for_parameter("rain")
-        assert actuator_group in weather_subroutine.actuator_handlers
+        assert weather_subroutine.actuator_handlers["rain"].group == actuator_group
 
         # Should raise if the actuator handler is already mounted
         with pytest.raises(ValueError):
@@ -51,6 +51,8 @@ class TestWeatherSubroutine:
 
         # Test unmounting actuator handler
         await weather_subroutine._unmount_actuator_handler("rain")
+
+        assert "rain" not in weather_subroutine.actuator_handlers
 
         # Should raise if the actuator handler is not mounted
         with pytest.raises(ValueError):
@@ -61,8 +63,7 @@ class TestWeatherSubroutine:
         weather_subroutine._actuator_handlers = {}
         await weather_subroutine._mount_actuator_handler("rain")
 
-        actuator_group = weather_subroutine.get_actuator_group_for_parameter("rain")
-        actuator_handler = weather_subroutine.actuator_handlers[actuator_group]
+        actuator_handler = weather_subroutine.actuator_handlers["rain"]
 
         assert actuator_handler.mode is gv.ActuatorMode.automatic
         assert not actuator_handler.status
