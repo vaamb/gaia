@@ -94,9 +94,8 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
-        expected_actuators = self.compute_expected_actuators()
-        for actuator_type in expected_actuators:
-            extra = set(self.ecosystem.get_hardware_group_uids(actuator_type))
+        for actuator_group in self.compute_expected_actuators():
+            extra = set(self.ecosystem.get_hardware_group_uids(actuator_group))
             hardware_needed = hardware_needed | extra
         return hardware_needed
 
@@ -131,6 +130,11 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
     @property
     def actuator_handlers(self) -> dict[str, ActuatorHandler]:
+        """Return the actuator handlers used by the climate subroutine.
+
+        The result is a dictionary where the keys are the actuator groups
+        and the values are the associated actuator handlers.
+        """
         if self._actuator_handlers is None:
             raise ValueError(
                 "actuator_handlers is not defined in non-started Climate subroutine")
@@ -170,9 +174,10 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             return {}
 
         # Check if climate parameters are available in the config file
-        for climate_param in [*regulated_parameters]:
-            if not self.config.has_climate_parameter(climate_param):
-                regulated_parameters.remove(climate_param)
+        regulated_parameters: list[gv.ClimateParameter] = [
+            climate_parameter for climate_parameter in self.config.climate.keys()
+            if climate_parameter in REGULABLE_PARAMETERS
+        ]
         if not regulated_parameters:
             self.logger.warning("No climate parameter found.")
             return {}
@@ -195,17 +200,17 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             self.logger.debug("No sensor measuring regulated parameters detected.")
             return {}
 
-        # Check if there are regulators available and map them with climate parameters
+        # Check if there are actuator groups available and map them with climate parameters
         rv: dict[str, gv.ClimateParameter] = {}
         actuator_couples = self.config.get_climate_actuators()
         for climate_param in regulated_parameters:
             actuator_couple: gv.ActuatorCouple = actuator_couples[climate_param]
-            for actuator_type in actuator_couple:
+            for actuator_group in actuator_couple:
                 if (
-                        actuator_type is not None
-                        and self.ecosystem.get_hardware_group_uids(actuator_type)
+                        actuator_group is not None
+                        and self.ecosystem.get_hardware_group_uids(actuator_group)
                 ):
-                    rv[actuator_type] = climate_param
+                    rv[actuator_group] = climate_param
         if not rv:
             self.logger.debug("No climatic actuator detected.")
             return {}
