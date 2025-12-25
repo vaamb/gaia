@@ -36,7 +36,7 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
             "Starting the weather subroutine. Its actions frequency are "
             "determined in the config file")
         self._actuator_handlers = {}
-        expected_events = self.compute_expected_actuators().values()
+        expected_events = self.compute_expected_actuators()
         for event in expected_events:
             # Mount actuator handler
             await self._mount_actuator_handler(event)
@@ -56,8 +56,7 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
-        for event in self.compute_expected_actuators().values():
-            actuator_group = self.get_actuator_group_for_parameter(event)
+        for event, actuator_group in self.compute_expected_actuators().items():
             extra = set(self.ecosystem.get_hardware_group_uids(actuator_group))
             hardware_needed = hardware_needed | extra
         return hardware_needed
@@ -72,8 +71,8 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
         for job in self._jobs:
             await self._remove_job(job)
         # Mount and unmount actuator handlers if required
-        currently_expected: set[str] = set(self.compute_expected_actuators().values())
-        currently_mounted: set[str] = set(self.actuator_handlers.keys())  # TODO: fix
+        currently_expected: set[str] = set(self.compute_expected_actuators())
+        currently_mounted: set[str] = set(self.actuator_handlers)
         for actuator_group in currently_expected - currently_mounted:
             await self._mount_actuator_handler(actuator_group)
         for actuator_group in currently_mounted - currently_expected:
@@ -83,16 +82,16 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
             await self._add_job(job)
 
     """Routine specific methods"""
-    def compute_expected_actuators(self) -> dict[str, gv.WeatherParameter]:
+    def compute_expected_actuators(self) -> dict[gv.WeatherParameter, str]:
         """Return the actuator groups that should be mounted for the weather events
 
-        The keys are the actuator groups and the values are the weather events"""
-        rv: dict[str, gv.WeatherParameter] = {}
+        The keys are the weather events and the values are the actuator groups"""
+        rv: dict[gv.WeatherParameter, str] = {}
         for weather_event, weather_cfg in self.config.weather.items():
             actuator_group = weather_cfg.get("linked_actuator", None) or weather_event
             # Make sure the actuator group is available
             if self.ecosystem.get_hardware_group_uids(actuator_group):
-                rv[actuator_group] = weather_event
+                rv[weather_event] = actuator_group
         return rv
 
     async def _mount_actuator_handler(self, parameter: str) -> None:
