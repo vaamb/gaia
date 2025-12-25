@@ -56,7 +56,7 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
-        for event, actuator_group in self.compute_expected_actuators().items():
+        for actuator_group in self.compute_expected_actuators().values():
             extra = set(self.ecosystem.get_hardware_group_uids(actuator_group))
             hardware_needed = hardware_needed | extra
         return hardware_needed
@@ -73,10 +73,13 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
         # Mount and unmount actuator handlers if required
         currently_expected: set[str] = set(self.compute_expected_actuators())
         currently_mounted: set[str] = set(self.actuator_handlers)
-        for actuator_group in currently_expected - currently_mounted:
-            await self._mount_actuator_handler(actuator_group)
-        for actuator_group in currently_mounted - currently_expected:
-            await self._unmount_actuator_handler(actuator_group)
+        for weather_event in currently_expected - currently_mounted:
+            await self._mount_actuator_handler(weather_event)
+        for weather_event in currently_mounted - currently_expected:
+            await self._unmount_actuator_handler(weather_event)
+        # Reset actuator handlers
+        for actuator_handler in self.actuator_handlers.values():
+            actuator_handler.reset_cached_actuators()
         # Add back jobs
         for job in currently_expected:
             await self._add_job(job)
