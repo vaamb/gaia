@@ -88,7 +88,8 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
     def compute_expected_actuators(self) -> dict[gv.WeatherParameter, str]:
         """Return the actuator groups that should be mounted for the weather events
 
-        The keys are the weather events and the values are the actuator groups"""
+        The keys are the weather events and the values are the associated actuator
+        groups"""
         rv: dict[gv.WeatherParameter, str] = {}
         for weather_event, weather_cfg in self.config.weather.items():
             actuator_group = weather_cfg.get("linked_actuator", None) or weather_event

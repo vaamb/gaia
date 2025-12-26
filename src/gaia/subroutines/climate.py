@@ -195,7 +195,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
 
         The result is a dictionary where the keys are a tuple of the climate
         parameters and the associated direction, and the values are the
-        associated actuator handlers."""
+        associated actuator groups."""
         # Make sure the sensor subroutine is running
         if not self.ecosystem.get_subroutine_status("sensors"):
             self.logger.warning(
