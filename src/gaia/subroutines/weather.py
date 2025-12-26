@@ -24,14 +24,11 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
         raise ValueError
 
     def _compute_if_manageable(self) -> bool:
-        events = self._get_expected_weather_events()
-        if not events:
+        if not self.compute_expected_actuators():
+            self.logger.warning(
+                "No parameters that could be regulated were found. Disabling "
+                "Weather subroutine.")
             return False
-        for event in events:
-            weather_cfg = self.ecosystem.config.get_weather_parameter(event)
-            actuator_group = weather_cfg.linked_actuator or weather_cfg.parameter
-            if not self.ecosystem.get_hardware_group_uids(actuator_group):
-                return False
         return True
 
     async def _start(self) -> None:
@@ -39,7 +36,7 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
             "Starting the weather subroutine. Its actions frequency are "
             "determined in the config file")
         self._actuator_handlers = {}
-        expected_events = self._get_expected_weather_events()
+        expected_events = self.compute_expected_actuators()
         for event in expected_events:
             # Mount actuator handler
             await self._mount_actuator_handler(event)
@@ -59,8 +56,7 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
-        for event in self._get_expected_weather_events():
-            actuator_group = self.get_actuator_group_for_parameter(event)
+        for actuator_group in self.compute_expected_actuators().values():
             extra = set(self.ecosystem.get_hardware_group_uids(actuator_group))
             hardware_needed = hardware_needed | extra
         return hardware_needed
@@ -75,43 +71,56 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
         for job in self._jobs:
             await self._remove_job(job)
         # Mount and unmount actuator handlers if required
-        currently_expected: set[str] = set(self._get_expected_weather_events())
-        currently_mounted: set[str] = set(self.actuator_handlers.keys())
-        for actuator_group in currently_expected - currently_mounted:
-            await self._mount_actuator_handler(actuator_group)
-        for actuator_group in currently_mounted - currently_expected:
-            await self._unmount_actuator_handler(actuator_group)
+        currently_expected: set[str] = set(self.compute_expected_actuators())
+        currently_mounted: set[str] = set(self.actuator_handlers)
+        for weather_event in currently_expected - currently_mounted:
+            await self._mount_actuator_handler(weather_event)
+        for weather_event in currently_mounted - currently_expected:
+            await self._unmount_actuator_handler(weather_event)
+        # Reset actuator handlers
+        for actuator_handler in self.actuator_handlers.values():
+            actuator_handler.reset_cached_actuators()
         # Add back jobs
         for job in currently_expected:
             await self._add_job(job)
 
     """Routine specific methods"""
-    def _get_expected_weather_events(self) -> list[str]:
-        return [*self.config.weather.keys()]
+    def compute_expected_actuators(self) -> dict[gv.WeatherParameter, str]:
+        """Return the actuator groups that should be mounted for the weather events
+
+        The keys are the weather events and the values are the associated actuator
+        groups"""
+        rv: dict[gv.WeatherParameter, str] = {}
+        for weather_event, weather_cfg in self.config.weather.items():
+            actuator_group = weather_cfg.get("linked_actuator", None) or weather_event
+            # Make sure the actuator group is available
+            if self.ecosystem.get_hardware_group_uids(actuator_group):
+                rv[weather_event] = actuator_group
+        return rv
 
     async def _mount_actuator_handler(self, parameter: str) -> None:
-        actuator_group = self.get_actuator_group_for_parameter(parameter)
-        if actuator_group in self.actuator_handlers:
+        if parameter in self.actuator_handlers:
             raise ValueError(
-                f"Actuator handler for weather parameter {parameter} is already mounted")
+                f"Actuator handler for weather parameter {parameter} is already mounted"
+            )
+        actuator_group = self.get_actuator_group_for_parameter(parameter)
         actuator_handler = self.get_actuator_handler(actuator_group)
-        self.actuator_handlers[actuator_group] = actuator_handler
+        self.actuator_handlers[parameter] = actuator_handler
         async with actuator_handler.update_status_transaction(activation=True):
             actuator_handler.activate()
         actuator_handler.reset_cached_actuators()
 
     async def _unmount_actuator_handler(self, parameter: str) -> None:
-        actuator_group = self.get_actuator_group_for_parameter(parameter)
-        if actuator_group not in self.actuator_handlers:
+        if parameter not in self.actuator_handlers:
             raise ValueError(
                 f"Actuator handler for weather parameter {parameter} is not mounted"
             )
-        actuator_handler = self.actuator_handlers[actuator_group]
+        actuator_handler = self.actuator_handlers[parameter]
         async with actuator_handler.update_status_transaction(activation=True):
             if actuator_handler.mode is gv.ActuatorMode.automatic:
                 await actuator_handler.reset()
             actuator_handler.deactivate()
-        del self.actuator_handlers[actuator_group]
+        del self.actuator_handlers[parameter]
 
     def _create_job_func(
             self,
@@ -123,7 +132,6 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
         mode = actuator_handler.mode
         status = actuator_handler.status
         level = actuator_handler.level
-
 
         async def delayed_restoration() -> None:
             async with actuator_handler.update_status_transaction():
@@ -143,9 +151,8 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
         if parameter in self._jobs:
             raise ValueError(f"Job for weather parameter {parameter} already exists")
         weather_cfg = self.ecosystem.config.get_weather_parameter(parameter)
-        actuator_group = self.get_actuator_group_for_parameter(parameter)
         # Should raise if the actuator handler is not mounted
-        actuator_handler = self.actuator_handlers[actuator_group]
+        actuator_handler = self.actuator_handlers[parameter]
         # Add the job
         self.ecosystem.engine.scheduler.add_job(
             func=self._create_job_func(
@@ -171,6 +178,11 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
 
     @property
     def actuator_handlers(self) -> dict[str, ActuatorHandler]:
+        """Return the actuator handlers used by the weather subroutine.
+
+        The result is a dictionary where the keys are the weather event names
+        and the values are the associated actuator handlers.
+        """
         if self._actuator_handlers is None:
             raise ValueError(
                 "actuator_handlers is not defined in non-started Climate subroutine")

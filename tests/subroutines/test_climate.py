@@ -62,12 +62,11 @@ def test_hardware_needed(climate_subroutine: Climate):
 
 def test_expected_actuators(climate_subroutine: Climate):
     expected_actuators = climate_subroutine.compute_expected_actuators()
-
     assert expected_actuators == {
         # Default actuator
-        "heater": gv.ClimateParameter.temperature,
+        (gv.ClimateParameter.temperature, "increase"): "heater",
         # Overridden actuator
-        "fogger": gv.ClimateParameter.humidity,
+        (gv.ClimateParameter.humidity, "increase"): "fogger",
     }
 
 
@@ -164,8 +163,8 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
     }
 
     assert set(climate_subroutine.actuator_handlers) == {
-        "heater",
-        "fogger",
+        (gv.ClimateParameter.temperature, "increase"),  # "heater"
+        (gv.ClimateParameter.humidity, "increase"),  # "fogger"
     }
 
     assert set(climate_subroutine.pids) == {

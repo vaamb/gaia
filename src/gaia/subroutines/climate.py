@@ -3,9 +3,11 @@ from __future__ import annotations
 from datetime import datetime, time
 from time import monotonic
 import typing as t
+from typing import Literal, TypeAlias
 
 import gaia_validators as gv
 
+from gaia import config
 from gaia.actuator_handler import HystericalPID
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Dimmer, Switch
@@ -15,6 +17,10 @@ from gaia.subroutines.template import SubroutineTemplate
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.actuator_handler import ActuatorHandler
     from gaia.subroutines.sensors import Sensors
+
+
+Direction = Literal["increase", "decrease"]
+ClimateDirection: TypeAlias = tuple[gv.ClimateParameter, Direction]
 
 
 MISSES_BEFORE_STOP = 5
@@ -32,7 +38,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         # Routine parameters
         loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
-        self._actuator_handlers: dict[str, ActuatorHandler] | None = None
+        self._actuator_handlers: dict[ClimateDirection, ActuatorHandler] | None = None
         self._pids: dict[gv.ClimateParameter, HystericalPID] | None = None
         self._sensor_miss: int = 0
         self._finish__init__()
@@ -77,26 +83,22 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             self.pids[climate_parameter] = pid
         # Mount required actuator handlers
         self._actuator_handlers = {}
-        expected_actuators = self.compute_expected_actuators()
-        for actuator_group in expected_actuators:
-            actuator_handler = self.get_actuator_handler(actuator_group)
-            self.actuator_handlers[actuator_group] = actuator_handler
-            await self._activate_actuator_handler(actuator_group)
-            actuator_handler.reset_cached_actuators()
+        climate_directions = self.compute_expected_actuators()
+        for climate_direction in climate_directions:
+            await self._mount_actuator_handler(climate_direction)
 
     async def _stop(self) -> None:
         # Deactivate activated actuator handlers
-        for actuator_group in [*self.actuator_handlers.keys()]:
-            await self._deactivate_actuator_handler(actuator_group)
+        for climate_direction in [*self.actuator_handlers.keys()]:
+            await self._unmount_actuator_handler(climate_direction)
         # Reset actuator handlers and PIDs
         self._actuator_handlers = None
         self._pids = None
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
-        expected_actuators = self.compute_expected_actuators()
-        for actuator_type in expected_actuators:
-            extra = set(self.ecosystem.get_hardware_group_uids(actuator_type))
+        for actuator_group in self.compute_expected_actuators().values():
+            extra = set(self.ecosystem.get_hardware_group_uids(actuator_group))
             hardware_needed = hardware_needed | extra
         return hardware_needed
 
@@ -109,18 +111,15 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         # Make sure PIDs are in sync with actuator handlers
         assert self._pids is not None
         # Activate, deactivate and reset actuator handlers if required
-        currently_expected: set[str] = set(self.compute_expected_actuators())
-        currently_mounted: set[str] = set(self.actuator_handlers.keys())
-        for actuator_group in currently_expected - currently_mounted:
-            actuator_handler = self.get_actuator_handler(actuator_group)
-            self.actuator_handlers[actuator_group] = actuator_handler
-            await self._activate_actuator_handler(actuator_group)
-        for actuator_group in currently_mounted - currently_expected:
-            await self._deactivate_actuator_handler(actuator_group)
-            del self.actuator_handlers[actuator_group]
+        currently_expected: set[ClimateDirection] = set(self.compute_expected_actuators())
+        currently_mounted: set[ClimateDirection] = set(self.actuator_handlers.keys())
+        for climate_direction in currently_expected - currently_mounted:
+            await self._mount_actuator_handler(climate_direction)
+        for climate_direction in currently_mounted - currently_expected:
+            await self._unmount_actuator_handler(climate_direction)
         # Reset actuator handlers
-        for actuator_group in self.actuator_handlers:
-            self.actuator_handlers[actuator_group].reset_cached_actuators()
+        for actuator_handler in self.actuator_handlers.values():
+            actuator_handler.reset_cached_actuators()
         # Reset PIDs
         for pid in self.pids.values():
             pid.reset()
@@ -130,23 +129,55 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         return self.ecosystem.actuator_hub.get_handler(actuator_group)
 
     @property
-    def actuator_handlers(self) -> dict[str, ActuatorHandler]:
+    def actuator_handlers(self) -> dict[ClimateDirection, ActuatorHandler]:
+        """Return the actuator handlers used by the climate subroutine.
+
+        The result is a dictionary where the keys are a tuple of the climate
+        parameters and the associated direction, and the values are the
+        associated actuator handlers.
+        """
         if self._actuator_handlers is None:
             raise ValueError(
                 "actuator_handlers is not defined in non-started Climate subroutine")
         return self._actuator_handlers
 
-    async def _activate_actuator_handler(self, actuator_group: str) -> None:
-        actuator_handler = self.actuator_handlers[actuator_group]
+    def get_actuator_group_for_parameter(self, climate_direction: ClimateDirection) -> str:
+        climate_cfg = self.ecosystem.config.get_climate_parameter(climate_direction[0])
+        # Try to get the actuator group from the config file
+        if climate_cfg.linked_actuators is not None:
+            potential_actuator: str | None = getattr(
+                climate_cfg.linked_actuators, climate_direction[1])
+            if potential_actuator is not None:
+                return potential_actuator
+        # If not found in the config file, use the default actuator group
+        couple = config.defaults.actuator_couples[climate_direction[0]]
+        return getattr(couple, climate_direction[1])
+
+    async def _mount_actuator_handler(self, climate_direction: ClimateDirection) -> None:
+        if climate_direction in self.actuator_handlers:
+            raise ValueError(
+                f"Actuator handler for climate parameter {climate_direction[0]} "
+                f"is already mounted"
+            )
+        actuator_group = self.get_actuator_group_for_parameter(climate_direction)
+        actuator_handler = self.get_actuator_handler(actuator_group)
+        self.actuator_handlers[climate_direction] = actuator_handler
         async with actuator_handler.update_status_transaction(activation=True):
             actuator_handler.activate()
+        actuator_handler.reset_cached_actuators()
 
-    async def _deactivate_actuator_handler(self, actuator_group: str) -> None:
-        actuator_handler = self.actuator_handlers[actuator_group]
+    async def _unmount_actuator_handler(self, climate_direction: ClimateDirection) -> None:
+        if climate_direction not in self.actuator_handlers:
+            raise ValueError(
+                f"Actuator handler for climate parameter {climate_direction[0]} "
+                f"is not mounted"
+            )
+        actuator_handler = self.actuator_handlers[climate_direction]
         async with actuator_handler.update_status_transaction(activation=True):
             if actuator_handler.mode is gv.ActuatorMode.automatic:
                 await actuator_handler.reset()
             actuator_handler.deactivate()
+        del self.actuator_handlers[climate_direction]
 
     def get_pid(self, climate_parameter: gv.ClimateParameter) -> HystericalPID:
         return self.ecosystem.actuator_hub.get_pid(climate_parameter)
@@ -159,9 +190,12 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         return self._pids
 
     # Climate parameters and actuators management
-    def compute_expected_actuators(self) -> dict[str, gv.ClimateParameter]:
-        regulated_parameters: list[gv.ClimateParameter] = REGULABLE_PARAMETERS.copy()
+    def compute_expected_actuators(self) -> dict[ClimateDirection, str]:
+        """Return the actuator groups that should be mounted for the weather events
 
+        The result is a dictionary where the keys are a tuple of the climate
+        parameters and the associated direction, and the values are the
+        associated actuator groups."""
         # Make sure the sensor subroutine is running
         if not self.ecosystem.get_subroutine_status("sensors"):
             self.logger.warning(
@@ -170,9 +204,10 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             return {}
 
         # Check if climate parameters are available in the config file
-        for climate_param in [*regulated_parameters]:
-            if not self.config.has_climate_parameter(climate_param):
-                regulated_parameters.remove(climate_param)
+        regulated_parameters: list[gv.ClimateParameter] = [
+            climate_parameter for climate_parameter in self.config.climate.keys()
+            if climate_parameter in REGULABLE_PARAMETERS
+        ]
         if not regulated_parameters:
             self.logger.warning("No climate parameter found.")
             return {}
@@ -180,9 +215,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         # Get mounted sensors and the measures they're taking
         measures: set[str] = {
             measure.name
-            # TODO: check if sensors are mounted.
-            #  They should be if sensors subroutine is running
-            for sensor in self.ecosystem.subroutines["sensors"].hardware.values()
+            for sensor in self.ecosystem.hardware.values()
             for measure in sensor.measures
         }
 
@@ -195,17 +228,17 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             self.logger.debug("No sensor measuring regulated parameters detected.")
             return {}
 
-        # Check if there are regulators available and map them with climate parameters
-        rv: dict[str, gv.ClimateParameter] = {}
+        # Check if there are actuator groups available and map them with climate parameters
+        rv: dict[ClimateDirection, str] = {}
         actuator_couples = self.config.get_climate_actuators()
         for climate_param in regulated_parameters:
             actuator_couple: gv.ActuatorCouple = actuator_couples[climate_param]
-            for actuator_type in actuator_couple:
-                if (
-                        actuator_type is not None
-                        and self.ecosystem.get_hardware_group_uids(actuator_type)
-                ):
-                    rv[actuator_type] = climate_param
+            for direction in ("increase", "decrease"):
+                direction: Direction
+                actuator_group: str | None = getattr(actuator_couple, direction, None)
+                any_hardware = self.ecosystem.get_hardware_group_uids(actuator_group)
+                if actuator_group and any_hardware:
+                    rv[(climate_param, direction)] = actuator_group
         if not rv:
             self.logger.debug("No climatic actuator detected.")
             return {}
@@ -216,7 +249,10 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         if not self.started:
             return []
         expected_actuators = self.compute_expected_actuators()
-        return [*set(expected_actuators.values())]
+        return [*set([
+            climate_direction[0] for climate_direction
+            in expected_actuators.keys()
+        ])]
 
     # Routine specific methods
     def _check_misses(self) -> bool:
@@ -306,8 +342,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
             return
         for climate_parameter in self.regulated_parameters:
             self._update_pid(climate_parameter, sensors_average)
-        for actuator_type in self.compute_expected_actuators():
-            actuator_handler = self.actuator_handlers[actuator_type]
+        for actuator_handler in self.actuator_handlers.values():
             async with actuator_handler.update_status_transaction():
                 await self._update_actuator_handler(actuator_handler)
 
