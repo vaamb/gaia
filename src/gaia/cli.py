@@ -4,7 +4,7 @@ import click
 import uvloop
 
 from gaia import Engine
-from gaia.helpers import validate_configs
+from gaia.helpers import generate_default_configs, validate_configs
 
 
 async def main():
@@ -37,4 +37,5 @@ def cli(ctx: click.Context) -> None:
     uvloop.run(main())
 
 
+cli.add_command(generate_default_configs)
 cli.add_command(validate_configs)

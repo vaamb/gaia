@@ -82,3 +82,47 @@ async def _validate_configs(verbose: bool = False) -> None:
 def validate_configs(verbose: bool = False) -> None:
     """Validate the ecosystems and the private configuration files."""
     asyncio.run(_validate_configs(verbose))
+
+
+async def _generate_default_configs(ecosystem: bool = True, private: bool = True) -> None:
+    if not any((ecosystem, private)):
+        raise ValueError("At least one of the ecosystems or private options must be True.")
+    engine_config = EngineConfig()
+    engine_config.logger.info("Creating default configuration files.")
+    if private:
+        private_cfg_path: Path = engine_config.get_file_path(ConfigType.private)
+        engine_config.logger.info(f"Private configuration file path set to: {private_cfg_path}")
+        if not private_cfg_path.exists():
+            engine_config.logger.info("Private configuration file not found. Creating it.")
+            async with engine_config.config_files_lock():
+                await engine_config._create_private_config_file()
+        else:
+            engine_config.logger.info("Private configuration file already exists.")
+    if ecosystem:
+        ecosystems_cfg_path: Path = engine_config.get_file_path(ConfigType.ecosystems)
+        engine_config.logger.info(f"Ecosystems configuration file path set to: {ecosystems_cfg_path}")
+        if not ecosystems_cfg_path.exists():
+            engine_config.logger.info("Ecosystems configuration file not found. Creating it.")
+            async with engine_config.config_files_lock():
+                await engine_config._create_ecosystems_config_file()
+        else:
+            engine_config.logger.info("Ecosystems configuration file already exists.")
+    engine_config.logger.info("Default configuration file()s created successfully.")
+
+
+@click.command()
+@click.option(
+    "--ecosystem/--no-ecosystem",
+    type=bool,
+    default=True,
+    is_flag=True,
+)
+@click.option(
+    "--private/--no-private",
+    type=bool,
+    default=True,
+    is_flag=True,
+)
+def generate_default_configs(ecosystem: bool = True, private: bool = True) -> None:
+    """Create default configuration files."""
+    asyncio.run(_generate_default_configs(ecosystem, private))
