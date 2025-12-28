@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Coroutine
 
 from apscheduler.triggers.cron import CronTrigger
@@ -129,11 +130,10 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
             duration: float,
             level: float,
     ) -> Coroutine:
-        mode = actuator_handler.mode
-        status = actuator_handler.status
-        level = actuator_handler.level
-
-        async def delayed_restoration() -> None:
+        async def delayed_restoration(status, level, mode) -> None:
+            self.logger.debug(
+                f"Job for `{job_name}` weather event is over. Restoring actuator "
+                f"handler to {status} {level} {mode}")
             async with actuator_handler.update_status_transaction():
                 await actuator_handler.set_status(status)
                 await actuator_handler.set_level(level)
@@ -141,9 +141,20 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
             del self._timers[job_name]
 
         async def wrapper():
+            self.logger.debug(
+                f"Activating job for `{job_name}` weather event. Turning actuator "
+                f"handler to {level}")
+
+            current_status = actuator_handler.status
+            current_level = actuator_handler.level
+            current_mode = actuator_handler.mode
+
             async with actuator_handler.update_status_transaction():
-                await actuator_handler.turn_to(gv.ActuatorModePayload.on, level=level)
-            self._timers[job_name] = Timer(delayed_restoration, duration)
+                await actuator_handler.set_status(True)
+                await actuator_handler.set_level(level)
+                await actuator_handler.set_mode(gv.ActuatorMode.manual)
+            callback = partial(delayed_restoration, current_status, current_level, current_mode)
+            self._timers[job_name] = Timer(callback, duration)
 
         return wrapper
 
@@ -154,6 +165,7 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
         # Should raise if the actuator handler is not mounted
         actuator_handler = self.actuator_handlers[parameter]
         # Add the job
+        self.logger.debug(f"Creating job for `{parameter}` weather event")
         self.ecosystem.engine.scheduler.add_job(
             func=self._create_job_func(
                 parameter, actuator_handler, weather_cfg.duration, weather_cfg.level),
