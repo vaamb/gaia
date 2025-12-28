@@ -460,6 +460,7 @@ class Ecosystem:
             self,
             actuator: str,
             mode: gv.ActuatorModePayload | str = gv.ActuatorModePayload.automatic,
+            level: int = 100,
             countdown: float = 0.0,
     ) -> None:
         """Turn the actuator to the specified mode
@@ -481,8 +482,11 @@ class Ecosystem:
             )
         validated_mode: gv.ActuatorModePayload = \
             gv.safe_enum_from_name(gv.ActuatorModePayload, mode)
+        level = min(100, level)
+        level = max(0, level)
         async with actuator_handler.update_status_transaction():
-            await actuator_handler.turn_to(turn_to=validated_mode, countdown=countdown)
+            await actuator_handler.turn_to(
+                turn_to=validated_mode, level=level, countdown=countdown)
 
     def get_actuator_handler(
             self,
