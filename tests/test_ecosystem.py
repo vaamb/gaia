@@ -87,7 +87,7 @@ def test_actuators_data(ecosystem: "Ecosystem"):
 
 @pytest.mark.asyncio
 async def test_turn_actuator(ecosystem: "Ecosystem"):
-    with pytest.raises(ValueError, match=r"Actuator group 'light' is not currently mounted."):
+    with pytest.raises(ValueError, match=r"Actuator group 'light' is not mounted."):
         await ecosystem.turn_actuator("light", gv.ActuatorModePayload.automatic)
 
     # All subroutines are disabled by default in testing config
