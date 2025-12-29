@@ -33,7 +33,7 @@ camera = [
 database = [
     "aiosqlite~=0.20.0",
     "SQLAlchemy~=2.0.5",
-    "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git@0.3.0",
+    "sqlalchemy-wrapper @ git+https://github.com/vaamb/sqlalchemy-wrapper.git@0.4.0",
 ]
 dispatcher = [
     "aiohttp~=3.11",
