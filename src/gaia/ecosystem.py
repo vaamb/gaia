@@ -460,7 +460,7 @@ class Ecosystem:
             self,
             actuator: str,
             mode: gv.ActuatorModePayload | str = gv.ActuatorModePayload.automatic,
-            level: int = 100,
+            level: float = 100.0,
             countdown: float = 0.0,
     ) -> None:
         """Turn the actuator to the specified mode
@@ -468,6 +468,8 @@ class Ecosystem:
         :param actuator: the name of an actuator group, ex: 'light'.
         :param mode: the mode to which the actuator needs to be set. Can be
                      'on', 'off' or 'automatic'.
+        :param level: the level to which the actuator needs to be set. Can be
+                      a float between 0 and 100.
         :param countdown: the delay before which the actuator will be turned to
                           the specified mode.
         """
