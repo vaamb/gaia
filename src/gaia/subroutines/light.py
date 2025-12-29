@@ -126,6 +126,7 @@ class Light(SubroutineTemplate[Switch]):
     """Routine specific methods"""
     def get_actuator_handler(self) -> ActuatorHandler:
         actuator_couples = self.config.get_climate_actuators()
+        # TODO: allow to set the actuator group in the config file
         actuator_group: str = actuator_couples[gv.ClimateParameter.light].increase
         return self.ecosystem.actuator_hub.get_handler(actuator_group)
 
@@ -253,5 +254,5 @@ class Light(SubroutineTemplate[Switch]):
     ) -> None:
         if not self._started:
             raise RuntimeError("Light subroutine is not started")
-        async with self.actuator_handler.update_status_transaction():
-            await self.actuator_handler.turn_to(turn_to, level=level, countdown=countdown)
+        await self.ecosystem.turn_actuator("light",
+            turn_to, level=level, countdown=countdown)

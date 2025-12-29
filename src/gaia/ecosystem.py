@@ -479,13 +479,11 @@ class Ecosystem:
         actuator_handler = self.actuator_hub.actuator_handlers.get(actuator)
         if not actuator_handler:
             raise ValueError(
-                f"Actuator group '{actuator}' is not currently mounted. The "
-                f"subroutine managing it is not running."
+                f"Actuator group '{actuator}' is not mounted. No subroutine "
+                f"managing it is currently running."
             )
         validated_mode: gv.ActuatorModePayload = \
             gv.safe_enum_from_name(gv.ActuatorModePayload, mode)
-        level = min(100, level)
-        level = max(0, level)
         async with actuator_handler.update_status_transaction():
             await actuator_handler.turn_to(
                 turn_to=validated_mode, level=level, countdown=countdown)

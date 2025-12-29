@@ -377,11 +377,5 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
     ) -> None:
         if not self._started:
             raise RuntimeError("Climate subroutine is not started")
-        if self._started:
-            actuator_handler: ActuatorHandler = self.ecosystem.actuator_hub.get_handler(
-                actuator_group)
-            async with actuator_handler.update_status_transaction():
-                await actuator_handler.turn_to(turn_to, level=level, countdown=countdown)
-        else:
-            raise RuntimeError(
-                f"Climate subroutine is not started in ecosystem {self.ecosystem}")
+        await self.ecosystem.turn_actuator(
+            actuator_group, turn_to, level=level, countdown=countdown)
