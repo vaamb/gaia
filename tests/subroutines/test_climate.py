@@ -87,10 +87,10 @@ async def test_turn_actuator(climate_subroutine: Climate):
     await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.off)
     await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.automatic)
 
-    with pytest.raises(RuntimeError, match=r"This actuator is not active"):
+    with pytest.raises(ValueError, match=r"Actuator group 'cooler' is not mounted."):
         await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.on)
 
-    with pytest.raises(RuntimeError, match=r"This actuator is not active"):
+    with pytest.raises(ValueError, match=r"Actuator group 'cooler' is not mounted."):
         await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.off)
 
     with pytest.raises(ValueError):

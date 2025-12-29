@@ -525,7 +525,7 @@ class ActuatorHandler:
     async def _turn_to(
             self,
             turn_to: gv.ActuatorModePayload,
-            level: float = 100,
+            level: float = 100.0,
     ) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
             await self.set_mode(gv.ActuatorMode.automatic)

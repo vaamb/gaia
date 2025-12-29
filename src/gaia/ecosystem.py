@@ -460,57 +460,33 @@ class Ecosystem:
             self,
             actuator: str,
             mode: gv.ActuatorModePayload | str = gv.ActuatorModePayload.automatic,
+            level: float = 100.0,
             countdown: float = 0.0,
     ) -> None:
         """Turn the actuator to the specified mode
 
-        :param actuator: the name of a group of actuators, ex: 'light'.
+        :param actuator: the name of an actuator group, ex: 'light'.
         :param mode: the mode to which the actuator needs to be set. Can be
                      'on', 'off' or 'automatic'.
+        :param level: the level to which the actuator needs to be set. Can be
+                      a float between 0 and 100.
         :param countdown: the delay before which the actuator will be turned to
                           the specified mode.
         """
         if isinstance(actuator, gv.HardwareType):
             actuator = actuator.name
-        actuator_to_parameter = self.config.get_actuator_to_parameter()
-        try:
-            parameter = actuator_to_parameter[actuator]
-        except KeyError:
+        # Get actuator handler
+        actuator_handler = self.actuator_hub.actuator_handlers.get(actuator)
+        if not actuator_handler:
             raise ValueError(
-                f"Actuator group '{actuator}' is not defined in the config"
+                f"Actuator group '{actuator}' is not mounted. No subroutine "
+                f"managing it is currently running."
             )
         validated_mode: gv.ActuatorModePayload = \
             gv.safe_enum_from_name(gv.ActuatorModePayload, mode)
-        try:
-            if parameter == gv.ClimateParameter.light:
-                if self.get_subroutine_status("light"):
-                    light_subroutine: Light = self.subroutines["light"]
-                    await light_subroutine.turn_light(
-                        turn_to=validated_mode, countdown=countdown)
-                else:
-                    raise ValueError("Light subroutine is not running")
-            elif parameter in (
-                    gv.ClimateParameter.temperature,
-                    gv.ClimateParameter.humidity
-            ):
-                if self.get_subroutine_status("climate"):
-                    climate_subroutine: Climate = self.subroutines["climate"]
-                    await climate_subroutine.turn_climate_actuator(
-                        actuator_group=actuator,
-                        turn_to=validated_mode,
-                        countdown=countdown,
-                    )
-                else:
-                    raise ValueError("Climate subroutine is not running")
-            else:
-                raise ValueError(
-                    f"No subroutine using '{actuator}' has been found. "
-                )
-        except RuntimeError:
-            self.logger.error(
-                f"Cannot turn {actuator} to {validated_mode} as the "
-                f"subroutine managing it is not currently running."
-            )
+        async with actuator_handler.update_status_transaction():
+            await actuator_handler.turn_to(
+                turn_to=validated_mode, level=level, countdown=countdown)
 
     def get_actuator_handler(
             self,
