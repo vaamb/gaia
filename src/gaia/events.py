@@ -453,8 +453,9 @@ class Events(AsyncEventHandler):
             f"'s '{data['actuator'].name}' to mode '{data['mode'].name}'.")
         if ecosystem_uid in self.ecosystems:
             await self.ecosystems[ecosystem_uid].turn_actuator(
-                actuator=data["actuator"],
+                actuator=data.get("group") or data["actuator"],
                 mode=data["mode"],
+                level=data.get("level", 100.0),
                 countdown=data.get("countdown", 0.0),
             )
 
