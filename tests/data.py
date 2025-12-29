@@ -24,10 +24,10 @@ sensor_info: gv.AnonymousHardwareConfigDict = {
     "model": "DHT22",  # The model should automatically be promoted to "virtualDHT22"
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
-    "groups": None,
+#    "groups": None,
     "measures": ["temperature", "humidity", "absolute_humidity"],
-    "plants": [],
-    "multiplexer_model": None,
+#    "plants": [],
+#    "multiplexer_model": None,
 }
 
 
@@ -39,9 +39,9 @@ i2c_sensor_veml7700_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualVEML7700",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
-    "groups": None,
+#    "groups": None,
     "measures": ["light"],
-    "plants": [],
+#    "plants": [],
     "multiplexer_model": "TCA9548A",
 }
 
@@ -54,9 +54,9 @@ ir2c_sensor_ens160_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualENS160",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
-    "groups": None,
+#    "groups": None,
     "measures": ["light"],
-    "plants": [],
+#    "plants": [],
     "multiplexer_model": "TCA9548A",
 }
 
@@ -69,10 +69,10 @@ light_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualgpioDimmable",
     "type": gv.HardwareType.light,
     "level": gv.HardwareLevel.environment,
-    "groups": None,
-    "measures": [],
-    "plants": [],
-    "multiplexer_model": None,
+#    "groups": None,
+#    "measures": [],
+#    "plants": [],
+#    "multiplexer_model": None,
 }
 
 
@@ -84,10 +84,10 @@ heater_info: gv.AnonymousHardwareConfigDict = {
     "model": "virtualgpioDimmable",
     "type": gv.HardwareType.heater,
     "level": gv.HardwareLevel.environment,
-    "groups": None,
-    "measures": [],
-    "plants": [],
-    "multiplexer_model": None,
+#    "groups": None,
+#    "measures": [],
+#    "plants": [],
+#    "multiplexer_model": None,
 }
 
 
@@ -100,9 +100,9 @@ humidifier_info: gv.AnonymousHardwareConfigDict = {
     "type": gv.HardwareType.humidifier,
     "level": gv.HardwareLevel.environment,
     "groups": ["fogger", "rainer"],
-    "measures": [],
-    "plants": [],
-    "multiplexer_model": None,
+#    "measures": [],
+#    "plants": [],
+#    "multiplexer_model": None,
 }
 
 
@@ -114,10 +114,10 @@ camera_info: gv.AnonymousHardwareConfigDict = {
     "model": "PiCamera",
     "type": gv.HardwareType.camera,
     "level": gv.HardwareLevel.environment,
-    "groups": None,
+#    "groups": None,
     "measures": ["mpri"],
-    "plants": [],
-    "multiplexer_model": None,
+#    "plants": [],
+#    "multiplexer_model": None,
 }
 
 
@@ -129,10 +129,10 @@ inactive_info: gv.AnonymousHardwareConfigDict = {
     "model": "gpioSwitch",
     "type": gv.HardwareType.actuator,
     "level": gv.HardwareLevel.environment,
-    "groups": None,
-    "measures": [],
-    "plants": [],
-    "multiplexer_model": None,
+#    "groups": None,
+#    "measures": [],
+#    "plants": [],
+#    "multiplexer_model": None,
 }
 
 

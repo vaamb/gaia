@@ -86,7 +86,7 @@ def test_actuators_data(ecosystem: "Ecosystem"):
 
 @pytest.mark.asyncio
 async def test_light_actuators(ecosystem: "Ecosystem"):
-    with pytest.raises(ValueError, match=r"Light subroutine is not running"):
+    with pytest.raises(ValueError, match=r"Actuator group 'light' is not currently mounted."):
         await ecosystem.turn_actuator(
             gv.HardwareType.light, gv.ActuatorModePayload.automatic)
 
@@ -106,7 +106,7 @@ async def test_light_actuators(ecosystem: "Ecosystem"):
 
 @pytest.mark.asyncio
 async def test_climate_actuators(ecosystem: "Ecosystem"):
-    with pytest.raises(ValueError, match=r"Climate subroutine is not running"):
+    with pytest.raises(ValueError, match=r"Actuator group 'heater' is not currently mounted."):
         await ecosystem.turn_actuator(
             gv.HardwareType.heater, gv.ActuatorModePayload.automatic)
 
