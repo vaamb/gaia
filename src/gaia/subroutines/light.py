@@ -103,8 +103,7 @@ class Light(SubroutineTemplate[Switch]):
         self._pid = None
 
     def get_hardware_needed_uid(self) -> set[str]:
-        actuator_couples = self.config.get_climate_actuators()
-        actuator_group: str = actuator_couples[gv.ClimateParameter.light].increase
+        actuator_group: str = self._get_actuator_group()
         return set(self.ecosystem.get_hardware_group_uids(actuator_group))
 
     async def refresh(self) -> None:
@@ -114,9 +113,8 @@ class Light(SubroutineTemplate[Switch]):
             return
         # Make sure PID is in sync with actuator handler
         assert self._pid is not None
-        # No need to activate or deactivate actuator handler: it is done in
-        #  during start and stop and if there isn't linked actuator, the subroutine
-        #  will stop.
+        # Refresh the actuator handler in case the actuator group name has changed
+        self._actuator_handler = self.get_actuator_handler()
         # Reset actuator handler, PID and light sensors
         self.actuator_handler.reset_cached_actuators()
         self.pid.reset()
@@ -124,10 +122,16 @@ class Light(SubroutineTemplate[Switch]):
         self.reset_any_dimmable_light()
 
     """Routine specific methods"""
-    def get_actuator_handler(self) -> ActuatorHandler:
+    def _get_actuator_group(self) -> str:
         actuator_couples = self.config.get_climate_actuators()
-        # TODO: allow to set the actuator group in the config file
-        actuator_group: str = actuator_couples[gv.ClimateParameter.light].increase
+        light_couple = actuator_couples[gv.ClimateParameter.light]
+        couple = light_couple.increase
+        if couple is not None:
+            return couple
+        return "light"
+
+    def get_actuator_handler(self) -> ActuatorHandler:
+        actuator_group: str = self._get_actuator_group()
         return self.ecosystem.actuator_hub.get_handler(actuator_group)
 
     @property
