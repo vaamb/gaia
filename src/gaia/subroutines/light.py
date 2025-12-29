@@ -248,9 +248,10 @@ class Light(SubroutineTemplate[Switch]):
     async def turn_light(
             self,
             turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
-            countdown: float = 0.0
+            level: float = 100.0,
+            countdown: float = 0.0,
     ) -> None:
         if not self._started:
             raise RuntimeError("Light subroutine is not started")
         async with self.actuator_handler.update_status_transaction():
-            await self.actuator_handler.turn_to(turn_to, countdown=countdown)
+            await self.actuator_handler.turn_to(turn_to, level=level, countdown=countdown)
