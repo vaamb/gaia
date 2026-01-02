@@ -23,7 +23,10 @@ def test_hardware_needed(pictures_subroutine: Pictures):
 
 @pytest.mark.asyncio
 async def test_routine(pictures_subroutine: Pictures):
+    # Enable the subroutine
     pictures_subroutine.enable()
+
+    # Test start, routine, refresh and stop
     await pictures_subroutine.start()
 
     assert not pictures_subroutine.picture_arrays
@@ -31,6 +34,13 @@ async def test_routine(pictures_subroutine: Pictures):
     await pictures_subroutine.routine()
 
     assert pictures_subroutine.picture_arrays
+
+    await pictures_subroutine.refresh()
+
+    await pictures_subroutine.stop()
+
+    # Disable the subroutine
+    pictures_subroutine.disable()
 
 
 @pytest.mark.asyncio

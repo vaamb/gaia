@@ -28,11 +28,15 @@ def test_hardware_needed(sensors_subroutine: Sensors):
 @pytest.mark.asyncio
 async def test_routine(sensors_subroutine: Sensors):
     # Rely on the correct implementation of virtualDHT22
-
+    # Setup climate parameters to test alarms
     sensors_subroutine.config.set_management(gv.ManagementFlags.alarms, True)
     sensors_subroutine.config.set_climate_parameter(
         "temperature", **{"day": 42.0, "night": 42.0, "hysteresis": 1.0, "alarm": 0.5})
+
+    # Enable the subroutine
     sensors_subroutine.enable()
+
+    # Test start, routine, refresh and stop
     await sensors_subroutine.start()
 
     assert sensors_subroutine.sensors_data == gv.Empty()
@@ -45,3 +49,9 @@ async def test_routine(sensors_subroutine: Sensors):
     assert len(sensors_subroutine.sensors_data.alarms) > 0
 
     assert sensors_subroutine.ecosystem.sensors_data.records
+
+    await sensors_subroutine.refresh()
+
+    await sensors_subroutine.stop()
+
+    sensors_subroutine.disable()

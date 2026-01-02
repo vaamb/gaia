@@ -154,7 +154,9 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
     await sensors_subroutine.routine()
     assert not isinstance(sensors_subroutine.sensors_data, gv.Empty)
 
+    # Enable the subroutine
     climate_subroutine.enable()
+
     await climate_subroutine.start()
 
     assert set(climate_subroutine.regulated_parameters) == {
@@ -175,3 +177,8 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
     await climate_subroutine.routine()
 
     await climate_subroutine.refresh()
+
+    await climate_subroutine.stop()
+
+    # Disable the subroutine
+    climate_subroutine.disable()
