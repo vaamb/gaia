@@ -221,7 +221,7 @@ class Events(AsyncEventHandler):
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while running the ping routine. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
 
     async def on_pong(self) -> None:
@@ -667,7 +667,7 @@ class Events(AsyncEventHandler):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while uploading image. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
 
     async def upload_picture_arrays(

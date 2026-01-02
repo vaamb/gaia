@@ -53,7 +53,7 @@ class Light(SubroutineTemplate[Switch]):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while running the light routine. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
 
     async def routine_task(self) -> None:

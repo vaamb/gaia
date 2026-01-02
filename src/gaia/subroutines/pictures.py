@@ -116,7 +116,7 @@ class Pictures(SubroutineTemplate[Camera]):
         except ValueError as e:
             self.logger.error(
                 f"Encountered an error while updating scored arrays. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`.")
+                f"ERROR msg: `{e.__class__.__name__}: {e}`.")
         finally:
             update_time = monotonic() - start_time
             self.logger.debug(
@@ -129,7 +129,7 @@ class Pictures(SubroutineTemplate[Camera]):
                 except Exception as e:
                     self.logger.error(
                         f"Encountered an error while sending picture arrays. "
-                        f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                        f"ERROR msg: `{e.__class__.__name__}: {e}`."
                     )
                 finally:
                     self._sending_counter = 0

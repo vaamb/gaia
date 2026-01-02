@@ -252,7 +252,7 @@ class Ecosystem:
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while stopping the subroutine "
-                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__} :{e}`."
+                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
         # Then update the already running subroutines
         for subroutine in self.subroutines_started:
@@ -262,7 +262,7 @@ class Ecosystem:
                 self.logger.error(
                     f"Encountered an error while refreshing the hardware of "
                     f"the subroutine '{subroutine}'. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
         # Finally, start the new subroutines
         to_start = subroutines_needed - self.subroutines_started
@@ -275,7 +275,7 @@ class Ecosystem:
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while starting the subroutine "
-                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__} :{e}`."
+                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
 
     @property
@@ -448,7 +448,7 @@ class Ecosystem:
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
 
     # Actuator

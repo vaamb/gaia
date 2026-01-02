@@ -51,7 +51,7 @@ class Climate(SubroutineTemplate[Dimmer | Switch]):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while running the climate routine. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
         loop_time = monotonic() - start_time
         if loop_time > self._loop_period:  # pragma: no cover
