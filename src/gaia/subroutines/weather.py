@@ -69,7 +69,7 @@ class Weather(SubroutineTemplate[Dimmer | Switch]):
         if not self.started:
             return
         # Remove all jobs to make sure they will be updated if they changed
-        for job in self._jobs:
+        for job in [*self._jobs]:
             await self._remove_job(job)
         # Mount and unmount actuator handlers if required
         currently_expected: set[str] = set(self.compute_expected_actuators())

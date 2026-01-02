@@ -54,7 +54,7 @@ class Sensors(SubroutineTemplate[BaseSensor]):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while updating sensors data. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
         finally:
             update_time = monotonic() - start_time
@@ -65,7 +65,7 @@ class Sensors(SubroutineTemplate[BaseSensor]):
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while sending sensors data and warnings. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
         loop_time = monotonic() - start_time
         if loop_time > self._loop_period:  # pragma: no cover

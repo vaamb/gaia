@@ -35,17 +35,25 @@ def test_hardware_needed(health_subroutine: Health):
 
 @pytest.mark.asyncio
 async def test_routine(health_subroutine: Health):
+    # Enable the subroutine
     health_subroutine.enable()
+
+    # Test start, routine, refresh and stop
     await health_subroutine.start()
 
     assert health_subroutine.plants_health == gv.Empty()
 
     await health_subroutine.routine()
 
-    await health_subroutine.stop()
-
     assert health_subroutine.plants_health != gv.Empty()
     assert isinstance(health_subroutine.plants_health["records"][0], gv.HealthRecord)
+
+    await health_subroutine.refresh()
+
+    await health_subroutine.stop()
+
+    # Disable the subroutine
+    health_subroutine.disable()
 
 
 @pytest.mark.asyncio

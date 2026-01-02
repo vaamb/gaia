@@ -457,7 +457,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 self.logger.warning(
                     f"Nycthemeral span method cannot be set to '{span_method.name}' "
                     f"for ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`")
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`")
 
             lighting_method = safe_enum_from_name(gv.LightingMethod, nycthemeral_cfg["lighting"])
             try:
@@ -467,7 +467,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 self.logger.warning(
                     f"Lighting method cannot be set to '{lighting_method.name}' "
                     f"for ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`")
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`")
 
         if unfixable_error:
             raise ValidationError(
@@ -696,7 +696,7 @@ class EngineConfig(metaclass=SingletonMeta):
             except Exception as e:  # pragma: no cover
                 self.logger.error(
                     f"Encountered an error while running the watchdog routine. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
             await event_wait(self._stop_event, sleep_period)
 
@@ -1479,7 +1479,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         except ValidationError as e:
             self.logger.warning(
                 f"Nycthemeral span method cannot be set to '{span.name}'. Will "
-                f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__} :{e}`"
+                f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__}: {e}`"
             )
         # Raw nycthemeral span is silently replaced if needed
         self.nycthemeral_span_method
@@ -1493,7 +1493,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         except ValidationError as e:
             self.logger.warning(
                 f"Lighting method cannot be set to '{lighting.name}'. Will "
-                f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__} :{e}`"
+                f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__}: {e}`"
             )
         # Raw lighting method span is silently replaced if needed
         self.lighting_method
@@ -1510,7 +1510,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             except Exception as e:  # pragma: no cover
                 self.logger.error(
                     f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`"
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
                 )
 
     @property

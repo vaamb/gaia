@@ -79,13 +79,28 @@ async def test_turn_light(light_subroutine: Light):
 
 @pytest.mark.asyncio
 async def test_routine(light_subroutine: Light, sensors_subroutine: Sensors):
+    # Sensors data are required for full capabilities
     sensors_subroutine.enable()
     await sensors_subroutine.start()
 
+    # Enable the subroutines
     light_subroutine.enable()
+
+    # Test start, routine, refresh and stop
     await light_subroutine.start()
+
+    assert light_subroutine.actuator_handler.group == "light"
+    assert len(light_subroutine.light_sensors) > 0
 
     await light_subroutine.routine()
 
+    await light_subroutine.refresh()
+
+    await light_subroutine.stop()
+
+    # Disable the subroutine
+    light_subroutine.disable()
+
+    # Stop the sensors subroutine and disable it
     await sensors_subroutine.stop()
     sensors_subroutine.disable()

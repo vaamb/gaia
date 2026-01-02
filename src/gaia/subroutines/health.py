@@ -60,7 +60,7 @@ class Health(SubroutineTemplate[Camera]):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while updating health data. "
-                f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
             )
         finally:
             update_time = monotonic() - start_time
@@ -71,7 +71,7 @@ class Health(SubroutineTemplate[Camera]):
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while sending health data. "
-                    f"ERROR msg: `{e.__class__.__name__} :{e}`."
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
         routine_time = monotonic() - start_time
         self.logger.debug(f"Health routine took {routine_time:.1f} s.")

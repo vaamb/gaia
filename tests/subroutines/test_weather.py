@@ -34,6 +34,29 @@ class TestWeatherSubroutine:
         uids = weather_subroutine.get_hardware_needed_uid()
         assert uids == {humidifier_uid}
 
+    async def test_routine(self, weather_subroutine: Weather):
+        # Enable the subroutine
+        weather_subroutine.enable()
+
+        assert not weather_subroutine._actuator_handlers
+        assert not weather_subroutine._jobs
+
+        # Test start, refresh and stop (weather has no routine)
+        await weather_subroutine.start()
+
+        assert weather_subroutine._actuator_handlers
+        assert weather_subroutine._jobs
+
+        with pytest.raises(ValueError):
+            await weather_subroutine.routine()
+
+        await weather_subroutine.refresh()
+
+        await weather_subroutine.stop()
+
+        # Disable the subroutine
+        weather_subroutine.disable()
+
     async def test_mount_actuator_handler(self, weather_subroutine: Weather):
         # Setup
         weather_subroutine._actuator_handlers = {}
