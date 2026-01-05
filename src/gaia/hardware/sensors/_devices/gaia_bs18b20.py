@@ -8,11 +8,15 @@ RawData: TypeAlias = tuple[list[tuple[str, float]], list[str]]
 
 
 class BS18B20:
-    def __init__(self) -> None:
+    def __init__(self, addr: str | None = None) -> None:
         # Get one wire devices
-        device_dirs: list[str] = glob.glob('/sys/bus/w1/devices/28*')
+        device_dirs: list[str]
+        if addr:
+            device_dirs = [f"/sys/bus/w1/devices/{addr}"]
+        else:
+            device_dirs = glob.glob('/sys/bus/w1/devices/28*')
         if not device_dirs:
-            raise RuntimeError("No one wire devices found.")
+            raise RuntimeError("No device found.")
         self.device_dirs = device_dirs
 
     @staticmethod
@@ -43,7 +47,7 @@ class BS18B20:
                 failed.append(device_dir)
         return successful, failed
 
-    def get_average(self) -> float | None:
+    def get_data(self) -> float | None:
         device_files: list[str] = [
             os.path.join(device_dir, "/w1_slave")
             for device_dir in self.device_dirs
