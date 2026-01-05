@@ -9,6 +9,28 @@ from gaia.utils import (
     get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 
 
+class TemperatureSensor(BaseSensor):
+    measures_available = {
+        Measure.temperature: Unit.celsius_degree,
+    }
+
+    def _get_raw_data(self) -> tuple[float | None]:
+        raise NotImplementedError("This method must be implemented in a subclass")
+
+    async def get_data(self) -> list[gv.SensorRecord]:
+        raw_temperature = await run_sync(self._get_raw_data)
+        data = []
+        if Measure.temperature in self.measures:
+            data.append(
+                gv.SensorRecord(
+                    sensor_uid=self.uid,
+                    measure=Measure.temperature.value,
+                    value=raw_temperature,
+                )
+            )
+        return data
+
+
 class TempHumSensor(BaseSensor):
     measures_available = {
         Measure.absolute_humidity: Unit.gram_per_cubic_m,
