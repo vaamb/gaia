@@ -1831,8 +1831,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 "'EcosystemConfig.supported_hardware()' to see supported hardware."
             )
         hardware_cls = hardware_models[hardware_config.model]
-        hardware_config.uid = "validation"
-        # Class initialization will correct default address if needed
+        # Class initialization will later correct default address if needed
         hardware = hardware_cls.from_hardware_config(hardware_config, None)
         # Replace default address with the actual address
         hardware_dict["address"] = hardware.address_repr
@@ -1898,7 +1897,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_dict = self.IO_dict[uid].copy()
         hardware_dict: gv.HardwareConfigDict = \
             cast(gv.HardwareConfigDict, hardware_dict)
-        hardware_dict["uid"] = uid
+        # Replace uid with a special uid for validation so it doesn't conflict
+        # with existing hardware
+        hardware_dict["uid"] = "__validation__"
         hardware_dict.update(
             {
                 key: value
@@ -1911,7 +1912,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         )  # Don't check address if not trying to update it
         self.validate_hardware_dict(
             hardware_dict, self._used_addresses(), check_address)
-        uid = hardware_dict.pop("uid")
+        # Remove the validation uid from the dict
+        hardware_dict.pop("uid")
         self.IO_dict[uid] = hardware_dict
 
     def delete_hardware(self, uid: str) -> None:

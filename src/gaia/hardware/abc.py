@@ -266,7 +266,7 @@ class _MetaHardware(type):
         except KeyError:
             hardware = cls.__new__(cls, *args, **kwargs)
             hardware.__init__(*args, **kwargs)
-            if uid != "validation":
+            if hardware.ecosystem is not None:
                 cls.instances[uid] = hardware
             return hardware
 
