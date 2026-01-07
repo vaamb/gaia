@@ -24,8 +24,11 @@ class BS18B20:
         # The w1_slave file contains the sensor data
         # The first line contains binary followed by the status of the sensor
         # The second line contains binary followed by the temperature data
-        with open(device_dir, "r") as f:
-            lines = f.readlines()
+        try:
+            with open(device_dir, "r") as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            raise RuntimeError("Device not found.")
         if len(lines) < 2:
             raise RuntimeError("Invalid data from device.")
         if lines[0].strip()[-3:] != 'YES':
