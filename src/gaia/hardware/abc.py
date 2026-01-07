@@ -210,6 +210,8 @@ class Address:
     def __repr__(self) -> str:
         if self.type == AddressType.PICAMERA:
             return f"{self.type.value}"
+        elif self.type == AddressType.ONEWIRE:
+            return f"{self.type.value}_{self.main}"
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
@@ -250,7 +252,8 @@ class Address:
                 default I2C address of the hardware.
             
             1-Wire:
-                "ONEWIRE_d1b4570a6461" where "d1b4570a6461" is the ID of the hardware
+                "ONEWIRE_d1b4570a6461" where "d1b4570a6461" is the address of the 
+                 hardware in hexadecimal.
                 Alternatively, you can use the place holder "ONEWIRE_default" to 
                 use the default 1-Wire address of the group of hardware.
             
@@ -649,14 +652,15 @@ class OneWireHardware(Hardware):
         if not self._address_book.primary.type == AddressType.ONEWIRE:  # pragma: no cover
             raise ValueError(
                 "OneWireHardware address must be of type: 'ONEWIRE_hexAddress' "
-                "to use a specific address"
+                "to use a specific address or 'ONEWIRE_default' to use the default "
+                "address"
             )
         # Chack that 1-wire is enabled
         if is_raspi():
             import subprocess
             lsmod = subprocess.Popen("lsmod", stdout=subprocess.PIPE)
             grep = subprocess.Popen(("grep", "-i", "w1_"), stdin=lsmod.stdout)
-            return_code = grep.poll()
+            return_code = grep.wait()
             if return_code != 0:
                 raise RuntimeError(
                     "1-wire is not enabled. Run `sudo raspi-config` and enable 1-wire."

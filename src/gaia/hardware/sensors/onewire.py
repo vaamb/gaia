@@ -5,9 +5,12 @@ from gaia.hardware.abc import BaseSensor, OneWireHardware
 from gaia.hardware.sensors.abc import TemperatureSensor
 from gaia.hardware.utils import is_raspi
 
+
 if t.TYPE_CHECKING:
     if is_raspi():
         from gaia.hardware.sensors._devices.gaia_bs18b20 import BS18B20
+    else:
+        from gaia.hardware._compatibility import BS18B20 as _BS18B20
 
 
 class BS18B20(OneWireHardware, TemperatureSensor):
