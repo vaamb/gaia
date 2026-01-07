@@ -192,7 +192,7 @@ class Address:
         # The hardware is using the one wire protocol
         elif address_type == "onewire":
             self.type = AddressType.ONEWIRE
-            self.main = address_number
+            self.main = address_number if address_number != "default" else None
             self.multiplexer_address = None
             self.multiplexer_channel = None
 
@@ -211,7 +211,7 @@ class Address:
         if self.type == AddressType.PICAMERA:
             return f"{self.type.value}"
         elif self.type == AddressType.ONEWIRE:
-            return f"{self.type.value}_{self.main}"
+            return f"{self.type.value}_{self.main if self.main is not None else 'default'}"
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
@@ -665,6 +665,10 @@ class OneWireHardware(Hardware):
                 raise RuntimeError(
                     "1-wire is not enabled. Run `sudo raspi-config` and enable 1-wire."
                 )
+
+    @property
+    def device_address(self) -> str | None:
+        return self.address_book.primary.main
 
 
 class PlantLevelHardware(Hardware):
