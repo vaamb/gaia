@@ -192,7 +192,7 @@ class Address:
         # The hardware is using the one wire protocol
         elif address_type == "onewire":
             self.type = AddressType.ONEWIRE
-            self.main = address_number if address_number is not "default" else None
+            self.main = address_number if address_number != "default" else None
             self.multiplexer_address = None
             self.multiplexer_channel = None
 
