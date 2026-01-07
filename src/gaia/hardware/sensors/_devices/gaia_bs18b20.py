@@ -49,7 +49,7 @@ class BS18B20:
 
     def get_data(self) -> float | None:
         device_files: list[str] = [
-            os.path.join(device_dir, "/w1_slave")
+            os.path.join(device_dir, "w1_slave")
             for device_dir in self.device_dirs
         ]
         result: list[float] = []
