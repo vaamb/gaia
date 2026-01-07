@@ -19,7 +19,7 @@ class BS18B20(OneWireHardware, TemperatureSensor):
             from gaia.hardware.sensors._devices.gaia_bs18b20 import BS18B20 as _BS18B20
         else:
             from gaia.hardware._compatibility import BS18B20 as _BS18B20
-        return _BS18B20()
+        return _BS18B20(self.device_address)
 
     def _get_raw_data(self) -> tuple[float | None]:
         return self.device.get_data()
