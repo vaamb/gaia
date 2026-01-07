@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+import inspect
 from pathlib import Path
 import textwrap
 from typing import Any, ClassVar, Literal, Self, TYPE_CHECKING
@@ -74,6 +75,14 @@ def str_to_hex(address: str) -> int:
     if address.lower() in ("def", "default"):
         return 0
     return int(address, base=16)
+
+
+def called_through(function: str) -> bool:
+    stack = inspect.stack()
+    for frame in stack:
+        if frame.function == function:
+            return True
+    return False
 
 
 class Address:
@@ -314,11 +323,11 @@ class Hardware(metaclass=_MetaHardware):
             multiplexer_model: str | None = None,
             ecosystem: Ecosystem | None = None,
     ) -> None:
-        self._ecosystem: Ecosystem | None
         if ecosystem is None:
-            self._ecosystem = None
-        else:
-            self._ecosystem = ecosystem
+            # ecosystem can be `None` ONLY when `Hardware` is called through `validate_hardware_dict`
+            if not called_through("validate_hardware_dict"):
+                raise RuntimeError("ecosystem can be set to `None` only during hardware validation")
+        self._ecosystem: Ecosystem | None = ecosystem
         self._uid: str = uid
         self._name: str = name
         self._active: bool = active
