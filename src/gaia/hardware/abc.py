@@ -658,7 +658,7 @@ class OneWireHardware(Hardware):
             import subprocess
             lsmod = subprocess.Popen("lsmod", stdout=subprocess.PIPE)
             grep = subprocess.Popen(("grep", "-i", "w1_"), stdin=lsmod.stdout)
-            return_code = grep.poll()
+            return_code = grep.wait()
             if return_code != 0:
                 raise RuntimeError(
                     "1-wire is not enabled. Run `sudo raspi-config` and enable 1-wire."
