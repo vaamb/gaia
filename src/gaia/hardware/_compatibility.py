@@ -213,6 +213,11 @@ class ENS160(CompatibilityDevice):
         }
 
 
+class BS18B20(TemperatureCompatibility):
+    def get_data(self) -> float | None:
+        return self.temperature
+
+
 class Picamera2:
     def __init__(self):
         self._cfg: dict = {"size": (800, 600)}
