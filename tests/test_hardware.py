@@ -9,7 +9,7 @@ from gaia import Ecosystem
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
     BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware, Measure,
-    PlantLevelHardware, Switch, Unit)
+    OneWireHardware, PlantLevelHardware, Switch, Unit)
 from gaia.hardware.camera import PiCamera
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
@@ -38,6 +38,8 @@ async def test_hardware_models(ecosystem: Ecosystem):
             hardware_cfg["address"] = "GPIO_19&GPIO_12"
         elif issubclass(hardware_cls, i2cHardware):
             hardware_cfg["address"] = "I2C_default"
+        elif issubclass(hardware_cls, OneWireHardware):
+            hardware_cfg["address"] = "onewire_default"
         elif issubclass(hardware_cls, PiCamera):
             hardware_cfg["address"] = "picamera"
         else:

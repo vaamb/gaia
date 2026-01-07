@@ -68,6 +68,7 @@ class AddressType(Enum):
     GPIO = "GPIO"
     I2C = "I2C"
     SPI = "SPI"
+    ONEWIRE = "ONEWIRE"
     PICAMERA = "PICAMERA"
 
 
@@ -188,6 +189,13 @@ class Address:
         elif address_type == "spi":
             raise NotImplementedError("SPI address type is not currently supported.")
 
+        # The hardware is using the one wire protocol
+        elif address_type == "onewire":
+            self.type = AddressType.ONEWIRE
+            self.main = address_number
+            self.multiplexer_address = None
+            self.multiplexer_channel = None
+
         # The hardware is a Pi Camera
         elif address_type.lower() == "picamera":
             self.type = AddressType.PICAMERA
@@ -230,7 +238,7 @@ class Address:
                         where "37" is the pin number using the board notation
                 BCM/GPIO numbers: "BCM_27"  == "GPIO_27"
                         where "32" is the pin number using the gpio notation
-                        
+            
             I2C:
                 Without a multiplexer: "I2C_0x10"
                         where "0x10" is the address of the hardware in hexadecimal
@@ -238,7 +246,14 @@ class Address:
                         where "0x70" is the address of the multiplexer in hexadecimal,
                         "1" the channel used and "0x10" the address of the hardware
                         in hexadecimal
-                        
+                Alternatively, you can use the place holder "I2C_default" to use the 
+                default I2C address of the hardware.
+            
+            1-Wire:
+                "ONEWIRE_d1b4570a6461" where "d1b4570a6461" is the ID of the hardware
+                Alternatively, you can use the place holder "ONEWIRE_default" to 
+                use the default 1-Wire address of the group of hardware.
+            
             SPI:
                 Not implemented yet
         """)
@@ -626,6 +641,26 @@ class i2cHardware(Hardware):
             return self.multiplexer.get_channel(multiplexer_channel)
         else:
             return get_i2c()
+
+
+class OneWireHardware(Hardware):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self._address_book.primary.type == AddressType.ONEWIRE:  # pragma: no cover
+            raise ValueError(
+                "OneWireHardware address must be of type: 'ONEWIRE_hexAddress' "
+                "to use a specific address"
+            )
+        # Chack that 1-wire is enabled
+        if is_raspi():
+            import subprocess
+            lsmod = subprocess.Popen("lsmod", stdout=subprocess.PIPE)
+            grep = subprocess.Popen(("grep", "-i", "w1_"), stdin=lsmod.stdout)
+            return_code = grep.poll()
+            if return_code != 0:
+                raise RuntimeError(
+                    "1-wire is not enabled. Run `sudo raspi-config` and enable 1-wire."
+                )
 
 
 class PlantLevelHardware(Hardware):
