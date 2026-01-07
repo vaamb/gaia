@@ -210,6 +210,8 @@ class Address:
     def __repr__(self) -> str:
         if self.type == AddressType.PICAMERA:
             return f"{self.type.value}"
+        elif self.type == AddressType.ONEWIRE:
+            return f"{self.type.value}_{self.main}"
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
