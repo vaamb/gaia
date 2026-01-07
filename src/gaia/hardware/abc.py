@@ -643,6 +643,26 @@ class i2cHardware(Hardware):
             return get_i2c()
 
 
+class OneWireHardware(Hardware):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self._address_book.primary.type == AddressType.ONEWIRE:  # pragma: no cover
+            raise ValueError(
+                "OneWireHardware address must be of type: 'ONEWIRE_hexAddress' "
+                "to use a specific address"
+            )
+        # Chack that 1-wire is enabled
+        if is_raspi():
+            import subprocess
+            lsmod = subprocess.Popen("lsmod", stdout=subprocess.PIPE)
+            grep = subprocess.Popen(("grep", "-i", "w1_"), stdin=lsmod.stdout)
+            return_code = grep.poll()
+            if return_code != 0:
+                raise RuntimeError(
+                    "1-wire is not enabled. Run `sudo raspi-config` and enable 1-wire."
+                )
+
+
 class PlantLevelHardware(Hardware):
     def __init__(self, *args, **kwargs) -> None:
         kwargs["level"] = gv.HardwareLevel.plants
