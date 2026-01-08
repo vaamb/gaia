@@ -375,17 +375,37 @@ class Ecosystem:
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
     async def refresh_hardware(self) -> None:
-        hardware_needed: set[str] = set(
+        needed: set[str] = set(
             hardware_uid for hardware_uid in self.config.IO_dict.keys()
             if self.config.IO_dict[hardware_uid]["active"]
         )
-        hardware_existing: set[str] = set(self.hardware.keys())
-        for hardware_uid in hardware_needed - hardware_existing:
-            await self.add_hardware(hardware_uid)
-        for hardware_uid in hardware_existing - hardware_needed:
+        existing: set[str] = set()
+        stale: set[str] = set()
+        not_stale: set[str] = set()
+        for hardware_uid, hardware in self.hardware.items():
+            existing.add(hardware_uid)
+            in_config = self.config.IO_dict.get(hardware_uid)
+            if in_config is None:
+                # Hardware was remove from config, go to next
+                continue
+            current = gv.to_anonymous(hardware.dict_repr(), "uid")
+            if current != in_config:
+                stale.add(hardware_uid)
+            else:
+                not_stale.add(hardware_uid)
+        # First remove hardware not in config anymore
+        for hardware_uid in existing - needed:
             await self.remove_hardware(hardware_uid)
+        # Then remove staled hardware
+        for hardware_uid in stale:
+            await self.remove_hardware(hardware_uid)
+        # Finally mount the missing hardware (= needed - (existing - stale))
+        for hardware_uid in needed - not_stale:
+            await self.add_hardware(hardware_uid)
+        # Reset cached actuators
         for actuator_handler in self.actuator_hub.actuator_handlers.values():
             actuator_handler.reset_cached_actuators()
+        # Reset the pids as the number of actuators might have changed
         for pid in self.actuator_hub.pids.values():
             pid.reset()
             pid.reset_direction()
