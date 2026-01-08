@@ -86,6 +86,9 @@ def called_through(function: str) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+#   Hardware address
+# ---------------------------------------------------------------------------
 class Address:
     """Represents a hardware address with support for different connection types.
 
@@ -274,6 +277,18 @@ class Address:
         )
 
 
+@dataclass(slots=True)
+class AddressBook:
+    primary: Address
+    secondary: Address | None = None
+
+
+AddressBookType = Literal["primary", "secondary"]
+
+
+# ---------------------------------------------------------------------------
+#   Base Hardware
+# ---------------------------------------------------------------------------
 class _MetaHardware(type):
     instances: WeakValueDictionary[str, Hardware] = WeakValueDictionary()
 
@@ -287,15 +302,6 @@ class _MetaHardware(type):
             if hardware.ecosystem is not None:
                 cls.instances[uid] = hardware
             return hardware
-
-
-@dataclass(slots=True)
-class AddressBook:
-    primary: Address
-    secondary: Address | None = None
-
-
-AddressBookType = Literal["primary", "secondary"]
 
 
 class Hardware(metaclass=_MetaHardware):
@@ -549,6 +555,9 @@ class Hardware(metaclass=_MetaHardware):
         ).model_dump(exclude_defaults=shorten)
 
 
+# ---------------------------------------------------------------------------
+#   Subclasses based on address type
+# ---------------------------------------------------------------------------
 class gpioHardware(Hardware):
     IN = 0
     OUT = 1
@@ -581,35 +590,6 @@ class gpioHardware(Hardware):
         if self._pin is None:
             self._pin = self._get_pin(self._address_book.primary.main)
         return self._pin
-
-
-class Switch(Hardware):
-    async def turn_on(self) -> None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
-
-    async def turn_off(self) -> None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
-
-
-class Dimmer(Hardware):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        if self._address_book.secondary is None:  # pragma: no cover
-            raise ValueError(
-                "dimmable hardware address should be of form "
-                "'addressType1_addressNum1&addressType2_addressNum2' with "
-                "address 1 being for the main (on/off) switch and address 2 "
-                "being PWM-able"
-            )
-
-    async def set_pwm_level(self, level) -> None:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
 
 
 class i2cHardware(Hardware):
@@ -671,15 +651,101 @@ class OneWireHardware(Hardware):
         return self.address_book.primary.main
 
 
-class PlantLevelHardware(Hardware):
+class Camera(Hardware):
     def __init__(self, *args, **kwargs) -> None:
-        kwargs["level"] = gv.HardwareLevel.plants
+        check_dependencies()
         super().__init__(*args, **kwargs)
-        if not self.plants:  # pragma: no cover
+        if not self._address_book.primary.type == AddressType.PICAMERA:  # pragma: no cover
             raise ValueError(
-                "Plants-level hardware should be provided a plant name "
-                "as kwarg with the key name 'plants'."
+                "Camera address must be 'PICAMERA'"
             )
+        self._device: Any | None = None
+        self._camera_dir: Path | None = None
+
+    @property
+    def device(self) -> Any:
+        if self._device is None:
+            self._device = self._get_device()
+        return self._device
+
+    def _get_device(self) -> Any:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )  # pragma: no cover
+
+    async def get_image(self, size: tuple | None = None) -> SerializableImage:
+        raise NotImplementedError("This method must be implemented in a subclass")
+
+    #async def get_video(self) -> io.BytesIO:
+    #    raise NotImplementedError(
+    #        "This method must be implemented in a subclass"
+    #    )
+
+    @property
+    def camera_dir(self) -> Path:
+        if self._camera_dir is None:
+            if self.ecosystem is None:
+                from gaia.config import GaiaConfigHelper
+
+                config_cls = GaiaConfigHelper.get_config()
+                base_dir = Path(config_cls.DIR)
+                self._camera_dir = base_dir / "camera/orphan_camera"
+            else:
+                base_dir = self.ecosystem.engine.config.base_dir
+                self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
+            if not self._camera_dir.exists():
+                self._camera_dir.mkdir(parents=True)
+        return self._camera_dir
+
+    async def load_image(self, image_path: Path) -> SerializableImage:
+        image = await run_sync(SerializableImage.read, str(image_path))
+        return image
+
+    async def save_image(
+            self,
+            image: SerializableImage,
+            image_path: Path | None = None,
+    ) -> Path:
+        if image_path is None:
+            timestamp: datetime | None = image.metadata.get("timestamp", None)
+            if timestamp is None:
+                timestamp = datetime.now(tz=timezone.utc)
+            image_path = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
+            image_path = self.camera_dir / image_path
+        await run_sync(image.write, image_path)
+        return image_path
+
+
+# ---------------------------------------------------------------------------
+#   Subclasses based on hardware type/function
+# ---------------------------------------------------------------------------
+class Switch(Hardware):
+    async def turn_on(self) -> None:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )  # pragma: no cover
+
+    async def turn_off(self) -> None:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )  # pragma: no cover
+
+
+class Dimmer(Hardware):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        if self._address_book.secondary is None:  # pragma: no cover
+            raise ValueError(
+                "dimmable hardware address should be of form "
+                "'addressType1_addressNum1&addressType2_addressNum2' with "
+                "address 1 being for the main (on/off) switch and address 2 "
+                "being PWM-able"
+            )
+
+    async def set_pwm_level(self, level) -> None:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )  # pragma: no cover
 
 
 class BaseSensor(Hardware):
@@ -745,6 +811,23 @@ class LightSensor(BaseSensor):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
+# ---------------------------------------------------------------------------
+#   Other simple subclasses
+# ---------------------------------------------------------------------------
+class PlantLevelHardware(Hardware):
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs["level"] = gv.HardwareLevel.plants
+        super().__init__(*args, **kwargs)
+        if not self.plants:  # pragma: no cover
+            raise ValueError(
+                "Plants-level hardware should be provided a plant name "
+                "as kwarg with the key name 'plants'."
+            )
+
+
+# ---------------------------------------------------------------------------
+#   Composition subclasses
+# ---------------------------------------------------------------------------
 class gpioSensor(BaseSensor, gpioHardware):
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
@@ -753,64 +836,3 @@ class gpioSensor(BaseSensor, gpioHardware):
 class i2cSensor(BaseSensor, i2cHardware):
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
-
-
-class Camera(Hardware):
-    def __init__(self, *args, **kwargs) -> None:
-        check_dependencies()
-        super().__init__(*args, **kwargs)
-        self._device: Any | None = None
-        self._camera_dir: Path | None = None
-
-    @property
-    def device(self) -> Any:
-        if self._device is None:
-            self._device = self._get_device()
-        return self._device
-
-    def _get_device(self) -> Any:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
-
-    async def get_image(self, size: tuple | None = None) -> SerializableImage:
-        raise NotImplementedError("This method must be implemented in a subclass")
-
-    #async def get_video(self) -> io.BytesIO:
-    #    raise NotImplementedError(
-    #        "This method must be implemented in a subclass"
-    #    )
-
-    @property
-    def camera_dir(self) -> Path:
-        if self._camera_dir is None:
-            if self.ecosystem is None:
-                from gaia.config import GaiaConfigHelper
-
-                config_cls = GaiaConfigHelper.get_config()
-                base_dir = Path(config_cls.DIR)
-                self._camera_dir = base_dir / "camera/orphan_camera"
-            else:
-                base_dir = self.ecosystem.engine.config.base_dir
-                self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
-            if not self._camera_dir.exists():
-                self._camera_dir.mkdir(parents=True)
-        return self._camera_dir
-
-    async def load_image(self, image_path: Path) -> SerializableImage:
-        image = await run_sync(SerializableImage.read, str(image_path))
-        return image
-
-    async def save_image(
-            self,
-            image: SerializableImage,
-            image_path: Path | None = None,
-    ) -> Path:
-        if image_path is None:
-            timestamp: datetime | None = image.metadata.get("timestamp", None)
-            if timestamp is None:
-                timestamp = datetime.now(tz=timezone.utc)
-            image_path = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
-            image_path = self.camera_dir / image_path
-        await run_sync(image.write, image_path)
-        return image_path
