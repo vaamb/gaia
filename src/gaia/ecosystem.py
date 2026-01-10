@@ -333,6 +333,10 @@ class Ecosystem:
             self,
             hardware_uid: str,
     ) -> Hardware:
+        if hardware_uid in self.hardware:
+            error_msg = f"Hardware {hardware_uid} is already mounted."
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
         hardware_config = self.config.get_hardware_config(hardware_uid)
         try:
             if hardware_config.type & gv.HardwareType.sensor and self.engine.config.app_config.VIRTUALIZATION:
