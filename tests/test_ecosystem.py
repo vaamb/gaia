@@ -64,9 +64,15 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
 
 @pytest.mark.asyncio
 async def test_hardware(ecosystem: Ecosystem, engine_config: EngineConfig):
+    # This test requires empty hardware
+    ecosystem._hardware = {}
+
     await ecosystem.add_hardware(hardware_uid)
     with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
         assert f"Hardware {hardware_info['name']} has been set up." in logs
+
+    with pytest.raises(ValueError, match=r"Hardware .* is already mounted."):
+        await ecosystem.add_hardware(hardware_uid)
 
     await ecosystem.remove_hardware(hardware_uid)
     with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
