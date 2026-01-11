@@ -376,6 +376,7 @@ class Ecosystem:
         if isinstance(hardware, Dimmer):
             await hardware.set_pwm_level(0)
         del self.hardware[hardware_uid]
+        Hardware.detach_instance(hardware_uid)
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
     async def refresh_hardware(self) -> None:

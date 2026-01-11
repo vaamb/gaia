@@ -456,6 +456,10 @@ class Hardware(metaclass=_MetaHardware):
     def get_mounted_by_uid(cls, uid: str) -> Self | None:
         return _MetaHardware.instances.get(uid)
 
+    @classmethod
+    def detach_instance(cls, uid: str) -> None:
+        _MetaHardware.instances.pop(uid)
+
     @property
     def ecosystem(self) -> Ecosystem | None:
         return self._ecosystem
