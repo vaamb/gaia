@@ -81,12 +81,37 @@ async def test_hardware(ecosystem: Ecosystem, engine_config: EngineConfig):
         await ecosystem.remove_hardware(data.hardware_uid)
 
 
-    await ecosystem.remove_hardware(hardware_uid)
-    with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
-        assert f"Hardware {hardware_info['name']} has been dismounted." in logs
+@pytest.mark.asyncio
+async def test_refresh(ecosystem: Ecosystem):
+    hardware_needed: set[str] = {
+        data.camera_uid,
+        data.heater_uid,
+        data.humidifier_uid,
+        data.light_uid,
+        data.sensor_uid,
+        data.i2c_sensor_ens160_uid,
+        data.i2c_sensor_veml7700_uid,
+    }
 
-    with pytest.raises(HardwareNotFound, match=f"Hardware '{hardware_uid}' not found."):
-        await ecosystem.remove_hardware(hardware_uid)
+    assert {*ecosystem.hardware.keys()} == hardware_needed
+
+    # Make sure refresh_hardware adds the hardware needed ...
+    await ecosystem.remove_hardware(data.sensor_uid)
+    # ... removes the unneeded hardware ...
+    ecosystem.config.delete_hardware(data.heater_uid)
+    assert {*ecosystem.hardware.keys()} != hardware_needed
+    # ... refresh the hardware whose config has changed
+    ecosystem.config.IO_dict[data.light_uid]["level"] = gv.HardwareLevel.plants
+    light_cfg = ecosystem.config.IO_dict[data.light_uid]
+    outdated_cfg = ecosystem.hardware[data.light_uid].dict_repr()
+    assert gv.to_anonymous(outdated_cfg, "uid") != light_cfg
+    await ecosystem.refresh_hardware()
+
+    # "A0oZpCJ50D0ajfJs" was removed from the config
+    assert {*ecosystem.hardware.keys()} == hardware_needed - {"A0oZpCJ50D0ajfJs"}
+
+    uptodate_cfg = ecosystem.hardware[data.light_uid].dict_repr()
+    assert gv.to_anonymous(uptodate_cfg, "uid") == light_cfg
 
 
 def test_actuators_data(ecosystem: "Ecosystem"):
