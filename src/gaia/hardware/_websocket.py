@@ -16,8 +16,16 @@ class WebSocketHardwareManager:
         if password == "gaia" and ecosystem.engine.config.app_config.PRODUCTION:
             raise ValueError("Production build should not use `gaia` as a password")
         self._password: str = password
+        self._registered_hardware: set[str] = set()
         self.device_connections: dict[str, ServerConnection] = {}
         self._stop_event: Event = Event()
+
+    async def register_hardware(self, hardware_uid: str) -> None:
+        self._registered_hardware.add(hardware_uid)
+
+    async def unregister_hardware(self, hardware_uid: str) -> None:
+        await self.device_connections[hardware_uid].close()
+        self._registered_hardware.remove(hardware_uid)
 
     async def run(self) -> None:
         async with serve(
@@ -38,8 +46,8 @@ class WebSocketHardwareManager:
             device_uid = await connection.recv(decode=True)
         except ConnectionClosed:
             return
-        # If the device uid is not in the ecosystem, close the connection
-        if device_uid not in self._ecosystem.config.IO_dict:
+        # If the device uid is registered, close the connection
+        if device_uid not in self._registered_hardware:
             self.logger.warning(
                 f"Device {device_uid} is trying to connect but is not in the "
                 f"ecosystem config, closing connection")
@@ -56,6 +64,8 @@ class WebSocketHardwareManager:
             self.device_connections.pop(device_uid)
 
     async def get_connection(self, device_uid: str) -> ServerConnection | None:
+        if not device_uid in self._registered_hardware:
+            raise RuntimeError(f"Hardware {device_uid} was never registered")
         try:
             return self.device_connections[device_uid]
         except KeyError:
