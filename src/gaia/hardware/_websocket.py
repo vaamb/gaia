@@ -1,19 +1,24 @@
+from __future__ import annotations
+
 from asyncio import Event
 from logging import getLogger, Logger
+import typing as t
 
 from websockets import basic_auth, serve, ServerConnection
 from websockets.exceptions import ConnectionClosed
 
-from gaia import Ecosystem
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia import EngineConfig
 
 
 class WebSocketHardwareManager:
-    def __init__(self, ecosystem: Ecosystem):
+    def __init__(self, engine_config: EngineConfig):
         self.logger: Logger = getLogger("gaia.hardware.websocket")
-        self._ecosystem = ecosystem
-        self._port = ecosystem.engine.config.app_config.HARDWARE_WEBSOCKET_PORT
-        password = ecosystem.engine.config.app_config.HARDWARE_WEBSOCKET_PASSWORD
-        if password == "gaia" and ecosystem.engine.config.app_config.PRODUCTION:
+        self._engine_config = engine_config
+        self._port = engine_config.app_config.HARDWARE_WEBSOCKET_PORT
+        password = engine_config.app_config.HARDWARE_WEBSOCKET_PASSWORD
+        if password == "gaia" and engine_config.app_config.PRODUCTION:
             raise ValueError("Production build should not use `gaia` as a password")
         self._password: str = password
         self._registered_hardware: set[str] = set()
