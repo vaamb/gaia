@@ -71,6 +71,14 @@ class AddressType(Enum):
     SPI = "SPI"
     ONEWIRE = "ONEWIRE"
     PICAMERA = "PICAMERA"
+    WEBSOCKET = "WEBSOCKET"
+
+
+def ip_is_valid(address: str) -> bool:
+    import re
+
+    ip_regex: str = r"(?:([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\.(?!$)|$)){4}"
+    return bool(re.match(ip_regex, address))
 
 
 def str_to_hex(address: str) -> int:
@@ -207,6 +215,18 @@ class Address:
             self.multiplexer_address = None
             self.multiplexer_channel = None
 
+        # The hardware is using WebSockets
+        elif address_type.lower() == "websocket":
+            if not ip_is_valid(address_number):
+                raise InvalidAddressError(
+                    "Invalid websocket address format. Expected format: "
+                    "'WEBSOCKET_<ip_addr>'"
+                )
+            self.type = AddressType.WEBSOCKET
+            self.main = address_number
+            self.multiplexer_address = None
+            self.multiplexer_channel = None
+
         # The address is not valid
         else:
             raise InvalidAddressError(f"Invalid address type: {address_type}. {self._hint()}")
@@ -216,6 +236,8 @@ class Address:
             return f"{self.type.value}"
         elif self.type == AddressType.ONEWIRE:
             return f"{self.type.value}_{self.main if self.main is not None else 'default'}"
+        elif self.type == AddressType.WEBSOCKET:
+            return f"{self.type.value}_{self.main}"
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
