@@ -68,7 +68,7 @@ class WebSocketHardwareManager:
             self.logger.debug(f"Device {device_uid} disconnected")
             self.device_connections.pop(device_uid)
 
-    async def get_connection(self, device_uid: str) -> ServerConnection | None:
+    def get_connection(self, device_uid: str) -> ServerConnection | None:
         if not device_uid in self._registered_hardware:
             raise RuntimeError(f"Hardware {device_uid} was never registered")
         try:
