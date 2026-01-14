@@ -389,38 +389,6 @@ class Hardware(metaclass=_MetaHardware):
         )
 
     @classmethod
-    def from_unclean(
-            cls,
-            ecosystem: Ecosystem | None,
-            uid: str,
-            address: str,
-            level: str | gv.HardwareLevel,
-            type: str | gv.HardwareType,
-            model: str,
-            groups: list[str] | set[str] | None = None,
-            name: str | None = None,
-            measures: list[str] | None = None,
-            plants: list[str] | None = None,
-            active: bool = True,
-            multiplexer_model: str | None = None,
-    ) -> Self:
-        name: str = name or uid
-        validated = gv.HardwareConfig(
-            uid=uid,
-            name=name,
-            active=active,
-            address=address,
-            type=type,
-            level=level,
-            groups=groups,
-            model=model,
-            measures=measures,
-            plants=plants,
-            multiplexer_model=multiplexer_model,
-        )
-        return cls.from_hardware_config(validated, ecosystem)
-
-    @classmethod
     def from_hardware_config(
             cls,
             hardware_config: gv.HardwareConfig,
