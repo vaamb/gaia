@@ -6,7 +6,7 @@ from enum import Enum
 import inspect
 from pathlib import Path
 import textwrap
-from typing import Any, ClassVar, Literal, Self, TYPE_CHECKING
+from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -15,6 +15,7 @@ import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
+from gaia.exceptions import HardwareNotFound
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
@@ -388,43 +389,12 @@ class Hardware(metaclass=_MetaHardware):
         )
 
     @classmethod
-    def from_unclean(
-            cls,
-            ecosystem: Ecosystem | None,
-            uid: str,
-            address: str,
-            level: str | gv.HardwareLevel,
-            type: str | gv.HardwareType,
-            model: str,
-            groups: list[str] | set[str] | None = None,
-            name: str | None = None,
-            measures: list[str] | None = None,
-            plants: list[str] | None = None,
-            active: bool = True,
-            multiplexer_model: str | None = None,
-    ) -> Self:
-        name: str = name or uid
-        validated = gv.HardwareConfig(
-            uid=uid,
-            name=name,
-            active=active,
-            address=address,
-            type=type,
-            level=level,
-            groups=groups,
-            model=model,
-            measures=measures,
-            plants=plants,
-            multiplexer_model=multiplexer_model,
-        )
-        return cls.from_hardware_config(validated, ecosystem)
-
-    @classmethod
     def from_hardware_config(
             cls,
             hardware_config: gv.HardwareConfig,
             ecosystem: Ecosystem | None,
     ) -> Self:
+        # Should only be used directly for validation
         return cls(
             ecosystem=ecosystem,
             uid=hardware_config.uid,
@@ -439,6 +409,46 @@ class Hardware(metaclass=_MetaHardware):
             plants=hardware_config.plants,
             multiplexer_model=hardware_config.multiplexer_model,
         )
+
+    @classmethod
+    async def create(
+            cls,
+            hardware_cfg: gv.HardwareConfig,
+            ecosystem: Ecosystem,
+    ) -> Self:
+        # TODO: Ensure this
+        #if hardware_cfg.uid in _MetaHardware.instances:
+        #    raise ValueError(f"Hardware {hardware_cfg.uid} already exists.")
+        # Ensure a virtual hardware will be return if virtualization is enabled
+        if (
+                ecosystem.engine.config.app_config.VIRTUALIZATION
+                and hardware_cfg.type & gv.HardwareType.sensor
+        ):
+            if not hardware_cfg.model.startswith("virtual"):
+                hardware_cfg.model = f"virtual{hardware_cfg.model}"
+        # Get the subclass needed based on the model used
+        hardware_cls = cls.get_model_subclass(hardware_cfg.model)
+        # Create hardware
+        hardware = hardware_cls.from_hardware_config(hardware_cfg, ecosystem)
+        # Turn off hardware to no have any unwanted side effect at startup
+        if isinstance(hardware, Switch):
+            await hardware.turn_off()
+        if isinstance(hardware, Dimmer):
+            await hardware.set_pwm_level(0)
+        return hardware
+
+    async def shutdown(self) -> None:
+        # Turn off hardware
+        if isinstance(self, Switch):
+            await self.turn_off()
+        if isinstance(self, Dimmer):
+            await self.set_pwm_level(0)
+        # Reset actuator handlers using this hardware
+        for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
+            if self in actuator_handler.get_linked_actuators():
+                actuator_handler.reset_cached_actuators()
+        # TODO: Temporary fix
+        self.detach_instance(self._uid)
 
     def _format_measures(
             self,
@@ -543,6 +553,15 @@ class Hardware(metaclass=_MetaHardware):
         if self._multiplexer:
             return self._multiplexer.__class__.__name__
         return None
+
+    @classmethod
+    def get_model_subclass(cls, model: str) -> Type[Hardware]:
+        from gaia.hardware import hardware_models
+
+        try:
+            return hardware_models[model]
+        except KeyError:
+            raise HardwareNotFound(f"{model} is not implemented.")
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
         return gv.HardwareConfig(
