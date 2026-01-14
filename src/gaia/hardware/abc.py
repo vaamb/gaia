@@ -6,7 +6,7 @@ from enum import Enum
 import inspect
 from pathlib import Path
 import textwrap
-from typing import Any, ClassVar, Literal, Self, TYPE_CHECKING
+from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -15,6 +15,7 @@ import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
+from gaia.exceptions import HardwareNotFound
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
@@ -574,6 +575,15 @@ class Hardware(metaclass=_MetaHardware):
         if self._multiplexer:
             return self._multiplexer.__class__.__name__
         return None
+
+    @classmethod
+    def get_model_subclass(cls, model: str) -> Type[Hardware]:
+        from gaia.hardware import hardware_models
+
+        try:
+            return hardware_models[model]
+        except KeyError:
+            raise HardwareNotFound(f"{model} is not implemented.")
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
         return gv.HardwareConfig(
