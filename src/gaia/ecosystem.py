@@ -11,9 +11,9 @@ from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, NonValidSubroutine
 from gaia.hardware import hardware_models
-from gaia.hardware.abc import Dimmer, Hardware, Switch
+from gaia.hardware.abc import Hardware
 from gaia.subroutines import (
-    Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
+    Climate, Health, Pictures, Sensors, subroutine_dict, SubroutineDict,
     subroutine_names, SubroutineNames)
 from gaia.virtual import VirtualEcosystem
 
@@ -348,11 +348,7 @@ class Ecosystem:
                     f"available."
                 )
             hardware_class: Type[Hardware] = hardware_models[hardware_config.model]
-            hardware: Hardware = hardware_class.from_hardware_config(hardware_config, self)
-            if isinstance(hardware, Switch):
-                await hardware.turn_off()
-            if isinstance(hardware, Dimmer):
-                await hardware.set_pwm_level(0)
+            hardware: Hardware = await hardware_class.create(hardware_config, self)
             self.logger.debug(f"Hardware {hardware.name} has been set up.")
             self.hardware[hardware.uid] = hardware
             return hardware
@@ -371,12 +367,8 @@ class Ecosystem:
             raise HardwareNotFound(error_msg)
 
         hardware = self.hardware[hardware_uid]
-        if isinstance(hardware, Switch):
-            await hardware.turn_off()
-        if isinstance(hardware, Dimmer):
-            await hardware.set_pwm_level(0)
+        await hardware.shutdown()
         del self.hardware[hardware_uid]
-        Hardware.detach_instance(hardware_uid)
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
     async def refresh_hardware(self) -> None:

@@ -440,6 +440,37 @@ class Hardware(metaclass=_MetaHardware):
             multiplexer_model=hardware_config.multiplexer_model,
         )
 
+    @classmethod
+    async def create(
+            cls,
+            hardware_cfg: gv.HardwareConfig,
+            ecosystem: Ecosystem,
+    ) -> Self:
+        # TODO: Ensure this
+        #if hardware_cfg.uid in _MetaHardware.instances:
+        #    raise ValueError(f"Hardware {hardware_cfg.uid} already exists.")
+        # Create hardware
+        hardware = cls.from_hardware_config(hardware_cfg, ecosystem)
+        # Turn off hardware to no have any unwanted side effect at startup
+        if isinstance(hardware, Switch):
+            await hardware.turn_off()
+        if isinstance(hardware, Dimmer):
+            await hardware.set_pwm_level(0)
+        return hardware
+
+    async def shutdown(self) -> None:
+        # Turn off hardware
+        if isinstance(self, Switch):
+            await self.turn_off()
+        if isinstance(self, Dimmer):
+            await self.set_pwm_level(0)
+        # Reset actuator handlers using this hardware
+        for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
+            if self in actuator_handler.get_linked_actuators():
+                actuator_handler.reset_cached_actuators()
+        # TODO: Temporary fix
+        self.detach_instance(self._uid)
+
     def _format_measures(
             self,
             measures: list[gv.Measure],
