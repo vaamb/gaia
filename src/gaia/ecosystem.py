@@ -339,16 +339,7 @@ class Ecosystem:
             raise ValueError(error_msg)
         hardware_config = self.config.get_hardware_config(hardware_uid)
         try:
-            if hardware_config.type & gv.HardwareType.sensor and self.engine.config.app_config.VIRTUALIZATION:
-                if not hardware_config.model.startswith("virtual"):
-                    hardware_config.model = f"virtual{hardware_config.model}"
-            if  hardware_config.model not in hardware_models:
-                raise HardwareNotFound(
-                    f"{hardware_config.model} is not in the list of the hardware "
-                    f"available."
-                )
-            hardware_class: Type[Hardware] = hardware_models[hardware_config.model]
-            hardware: Hardware = await hardware_class.create(hardware_config, self)
+            hardware: Hardware = await Hardware.create(hardware_config, self)
             self.logger.debug(f"Hardware {hardware.name} has been set up.")
             self.hardware[hardware.uid] = hardware
             return hardware

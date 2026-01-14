@@ -426,6 +426,7 @@ class Hardware(metaclass=_MetaHardware):
             hardware_config: gv.HardwareConfig,
             ecosystem: Ecosystem | None,
     ) -> Self:
+        # Should only be used directly for validation
         return cls(
             ecosystem=ecosystem,
             uid=hardware_config.uid,
@@ -450,8 +451,17 @@ class Hardware(metaclass=_MetaHardware):
         # TODO: Ensure this
         #if hardware_cfg.uid in _MetaHardware.instances:
         #    raise ValueError(f"Hardware {hardware_cfg.uid} already exists.")
+        # Ensure a virtual hardware will be return if virtualization is enabled
+        if (
+                ecosystem.engine.config.app_config.VIRTUALIZATION
+                and hardware_cfg.type & gv.HardwareType.sensor
+        ):
+            if not hardware_cfg.model.startswith("virtual"):
+                hardware_cfg.model = f"virtual{hardware_cfg.model}"
+        # Get the subclass needed based on the model used
+        hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
-        hardware = cls.from_hardware_config(hardware_cfg, ecosystem)
+        hardware = hardware_cls.from_hardware_config(hardware_cfg, ecosystem)
         # Turn off hardware to no have any unwanted side effect at startup
         if isinstance(hardware, Switch):
             await hardware.turn_off()
