@@ -411,7 +411,7 @@ class Hardware(metaclass=_MetaHardware):
         )
 
     @classmethod
-    async def create(
+    async def initialize(
             cls,
             hardware_cfg: gv.HardwareConfig,
             ecosystem: Ecosystem,
@@ -437,7 +437,7 @@ class Hardware(metaclass=_MetaHardware):
             await hardware.set_pwm_level(0)
         return hardware
 
-    async def shutdown(self) -> None:
+    async def terminate(self) -> None:
         # Turn off hardware
         if isinstance(self, Switch):
             await self.turn_off()

@@ -358,7 +358,7 @@ class Ecosystem:
             raise HardwareNotFound(error_msg)
 
         hardware = self.hardware[hardware_uid]
-        await hardware.shutdown()
+        await hardware.terminate()
         del self.hardware[hardware_uid]
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
