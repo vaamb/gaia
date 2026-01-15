@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing
-from typing import cast, Type
+from typing import cast, Literal, overload
 
 import gaia_validators as gv
 
@@ -10,11 +10,10 @@ from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, NonValidSubroutine
-from gaia.hardware import hardware_models
 from gaia.hardware.abc import Hardware
 from gaia.subroutines import (
-    Climate, Health, Pictures, Sensors, subroutine_dict, SubroutineDict,
-    subroutine_names, SubroutineNames)
+    Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
+    subroutine_names, SubroutineNames, SubroutineTemplate, Weather)
 from gaia.virtual import VirtualEcosystem
 
 
@@ -179,6 +178,25 @@ class Ecosystem:
         return self._virtual_self is not None
 
     # Subroutines management
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["sensors"]) -> Sensors: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["light"]) -> Light: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["climate"]) -> Climate: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["weather"]) -> Weather: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["pictures"]) -> Pictures: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["health"]) -> Health: ...
+
+    def get_subroutine(self, subroutine_name: SubroutineNames) -> SubroutineTemplate:
+        try:
+            return self.subroutines[subroutine_name]
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+
     async def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
 
@@ -186,12 +204,9 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to enable
         """
-        try:
-            self.subroutines[subroutine_name].enable()
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
-        else:
-            await self.config.save()
+        subroutine = self.get_subroutine(subroutine_name)
+        subroutine.enable()
+        await self.config.save()
 
     async def disable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Disable a Subroutine
@@ -200,38 +215,29 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to disable
         """
-        try:
-            self.subroutines[subroutine_name].disable()
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
-        else:
-            await self.config.save()
+        subroutine = self.get_subroutine(subroutine_name)
+        subroutine.disable()
+        await self.config.save()
 
     async def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Start a Subroutine
 
         :param subroutine_name: The name of the Subroutine to start
         """
-        try:
-            await self.subroutines[subroutine_name].start()
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+        subroutine = self.get_subroutine(subroutine_name)
+        await subroutine.start()
 
     async def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutine
 
         :param subroutine_name: The name of the Subroutine to stop
         """
-        try:
-            await self.subroutines[subroutine_name].stop()
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+        subroutine = self.get_subroutine(subroutine_name)
+        await subroutine.stop()
 
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
-        try:
-            return self.subroutines[subroutine_name].started
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+        subroutine = self.get_subroutine(subroutine_name)
+        return subroutine.started
 
     async def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
