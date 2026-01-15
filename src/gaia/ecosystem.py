@@ -225,7 +225,13 @@ class Ecosystem:
         :param subroutine_name: The name of the Subroutine to start
         """
         subroutine = self.get_subroutine(subroutine_name)
-        await subroutine.start()
+        try:
+            await subroutine.start()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while starting the subroutine "
+                f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
 
     async def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutine
@@ -233,11 +239,23 @@ class Ecosystem:
         :param subroutine_name: The name of the Subroutine to stop
         """
         subroutine = self.get_subroutine(subroutine_name)
-        await subroutine.stop()
+        try:
+            await subroutine.stop()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while stopping the subroutine "
+                f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
 
     async def refresh_subroutine(self, subroutine_name: SubroutineNames) -> None:
         subroutine = self.get_subroutine(subroutine_name)
-        await subroutine.refresh()
+        try:
+            await subroutine.refresh()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while refreshing the subroutine "
+                f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
 
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
         subroutine = self.get_subroutine(subroutine_name)
@@ -257,36 +275,17 @@ class Ecosystem:
         to_stop = self.subroutines_started - subroutines_needed
         for subroutine in to_stop:
             self.logger.debug(f"Stopping the subroutine '{subroutine}'.")
-            try:
-                await self.stop_subroutine(subroutine)
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while stopping the subroutine "
-                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
+            await self.stop_subroutine(subroutine)
         # Then update the already running subroutines
         for subroutine in self.subroutines_started:
-            try:
-                await self.refresh_subroutine(subroutine)
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while refreshing the hardware of "
-                    f"the subroutine '{subroutine}'. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
+            await self.refresh_subroutine(subroutine)
         # Finally, start the new subroutines
         to_start = subroutines_needed - self.subroutines_started
         for subroutine in subroutine_names:
             if subroutine not in to_start:
                 continue
             self.logger.debug(f"Starting the subroutine '{subroutine}'.")
-            try:
-                await self.start_subroutine(subroutine)
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while starting the subroutine "
-                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
+            await self.start_subroutine(subroutine)
 
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
