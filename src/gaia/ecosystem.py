@@ -235,6 +235,10 @@ class Ecosystem:
         subroutine = self.get_subroutine(subroutine_name)
         await subroutine.stop()
 
+    async def refresh_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        subroutine = self.get_subroutine(subroutine_name)
+        await subroutine.refresh()
+
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
         subroutine = self.get_subroutine(subroutine_name)
         return subroutine.started
@@ -263,7 +267,7 @@ class Ecosystem:
         # Then update the already running subroutines
         for subroutine in self.subroutines_started:
             try:
-                await self.subroutines[subroutine].refresh()
+                await self.refresh_subroutine(subroutine)
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while refreshing the hardware of "
