@@ -339,7 +339,7 @@ class Ecosystem:
             raise ValueError(error_msg)
         hardware_config = self.config.get_hardware_config(hardware_uid)
         try:
-            hardware: Hardware = await Hardware.create(hardware_config, self)
+            hardware: Hardware = await Hardware.initialize(hardware_config, self)
             self.logger.debug(f"Hardware {hardware.name} has been set up.")
             self.hardware[hardware.uid] = hardware
             return hardware
