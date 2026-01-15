@@ -224,6 +224,7 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to start
         """
+        self.logger.debug(f"Starting the subroutine '{subroutine_name}'.")
         subroutine = self.get_subroutine(subroutine_name)
         try:
             await subroutine.start()
@@ -238,6 +239,7 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to stop
         """
+        self.logger.debug(f"Stopping the subroutine '{subroutine_name}'.")
         subroutine = self.get_subroutine(subroutine_name)
         try:
             await subroutine.stop()
@@ -264,26 +266,26 @@ class Ecosystem:
     async def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
-        # Need to start sensors and lights before other subroutines
-        subroutines_needed = set(subroutine_names).intersection(
-            self._config.get_subroutines_enabled()
-        )
+        # /!\ the sensors and light subroutines should be started before the others
+        subroutines_enabled = self._config.get_subroutines_enabled()
+        subroutines_needed =  set(subroutine_names).intersection(subroutines_enabled)
         if not subroutines_needed:
             self.logger.debug("No subroutine needed.")
             return
-        # Stop the unneeded subroutines first.
-        to_stop = self.subroutines_started - subroutines_needed
-        for subroutine in to_stop:
-            self.logger.debug(f"Stopping the subroutine '{subroutine}'.")
-            await self.stop_subroutine(subroutine)
-        # Then update the already running subroutines
-        for subroutine in self.subroutines_started:
-            await self.refresh_subroutine(subroutine)
+
+        def order_subroutines(to_keep: set[str]) -> list:
+            return [n for n in subroutine_names if n in to_keep]
+
+        # First, stop the subroutines not needed anymore
+        to_stop = order_subroutines(self.subroutines_started - subroutines_needed)
+        for subroutine_name in reversed(to_stop):
+            await self.stop_subroutine(subroutine_name)
+        # Then, update the subroutines already running
+        for subroutine_name in order_subroutines(self.subroutines_started):
+            await self.refresh_subroutine(subroutine_name)
         # Finally, start the new subroutines
         to_start = subroutines_needed - self.subroutines_started
-        for subroutine in subroutine_names:
-            if subroutine not in to_start:
-                continue
+        for subroutine in order_subroutines(to_start):
             self.logger.debug(f"Starting the subroutine '{subroutine}'.")
             await self.start_subroutine(subroutine)
 
