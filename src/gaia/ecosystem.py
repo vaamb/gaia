@@ -373,6 +373,11 @@ class Ecosystem:
         del self.hardware[hardware_uid]
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
+    async def initialize_hardware(self) -> None:
+        for hardware_uid, hardware_cfg in self.config.IO_dict.items():
+            if hardware_cfg["active"]:
+                await self.add_hardware(hardware_uid)
+
     async def refresh_hardware(self) -> None:
         needed: set[str] = set(
             hardware_uid for hardware_uid in self.config.IO_dict.keys()
@@ -408,6 +413,12 @@ class Ecosystem:
         for pid in self.actuator_hub.pids.values():
             pid.reset()
             pid.reset_direction()
+
+    async def terminate_hardware(self) -> None:
+        for hardware_uid in [*self.hardware.keys()]:
+            hardware = self.hardware[hardware_uid]
+            await hardware.terminate()
+            del self.hardware[hardware_uid], hardware
 
     # Ecosystem management
     async def start(self):
