@@ -316,7 +316,7 @@ class Ecosystem:
             await self.start_subroutine(subroutine)
 
     def terminate_subroutines(self) -> None:
-        for subroutine_name in subroutine_names:
+        for subroutine_name in [*self.subroutines.keys()]:
             del self.subroutines[subroutine_name]
 
     @property
