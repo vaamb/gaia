@@ -14,7 +14,7 @@ from gaia.utils import (
 
 
 if typing.TYPE_CHECKING:
-    from engine import Ecosystem, Engine
+    from gaia import Ecosystem, Engine
 
 
 SUNRISE = time(7, 0)
@@ -175,8 +175,8 @@ class VirtualEcosystem:
 
     def __init__(
             self,
+            ecosystem: Ecosystem,
             virtual_world: VirtualWorld,
-            uid: str,
             dimension: tuple[float, float, float] = (0.5, 0.5, 1.0),
             water_volume: float = 15.0,  # in liter
             max_heater_output: float = 100.0,  # max heater output in watt
@@ -186,9 +186,9 @@ class VirtualEcosystem:
             **kwargs,
     ) -> None:
         assert len(dimension) == 3
-        self.logger: logging.Logger = logging.getLogger(f"virtual.ecosystem.{uid}")
+        self._ecosystem: Ecosystem = ecosystem
+        self.logger: logging.Logger = logging.getLogger(f"virtual.ecosystem.{ecosystem.uid}")
         self._virtual_world: VirtualWorld = virtual_world
-        self._uid: str = uid
         self._volume = dimension[0] * dimension[1] * dimension[2]
         # Assumes only loss through walls
         self._exchange_surface: float = (
@@ -217,12 +217,8 @@ class VirtualEcosystem:
         return self._virtual_world
 
     @property
-    def uid(self) -> str:
-        return self._uid
-
-    @property
     def ecosystem(self) -> Ecosystem:
-        return self.virtual_world.engine.get_ecosystem(self.uid)
+        return self._ecosystem
 
     @property
     def volume(self) -> float:

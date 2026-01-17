@@ -124,7 +124,7 @@ class Ecosystem:
             virtual_cfg = self.engine.config.app_config.VIRTUALIZATION_PARAMETERS
             virtual_eco_cfg: dict = virtual_cfg.get("ecosystems", {}).get(self.uid, {})
             self._virtual_self = VirtualEcosystem(
-                self.engine.virtual_world, self.uid, **virtual_eco_cfg)
+                self, self.engine.virtual_world, **virtual_eco_cfg)
         self._hardware: dict[str, Hardware] = {}
         self._alarms: list = []
         self.actuator_hub: ActuatorHub = ActuatorHub(self)
