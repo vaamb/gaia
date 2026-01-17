@@ -288,6 +288,8 @@ async def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
 
     yield light_handler
 
+    light_handler.deactivate()
+
     del pid
 
 

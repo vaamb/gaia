@@ -117,6 +117,8 @@ class TestWeatherSubroutine:
         assert actuator_handler.mode is gv.ActuatorMode.automatic
         assert not actuator_handler.status
 
+        await weather_subroutine._unmount_actuator_handler("rain")
+
     async def test_add_job(self, weather_subroutine: Weather):
         # Setup
         weather_subroutine._actuator_handlers = {}
@@ -140,3 +142,5 @@ class TestWeatherSubroutine:
         # Should raise if the job does not exist
         with pytest.raises(ValueError):
             await weather_subroutine._remove_job("rain")
+
+        await weather_subroutine._unmount_actuator_handler("rain")

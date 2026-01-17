@@ -100,6 +100,8 @@ async def test_turn_actuator(climate_subroutine: Climate):
     with pytest.raises(ValueError):
         await climate_subroutine.turn_climate_actuator(valid_actuator_group, "WrongMode")
 
+    handler.deactivate()
+
 
 @pytest.mark.asyncio
 async def test_regulated_parameters(climate_subroutine: Climate):
