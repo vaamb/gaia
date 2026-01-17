@@ -74,7 +74,7 @@ class Engine(metaclass=SingletonMeta):
             # Initialize the database and the message broker
             await self.init_plugins()
         for ecosystem_uid in self.config.ecosystems_uid:
-            self.init_ecosystem(ecosystem_uid)
+            await self.add_ecosystem(ecosystem_uid)
 
     @classmethod
     async def initialize(
@@ -474,132 +474,65 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Ecosystem managements
     # ---------------------------------------------------------------------------
-    def init_ecosystem(self, ecosystem_id: str, start: bool = False) -> Ecosystem:
-        """Initialize an Ecosystem.
-
-        :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                             'ecosystems.cfg'.
-        :param start: Whether to immediately start the ecosystem after its
-                      creation or not.
-        """
-        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
-        if ecosystem_uid not in self.ecosystems:
-            ecosystem = Ecosystem(ecosystem_uid, self)
-            self.ecosystems[ecosystem_uid] = ecosystem
-            self.logger.debug(f"Ecosystem {ecosystem_id} has been created.")
-            if start:
-                warnings.warn(
-                    "The 'start' parameter is deprecated, please use "
-                    "'start_ecosystem' instead.",
-                    DeprecationWarning,
-                )
-            #    await self.start_ecosystem(ecosystem_uid)
-            return ecosystem
-        raise RuntimeError(f"Ecosystem {ecosystem_id} already exists")
-
-    async def start_ecosystem(self, ecosystem_id: str, send_info: bool = False) -> None:
-        """Start an Ecosystem.
-
-        :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                             'ecosystems.cfg'.
-        :param send_info: If `True`, will try to send the ecosystem info to
-                          Ouranos if possible.
-        """
-        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
-        if ecosystem_uid in self.ecosystems:
-            if ecosystem_uid not in self.ecosystems_started:
-                ecosystem: Ecosystem = self.ecosystems[ecosystem_uid]
-                self.logger.debug(f"Starting ecosystem {ecosystem_id}.")
-                await ecosystem.start()
-                if send_info:
-                    await self._send_ecosystems_info([ecosystem_uid])
-            else:
-                raise RuntimeError(f"Ecosystem {ecosystem_id} is already running")
-        else:
-            raise RuntimeError(f"Need to initialise Ecosystem {ecosystem_id} first")
-
-    async def stop_ecosystem(
-            self,
-            ecosystem_id: str,
-            dismount: bool = False,
-            send_info: bool = False,
-    ) -> None:
-        """Stop an Ecosystem.
-
-        :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                             'ecosystems.cfg'.
-        :param dismount: Whether to remove the Ecosystem from the memory or not.
-                         If dismounted, the Ecosystem will need to be recreated
-                         before being able to restart.
-        :param send_info: If `True`, will try to send the ecosystem info to
-                  Ouranos if possible.
-        """
-        if ecosystem_id in self.ecosystems:
-            ecosystem_uid = ecosystem_id
-        else:
-            ecosystem_uid, _ = self.config.get_IDs(ecosystem_id)
-        if ecosystem_uid in self.ecosystems:
-            if ecosystem_uid in self.ecosystems_started:
-                ecosystem = self.ecosystems[ecosystem_uid]
-                await ecosystem.stop()
-                if dismount:
-                    await self.dismount_ecosystem(ecosystem_uid)
-                if send_info:
-                    await self._send_ecosystems_info([ecosystem_uid])
-                self.logger.info(f"Ecosystem {ecosystem_id} has been stopped")
-            else:
-                raise RuntimeError(
-                    f"Cannot stop Ecosystem {ecosystem_id} as it has not been "
-                    f"started"
-                )
-        else:
-            raise RuntimeError(
-                f"Cannot stop Ecosystem {ecosystem_id} as it has not been "
-                f"initialised"
-            )
-
-    async def dismount_ecosystem(
-            self,
-            ecosystem_id: str,
-            send_info: bool = False,
-    ) -> None:
-        """Remove the Ecosystem from Engine's memory.
-
-        :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                             'ecosystems.cfg'.
-        :param send_info: If `True`, will try to send the ecosystem info to
-                  Ouranos if possible.
-        """
-        if ecosystem_id in self.ecosystems:
-            ecosystem_uid = ecosystem_id
-        else:
-            ecosystem_uid, _ = self.config.get_IDs(ecosystem_id)
-        if ecosystem_uid in self.ecosystems:
-            if ecosystem_uid in self.ecosystems_started:
-                raise RuntimeError("Cannot dismount a started ecosystem. First stop it")
-            else:
-                del self.ecosystems[ecosystem_uid]
-                if send_info:
-                    await self._send_ecosystems_info([ecosystem_uid])
-                self.logger.info(f"Ecosystem {ecosystem_id} has been dismounted")
-        else:
-            raise RuntimeError(
-                f"Cannot dismount ecosystem {ecosystem_id} as it has not been "
-                f"initialised"
-            )
-
-    def get_ecosystem(self, ecosystem_id: str) -> Ecosystem:
+    def get_ecosystem(self, ecosystem_uid: str) -> Ecosystem:
         """Get the required Ecosystem
 
-        :param ecosystem_id: The name or the uid of an ecosystem, as written in
-                            'ecosystems.cfg'
+        :param ecosystem_uid: The uid of an ecosystem, as written in 'ecosystems.cfg'
         """
-        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_id)
-        if ecosystem_uid in self.ecosystems:
-            ecosystem = self.ecosystems[ecosystem_uid]
-        else:
-            ecosystem = self.init_ecosystem(ecosystem_uid)
+        try:
+            return self.ecosystems[ecosystem_uid]
+        except KeyError:
+            raise ValueError(f"Ecosystem '{ecosystem_uid}' is not linked to this engine")
+
+    async def add_ecosystem(self, ecosystem_uid: str) -> Ecosystem:
+        """Create an Ecosystem and link it to the Engine.
+
+        :param ecosystem_uid: The uid of an ecosystem, as written in 'ecosystems.cfg'
+        """
+        ecosystem_uid, ecosystem_name = self.config.get_IDs(ecosystem_uid)
+        if self.ecosystems.get(ecosystem_uid):
+            raise RuntimeError(f"Ecosystem {ecosystem_uid} already exists")
+        ecosystem = await Ecosystem.initialize(ecosystem_uid, self)
+        self.ecosystems[ecosystem_uid] = ecosystem
+        self.logger.debug(f"Ecosystem {ecosystem_uid} has been created.")
         return ecosystem
+
+    async def start_ecosystem(self, ecosystem_uid: str) -> None:
+        """Start an Ecosystem.
+
+        :param ecosystem_uid: The uid of an ecosystem, as written in 'ecosystems.cfg'
+        """
+        ecosystem = self.get_ecosystem(ecosystem_uid)
+        if ecosystem.started:
+            raise RuntimeError(f"Ecosystem {ecosystem_uid} is already running")
+
+        self.logger.debug(f"Starting ecosystem {ecosystem_uid}.")
+        await ecosystem.start()
+
+    async def stop_ecosystem(self, ecosystem_uid: str) -> None:
+        """Stop an Ecosystem.
+
+        :param ecosystem_uid: The uid of an ecosystem, as written in 'ecosystems.cfg'
+        """
+        ecosystem = self.get_ecosystem(ecosystem_uid)
+        if not ecosystem.started:
+            raise RuntimeError(f"Ecosystem {ecosystem_uid} is not running")
+
+        await ecosystem.stop()
+        self.logger.info(f"Ecosystem {ecosystem_uid} has been stopped")
+
+    async def remove_ecosystem(self, ecosystem_uid: str) -> None:
+        """Terminate an Ecosystem and remove it from Engine's memory.
+
+        :param ecosystem_uid: The uid of an ecosystem, as written in 'ecosystems.cfg'
+        """
+        ecosystem = self.get_ecosystem(ecosystem_uid)
+        if ecosystem.uid in self.ecosystems_started:
+            raise RuntimeError("Cannot dismount a started ecosystem. First stop it")
+
+        await ecosystem.terminate()
+        del self.ecosystems[ecosystem.uid], ecosystem
+        self.logger.info(f"Ecosystem {ecosystem_uid} has been dismounted")
 
     def _humanize_eco_set(self, ecosystem_uid_set: set[str]) -> str:
         return humanize_list(
@@ -617,80 +550,50 @@ class Engine(metaclass=SingletonMeta):
         """
         self.logger.info("Refreshing the ecosystems ...")
         expected_to_run = set(self.config.get_ecosystems_expected_to_run())
+
+        # First stop the ecosystems not expected to run
+        self.logger.debug("Looking for ecosystems not expected to be running.")
+        to_stop = self.ecosystems_started - expected_to_run
+        for ecosystem_uid in to_stop:
+            await self.stop_ecosystem(ecosystem_uid)
+
+        # Then, delete the ecosystems which are no longer in the config file
+        self.logger.debug(
+            "Looking for ecosystems that are no longer in the config file.")
+        to_delete = set(self.ecosystems.keys()) - set(self.config.ecosystems_uid)
+        for ecosystem_uid in to_delete:
+            await self.remove_ecosystem(ecosystem_uid)
+
         # Initialize the ecosystems found in the config file but not yet initialized
         self.logger.debug(
             "Looking for ecosystems present in the config file but not yet initialized.")
         to_initialize = set(self.config.ecosystems_uid) - set(self.ecosystems.keys())
-        if to_initialize:
-            self.logger.info(
-                f"Need to initialize {len(to_initialize)} ecosystem(s): "
-                f"{self._humanize_eco_set(to_initialize)}.")
-            for ecosystem_uid in to_initialize:
-                self.init_ecosystem(ecosystem_uid)
-        else:
-            self.logger.debug("No need to initialize any new ecosystem.")
+        for ecosystem_uid in to_initialize:
+            await self.add_ecosystem(ecosystem_uid)
+
         # Start the ecosystems which are expected to run and are not running
         self.logger.debug(
             "Looking for ecosystems expected to be running but not yet started.")
+        already_started = self.ecosystems_started
         to_start = expected_to_run - self.ecosystems_started
-        if to_start:
-            self.logger.info(
-                f"Need to start {len(to_start)} ecosystem(s): "
-                f"{self._humanize_eco_set(to_start)}.")
-            for ecosystem_uid in to_start:
-                await self.start_ecosystem(ecosystem_uid, send_info=False)
-        else:
-            self.logger.debug("No need to start any ecosystem.")
-        # Stop the ecosystems which are not expected to run and are currently
-        # running
-        self.logger.debug(
-            "Looking for ecosystems expected to be stopped but currently running.")
-        to_stop = self.ecosystems_started - expected_to_run
-        if to_stop:
-            self.logger.info(
-                f"Need to stop {len(to_stop)} ecosystem(s): "
-                f"{self._humanize_eco_set(to_stop)}.")
-            for ecosystem_uid in to_stop:
-                await self.stop_ecosystem(ecosystem_uid, send_info=False)
-        else:
-            self.logger.debug("No need to stop any ecosystem.")
+        for ecosystem_uid in to_start:
+            await self.start_ecosystem(ecosystem_uid)
+
         # Refresh the ecosystems that were already running and did not stop
         self.logger.debug(
             "Looking for already running ecosystems that need to continue to run.")
-        started_before = self.ecosystems_started - to_start
-        if started_before:
-            self.logger.info(
-                f"Need to refresh {len(started_before)} ecosystem(s): "
-                f"{self._humanize_eco_set(started_before)}.")
-        else:
-            self.logger.debug("No need to refresh any ecosystem.")
-        for ecosystem_uid in started_before:
+        for ecosystem_uid in already_started:
             await self.ecosystems[ecosystem_uid].refresh_hardware()
             await self.ecosystems[ecosystem_uid].refresh_subroutines()
             await self.ecosystems[ecosystem_uid].refresh_lighting_hours(send_info=False)
-        # Delete the ecosystems which were created and are no longer on the
-        #  config file
-        self.logger.debug(
-            "Looking for ecosystems that are initialized but no longer in the "
-            "config file.")
-        to_delete = set(self.ecosystems.keys()) - set(self.config.ecosystems_uid)
-        if to_delete:
-            self.logger.info(
-                f"Need to remove {len(to_delete)} ecosystem(s): "
-                f"{self._humanize_eco_set(to_delete)}.")
-        else:
-            self.logger.debug("No extraneous ecosystem detected.")
-        for ecosystem_uid in to_delete:
-            if self.ecosystems[ecosystem_uid].started:
-                await self.stop_ecosystem(ecosystem_uid, send_info=False)
-            await self.dismount_ecosystem(ecosystem_uid)
         # self.refresh_ecosystems_lighting_hours()  # done by Ecosystem during their startup
+
         if send_info:
             await self._send_ecosystems_info()
 
     async def terminate_ecosystems(self) -> None:
         for ecosystem_uid in [*self.ecosystems.keys()]:
-            await self.dismount_ecosystem(ecosystem_uid)
+            await self.remove_ecosystem(ecosystem_uid)
 
     async def refresh_ecosystems_lighting_hours(self, send_info: bool = True) -> None:
         """Refresh all the Ecosystems lighting hours

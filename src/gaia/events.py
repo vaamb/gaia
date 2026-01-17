@@ -488,7 +488,7 @@ class Events(AsyncEventHandler):
                 raise ValueError(
                     f"Ecosystem with uid '{ecosystem_uid}' is not one of the "
                     f"started ecosystems.")
-            base_obj = self.engine.ecosystems[ecosystem_uid].config
+            base_obj = self.engine.config.get_ecosystem_config(ecosystem_uid)
 
         event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
 
