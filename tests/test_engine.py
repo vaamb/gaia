@@ -232,6 +232,8 @@ async def test_engine_run(engine: Engine):
 
 @pytest.mark.asyncio
 async def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig):
+    # Ecosystems are initialized during the engine initialization
+    await engine.terminate_ecosystems()
     # /!\ Ecosystem need a runnable subroutine in order to start
     ecosystem_config.set_management("light", True)
 

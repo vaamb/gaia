@@ -69,6 +69,33 @@ class Engine(metaclass=SingletonMeta):
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
 
+    async def _async_init(self) -> None:
+        if self.plugins_needed:
+            # Initialize the database and the message broker
+            await self.init_plugins()
+        for ecosystem_uid in self.config.ecosystems_uid:
+            self.init_ecosystem(ecosystem_uid)
+
+    @classmethod
+    async def initialize(
+            cls,
+            engine_config: EngineConfig | None = None,
+    ) -> t.Self:
+        # Sync initialization of the ecosystem
+        engine = cls(engine_config)
+        # Finalization of the initialization
+        await engine._async_init()
+        return engine
+
+    async def terminate(self) -> None:
+        # Terminate the ecosystems first
+        await self.terminate_ecosystems()
+        # Stop plugins and background tasks
+        if self.plugins_initialized:
+            await self.stop_plugins()
+        self._db = None
+        self._message_broker = None
+
     @property
     def plugins_needed(self) -> bool:
         return (
@@ -661,6 +688,10 @@ class Engine(metaclass=SingletonMeta):
         if send_info:
             await self._send_ecosystems_info()
 
+    async def terminate_ecosystems(self) -> None:
+        for ecosystem_uid in [*self.ecosystems.keys()]:
+            await self.dismount_ecosystem(ecosystem_uid)
+
     async def refresh_ecosystems_lighting_hours(self, send_info: bool = True) -> None:
         """Refresh all the Ecosystems lighting hours
 
@@ -778,12 +809,7 @@ class Engine(metaclass=SingletonMeta):
         # Stop and dismount ecosystems
         for ecosystem_uid in [*self.ecosystems_started]:
             await self.stop_ecosystem(ecosystem_uid)
-        to_delete = [*self.ecosystems.keys()]
-        for ecosystem in to_delete:
-            await self.dismount_ecosystem(ecosystem)
-        # Stop plugins and background tasks
-        if self.plugins_initialized:
-            await self.stop_plugins()
+        await self.terminate()
         self.config.stop_watchdog()
         self.stop_background_tasks()
         self._shut_down = True

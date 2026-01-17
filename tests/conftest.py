@@ -140,7 +140,7 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
-    engine = Engine(engine_config=engine_config)
+    engine = await Engine.initialize(engine_config=engine_config)
     with get_logs_content(engine_config.logs_dir / debug_log_file):
         pass  # Clear logs
 
