@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing
-from typing import cast, Literal, overload
+from typing import cast, Literal, overload, Self
 
 import gaia_validators as gv
 
@@ -138,6 +138,32 @@ class Ecosystem:
             f"{self.__class__.__name__}({self.uid}, name={self.name}, "
             f"status={self.started}, engine={self._engine})"
         )
+
+    async def _async_init(self) -> None:
+        await self.initialize_hardware()
+
+    @classmethod
+    async def initialize(
+            cls,
+            ecosystem_id: str,
+            engine: Engine | None = None,
+    ) -> Self:
+        # Sync initialization of the ecosystem
+        ecosystem = cls(ecosystem_id, engine)
+        # Finalization of the initialization
+        await ecosystem._async_init()
+        return ecosystem
+
+    async def terminate(self) -> None:
+        # Terminate the subroutines first
+        self.terminate_subroutines()
+        # Terminate the actuator hub
+        self.terminate_actuator_hub()
+        # Terminate the hardware
+        await self.terminate_hardware()
+        # Detach the virtual ecosystem
+        if self.virtualized:
+            self._virtual_self = None
 
     """
     API calls
@@ -288,6 +314,10 @@ class Ecosystem:
         for subroutine in order_subroutines(to_start):
             self.logger.debug(f"Starting the subroutine '{subroutine}'.")
             await self.start_subroutine(subroutine)
+
+    def terminate_subroutines(self) -> None:
+        for subroutine_name in subroutine_names:
+            del self.subroutines[subroutine_name]
 
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
@@ -523,6 +553,18 @@ class Ecosystem:
             actuator_group: str,
     ) -> ActuatorHandler:
         return self.actuator_hub.get_handler(actuator_group)
+
+    def terminate_actuator_hub(self) -> None:
+        # Terminate actuator handlers
+        for handler_group in [*self.actuator_hub.actuator_handlers.keys()]:
+            handler = self.actuator_hub.actuator_handlers[handler_group]
+            handler.reset_cached_actuators()
+            # Maker sure all the handlers where deactivated when the subroutine finished
+            assert not handler.active
+            del self.actuator_hub.actuator_handlers[handler_group], handler
+        # Terminate PIDs
+        for pid_group in [*self.actuator_hub.pids.keys()]:
+            del self.actuator_hub.pids[pid_group]
 
     # Sensors
     @property

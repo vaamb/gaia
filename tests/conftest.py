@@ -184,6 +184,7 @@ async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     finally:
         if ecosystem.started:
             await ecosystem.stop()
+        await ecosystem.terminate()
         del ecosystem
 
 
