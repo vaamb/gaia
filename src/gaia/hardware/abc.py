@@ -389,7 +389,7 @@ class Hardware(metaclass=_MetaHardware):
         )
 
     @classmethod
-    def from_hardware_config(
+    def _unsafe_from_config(
             cls,
             hardware_config: gv.HardwareConfig,
             ecosystem: Ecosystem | None,
@@ -429,7 +429,7 @@ class Hardware(metaclass=_MetaHardware):
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
-        hardware = hardware_cls.from_hardware_config(hardware_cfg, ecosystem)
+        hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
         # Turn off hardware to no have any unwanted side effect at startup
         if isinstance(hardware, Switch):
             await hardware.turn_off()

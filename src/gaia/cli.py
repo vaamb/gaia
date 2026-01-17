@@ -13,9 +13,7 @@ async def main():
 
     setproctitle("gaia")
 
-    gaia_engine = Engine()
-    if gaia_engine.plugins_needed:
-        await gaia_engine.init_plugins()
+    gaia_engine = await Engine.new()
     await gaia_engine.run()
 
 

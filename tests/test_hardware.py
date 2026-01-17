@@ -69,7 +69,7 @@ async def test_hardware_models(ecosystem: Ecosystem):
             hardware_cfg["level"] = gv.HardwareLevel.environment
 
         # Test hardware
-        hardware = hardware_cls.from_hardware_config(
+        hardware = hardware_cls._unsafe_from_config(
             gv.HardwareConfig(**hardware_cfg), ecosystem=ecosystem)
         if isinstance(hardware, gpioHardware):
             assert hardware.pin

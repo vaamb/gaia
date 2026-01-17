@@ -1832,7 +1832,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         hardware_cls = hardware_models[hardware_config.model]
         # Class initialization will later correct default address if needed
-        hardware = hardware_cls.from_hardware_config(hardware_config, None)
+        hardware = hardware_cls._unsafe_from_config(hardware_config, None)
         # Replace default address with the actual address
         hardware_dict["address"] = hardware.address_repr
         if (

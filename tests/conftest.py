@@ -22,7 +22,7 @@ from gaia.subroutines import (
 from gaia.utils import SingletonMeta, yaml
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
-from .data import debug_log_file, ecosystem_info, ecosystem_name, engine_uid
+from .data import debug_log_file, ecosystem_info, ecosystem_uid, engine_uid
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content, MockDispatcher
 
@@ -140,7 +140,7 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
-    engine = Engine(engine_config=engine_config)
+    engine = await Engine.initialize(engine_config=engine_config)
     with get_logs_content(engine_config.logs_dir / debug_log_file):
         pass  # Clear logs
 
@@ -160,7 +160,7 @@ async def virtual_world(engine: Engine) -> YieldFixture[VirtualWorld]:
 
 @pytest_asyncio.fixture(scope="function")
 async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfig]:
-    ecosystem_config = engine_config.get_ecosystem_config(ecosystem_name)
+    ecosystem_config = engine_config.get_ecosystem_config(ecosystem_uid)
     with get_logs_content(ecosystem_config.general.logs_dir / debug_log_file):
         pass  # Clear logs
 
@@ -172,7 +172,7 @@ async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[Ecosyste
 
 @pytest_asyncio.fixture(scope="function")
 async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
-    ecosystem = engine.get_ecosystem(ecosystem_name)
+    ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
     with get_logs_content(engine.config.logs_dir / debug_log_file):
         pass  # Clear logs
@@ -184,6 +184,7 @@ async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     finally:
         if ecosystem.started:
             await ecosystem.stop()
+        await ecosystem.terminate()
         del ecosystem
 
 
