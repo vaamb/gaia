@@ -292,15 +292,15 @@ class Ecosystem:
     async def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
-        # /!\ the sensors and light subroutines should be started before the others
+        # Make sure the sensors and light subroutines are started first and stopped last
+        def order_subroutines(to_keep: set[str]) -> list:
+            return [n for n in subroutine_names if n in to_keep]
+
         subroutines_enabled = self._config.get_subroutines_enabled()
-        subroutines_needed =  set(subroutine_names).intersection(subroutines_enabled)
+        subroutines_needed = set(subroutine_names).intersection(subroutines_enabled)
         if not subroutines_needed:
             self.logger.debug("No subroutine needed.")
             return
-
-        def order_subroutines(to_keep: set[str]) -> list:
-            return [n for n in subroutine_names if n in to_keep]
 
         # First, stop the subroutines not needed anymore
         to_stop = order_subroutines(self.subroutines_started - subroutines_needed)
