@@ -8,7 +8,6 @@ from math import ceil
 import signal
 import threading
 import typing as t
-import warnings
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
