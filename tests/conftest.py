@@ -149,6 +149,7 @@ async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     finally:
         if engine.started:
             engine.stop()
+        await engine.terminate()
         SingletonMeta.detach_instance("Engine")
         del engine
 
