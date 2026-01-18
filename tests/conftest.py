@@ -178,8 +178,6 @@ async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
     with get_logs_content(engine.config.logs_dir / debug_log_file):
         pass  # Clear logs
 
-    await ecosystem.refresh_hardware()
-
     try:
         yield ecosystem
     finally:
