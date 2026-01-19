@@ -432,7 +432,7 @@ class Ecosystem:
         for hardware_uid in stale:
             await self.remove_hardware(hardware_uid)
             await self.add_hardware(hardware_uid)
-        # Finally mount the missing hardware (= needed - (existing - stale))
+        # Finally mount the missing hardware
         for hardware_uid in needed - existing:
             await self.add_hardware(hardware_uid)
         # Reset cached actuators
