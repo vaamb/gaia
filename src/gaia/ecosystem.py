@@ -415,7 +415,6 @@ class Ecosystem:
         )
         existing: set[str] = set()
         stale: set[str] = set()
-        not_stale: set[str] = set()
         for hardware_uid in self.hardware:
             existing.add(hardware_uid)
             in_config = self.config.IO_dict.get(hardware_uid)
@@ -426,16 +425,15 @@ class Ecosystem:
             current = gv.to_anonymous(self.hardware[hardware_uid].dict_repr(), "uid")
             if current != in_config:
                 stale.add(hardware_uid)
-            else:
-                not_stale.add(hardware_uid)
         # First remove hardware not in config anymore
         for hardware_uid in existing - needed:
             await self.remove_hardware(hardware_uid)
-        # Then remove staled hardware
+        # Then update the staled hardware
         for hardware_uid in stale:
             await self.remove_hardware(hardware_uid)
+            await self.add_hardware(hardware_uid)
         # Finally mount the missing hardware (= needed - (existing - stale))
-        for hardware_uid in needed - not_stale:
+        for hardware_uid in needed - existing:
             await self.add_hardware(hardware_uid)
         # Reset cached actuators
         for actuator_handler in self.actuator_hub.actuator_handlers.values():
