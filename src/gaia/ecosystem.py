@@ -416,13 +416,14 @@ class Ecosystem:
         existing: set[str] = set()
         stale: set[str] = set()
         not_stale: set[str] = set()
-        for hardware_uid, hardware in self.hardware.items():
+        for hardware_uid in self.hardware:
             existing.add(hardware_uid)
             in_config = self.config.IO_dict.get(hardware_uid)
             if in_config is None:
                 # Hardware was remove from config, go to next
                 continue
-            current = gv.to_anonymous(hardware.dict_repr(), "uid")
+            # /!\ Do not hold a reference to hardware or its reference count will never reach 0
+            current = gv.to_anonymous(self.hardware[hardware_uid].dict_repr(), "uid")
             if current != in_config:
                 stale.add(hardware_uid)
             else:
