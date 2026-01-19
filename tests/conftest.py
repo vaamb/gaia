@@ -22,7 +22,7 @@ from gaia.subroutines import (
 from gaia.utils import SingletonMeta, yaml
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
-from .data import debug_log_file, ecosystem_info, ecosystem_name, engine_uid
+from .data import debug_log_file, ecosystem_info, ecosystem_uid, engine_uid
 from .subroutines.dummy_subroutine import Dummy
 from .utils import get_logs_content, MockDispatcher
 
@@ -140,7 +140,7 @@ async def engine_config(engine_config_master: EngineConfig) -> YieldFixture[Engi
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
-    engine = Engine(engine_config=engine_config)
+    engine = await Engine.initialize(engine_config=engine_config)
     with get_logs_content(engine_config.logs_dir / debug_log_file):
         pass  # Clear logs
 
@@ -149,6 +149,7 @@ async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
     finally:
         if engine.started:
             engine.stop()
+        await engine.terminate()
         SingletonMeta.detach_instance("Engine")
         del engine
 
@@ -160,7 +161,7 @@ async def virtual_world(engine: Engine) -> YieldFixture[VirtualWorld]:
 
 @pytest_asyncio.fixture(scope="function")
 async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[EcosystemConfig]:
-    ecosystem_config = engine_config.get_ecosystem_config(ecosystem_name)
+    ecosystem_config = engine_config.get_ecosystem_config(ecosystem_uid)
     with get_logs_content(ecosystem_config.general.logs_dir / debug_log_file):
         pass  # Clear logs
 
@@ -172,18 +173,17 @@ async def ecosystem_config(engine_config: EngineConfig) -> YieldFixture[Ecosyste
 
 @pytest_asyncio.fixture(scope="function")
 async def ecosystem(engine: Engine) -> YieldFixture[Ecosystem]:
-    ecosystem = engine.get_ecosystem(ecosystem_name)
+    ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
     with get_logs_content(engine.config.logs_dir / debug_log_file):
         pass  # Clear logs
-
-    await ecosystem.refresh_hardware()
 
     try:
         yield ecosystem
     finally:
         if ecosystem.started:
             await ecosystem.stop()
+        await ecosystem.terminate()
         del ecosystem
 
 
@@ -195,7 +195,7 @@ async def virtual_ecosystem(ecosystem: Ecosystem) -> YieldFixture[VirtualEcosyst
 
 @pytest_asyncio.fixture(scope="function")
 async def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
-    climate_subroutine: Climate = ecosystem.subroutines["climate"]
+    climate_subroutine: Climate = ecosystem.get_subroutine("climate")
 
     # Sensors subroutine is required
     await ecosystem.enable_subroutine("sensors")
@@ -213,7 +213,7 @@ async def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
 @pytest_asyncio.fixture(scope="function")
 async def weather_subroutine(ecosystem: Ecosystem) -> YieldFixture[Weather]:
     ecosystem.config.set_management("camera", True)
-    weather_subroutine: Weather = ecosystem.subroutines["weather"]
+    weather_subroutine: Weather = ecosystem.get_subroutine("weather")
 
     try:
         yield weather_subroutine
@@ -225,7 +225,7 @@ async def weather_subroutine(ecosystem: Ecosystem) -> YieldFixture[Weather]:
 @pytest_asyncio.fixture(scope="function")
 async def health_subroutine(ecosystem: Ecosystem) -> YieldFixture[Health]:
     ecosystem.config.set_management("camera", True)
-    health_subroutine: Health = ecosystem.subroutines["health"]
+    health_subroutine: Health = ecosystem.get_subroutine("health")
 
     try:
         yield health_subroutine
@@ -236,7 +236,7 @@ async def health_subroutine(ecosystem: Ecosystem) -> YieldFixture[Health]:
 
 @pytest_asyncio.fixture(scope="function")
 async def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
-    light_subroutine: Light = ecosystem.subroutines["light"]
+    light_subroutine: Light = ecosystem.get_subroutine("light")
 
     try:
         yield light_subroutine
@@ -248,7 +248,7 @@ async def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
 @pytest_asyncio.fixture(scope="function")
 async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Pictures]:
     ecosystem.config.set_management("camera", True)
-    pictures_subroutine: Pictures = ecosystem.subroutines["pictures"]
+    pictures_subroutine: Pictures = ecosystem.get_subroutine("pictures")
 
     try:
         yield pictures_subroutine
@@ -259,7 +259,7 @@ async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Pictures]:
 
 @pytest_asyncio.fixture(scope="function")
 async def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
-    sensor_subroutine: Sensors = ecosystem.subroutines["sensors"]
+    sensor_subroutine: Sensors = ecosystem.get_subroutine("sensors")
 
     try:
         yield sensor_subroutine
@@ -270,7 +270,7 @@ async def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
 
 @pytest_asyncio.fixture(scope="function")
 async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Dummy]:
-    dummy_subroutine: Sensors = ecosystem.subroutines["dummy"]
+    dummy_subroutine: Dummy = ecosystem.get_subroutine("dummy")
 
     try:
         yield dummy_subroutine

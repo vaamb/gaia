@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing
-from typing import cast, Type
+from typing import cast, Literal, overload, Self
 
 import gaia_validators as gv
 
@@ -10,11 +10,10 @@ from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, NonValidSubroutine
-from gaia.hardware import hardware_models
 from gaia.hardware.abc import Hardware
 from gaia.subroutines import (
-    Climate, Health, Pictures, Sensors, subroutine_dict, SubroutineDict,
-    subroutine_names, SubroutineNames)
+    Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
+    subroutine_names, SubroutineNames, SubroutineTemplate, Weather)
 from gaia.virtual import VirtualEcosystem
 
 
@@ -140,6 +139,32 @@ class Ecosystem:
             f"status={self.started}, engine={self._engine})"
         )
 
+    async def _async_init(self) -> None:
+        await self.initialize_hardware()
+
+    @classmethod
+    async def initialize(
+            cls,
+            ecosystem_id: str,
+            engine: Engine | None = None,
+    ) -> Self:
+        # Sync initialization of the ecosystem
+        ecosystem = cls(ecosystem_id, engine)
+        # Finalization of the initialization
+        await ecosystem._async_init()
+        return ecosystem
+
+    async def terminate(self) -> None:
+        # Terminate the subroutines first
+        self.terminate_subroutines()
+        # Terminate the actuator hub
+        self.terminate_actuator_hub()
+        # Terminate the hardware
+        await self.terminate_hardware()
+        # Detach the virtual ecosystem
+        if self.virtualized:
+            self._virtual_self = None
+
     """
     API calls
     """
@@ -179,6 +204,25 @@ class Ecosystem:
         return self._virtual_self is not None
 
     # Subroutines management
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["sensors"]) -> Sensors: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["light"]) -> Light: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["climate"]) -> Climate: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["weather"]) -> Weather: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["pictures"]) -> Pictures: ...
+    @overload
+    def get_subroutine(self, subroutine_name: Literal["health"]) -> Health: ...
+
+    def get_subroutine(self, subroutine_name: SubroutineNames) -> SubroutineTemplate:
+        try:
+            return self.subroutines[subroutine_name]
+        except KeyError:
+            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+
     async def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
 
@@ -186,12 +230,9 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to enable
         """
-        try:
-            self.subroutines[subroutine_name].enable()
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
-        else:
-            await self.config.save()
+        subroutine = self.get_subroutine(subroutine_name)
+        subroutine.enable()
+        await self.config.save()
 
     async def disable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Disable a Subroutine
@@ -200,83 +241,83 @@ class Ecosystem:
 
         :param subroutine_name: The name of the Subroutine to disable
         """
-        try:
-            self.subroutines[subroutine_name].disable()
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
-        else:
-            await self.config.save()
+        subroutine = self.get_subroutine(subroutine_name)
+        subroutine.disable()
+        await self.config.save()
 
     async def start_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Start a Subroutine
 
         :param subroutine_name: The name of the Subroutine to start
         """
+        self.logger.debug(f"Starting the subroutine '{subroutine_name}'.")
+        subroutine = self.get_subroutine(subroutine_name)
         try:
-            await self.subroutines[subroutine_name].start()
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+            await subroutine.start()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while starting the subroutine "
+                f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
 
     async def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutine
 
         :param subroutine_name: The name of the Subroutine to stop
         """
+        self.logger.debug(f"Stopping the subroutine '{subroutine_name}'.")
+        subroutine = self.get_subroutine(subroutine_name)
         try:
-            await self.subroutines[subroutine_name].stop()
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+            await subroutine.stop()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while stopping the subroutine "
+                f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
+
+    async def refresh_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        subroutine = self.get_subroutine(subroutine_name)
+        try:
+            await subroutine.refresh()
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while refreshing the subroutine "
+                f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
 
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
-        try:
-            return self.subroutines[subroutine_name].started
-        except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+        subroutine = self.get_subroutine(subroutine_name)
+        return subroutine.started
 
     async def refresh_subroutines(self) -> None:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
-        # Need to start sensors and lights before other subroutines
-        subroutines_needed = set(subroutine_names).intersection(
-            self._config.get_subroutines_enabled()
-        )
+        # Make sure the sensors and light subroutines are started first and stopped last
+        def order_subroutines(to_keep: set[str]) -> list:
+            return [n for n in subroutine_names if n in to_keep]
+
+        subroutines_enabled = self._config.get_subroutines_enabled()
+        subroutines_needed = set(subroutine_names).intersection(subroutines_enabled)
         if not subroutines_needed:
             self.logger.debug("No subroutine needed.")
             return
-        # Stop the unneeded subroutines first.
-        to_stop = self.subroutines_started - subroutines_needed
-        for subroutine in to_stop:
-            self.logger.debug(f"Stopping the subroutine '{subroutine}'.")
-            try:
-                await self.stop_subroutine(subroutine)
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while stopping the subroutine "
-                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
-        # Then update the already running subroutines
-        for subroutine in self.subroutines_started:
-            try:
-                await self.subroutines[subroutine].refresh()
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while refreshing the hardware of "
-                    f"the subroutine '{subroutine}'. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
+
+        # First, stop the subroutines not needed anymore
+        to_stop = order_subroutines(self.subroutines_started - subroutines_needed)
+        for subroutine_name in reversed(to_stop):
+            await self.stop_subroutine(subroutine_name)
+        # Then, update the subroutines already running
+        for subroutine_name in order_subroutines(self.subroutines_started):
+            await self.refresh_subroutine(subroutine_name)
         # Finally, start the new subroutines
         to_start = subroutines_needed - self.subroutines_started
-        for subroutine in subroutine_names:
-            if subroutine not in to_start:
-                continue
+        for subroutine in order_subroutines(to_start):
             self.logger.debug(f"Starting the subroutine '{subroutine}'.")
-            try:
-                await self.start_subroutine(subroutine)
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while starting the subroutine "
-                    f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
+            await self.start_subroutine(subroutine)
+
+    def terminate_subroutines(self) -> None:
+        for subroutine_name in [*self.subroutines.keys()]:
+            del self.subroutines[subroutine_name]
 
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
@@ -362,6 +403,11 @@ class Ecosystem:
         del self.hardware[hardware_uid]
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
+    async def initialize_hardware(self) -> None:
+        for hardware_uid, hardware_cfg in self.config.IO_dict.items():
+            if hardware_cfg["active"]:
+                await self.add_hardware(hardware_uid)
+
     async def refresh_hardware(self) -> None:
         needed: set[str] = set(
             hardware_uid for hardware_uid in self.config.IO_dict.keys()
@@ -369,26 +415,25 @@ class Ecosystem:
         )
         existing: set[str] = set()
         stale: set[str] = set()
-        not_stale: set[str] = set()
-        for hardware_uid, hardware in self.hardware.items():
+        for hardware_uid in self.hardware:
             existing.add(hardware_uid)
             in_config = self.config.IO_dict.get(hardware_uid)
             if in_config is None:
                 # Hardware was remove from config, go to next
                 continue
-            current = gv.to_anonymous(hardware.dict_repr(), "uid")
+            # /!\ Do not hold a reference to hardware or its reference count will never reach 0
+            current = gv.to_anonymous(self.hardware[hardware_uid].dict_repr(), "uid")
             if current != in_config:
                 stale.add(hardware_uid)
-            else:
-                not_stale.add(hardware_uid)
         # First remove hardware not in config anymore
         for hardware_uid in existing - needed:
             await self.remove_hardware(hardware_uid)
-        # Then remove staled hardware
+        # Then update the staled hardware
         for hardware_uid in stale:
             await self.remove_hardware(hardware_uid)
-        # Finally mount the missing hardware (= needed - (existing - stale))
-        for hardware_uid in needed - not_stale:
+            await self.add_hardware(hardware_uid)
+        # Finally mount the missing hardware
+        for hardware_uid in needed - existing:
             await self.add_hardware(hardware_uid)
         # Reset cached actuators
         for actuator_handler in self.actuator_hub.actuator_handlers.values():
@@ -397,6 +442,12 @@ class Ecosystem:
         for pid in self.actuator_hub.pids.values():
             pid.reset()
             pid.reset_direction()
+
+    async def terminate_hardware(self) -> None:
+        for hardware_uid in [*self.hardware.keys()]:
+            hardware = self.hardware[hardware_uid]
+            await hardware.terminate()
+            del self.hardware[hardware_uid], hardware
 
     # Ecosystem management
     async def start(self):
@@ -501,6 +552,18 @@ class Ecosystem:
             actuator_group: str,
     ) -> ActuatorHandler:
         return self.actuator_hub.get_handler(actuator_group)
+
+    def terminate_actuator_hub(self) -> None:
+        # Terminate actuator handlers
+        for handler_group in [*self.actuator_hub.actuator_handlers.keys()]:
+            handler = self.actuator_hub.actuator_handlers[handler_group]
+            handler.reset_cached_actuators()
+            # Maker sure all the handlers where deactivated when the subroutine finished
+            assert not handler.active
+            del self.actuator_hub.actuator_handlers[handler_group], handler
+        # Terminate PIDs
+        for pid_group in [*self.actuator_hub.pids.keys()]:
+            del self.actuator_hub.pids[pid_group]
 
     # Sensors
     @property

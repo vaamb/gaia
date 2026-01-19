@@ -5,16 +5,17 @@ import pytest
 
 import gaia_validators as gv
 
-from gaia import Ecosystem
+from gaia import Ecosystem, Engine
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
-    BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware, Measure,
-    OneWireHardware, PlantLevelHardware, Switch, Unit)
+    _MetaHardware, BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
+    Measure, OneWireHardware, PlantLevelHardware, Switch, Unit)
 from gaia.hardware.camera import PiCamera
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
 
-from .data import i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid
+from .data import (
+    ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid)
 
 
 @pytest.mark.asyncio
@@ -69,7 +70,7 @@ async def test_hardware_models(ecosystem: Ecosystem):
             hardware_cfg["level"] = gv.HardwareLevel.environment
 
         # Test hardware
-        hardware = hardware_cls.from_hardware_config(
+        hardware = hardware_cls._unsafe_from_config(
             gv.HardwareConfig(**hardware_cfg), ecosystem=ecosystem)
         if isinstance(hardware, gpioHardware):
             assert hardware.pin
@@ -117,3 +118,9 @@ def test_i2c_address_injection(ecosystem: Ecosystem):
         if hardware.address_book.secondary is not None:
             assert hardware.address_book.secondary.main not in ("default", "def", 0x0)
             assert hardware.address_book.secondary.multiplexer_address != 0x0
+
+
+@pytest.mark.asyncio
+async def test_cleanup(engine: Engine):
+    await engine.remove_ecosystem(ecosystem_uid)
+    assert not _MetaHardware.instances

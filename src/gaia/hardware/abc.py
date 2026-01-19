@@ -389,7 +389,7 @@ class Hardware(metaclass=_MetaHardware):
         )
 
     @classmethod
-    def from_hardware_config(
+    def _unsafe_from_config(
             cls,
             hardware_config: gv.HardwareConfig,
             ecosystem: Ecosystem | None,
@@ -416,9 +416,8 @@ class Hardware(metaclass=_MetaHardware):
             hardware_cfg: gv.HardwareConfig,
             ecosystem: Ecosystem,
     ) -> Self:
-        # TODO: Ensure this
-        #if hardware_cfg.uid in _MetaHardware.instances:
-        #    raise ValueError(f"Hardware {hardware_cfg.uid} already exists.")
+        if hardware_cfg.uid in _MetaHardware.instances:
+            raise ValueError(f"Hardware {hardware_cfg.uid} already exists.")
         # Ensure a virtual hardware will be return if virtualization is enabled
         if (
                 ecosystem.engine.config.app_config.VIRTUALIZATION
@@ -429,7 +428,7 @@ class Hardware(metaclass=_MetaHardware):
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
-        hardware = hardware_cls.from_hardware_config(hardware_cfg, ecosystem)
+        hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
         # Turn off hardware to no have any unwanted side effect at startup
         if isinstance(hardware, Switch):
             await hardware.turn_off()
@@ -447,8 +446,6 @@ class Hardware(metaclass=_MetaHardware):
         for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
             if self in actuator_handler.get_linked_actuators():
                 actuator_handler.reset_cached_actuators()
-        # TODO: Temporary fix
-        self.detach_instance(self._uid)
 
     def _format_measures(
             self,

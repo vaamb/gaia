@@ -232,15 +232,17 @@ async def test_engine_run(engine: Engine):
 
 @pytest.mark.asyncio
 async def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig):
+    # Ecosystems are initialized during the engine initialization
+    await engine.terminate_ecosystems()
     # /!\ Ecosystem need a runnable subroutine in order to start
     ecosystem_config.set_management("light", True)
 
-    engine.init_ecosystem(ecosystem_uid)
+    await engine.add_ecosystem(ecosystem_uid)
     with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
         assert f"Ecosystem {ecosystem_uid} has been created" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* already exists"):
-        engine.init_ecosystem(ecosystem_uid)
-    with pytest.raises(RuntimeError, match=r"Cannot stop Ecosystem .*"):
+        await engine.add_ecosystem(ecosystem_uid)
+    with pytest.raises(RuntimeError, match=r"Ecosystem .* is not running"):
         await engine.stop_ecosystem(ecosystem_uid)
 
     await engine.start_ecosystem(ecosystem_uid)
@@ -249,18 +251,18 @@ async def test_ecosystem_managements(engine: Engine, ecosystem_config: Ecosystem
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         await engine.start_ecosystem(ecosystem_uid)
     with pytest.raises(RuntimeError, match=r"Cannot dismount a started ecosystem."):
-        await engine.dismount_ecosystem(ecosystem_uid)
+        await engine.remove_ecosystem(ecosystem_uid)
 
     await engine.stop_ecosystem(ecosystem_uid)
     with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
         assert f"Ecosystem {ecosystem_uid} has been stopped" in logs
-    with pytest.raises(RuntimeError, match=r"Cannot stop Ecosystem .*"):
+    with pytest.raises(RuntimeError, match=r"Ecosystem .* is not running"):
         await engine.stop_ecosystem(ecosystem_uid)
 
-    await engine.dismount_ecosystem(ecosystem_uid)
+    await engine.remove_ecosystem(ecosystem_uid)
     with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
         assert f"Ecosystem {ecosystem_uid} has been dismounted" in logs
-    with pytest.raises(RuntimeError, match=r"Need to initialise Ecosystem .* first"):
+    with pytest.raises(ValueError, match=r"Ecosystem .* is not linked to this engine"):
         await engine.start_ecosystem(ecosystem_uid)
 
 
