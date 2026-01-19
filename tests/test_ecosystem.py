@@ -6,6 +6,7 @@ import gaia_validators as gv
 from gaia import Ecosystem, EcosystemConfig, Engine, EngineConfig
 from gaia.config import defaults
 from gaia.exceptions import HardwareNotFound, NonValidSubroutine
+from gaia.hardware.abc import _MetaHardware
 
 from . import data
 from .utils import get_logs_content
@@ -97,6 +98,8 @@ async def test_refresh(ecosystem: Ecosystem):
 
     # Make sure refresh_hardware adds the hardware needed ...
     await ecosystem.remove_hardware(data.sensor_uid)
+    # The only reference to this hardware should be gone and hence be collected
+    assert data.sensor_uid not in _MetaHardware.instances
     # ... removes the unneeded hardware ...
     ecosystem.config.delete_hardware(data.heater_uid)
     assert {*ecosystem.hardware.keys()} != hardware_needed
@@ -112,6 +115,9 @@ async def test_refresh(ecosystem: Ecosystem):
 
     uptodate_cfg = ecosystem.hardware[data.light_uid].dict_repr()
     assert gv.to_anonymous(uptodate_cfg, "uid") == light_cfg
+
+    # Refreshing a second time should not raise an exception
+    await ecosystem.refresh_hardware()
 
 
 def test_actuators_data(ecosystem: "Ecosystem"):
