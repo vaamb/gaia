@@ -21,26 +21,37 @@ import gaia_validators as gv
 
 remote_address = "1.1.1.1"
 
-yaml = ruamel.yaml.YAML()
+_yaml: ruamel.yaml.YAML | None = None
 
 
-def _repr_time(self: SafeRepresenter, data: time) -> ScalarNode:
-    time_repr = str(data).split(".")[0]
-    return self.represent_scalar("tag:yaml.org,2002:str", time_repr)
+def _get_yaml() -> ruamel.yaml.YAML:
+    yaml = ruamel.yaml.YAML()
+
+    def _repr_time(self: SafeRepresenter, data: time) -> ScalarNode:
+        time_repr = str(data).split(".")[0]
+        return self.represent_scalar("tag:yaml.org,2002:str", time_repr)
+
+    def _repr_enum(self: SafeRepresenter, data: Enum) -> ScalarNode:
+        return self.represent_scalar("tag:yaml.org,2002:str", data.name)
+
+    def _repr_coordinates(self: SafeRepresenter, data: gv.Coordinates) -> SequenceNode:
+        return self.represent_sequence("tag:yaml.org,2002:seq", tuple(data))
+
+    ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
+    ruamel.yaml.add_representer(gv.Coordinates, _repr_coordinates, yaml.representer)
+    ruamel.yaml.add_multi_representer(Enum, _repr_enum, yaml.representer)
+    yaml.Constructor = ruamel.yaml.constructor.SafeConstructor
+
+    return yaml
 
 
-def _repr_enum(self: SafeRepresenter, data: Enum) -> ScalarNode:
-    return self.represent_scalar("tag:yaml.org,2002:str", data.name)
+def get_yaml() -> ruamel.yaml.YAML:
+    global _yaml
 
+    if _yaml is None:
+        _yaml = _get_yaml()
 
-def _repr_coordinates(self: SafeRepresenter, data: gv.Coordinates) -> SequenceNode:
-    return self.represent_sequence("tag:yaml.org,2002:seq", tuple(data))
-
-
-ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
-ruamel.yaml.add_representer(gv.Coordinates, _repr_coordinates, yaml.representer)
-ruamel.yaml.add_multi_representer(Enum, _repr_enum, yaml.representer)
-yaml.Constructor = ruamel.yaml.constructor.SafeConstructor
+    return _yaml
 
 
 # A convenience wrapper around orjson that conforms to json module signature

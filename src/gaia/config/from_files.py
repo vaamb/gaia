@@ -31,7 +31,7 @@ from gaia.exceptions import (
 from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
-    create_uid, humanize_list, is_time_between, json, SingletonMeta, yaml)
+    create_uid, get_yaml, humanize_list, is_time_between, json, SingletonMeta)
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -75,6 +75,8 @@ async def _dump_json(data: dict, path: Path) -> None:
 
 
 async def _load_yaml(path: Path) -> dict:
+    yaml = get_yaml()
+
     def load_yaml_sync() -> dict:
         with open(path, "r") as file:
             data: dict = yaml.load(file)
@@ -84,6 +86,8 @@ async def _load_yaml(path: Path) -> dict:
 
 
 async def _dump_yaml(data: dict, path: Path) -> None:
+    yaml = get_yaml()
+
     def dump_yaml_sync() -> None:
         with open(path, "w") as file:
             yaml.dump(data, file)
