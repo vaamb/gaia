@@ -8,10 +8,10 @@ import gaia_validators as gv
 from gaia.config import ConfigType, EcosystemConfig, EngineConfig
 from gaia.exceptions import HardwareNotFound, UndefinedParameter
 from gaia.subroutines import subroutine_names
-from gaia.utils import yaml
+from gaia.utils import get_yaml
 
 from .data import (
-    debug_log_file, ecosystem_info, ecosystem_name, lighting_method, sensor_info, 
+    debug_log_file, ecosystem_info, ecosystem_name, lighting_method, sensor_info,
     sensor_uid, sun_times)
 from .utils import get_logs_content
 
@@ -83,6 +83,8 @@ class TestEngineConfig:
 class TestWatchdog:
     pytest.mark.asyncio(loop_scope="function")
     async def test_config_files_watchdog(self, engine_config: EngineConfig):
+        yaml = get_yaml()
+
         # Start watchdog and make sure it can only be started once
         engine_config.start_watchdog()
         with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:

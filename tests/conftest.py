@@ -19,7 +19,7 @@ from gaia.events import Events
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, subroutine_names,
     Weather)
-from gaia.utils import SingletonMeta, yaml
+from gaia.utils import get_yaml, SingletonMeta
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
 from .data import debug_log_file, ecosystem_info, ecosystem_uid, engine_uid
@@ -72,6 +72,7 @@ def patch() -> None:
 
 @pytest.fixture(scope="session")
 def temp_dir(patch) -> YieldFixture[str]:
+    yaml = get_yaml()
     temp_dir = tempfile.mkdtemp(prefix="gaia-")
     with open(os.path.join(temp_dir, "ecosystems.cfg"), "w") as file:
         yaml.dump(ecosystem_info, file)
