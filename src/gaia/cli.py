@@ -13,7 +13,7 @@ async def main():
 
     setproctitle("gaia")
 
-    gaia_engine = await Engine.new()
+    gaia_engine = await Engine.initialize()
     await gaia_engine.run()
 
 
