@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import base64
 from enum import Enum
-from datetime import date, datetime, time, timedelta, timezone
-from math import acos, asin, cos, log, e, pi, sin
+from datetime import time
+from math import log, e
 import os
 import platform
 import random
@@ -12,6 +12,7 @@ import string
 from typing import Any
 from weakref import WeakValueDictionary
 
+import orjson
 import ruamel.yaml
 from ruamel.yaml import SafeRepresenter, ScalarNode, SequenceNode
 
@@ -42,43 +43,14 @@ ruamel.yaml.add_multi_representer(Enum, _repr_enum, yaml.representer)
 yaml.Constructor = ruamel.yaml.constructor.SafeConstructor
 
 
-try:
-    import orjson
-except ImportError:  # pragma: no cover
-    import json as _json
+# A convenience wrapper around orjson that conforms to json module signature
+class json:
+    def dumps(*args, **kwargs) -> str:
+        return orjson.dumps(*args, **kwargs).decode("utf8")
 
-    class datetimeJSONEncoder(_json.JSONEncoder):
-        def default(self, obj: date | datetime | time) -> str:
-            if isinstance(obj, datetime):
-                return obj.astimezone(tz=timezone.utc).isoformat(timespec="seconds")
-            if isinstance(obj, date):
-                return obj.isoformat()
-            if isinstance(obj, time):
-                return (
-                    datetime.combine(date.today(), obj)
-                    .astimezone(tz=timezone.utc)
-                    .isoformat(timespec="seconds")
-                )
-
-    class json:
-        def dumps(*args, **kwargs) -> str:
-            if "cls" not in kwargs:
-                kwargs["cls"] = datetimeJSONEncoder
-            return _json.dumps(*args, **kwargs)
-
-        @staticmethod
-        def loads(*args, **kwargs) -> Any:
-            return _json.loads(*args, **kwargs)
-
-else:
-
-    class json:
-        def dumps(*args, **kwargs) -> str:
-            return orjson.dumps(*args, **kwargs).decode("utf8")
-
-        @staticmethod
-        def loads(*args, **kwargs) -> Any:
-            return orjson.loads(*args, **kwargs)
+    @staticmethod
+    def loads(*args, **kwargs) -> Any:
+        return orjson.loads(*args, **kwargs)
 
 
 pin_board_to_bcm = {
