@@ -37,6 +37,10 @@ class WebSocketHardwareManager:
         await self.device_connections[hardware_uid].close()
         self._registered_hardware.remove(hardware_uid)
 
+    @property
+    def registered_hardware(self) -> int:
+        return len(self._registered_hardware)
+
     async def _start(self) -> None:
         async with serve(
                 self.connection_handler,
