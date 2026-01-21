@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from asyncio import create_task, Event, Future, sleep, Task, wait_for
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -7,6 +8,7 @@ import inspect
 from pathlib import Path
 import textwrap
 from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
+from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -16,13 +18,16 @@ from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.exceptions import HardwareNotFound
+from gaia.hardware._websocket import WebSocketHardwareManager
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
 if TYPE_CHECKING:  # pragma: no cover
-    from gaia import Ecosystem
+    from websockets import ServerConnection
+
+    from gaia import Ecosystem, EngineConfig
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -457,6 +462,8 @@ class Hardware(metaclass=_MetaHardware):
             await hardware.turn_off()
         if isinstance(hardware, Dimmer):
             await hardware.set_pwm_level(0)
+        if isinstance(hardware, WebSocketHardware):
+            await hardware.register()
         return hardware
 
     async def terminate(self) -> None:
@@ -465,6 +472,8 @@ class Hardware(metaclass=_MetaHardware):
             await self.turn_off()
         if isinstance(self, Dimmer):
             await self.set_pwm_level(0)
+        if isinstance(self, WebSocketHardware):
+            await self.unregister()
         # Reset actuator handlers using this hardware
         for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
             if self in actuator_handler.get_linked_actuators():
@@ -757,6 +766,100 @@ class Camera(Hardware):
             image_path = self.camera_dir / image_path
         await run_sync(image.write, image_path)
         return image_path
+
+
+class WebsocketMessage(gv.BaseModel):
+    uuid: UUID | None = None
+    data: Any
+
+
+class WebSocketHardware(Hardware):
+    _websocket_manager: WebSocketHardwareManager | None = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self._address_book.primary.type == AddressType.WEBSOCKET:  # pragma: no cover
+            raise ValueError(
+                "WebSocketHardware address must be of type: 'WEBSOCKET_ipAddress'"
+            )
+        if self.__class__._websocket_manager is None:
+            engine_cfg: EngineConfig = self.ecosystem.engine.config
+            self.__class__._websocket_manager = WebSocketHardwareManager(engine_cfg)
+        self._websocket_manager = self.__class__._websocket_manager
+        self._logger = self._websocket_manager.logger
+        self._requests: dict[UUID: Future] = {}
+        self._task: Task | None = None
+        self._stop_event: Event = Event()
+
+    @property
+    def connected(self) -> bool:
+        return self._websocket_manager.get_connection(self.uid) is not None
+
+    async def _connection_loop(self) -> None:
+        wait_time: int = 1
+        while not self._stop_event.is_set():
+            connection = self._websocket_manager.get_connection(self.uid)
+            if connection is not None:
+                await self._listening_loop(connection)
+            try:
+                await wait_for(self._stop_event.wait(), wait_time)
+            except TimeoutError:
+                wait_time *= 2
+                wait_time = min(32, wait_time)
+            else:
+                wait_time = 1
+
+    async def _listening_loop(self, connection: ServerConnection) -> None:
+        async for msg in connection:
+            try:
+                parsed_msg = WebsocketMessage.model_validate_json(msg)
+                uuid: UUID = parsed_msg.uuid
+                data: dict = parsed_msg.data
+                if uuid not in self._requests:
+                    self.ecosystem.logger.error(
+                        f"Hardware '{self.uid}' received a message with an "
+                        f"unknown uuid: {uuid}")
+                    continue
+                self._requests[uuid].set_result(data)
+            except Exception as e:
+                self.ecosystem.logger.error(
+                    f"Hardware '{self.uid}' encountered an error parsing message: {e}")
+                continue
+
+    async def _send_msg_and_forget(self, msg: Any) -> None:
+        connection = self._websocket_manager.get_connection(self.uid)
+        if connection is None:
+            raise RuntimeError(f"Hardware '{self.uid}' is not registered.")
+        payload = WebsocketMessage(uuid=None, data=msg).model_dump_json()
+        await connection.send(payload)
+
+    async def _send_msg_and_wait(self, msg: Any) -> Any:
+        connection = self._websocket_manager.get_connection(self.uid)
+        if connection is None:
+            raise RuntimeError(f"Hardware '{self.uid}' is not registered.")
+        uuid: UUID = uuid4()
+        self._requests[str(uuid)] = Future()
+        payload = WebsocketMessage(uuid=uuid, data=msg).model_dump_json()
+        await connection.send(payload)
+        return await self._requests[str(uuid)]
+
+    async def register(self) -> None:
+        if not self._websocket_manager.is_running:
+            await self._websocket_manager.start()
+        await self._websocket_manager.register_hardware(self.uid)
+        self._task = create_task(self._connection_loop())
+        await sleep(0.1)  # Allow the task to start
+
+    async def unregister(self) -> None:
+        await self._websocket_manager.unregister_hardware(self.uid)
+        self._stop_event.set()
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+        # If not more hardware are registered, there is no need to keep the manager
+        #  running
+        if self._websocket_manager.registered_hardware == 0:
+            await self._websocket_manager.stop()
 
 
 # ---------------------------------------------------------------------------
