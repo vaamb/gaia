@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from asyncio import Event
+from asyncio import create_task, Event, sleep, Task
 from logging import getLogger, Logger
 import typing as t
 
@@ -23,7 +23,12 @@ class WebSocketHardwareManager:
         self._password: str = password
         self._registered_hardware: set[str] = set()
         self.device_connections: dict[str, ServerConnection] = {}
+        self._running_task: Task | None = None
         self._stop_event: Event = Event()
+
+    @property
+    def is_running(self) -> bool:
+        return self._running_task is not None
 
     async def register_hardware(self, hardware_uid: str) -> None:
         self._registered_hardware.add(hardware_uid)
@@ -32,7 +37,7 @@ class WebSocketHardwareManager:
         await self.device_connections[hardware_uid].close()
         self._registered_hardware.remove(hardware_uid)
 
-    async def run(self) -> None:
+    async def _start(self) -> None:
         async with serve(
                 self.connection_handler,
                 "127.0.0.1",
@@ -42,8 +47,18 @@ class WebSocketHardwareManager:
         ):
             await self._stop_event.wait()
 
+    async def start(self) -> None:
+        if self.is_running:
+            raise RuntimeError("WebSocketHardwareManager is already running")
+        self._running_task = create_task(self._start())
+        await sleep(0.1)  # Allow the task to start
+
     async def stop(self) -> None:
+        if not self.is_running:
+            raise RuntimeError("WebSocketHardwareManager is not currently running")
         self._stop_event.set()
+        await self._running_task
+        self._running_task = None
 
     async def connection_handler(self, connection: ServerConnection) -> None:
         # We should receive the device uid first
