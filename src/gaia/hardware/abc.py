@@ -379,8 +379,9 @@ class Hardware(metaclass=_MetaHardware):
                 i2c_address=self._address_book.primary.multiplexer_address)
         else:
             self._multiplexer = None
+        measures = measures or []
         self._measures: dict[Measure, Unit | None] = self._format_measures(measures)
-        self._plants = plants
+        self._plants = plants or []
 
     def __repr__(self) -> str:  # pragma: no cover
         return (
