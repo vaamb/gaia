@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
+from websockets.exceptions import ConnectionClosed
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
@@ -800,7 +801,11 @@ class WebSocketHardware(Hardware):
         while not self._stop_event.is_set():
             connection = self._websocket_manager.get_connection(self.uid)
             if connection is not None:
-                await self._listening_loop(connection)
+                try:
+                    await self._listening_loop(connection)
+                except ConnectionClosed:
+                    # The connection closed, try to reconnect
+                    pass
             try:
                 await wait_for(self._stop_event.wait(), wait_time)
             except TimeoutError:
