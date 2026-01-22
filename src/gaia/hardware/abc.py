@@ -844,14 +844,14 @@ class WebSocketHardware(Hardware):
     async def _send_msg_and_forget(self, msg: Any) -> None:
         connection = self._websocket_manager.get_connection(self.uid)
         if connection is None:
-            raise RuntimeError(f"Hardware '{self.uid}' is not registered.")
+            raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
         payload = WebsocketMessage(uuid=None, data=msg).model_dump_json()
         await connection.send(payload)
 
     async def _send_msg_and_wait(self, msg: Any) -> Any:
         connection = self._websocket_manager.get_connection(self.uid)
         if connection is None:
-            raise RuntimeError(f"Hardware '{self.uid}' is not registered.")
+            raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
         uuid: UUID = uuid4()
         self._requests[str(uuid)] = Future()
         payload = WebsocketMessage(uuid=uuid, data=msg).model_dump_json()
