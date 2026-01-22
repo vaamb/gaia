@@ -41,6 +41,9 @@ class InvalidAddressError(ValueError):
     pass
 
 
+# ---------------------------------------------------------------------------
+#   Enums
+# ---------------------------------------------------------------------------
 class Measure(Enum):
     """Enum representing different types of measurements that can be taken by hardware."""
     absolute_humidity = "absolute_humidity"
@@ -80,6 +83,9 @@ class AddressType(Enum):
     WEBSOCKET = "WEBSOCKET"
 
 
+# ---------------------------------------------------------------------------
+#   Utility functions
+# ---------------------------------------------------------------------------
 def ip_is_valid(address: str) -> bool:
     import re
 
@@ -99,6 +105,14 @@ def called_through(function: str) -> bool:
         if frame.function == function:
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+#   Validation models
+# ---------------------------------------------------------------------------
+class WebsocketMessage(gv.BaseModel):
+    uuid: UUID | None = None
+    data: Any
 
 
 # ---------------------------------------------------------------------------
@@ -767,11 +781,6 @@ class Camera(Hardware):
             image_path = self.camera_dir / image_path
         await run_sync(image.write, image_path)
         return image_path
-
-
-class WebsocketMessage(gv.BaseModel):
-    uuid: UUID | None = None
-    data: Any
 
 
 class WebSocketHardware(Hardware):
