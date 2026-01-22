@@ -866,6 +866,11 @@ class WebSocketHardware(Hardware):
         await sleep(0.1)  # Allow the task to start
 
     async def unregister(self) -> None:
+        try:
+            await self._send_msg_and_forget("disconnecting")
+        except ConnectionError:
+            # The hardware is not connected
+            pass
         await self._websocket_manager.unregister_hardware(self.uid)
         self._stop_event.set()
         if self._task is not None:
