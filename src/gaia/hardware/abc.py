@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import inspect
+from logging import getLogger
 from pathlib import Path
 import textwrap
 from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
@@ -12,6 +13,7 @@ from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
+from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosed
 
 import gaia_validators as gv
@@ -796,7 +798,7 @@ class WebSocketHardware(Hardware):
             engine_cfg: EngineConfig = self.ecosystem.engine.config
             self.__class__._websocket_manager = WebSocketHardwareManager(engine_cfg)
         self._websocket_manager = self.__class__._websocket_manager
-        self._logger = self._websocket_manager.logger
+        self._logger = getLogger(f"gaia.hardware.websocket.{self.uid}")
         self._requests: dict[UUID: Future] = {}
         self._task: Task | None = None
         self._stop_event: Event = Event()
@@ -828,16 +830,15 @@ class WebSocketHardware(Hardware):
             try:
                 parsed_msg = WebsocketMessage.model_validate_json(msg)
                 uuid: UUID = parsed_msg.uuid
-                data: dict = parsed_msg.data
+                data: Any = parsed_msg.data
                 if uuid not in self._requests:
                     self.ecosystem.logger.error(
-                        f"Hardware '{self.uid}' received a message with an "
-                        f"unknown uuid: {uuid}")
+                        f"Received a message with an unknown uuid {uuid}: {data}")
                     continue
                 self._requests[uuid].set_result(data)
-            except Exception as e:
+            except ValidationError:
                 self.ecosystem.logger.error(
-                    f"Hardware '{self.uid}' encountered an error parsing message: {e}")
+                    f"Encountered an error while parsing the message {msg}")
                 continue
 
     async def _send_msg_and_forget(self, msg: Any) -> None:
