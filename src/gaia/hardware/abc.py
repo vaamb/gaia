@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
-from pydantic import ValidationError
+from pydantic import RootModel, ValidationError
 from websockets.exceptions import ConnectionClosed
 
 import gaia_validators as gv
@@ -115,6 +115,9 @@ def called_through(function: str) -> bool:
 class WebsocketMessage(gv.BaseModel):
     uuid: UUID | None = None
     data: Any
+
+
+SensorRecords = RootModel[list[gv.SensorRecord]]
 
 
 # ---------------------------------------------------------------------------
@@ -1002,3 +1005,62 @@ class gpioSensor(BaseSensor, gpioHardware):
 class i2cSensor(BaseSensor, i2cHardware):
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
+
+
+class WebSocketSensor(BaseSensor, WebSocketHardware):
+    async def get_data(self) -> list[gv.SensorRecord]:
+        try:
+            data = await self._send_msg_and_wait({"action": "send_data"})
+        except ConnectionError:
+            return []
+        try:
+            data: list[gv.SensorRecord] = SensorRecords.model_validate(data).model_dump()
+        except ValidationError:
+            self._logger.error(f"Received an invalid `SensorRecord`: {data}")
+            return []
+        else:
+            return data
+
+
+class WebSocketSwitch(Switch, WebSocketHardware):
+    async def turn_on(self) -> None:
+        try:
+            response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "on"})
+            response = gv.RequestResult.model_validate(response)
+        except ConnectionError:
+            self._logger.error("Could not connect to the device")
+        else:
+            if response.status != gv.Result.success:
+                base_msg = "Failed to turn on the switch"
+                if response.message:
+                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                self._logger.error(base_msg)
+
+
+    async def turn_off(self) -> None:
+        try:
+            response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "off"})
+            response = gv.RequestResult.model_validate(response)
+        except ConnectionError:
+            self._logger.error("Could not connect to the device")
+        else:
+            if response.status != gv.Result.success:
+                base_msg = "Failed to turn off the switch"
+                if response.message:
+                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                self._logger.error(base_msg)
+
+
+class WebSocketDimmer(Dimmer, WebSocketHardware):
+    async def set_pwm_level(self, level) -> None:
+        try:
+            response = await self._send_msg_and_wait({"action": "set_level", "data": level})
+            response = gv.RequestResult.model_validate(response)
+        except ConnectionError:
+            self._logger.error("Could not connect to the device")
+        else:
+            if response.status != gv.Result.success:
+                base_msg = f"Failed to set the level to {level}"
+                if response.message:
+                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                self._logger.error(base_msg)
