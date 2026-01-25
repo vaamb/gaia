@@ -677,9 +677,7 @@ class Camera(Hardware):
         check_dependencies()
         super().__init__(*args, **kwargs)
         if not self._address_book.primary.type == AddressType.PICAMERA:  # pragma: no cover
-            raise ValueError(
-                "Camera address must be 'PICAMERA'"
-            )
+            raise ValueError("Camera address must be 'PICAMERA'")
         self._device: Any | None = None
         self._camera_dir: Path | None = None
 
@@ -740,7 +738,14 @@ class Camera(Hardware):
 # ---------------------------------------------------------------------------
 #   Subclasses based on hardware type/function
 # ---------------------------------------------------------------------------
-class Switch(Hardware):
+class Actuator(Hardware):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        if self.type not in gv.HardwareType.actuator:
+            raise ValueError("Type should be in ´HardwareType.actuator´")
+
+
+class Switch(Actuator):
     async def turn_on(self) -> None:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
@@ -752,7 +757,7 @@ class Switch(Hardware):
         )  # pragma: no cover
 
 
-class Dimmer(Hardware):
+class Dimmer(Actuator):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self._address_book.secondary is None:  # pragma: no cover
