@@ -9,7 +9,8 @@ from gaia import Ecosystem, Engine
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
     _MetaHardware, BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
-    Measure, OneWireHardware, PlantLevelHardware, Switch, Unit)
+    Measure, OneWireHardware, PlantLevelHardware, Switch, Unit, WebSocketHardware)
+from gaia.hardware.actuators.websocket import WebSocketDimmer
 from gaia.hardware.camera import PiCamera
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
@@ -23,6 +24,9 @@ async def test_hardware_models(ecosystem: Ecosystem):
     for hardware_cls in hardware_models.values():
         # Create required config
         hardware_cls: Type[Hardware]
+        if hardware_cls is WebSocketDimmer:
+            # Its address type is of a special case
+            continue
         hardware_cfg: gv.HardwareConfigDict = {
             "uid": create_uid(16),
             "name": "VirtualTestHardware",
@@ -43,6 +47,8 @@ async def test_hardware_models(ecosystem: Ecosystem):
             hardware_cfg["address"] = "onewire_default"
         elif issubclass(hardware_cls, PiCamera):
             hardware_cfg["address"] = "picamera"
+        elif issubclass(hardware_cls, WebSocketHardware):
+            hardware_cfg["address"] = "websocket_127.0.0.1"
         else:
             raise ValueError("Unknown hardware address")
         # Setup model
@@ -76,10 +82,12 @@ async def test_hardware_models(ecosystem: Ecosystem):
             assert hardware.pin
         if isinstance(hardware, i2cHardware):
             hardware._get_i2c()
+        if isinstance(hardware, WebSocketHardware):
+            await hardware.register()
         if isinstance(hardware, PlantLevelHardware):
             assert hardware.plants
         if isinstance(hardware, BaseSensor):
-            assert await hardware.get_data()
+            assert isinstance(await hardware.get_data(), list)
         if isinstance(hardware, Camera):
             assert hardware.camera_dir
             assert await hardware.get_image((42, 21))
@@ -88,6 +96,8 @@ async def test_hardware_models(ecosystem: Ecosystem):
         if isinstance(hardware, Switch):
             await hardware.turn_on()
             await hardware.turn_off()
+        if isinstance(hardware, WebSocketHardware):
+            await hardware.unregister()
         print(f"Test succeeded for hardware '{hardware}'")
 
 
