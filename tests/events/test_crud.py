@@ -7,8 +7,8 @@ import gaia_validators as gv
 from gaia.events import Events as Events_
 
 from ..data import (
-    climate_dict, debug_log_file, ecosystem_uid, engine_uid, hardware_info,
-    hardware_uid, IO_dict, weather_cfg)
+    climate_dict, debug_log_file, ecosystem_uid, engine_uid, hardware_uid,
+    humidifier_info, humidifier_uid, IO_dict, weather_cfg)
 from ..utils import get_logs_content, MockDispatcher
 
 
@@ -636,7 +636,7 @@ async def test_delete_weather_event(events_handler: Events):
 async def test_create_hardware(events_handler: Events):
     events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]["IO"] = {}
     valid_hardware_info = {
-        **hardware_info,
+        **humidifier_info,
         "model": "gpioSwitch",
         "address": "GPIO_11",  # Use a free address
     }
@@ -685,7 +685,7 @@ async def test_update_hardware_failure(events_handler: Events):
 @pytest.mark.asyncio
 async def test_update_hardware(events_handler: Events):
     valid_hardware_info = {
-        "uid": hardware_uid,
+        "uid": humidifier_uid,
         "model": "gpioSwitch",
         "address": "GPIO_11",  # Use a free address
     }
@@ -704,7 +704,7 @@ async def test_update_hardware(events_handler: Events):
         events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.HardwareConfigPayload(**data_update[0])
     for hardware in verified.data:
-        if hardware.uid != hardware_uid:
+        if hardware.uid != humidifier_uid:
             continue
         assert hardware.address == valid_hardware_info["address"]
         assert hardware.model == valid_hardware_info["model"]

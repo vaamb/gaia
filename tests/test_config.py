@@ -11,8 +11,8 @@ from gaia.subroutines import subroutine_names
 from gaia.utils import get_yaml
 
 from .data import (
-    debug_log_file, ecosystem_info, ecosystem_name, lighting_method, sensor_info,
-    sensor_uid, sun_times)
+    debug_log_file, ecosystem_info, ecosystem_name, humidifier_info, humidifier_uid,
+    lighting_method, sensor_info, sensor_uid, sun_times)
 from .utils import get_logs_content
 
 
@@ -357,7 +357,7 @@ class TestEcosystemConfigHardware:
 
     def test_create_success(self, ecosystem_config: EcosystemConfig):
         valid_hardware_info = {
-            **sensor_info,
+            **humidifier_info,
             "model": "gpioSwitch",
             "address": "GPIO_11",  # Use a free address
         }
@@ -370,24 +370,24 @@ class TestEcosystemConfigHardware:
     def test_update_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):
             hardware_address = sensor_info["address"]
-            ecosystem_config.update_hardware(sensor_uid, address=hardware_address)
+            ecosystem_config.update_hardware(humidifier_uid, address=hardware_address)
 
     def test_update_fail_model(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match="This hardware model is not supported"):
-            ecosystem_config.update_hardware(sensor_uid, model="Invalid")
+            ecosystem_config.update_hardware(humidifier_uid, model="Invalid")
 
     def test_update_fail_type(self, ecosystem_config: EcosystemConfig):
         error_msg = "VALUE ERROR at parameter 'type', input 'Invalid' is not valid"
         with pytest.raises(ValueError, match=error_msg):
-            ecosystem_config.update_hardware(sensor_uid, type="Invalid")
+            ecosystem_config.update_hardware(humidifier_uid, type="Invalid")
 
     def test_update_fail_level(self, ecosystem_config: EcosystemConfig):
         error_msg = "VALUE ERROR at parameter 'level', input 'Invalid' is not valid"
         with pytest.raises(ValueError, match=error_msg):
-            ecosystem_config.update_hardware(sensor_uid, level="Invalid")
+            ecosystem_config.update_hardware(humidifier_uid, level="Invalid")
 
     def test_update_success(self, ecosystem_config: EcosystemConfig):
-        ecosystem_config.update_hardware(sensor_uid, model="gpioSwitch", address="BOARD_37")
+        ecosystem_config.update_hardware(humidifier_uid, model="gpioSwitch", address="BOARD_37")
 
     def test_delete_fail_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(HardwareNotFound):
