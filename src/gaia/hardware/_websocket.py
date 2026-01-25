@@ -34,7 +34,8 @@ class WebSocketHardwareManager:
         self._registered_hardware.add(hardware_uid)
 
     async def unregister_hardware(self, hardware_uid: str) -> None:
-        await self.device_connections[hardware_uid].close()
+        if hardware_uid in self.device_connections:
+            await self.device_connections[hardware_uid].close()
         self._registered_hardware.remove(hardware_uid)
 
     @property
