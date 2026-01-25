@@ -1,28 +1,36 @@
 from __future__ import annotations
 
+from asyncio import create_task, Event, Future, sleep, Task, wait_for
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import inspect
+from logging import getLogger
 from pathlib import Path
 import textwrap
 from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
+from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
+from pydantic import RootModel, ValidationError
+from websockets.exceptions import ConnectionClosed
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.exceptions import HardwareNotFound
+from gaia.hardware._websocket import WebSocketHardwareManager
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
 if TYPE_CHECKING:  # pragma: no cover
-    from gaia import Ecosystem
+    from websockets import ServerConnection
+
+    from gaia import Ecosystem, EngineConfig
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -35,6 +43,9 @@ class InvalidAddressError(ValueError):
     pass
 
 
+# ---------------------------------------------------------------------------
+#   Enums
+# ---------------------------------------------------------------------------
 class Measure(Enum):
     """Enum representing different types of measurements that can be taken by hardware."""
     absolute_humidity = "absolute_humidity"
@@ -71,6 +82,17 @@ class AddressType(Enum):
     SPI = "SPI"
     ONEWIRE = "ONEWIRE"
     PICAMERA = "PICAMERA"
+    WEBSOCKET = "WEBSOCKET"
+
+
+# ---------------------------------------------------------------------------
+#   Utility functions
+# ---------------------------------------------------------------------------
+def ip_is_valid(address: str) -> bool:
+    import re
+
+    ip_regex: str = r"(?:([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\.(?!$)|$)){4}"
+    return bool(re.match(ip_regex, address))
 
 
 def str_to_hex(address: str) -> int:
@@ -85,6 +107,17 @@ def called_through(function: str) -> bool:
         if frame.function == function:
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+#   Validation models
+# ---------------------------------------------------------------------------
+class WebsocketMessage(gv.BaseModel):
+    uuid: UUID | None = None
+    data: Any
+
+
+SensorRecords = RootModel[list[gv.SensorRecord]]
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +240,18 @@ class Address:
             self.multiplexer_address = None
             self.multiplexer_channel = None
 
+        # The hardware is using WebSockets
+        elif address_type.lower() == "websocket":
+            if not ip_is_valid(address_number):
+                raise InvalidAddressError(
+                    "Invalid websocket address format. Expected format: "
+                    "'WEBSOCKET_<ip_addr>'"
+                )
+            self.type = AddressType.WEBSOCKET
+            self.main = address_number
+            self.multiplexer_address = None
+            self.multiplexer_channel = None
+
         # The address is not valid
         else:
             raise InvalidAddressError(f"Invalid address type: {address_type}. {self._hint()}")
@@ -216,6 +261,8 @@ class Address:
             return f"{self.type.value}"
         elif self.type == AddressType.ONEWIRE:
             return f"{self.type.value}_{self.main if self.main is not None else 'default'}"
+        elif self.type == AddressType.WEBSOCKET:
+            return f"{self.type.value}_{self.main}"
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
@@ -435,6 +482,8 @@ class Hardware(metaclass=_MetaHardware):
             await hardware.turn_off()
         if isinstance(hardware, Dimmer):
             await hardware.set_pwm_level(0)
+        if isinstance(hardware, WebSocketHardware):
+            await hardware.register()
         return hardware
 
     async def terminate(self) -> None:
@@ -443,6 +492,8 @@ class Hardware(metaclass=_MetaHardware):
             await self.turn_off()
         if isinstance(self, Dimmer):
             await self.set_pwm_level(0)
+        if isinstance(self, WebSocketHardware):
+            await self.unregister()
         # Reset actuator handlers using this hardware
         for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
             if self in actuator_handler.get_linked_actuators():
@@ -737,6 +788,103 @@ class Camera(Hardware):
         return image_path
 
 
+class WebSocketHardware(Hardware):
+    _websocket_manager: WebSocketHardwareManager | None = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self._address_book.primary.type == AddressType.WEBSOCKET:  # pragma: no cover
+            raise ValueError(
+                "WebSocketHardware address must be of type: 'WEBSOCKET_ipAddress'"
+            )
+        if self.__class__._websocket_manager is None:
+            engine_cfg: EngineConfig = self.ecosystem.engine.config
+            self.__class__._websocket_manager = WebSocketHardwareManager(engine_cfg)
+        self._websocket_manager = self.__class__._websocket_manager
+        self._logger = getLogger(f"gaia.hardware.websocket.{self.uid}")
+        self._requests: dict[UUID: Future] = {}
+        self._task: Task | None = None
+        self._stop_event: Event = Event()
+
+    @property
+    def connected(self) -> bool:
+        return self._websocket_manager.get_connection(self.uid) is not None
+
+    async def _connection_loop(self) -> None:
+        wait_time: int = 1
+        while not self._stop_event.is_set():
+            connection = self._websocket_manager.get_connection(self.uid)
+            if connection is not None:
+                try:
+                    await self._listening_loop(connection)
+                except ConnectionClosed:
+                    # The connection closed, try to reconnect
+                    pass
+            try:
+                await wait_for(self._stop_event.wait(), wait_time)
+            except TimeoutError:
+                wait_time *= 2
+                wait_time = min(32, wait_time)
+            else:
+                wait_time = 1
+
+    async def _listening_loop(self, connection: ServerConnection) -> None:
+        async for msg in connection:
+            try:
+                parsed_msg = WebsocketMessage.model_validate_json(msg)
+                uuid: UUID = parsed_msg.uuid
+                data: Any = parsed_msg.data
+                if uuid not in self._requests:
+                    self.ecosystem.logger.error(
+                        f"Received a message with an unknown uuid {uuid}: {data}")
+                    continue
+                self._requests[uuid].set_result(data)
+            except ValidationError:
+                self.ecosystem.logger.error(
+                    f"Encountered an error while parsing the message {msg}")
+                continue
+
+    async def _send_msg_and_forget(self, msg: Any) -> None:
+        connection = self._websocket_manager.get_connection(self.uid)
+        if connection is None:
+            raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
+        payload = WebsocketMessage(uuid=None, data=msg).model_dump_json()
+        await connection.send(payload)
+
+    async def _send_msg_and_wait(self, msg: Any) -> Any:
+        connection = self._websocket_manager.get_connection(self.uid)
+        if connection is None:
+            raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
+        uuid: UUID = uuid4()
+        self._requests[str(uuid)] = Future()
+        payload = WebsocketMessage(uuid=uuid, data=msg).model_dump_json()
+        await connection.send(payload)
+        return await self._requests[str(uuid)]
+
+    async def register(self) -> None:
+        if not self._websocket_manager.is_running:
+            await self._websocket_manager.start()
+        await self._websocket_manager.register_hardware(self.uid)
+        self._task = create_task(self._connection_loop())
+        await sleep(0.1)  # Allow the task to start
+
+    async def unregister(self) -> None:
+        try:
+            await self._send_msg_and_forget("disconnecting")
+        except ConnectionError:
+            # The hardware is not connected
+            pass
+        await self._websocket_manager.unregister_hardware(self.uid)
+        self._stop_event.set()
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+        # If not more hardware are registered, there is no need to keep the manager
+        #  running
+        if self._websocket_manager.registered_hardware == 0:
+            await self._websocket_manager.stop()
+
+
 # ---------------------------------------------------------------------------
 #   Subclasses based on hardware type/function
 # ---------------------------------------------------------------------------
@@ -857,3 +1005,62 @@ class gpioSensor(BaseSensor, gpioHardware):
 class i2cSensor(BaseSensor, i2cHardware):
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
+
+
+class WebSocketSensor(BaseSensor, WebSocketHardware):
+    async def get_data(self) -> list[gv.SensorRecord]:
+        try:
+            data = await self._send_msg_and_wait({"action": "send_data"})
+        except ConnectionError:
+            return []
+        try:
+            data: list[gv.SensorRecord] = SensorRecords.model_validate(data).model_dump()
+        except ValidationError:
+            self._logger.error(f"Received an invalid `SensorRecord`: {data}")
+            return []
+        else:
+            return data
+
+
+class WebSocketSwitch(Switch, WebSocketHardware):
+    async def turn_on(self) -> None:
+        try:
+            response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "on"})
+            response = gv.RequestResult.model_validate(response)
+        except ConnectionError:
+            self._logger.error("Could not connect to the device")
+        else:
+            if response.status != gv.Result.success:
+                base_msg = "Failed to turn on the switch"
+                if response.message:
+                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                self._logger.error(base_msg)
+
+
+    async def turn_off(self) -> None:
+        try:
+            response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "off"})
+            response = gv.RequestResult.model_validate(response)
+        except ConnectionError:
+            self._logger.error("Could not connect to the device")
+        else:
+            if response.status != gv.Result.success:
+                base_msg = "Failed to turn off the switch"
+                if response.message:
+                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                self._logger.error(base_msg)
+
+
+class WebSocketDimmer(Dimmer, WebSocketHardware):
+    async def set_pwm_level(self, level) -> None:
+        try:
+            response = await self._send_msg_and_wait({"action": "set_level", "data": level})
+            response = gv.RequestResult.model_validate(response)
+        except ConnectionError:
+            self._logger.error("Could not connect to the device")
+        else:
+            if response.status != gv.Result.success:
+                base_msg = f"Failed to set the level to {level}"
+                if response.message:
+                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                self._logger.error(base_msg)
