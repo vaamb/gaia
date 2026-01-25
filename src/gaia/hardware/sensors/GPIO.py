@@ -4,7 +4,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import BaseSensor, gpioHardware, hardware_logger
+from gaia.hardware.abc import BaseSensor, gpioSensor, hardware_logger
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 
@@ -19,7 +19,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   GPIO sensors
 # ---------------------------------------------------------------------------
-class DHTSensor(TempHumSensor, gpioHardware):
+class DHTSensor(TempHumSensor, gpioSensor):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Load dht device.
