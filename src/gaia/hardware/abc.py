@@ -742,7 +742,7 @@ class Actuator(Hardware):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self.type not in gv.HardwareType.actuator:
-            raise ValueError("Type should be in ´HardwareType.actuator´")
+            raise ValueError("Type should be in `HardwareType.actuator`")
 
 
 class Switch(Actuator):
