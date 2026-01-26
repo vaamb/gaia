@@ -259,7 +259,7 @@ class Address:
         elif self.type == AddressType.ONEWIRE:
             return f"{self.type.value}_{self.main if self.main is not None else 'default'}"
         elif self.type == AddressType.WEBSOCKET:
-            return f"{self.type.value}_{self.main}"
+            return f"{self.type.value}_{self.main}" if self.main else f"{self.type.value}"
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
@@ -790,7 +790,8 @@ class WebSocketHardware(Hardware):
         super().__init__(*args, **kwargs)
         if not self._address_book.primary.type == AddressType.WEBSOCKET:  # pragma: no cover
             raise ValueError(
-                "WebSocketHardware address must be of type: 'WEBSOCKET_ipAddress'"
+                "WebSocketHardware address must be of type: 'WEBSOCKET' or "
+                "'WEBSOCKET_<remote_ip_addr>'"
             )
         # During data validation, ecosystem is not available
         if self.ecosystem and WebSocketHardware._websocket_manager is None:
