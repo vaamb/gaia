@@ -64,10 +64,13 @@ async def test_hardware_models(ecosystem: Ecosystem):
             raise ValueError("Unknown hardware type")
         # Setup measures
         if issubclass(hardware_cls, BaseSensor):
-            hardware_cfg["measures"] = [
-                measure.name
-                for measure in hardware_cls.measures_available.keys()
-            ]
+            if hardware_cls.measures_available is not Ellipsis:
+                hardware_cfg["measures"] = [
+                    measure.name
+                    for measure in hardware_cls.measures_available.keys()
+                ]
+            else:
+                hardware_cfg["measures"] = ["temperature|°C", "humidity|%"]
         # Setup plants
         if issubclass(hardware_cls, PlantLevelHardware):
             hardware_cfg["level"] = gv.HardwareLevel.plants
