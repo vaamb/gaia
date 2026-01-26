@@ -100,7 +100,7 @@ class WebSocketHardwareManager:
 
     def get_connection(self, device_uid: str) -> ServerConnection | None:
         if device_uid not in self._registered_hardware:
-            raise RuntimeError(f"Hardware {device_uid} was never registered")
+            raise ConnectionError(f"Hardware {device_uid} was never registered")
         try:
             return self.device_connections[device_uid]
         except KeyError:
