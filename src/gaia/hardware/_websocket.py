@@ -21,7 +21,7 @@ class WebSocketHardwareManager:
         if password == "gaia" and engine_config.app_config.PRODUCTION:
             raise ValueError("Production build should not use `gaia` as a password")
         self._password: str = password
-        self._registered_hardware: set[str] = set()
+        self._registered_hardware: dict[str, str] = {}
         self.device_connections: dict[str, ServerConnection] = {}
         self._running_task: Task | None = None
         self._stop_event: Event = Event()
@@ -30,13 +30,13 @@ class WebSocketHardwareManager:
     def is_running(self) -> bool:
         return self._running_task is not None
 
-    async def register_hardware(self, hardware_uid: str) -> None:
-        self._registered_hardware.add(hardware_uid)
+    async def register_hardware(self, hardware_uid: str, remote_ip: str | None = None) -> None:
+        self._registered_hardware[hardware_uid] = remote_ip
 
     async def unregister_hardware(self, hardware_uid: str) -> None:
         if hardware_uid in self.device_connections:
             await self.device_connections[hardware_uid].close()
-        self._registered_hardware.remove(hardware_uid)
+        self._registered_hardware.pop(hardware_uid)
 
     @property
     def registered_hardware(self) -> int:
@@ -76,6 +76,16 @@ class WebSocketHardwareManager:
             self.logger.warning(
                 f"Device {device_uid} is trying to connect but is not in the "
                 f"ecosystem config, closing connection")
+            await connection.close()
+            return
+        expected_ip = self._registered_hardware[device_uid]
+        if (
+                expected_ip is not None
+                and connection.remote_address[0] != expected_ip
+        ):
+            self.logger.warning(
+                f"Device {device_uid} is trying to connect from an unexpected "
+                f"address, closing connection")
             await connection.close()
             return
         # Store the connection for later retrieval

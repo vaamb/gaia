@@ -239,10 +239,10 @@ class Address:
 
         # The hardware is using WebSockets
         elif address_type.lower() == "websocket":
-            if not ip_is_valid(address_number):
+            if address_number is not None and not ip_is_valid(address_number):
                 raise InvalidAddressError(
                     "Invalid websocket address format. Expected format: "
-                    "'WEBSOCKET_<ip_addr>'"
+                    "'WEBSOCKET' or 'WEBSOCKET_<remote_ip_addr>'"
                 )
             self.type = AddressType.WEBSOCKET
             self.main = address_number
@@ -859,7 +859,8 @@ class WebSocketHardware(Hardware):
     async def register(self) -> None:
         if not self._websocket_manager.is_running:
             await self._websocket_manager.start()
-        await self._websocket_manager.register_hardware(self.uid)
+        await self._websocket_manager.register_hardware(
+            self.uid, self.address_book.primary.main)
         self._task = create_task(self._connection_loop())
         await sleep(0.1)  # Allow the task to start
 
