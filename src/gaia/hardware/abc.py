@@ -775,13 +775,13 @@ class Dimmer(Actuator):
 
 
 class BaseSensor(Hardware):
-    measures_available: ClassVar[dict[Measure, Unit | None] | None] = None
+    measures_available: ClassVar[dict[Measure, Unit | None] | Ellipsis | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
         if self.measures_available is None:
             raise NotImplementedError(
-                "'cls.measures_available' should be a dict with 'measure: unit' "
-                "as entries."
+                "'cls.measures_available' should either be a dict with "
+                "´measure: unit´ as entries, or ´...´ as value."
             )
         kwargs["type"] = gv.HardwareType.sensor
         super().__init__(*args, **kwargs)
@@ -804,26 +804,36 @@ class BaseSensor(Hardware):
     ) -> dict[Measure, Unit | None]:
         formatted_measures: dict[Measure, Unit | None] = \
             super()._format_measures(measures)
+
+        # If no measure is specified ...
         if not formatted_measures:
-            formatted_measures = {
-                measure: unit
-                for measure, unit in self.measures_available.items()
-            }
-        else:
-            err = ""
-            validated: dict[Measure, Unit | None] = {}
-            for measure, unit in self.measures_available.items():
-                if measure not in self.measures_available:
-                    err += (
-                        f"Measure '{measure.name}' is not valid for sensor "
-                        f"model '{self.model}'.\n"
-                    )
-                else:
-                    validated[measure] = self.measures_available[measure]
-            formatted_measures = validated
-            if err:
-                raise ValueError(err)
-        return formatted_measures
+            # ... make sure we have some default measures available ...
+            if self.measures_available is Ellipsis:
+                raise ValueError(
+                    f"Measures must be specified for sensor model '{self.model}'."
+                )
+            # ... and return them
+            return self.measures_available
+
+        # If we don't have any default measures available don't perform any check
+        if self.measures_available is Ellipsis:
+            return formatted_measures
+
+        # Otherwise, validate the measures
+        err = ""
+        for measure in formatted_measures:
+            if measure not in self.measures_available:
+                err += (
+                    f"Measure '{measure.name}' is not valid for sensor "
+                    f"model '{self.model}'.\n"
+                )
+        if err:
+            raise ValueError(err)
+        # Assign the unit from the default measures available
+        return {
+            measure: self.measures_available[measure]
+            for measure in formatted_measures
+        }
 
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
