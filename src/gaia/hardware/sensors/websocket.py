@@ -11,7 +11,7 @@ SensorRecords = RootModel[list[gv.SensorRecord]]
 
 
 class WebSocketSensor(BaseSensor, WebSocketHardware):
-    measures_available = {}
+    measures_available = ...
 
     async def get_data(self) -> list[gv.SensorRecord]:
         try:
