@@ -55,7 +55,7 @@ ir2c_sensor_ens160_info: gv.AnonymousHardwareConfigDict = {
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
 #    "groups": None,
-    "measures": ["light"],
+    "measures": ["TVOC"],
 #    "plants": [],
     "multiplexer_model": "TCA9548A",
 }
