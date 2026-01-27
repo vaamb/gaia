@@ -1,7 +1,10 @@
+from asyncio import create_task, sleep
+
 import math
 from typing import Type
 
 import pytest
+from websockets.asyncio.client import connect
 
 import gaia_validators as gv
 
@@ -9,14 +12,17 @@ from gaia import Ecosystem, Engine
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
     _MetaHardware, BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
-    Measure, OneWireHardware, PlantLevelHardware, Switch, Unit, WebSocketHardware)
-from gaia.hardware.actuators.websocket import WebSocketDimmer
+    Measure, OneWireHardware, PlantLevelHardware, Switch, Unit, WebSocketHardware,
+    WebsocketMessage)
+from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.camera import PiCamera
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
 
 from .data import (
-    ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid)
+    debug_log_file, ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid,
+    sensor_uid, ws_actuator_uid)
+from .utils import get_logs_content
 
 
 @pytest.mark.asyncio
@@ -131,6 +137,47 @@ def test_i2c_address_injection(ecosystem: Ecosystem):
         if hardware.address_book.secondary is not None:
             assert hardware.address_book.secondary.main not in ("default", "def", 0x0)
             assert hardware.address_book.secondary.multiplexer_address != 0x0
+
+
+@pytest.mark.asyncio
+class TestWebsocketHardware:
+    async def test_hardware(self, ecosystem: Ecosystem):
+        hardware: WebSocketSwitch = ecosystem.hardware[ws_actuator_uid]
+        # Hardware registration is taken care of by the ecosystem setup
+
+        # Test device connection
+        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+        await websocket.send(hardware.uid)
+        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+        with get_logs_content(ecosystem.engine.config.logs_dir / debug_log_file) as logs:
+            assert f"Device {hardware.uid} connected" in logs
+
+        # Test ´_send_msg_and_forget()´
+        msg = "Test msg"
+        await hardware._send_msg_and_forget(msg)
+        raw_response = await websocket.recv()
+        response = WebsocketMessage.model_validate_json(raw_response)
+        assert response.uuid is None
+        assert response.data == msg
+
+        # Test ´_send_msg_and_wait()´
+        # Send message from Gaia to device
+        task = create_task(hardware._send_msg_and_wait(msg))
+        await sleep(0.1)
+        raw_response = await websocket.recv()
+        response = WebsocketMessage.model_validate_json(raw_response)
+        assert response.uuid is not None
+        assert response.data == msg
+        # Get response, from device to Gaia
+        payload = WebsocketMessage(uuid=response.uuid, data=msg * 2).model_dump_json()
+        await websocket.send(payload)
+        await sleep(0.1)
+        response = await task
+        assert response == msg * 2
+
+        # Stop the manager as otherwise the test will hang forever
+        await hardware._websocket_manager.stop()
+        # Hardware unregistration is taken care of by the ecosystem teardown
 
 
 @pytest.mark.asyncio

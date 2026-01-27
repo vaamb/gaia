@@ -136,6 +136,36 @@ inactive_info: gv.AnonymousHardwareConfigDict = {
 }
 
 
+ws_sensor_uid = "P6lkNoGUGeTRm8kI"
+ws_sensor_info: gv.AnonymousHardwareConfigDict = {
+    "name": "RemoteSensor",
+    "active": True,
+    "address": "websocket",
+    "model": "WebSocketSensor",
+    "type": gv.HardwareType.sensor,
+    "level": gv.HardwareLevel.environment,
+#    "groups": None,
+    "measures": ["temperature|°C", "humidity|%"],
+#    "plants": [],
+#    "multiplexer_model": None,
+}
+
+
+ws_actuator_uid = "pkMEVC918eJehEz7"
+ws_actuator_info: gv.AnonymousHardwareConfigDict = {
+    "name": "WSActuator",
+    "active": True,
+    "address": "websocket_127.0.0.1",
+    "model": "WebSocketSwitch",
+    "type": gv.HardwareType.heater,
+    "level": gv.HardwareLevel.environment,
+#    "groups": None,
+#    "measures": [],
+#    "plants": [],
+#    "multiplexer_model": None,
+}
+
+
 hardware_uid = sensor_uid
 hardware_info = sensor_info
 
@@ -149,6 +179,8 @@ IO_dict = {
     humidifier_uid: humidifier_info,
     camera_uid: camera_info,
     inactive_uid: inactive_info,
+    ws_sensor_uid: ws_sensor_info,
+    ws_actuator_uid: ws_actuator_info,
 }
 
 
