@@ -14,7 +14,7 @@ from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
 from pydantic import ValidationError
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
@@ -869,7 +869,7 @@ class WebSocketHardware(Hardware):
     async def unregister(self) -> None:
         try:
             await self._send_msg_and_forget("disconnecting")
-        except ConnectionError:
+        except (ConnectionError, ConnectionClosedOK):
             # The device is not connected
             pass
         await self._websocket_manager.unregister_hardware(self.uid)

@@ -1,5 +1,7 @@
 from typing import Type
 
+from websockets import ConnectionClosedOK
+
 import gaia_validators as gv
 
 from gaia.hardware.abc import Dimmer, Hardware, Switch, WebSocketHardware
@@ -10,7 +12,7 @@ class WebSocketSwitch(Switch, WebSocketHardware):
         try:
             response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "on"})
             response = gv.RequestResult.model_validate(response)
-        except ConnectionError:
+        except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
         else:
             if response.status != gv.Result.success:
@@ -24,7 +26,7 @@ class WebSocketSwitch(Switch, WebSocketHardware):
         try:
             response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "off"})
             response = gv.RequestResult.model_validate(response)
-        except ConnectionError:
+        except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
         else:
             if response.status != gv.Result.success:
@@ -39,7 +41,7 @@ class WebSocketDimmer(Dimmer, WebSocketHardware):
         try:
             response = await self._send_msg_and_wait({"action": "set_level", "data": level})
             response = gv.RequestResult.model_validate(response)
-        except ConnectionError:
+        except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
         else:
             if response.status != gv.Result.success:
