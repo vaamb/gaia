@@ -792,10 +792,11 @@ class WebSocketHardware(Hardware):
             raise ValueError(
                 "WebSocketHardware address must be of type: 'WEBSOCKET_ipAddress'"
             )
-        if self.__class__._websocket_manager is None:
-            engine_cfg: EngineConfig = self.ecosystem.engine.config
-            self.__class__._websocket_manager = WebSocketHardwareManager(engine_cfg)
-        self._websocket_manager = self.__class__._websocket_manager
+        # During data validation, ecosystem is not available
+        if self.ecosystem and WebSocketHardware._websocket_manager is None:
+            manager = WebSocketHardwareManager(self.ecosystem.engine.config)
+            WebSocketHardware._websocket_manager = manager
+        self._websocket_manager = WebSocketHardware._websocket_manager
         self._logger = getLogger(f"gaia.hardware.websocket.{self.uid}")
         self._requests: dict[UUID: Future] = {}
         self._task: Task | None = None
