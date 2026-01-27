@@ -869,7 +869,7 @@ class WebSocketHardware(Hardware):
         try:
             await self._send_msg_and_forget("disconnecting")
         except ConnectionError:
-            # The hardware is not connected
+            # The device is not connected
             pass
         await self._websocket_manager.unregister_hardware(self.uid)
         self._stop_event.set()
@@ -878,7 +878,10 @@ class WebSocketHardware(Hardware):
             self._task = None
         # If not more hardware are registered, there is no need to keep the manager
         #  running
-        if self._websocket_manager.registered_hardware == 0:
+        if (
+                self._websocket_manager.is_running
+                and self._websocket_manager.registered_hardware == 0
+        ):
             await self._websocket_manager.stop()
 
 

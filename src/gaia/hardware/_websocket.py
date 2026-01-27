@@ -36,7 +36,7 @@ class WebSocketHardwareManager:
     async def unregister_hardware(self, hardware_uid: str) -> None:
         if hardware_uid in self.device_connections:
             await self.device_connections[hardware_uid].close()
-        self._registered_hardware.pop(hardware_uid)
+        self._registered_hardware.pop(hardware_uid, None)
 
     @property
     def registered_hardware(self) -> int:
@@ -62,7 +62,7 @@ class WebSocketHardwareManager:
         if not self.is_running:
             raise RuntimeError("WebSocketHardwareManager is not currently running")
         self._stop_event.set()
-        await self._running_task
+        self._running_task.cancel()
         self._running_task = None
 
     async def connection_handler(self, connection: ServerConnection) -> None:
