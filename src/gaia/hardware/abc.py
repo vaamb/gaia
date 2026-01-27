@@ -853,10 +853,10 @@ class WebSocketHardware(Hardware):
         if connection is None:
             raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
         uuid: UUID = uuid4()
-        self._requests[str(uuid)] = Future()
+        self._requests[uuid] = Future()
         payload = WebsocketMessage(uuid=uuid, data=msg).model_dump_json()
         await connection.send(payload)
-        return await self._requests[str(uuid)]
+        return await self._requests[uuid]
 
     async def register(self) -> None:
         if not self._websocket_manager.is_running:
