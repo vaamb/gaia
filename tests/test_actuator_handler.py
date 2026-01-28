@@ -49,7 +49,8 @@ async def test_status(light_handler: ActuatorHandler):
 
     # Test set status True
     async with light_handler.update_status_transaction():
-        await light_handler.set_status(True)
+        success = await light_handler.set_status(True)
+    assert success
     assert light_handler.status
     for light in get_lights(light_handler.ecosystem):
         light: gpioSwitch
@@ -57,7 +58,8 @@ async def test_status(light_handler: ActuatorHandler):
 
     # Test set status False
     async with light_handler.update_status_transaction():
-        await light_handler.set_status(False)
+        success =await light_handler.set_status(False)
+    assert success
     assert not light_handler.status
     for light in get_lights(light_handler.ecosystem):
         light: gpioSwitch
