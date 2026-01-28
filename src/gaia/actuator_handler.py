@@ -455,12 +455,20 @@ class ActuatorHandler:
                 f"{'on' if self.status else 'off'} as it has no actuator linked "
                 f"to it."
             )
+        failed: list[tuple[str, str]] = []
         for actuator in actuators_linked:
             if isinstance(actuator, Switch):
                 if value:
-                    await actuator.turn_on()
+                    success = await actuator.turn_on()
                 else:
-                    await actuator.turn_off()
+                    success = await actuator.turn_off()
+                if not success:
+                    failed.append((actuator.name, actuator.uid))
+        if failed:
+            ids: list[str] = [f"{a_id[0]} ({a_id[1]})" for a_id in failed]
+            self.logger.warning(
+                f"Could not set all status to ´{value}´. The following actuators "
+                f"failed: {', '.join(ids)}")
 
     async def turn_on(self) -> None:
         await self.set_status(True)
