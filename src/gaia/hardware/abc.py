@@ -501,10 +501,6 @@ class Hardware(metaclass=_MetaHardware):
         self._active = new_active
 
     @property
-    def address_book(self) -> AddressBook:
-        return self._address_book
-
-    @property
     def address(self) -> Address:
         return self._address
 
