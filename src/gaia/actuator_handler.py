@@ -483,20 +483,31 @@ class ActuatorHandler:
     def level(self) -> float | None:
         return self._level
 
-    async def set_level(self, pwm_level: float) -> None:
+    async def set_level(self, pwm_level: float) -> bool:
         self._check_update_status_transaction()
         if self._level == pwm_level:
-            return
-        await self._set_level(pwm_level)
+            return True
+        success = await self._set_level(pwm_level)
         #self._any_status_change = True
-        self.logger.debug(
-            f"{self.group.capitalize()}'s level has been set to {pwm_level}%.")
+        return success
 
-    async def _set_level(self, pwm_level: float) -> None:
+    async def _set_level(self, pwm_level: float) -> bool:
         self._level = pwm_level
+        failed: list[tuple[str, str]] = []
         for actuator in self.get_linked_actuators():
             if isinstance(actuator, Dimmer):
-                await actuator.set_pwm_level(pwm_level)
+                success = await actuator.set_pwm_level(pwm_level)
+                if not success:
+                    failed.append((actuator.name, actuator.uid))
+        if failed:
+            ids: list[str] = [f"{a_id[0]} ({a_id[1]})" for a_id in failed]
+            self.logger.warning(
+                f"Could not set all the PWM level to ´{pwm_level}´. The following actuators "
+                f"failed: {', '.join(ids)}")
+            return False
+        self.logger.debug(
+            f"{self.group.capitalize()}'s PWM level has been set to {pwm_level}%.")
+        return True
 
     @property
     def countdown(self) -> float | None:

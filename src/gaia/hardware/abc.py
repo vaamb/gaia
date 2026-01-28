@@ -437,7 +437,10 @@ class Hardware(metaclass=_MetaHardware):
                 hardware_logger.warning(
                     f"Failed to turn {hardware.name} ({hardware.uid}) off")
         if isinstance(hardware, Dimmer):
-            await hardware.set_pwm_level(0)
+            success = await hardware.set_pwm_level(0)
+            if not success:
+                hardware_logger.warning(
+                    f"Failed to set {hardware.name} ({hardware.uid})'s PWM level to 0")
         return hardware
 
     async def terminate(self) -> None:
@@ -448,7 +451,10 @@ class Hardware(metaclass=_MetaHardware):
                 hardware_logger.warning(
                     f"Failed to turn {self.name} ({self.uid}) off")
         if isinstance(self, Dimmer):
-            await self.set_pwm_level(0)
+            success = await self.set_pwm_level(0)
+            if not success:
+                hardware_logger.warning(
+                    f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
         # Reset actuator handlers using this hardware
         for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
             if self in actuator_handler.get_linked_actuators():
@@ -774,7 +780,7 @@ class Dimmer(Actuator):
                 "being PWM-able"
             )
 
-    async def set_pwm_level(self, level) -> None:
+    async def set_pwm_level(self, level) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover

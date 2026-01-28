@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import isclose
 import typing as t
 
 from anyio.to_thread import run_sync
@@ -60,12 +61,14 @@ class gpioDimmer(gpioHardware, Dimmer):
             from gaia.hardware._compatibility import pwmio
         return pwmio.PWMOut(self.pwm_pin, frequency=100, duty_cycle=0)
 
-    def _set_pwm_level(self, duty_cycle_in_percent: float | int) -> None:
+    def _set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
         duty_cycle_in_16_bit = duty_cycle_in_percent / 100 * (2**16 - 1)
         self.dimmer.duty_cycle = duty_cycle_in_16_bit
+        # Allow a 0.5% tolerance
+        return isclose(self.dimmer.duty_cycle, duty_cycle_in_16_bit, rel_tol=0.005)
 
-    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> None:
-        await run_sync(self._set_pwm_level, duty_cycle_in_percent)
+    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
+        return await run_sync(self._set_pwm_level, duty_cycle_in_percent)
 
     @property
     def pwm_pin(self) -> "Pin":

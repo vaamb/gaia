@@ -84,7 +84,7 @@ async def test_hardware_models(ecosystem: Ecosystem):
             assert hardware.camera_dir
             assert await hardware.get_image((42, 21))
         if isinstance(hardware, Dimmer):
-            await hardware.set_pwm_level(100)
+            assert await hardware.set_pwm_level(100)
         if isinstance(hardware, Switch):
             assert await hardware.turn_on()
             assert await hardware.turn_off()
