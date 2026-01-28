@@ -588,6 +588,12 @@ class gpioHardware(Hardware):
             )
         self._pin: Pin | None = None
 
+    @property
+    def pin(self) -> Pin:
+        if self._pin is None:
+            self._pin = self._get_pin()
+        return self._pin
+
     def _get_pin(self) -> Pin:
         if is_raspi():  # pragma: no cover
             try:
@@ -601,12 +607,6 @@ class gpioHardware(Hardware):
             from gaia.hardware._compatibility import Pin
         address = self.address.main
         return Pin(address)
-
-    @property
-    def pin(self) -> Pin:
-        if self._pin is None:
-            self._pin = self._get_pin()
-        return self._pin
 
 
 class i2cHardware(Hardware):

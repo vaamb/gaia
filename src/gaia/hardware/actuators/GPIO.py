@@ -45,10 +45,15 @@ class gpioDimmer(gpioHardware, Dimmer):
                 "gpioDimmable address must be of type"
                 "'addressType1_addressNum1:GPIO_pinNumber'"
             )
-        self._pwm_pin: Pin | None = None
         self._dimmer: pwmio.PWMOut | None = None
 
-    def _get_dimmer(self) -> "pwmio.PWMOut":
+    @property
+    def dimmer(self) -> pwmio.PWMOut:
+        if not self._dimmer:
+            self._dimmer = self._get_dimmer()
+        return self._dimmer
+
+    def _get_dimmer(self) -> pwmio.PWMOut:
         if is_raspi():  # pragma: no cover
             try:
                 import pwmio
@@ -59,28 +64,16 @@ class gpioDimmer(gpioHardware, Dimmer):
                 )
         else:
             from gaia.hardware._compatibility import pwmio
-        return pwmio.PWMOut(self.pwm_pin, frequency=100, duty_cycle=0)
+        return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)
+
+    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
+        return await run_sync(self._set_pwm_level, duty_cycle_in_percent)
 
     def _set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
         duty_cycle_in_16_bit = duty_cycle_in_percent / 100 * (2**16 - 1)
         self.dimmer.duty_cycle = duty_cycle_in_16_bit
         # Allow a 0.5% tolerance
         return isclose(self.dimmer.duty_cycle, duty_cycle_in_16_bit, rel_tol=0.005)
-
-    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
-        return await run_sync(self._set_pwm_level, duty_cycle_in_percent)
-
-    @property
-    def pwm_pin(self) -> "Pin":
-        if not self._pwm_pin:
-            self._pwm_pin = self._get_pin()
-        return self._pwm_pin
-
-    @property
-    def dimmer(self) -> "pwmio.PWMOut":
-        if not self._dimmer:
-            self._dimmer = self._get_dimmer()
-        return self._dimmer
 
 
 class gpioDimmable(gpioSwitch, gpioDimmer):
