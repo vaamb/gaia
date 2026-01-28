@@ -320,12 +320,6 @@ class TestEcosystemConfigHardware:
         with pytest.raises(ValueError, match=r"Address .* already used"):
             ecosystem_config.create_new_hardware(**sensor_info)
 
-    def test_create_fail_address_compound(self, ecosystem_config: EcosystemConfig):
-        new_sensor_info = sensor_info.copy()
-        new_sensor_info["address"] = "GPIO_11&GPIO_19"  # GPIO_19 is already used
-        with pytest.raises(ValueError, match=r"Address .* already used"):
-            ecosystem_config.create_new_hardware(**new_sensor_info)
-
     def test_create_fail_model(self, ecosystem_config: EcosystemConfig):
         invalid_hardware_info = {
             **sensor_info,

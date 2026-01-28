@@ -278,15 +278,6 @@ class Address:
         )
 
 
-@dataclass(slots=True)
-class AddressBook:
-    primary: Address
-    secondary: Address | None = None
-
-
-AddressBookType = Literal["primary", "secondary"]
-
-
 # ---------------------------------------------------------------------------
 #   Base Hardware
 # ---------------------------------------------------------------------------
@@ -319,7 +310,7 @@ class Hardware(metaclass=_MetaHardware):
     __slots__ = (
         "__weakref__",
         "_active",
-        "_address_book",
+        "_address",
         "_ecosystem",
         "_groups",
         "_level",
@@ -361,22 +352,15 @@ class Hardware(metaclass=_MetaHardware):
         self._groups: set[str] = set(groups) if groups else set()
         self._model: str = model
         self._name: str = name
-        address_list: list = address.split("&")
-        self._address_book: AddressBook = AddressBook(
-            primary=Address(address_list[0]),
-            secondary=Address(address_list[1]) if len(address_list) == 2 else None,
-        )
-        if multiplexer_model is None and self._address_book.primary.is_multiplexed:
+        self._address = Address(address)
+        if multiplexer_model is None and self._address.is_multiplexed:
             raise ValueError("Multiplexed address should be used with a multiplexer.")
-        if (
-            multiplexer_model is not None
-            and not self._address_book.primary.is_multiplexed
-        ):
+        if multiplexer_model is not None and not self._address.is_multiplexed:
             raise ValueError("Multiplexer can only be used with a multiplexed address.")
         if multiplexer_model:
             multiplexer_cls = multiplexer_models[multiplexer_model]
             self._multiplexer = multiplexer_cls(
-                i2c_address=self._address_book.primary.multiplexer_address)
+                i2c_address=self._address.multiplexer_address)
         else:
             self._multiplexer = None
         measures = measures or []
@@ -517,16 +501,12 @@ class Hardware(metaclass=_MetaHardware):
         self._active = new_active
 
     @property
-    def address_book(self) -> AddressBook:
-        return self._address_book
+    def address(self) -> Address:
+        return self._address
 
     @property
     def address_repr(self) -> str:
-        sec = self._address_book.secondary is not None
-        if sec:
-            return f"{self._address_book.primary}&{self._address_book.secondary}"
-        else:
-            return str(self._address_book.primary)
+        return str(self._address)
 
     @property
     def model(self) -> str:
@@ -597,15 +577,20 @@ class gpioHardware(Hardware):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not self._address_book.primary.type == AddressType.GPIO:  # pragma: no cover
+        if not self._address.type == AddressType.GPIO:  # pragma: no cover
             raise ValueError(
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
         self._pin: Pin | None = None
 
-    @staticmethod
-    def _get_pin(address) -> Pin:
+    @property
+    def pin(self) -> Pin:
+        if self._pin is None:
+            self._pin = self._get_pin()
+        return self._pin
+
+    def _get_pin(self) -> Pin:
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -616,13 +601,8 @@ class gpioHardware(Hardware):
                 )
         else:
             from gaia.hardware._compatibility import Pin
+        address = self.address.main
         return Pin(address)
-
-    @property
-    def pin(self) -> Pin:
-        if self._pin is None:
-            self._pin = self._get_pin(self._address_book.primary.main)
-        return self._pin
 
 
 class i2cHardware(Hardware):
@@ -630,7 +610,7 @@ class i2cHardware(Hardware):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not self._address_book.primary.type == AddressType.I2C:  # pragma: no cover
+        if not self._address.type == AddressType.I2C:  # pragma: no cover
             raise ValueError(
                 "i2cHardware address must be of type: 'I2C_default' or 'I2C_0' "
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
@@ -646,14 +626,11 @@ class i2cHardware(Hardware):
                     address.multiplexer_address = self.multiplexer.address
             return address
 
-        self._address_book.primary = inject_default_address(self.address_book.primary)
-        if self.address_book.secondary is not None:
-            self._address_book.secondary = inject_default_address(self.address_book.secondary)
+        self._address = inject_default_address(self._address)
 
-    def _get_i2c(self, address_type: AddressBookType = "primary"):
+    def _get_i2c(self):
         if self.multiplexer is not None:
-            address: Address = getattr(self._address_book, address_type)
-            multiplexer_channel = address.multiplexer_channel
+            multiplexer_channel = self.address.multiplexer_channel
             return self.multiplexer.get_channel(multiplexer_channel)
         else:
             return get_i2c()
@@ -662,7 +639,7 @@ class i2cHardware(Hardware):
 class OneWireHardware(Hardware):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self._address_book.primary.type == AddressType.ONEWIRE:  # pragma: no cover
+        if not self.address.type == AddressType.ONEWIRE:  # pragma: no cover
             raise ValueError(
                 "OneWireHardware address must be of type: 'ONEWIRE_hexAddress' "
                 "to use a specific address or 'ONEWIRE_default' to use the default "
@@ -681,14 +658,14 @@ class OneWireHardware(Hardware):
 
     @property
     def device_address(self) -> str | None:
-        return self.address_book.primary.main
+        return self.address.main
 
 
 class Camera(Hardware):
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies()
         super().__init__(*args, **kwargs)
-        if not self._address_book.primary.type == AddressType.PICAMERA:  # pragma: no cover
+        if not self.address.type == AddressType.PICAMERA:  # pragma: no cover
             raise ValueError("Camera address must be 'PICAMERA'")
         self._device: Any | None = None
         self._camera_dir: Path | None = None
@@ -770,16 +747,6 @@ class Switch(Actuator):
 
 
 class Dimmer(Actuator):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        if self._address_book.secondary is None:  # pragma: no cover
-            raise ValueError(
-                "dimmable hardware address should be of form "
-                "'addressType1_addressNum1&addressType2_addressNum2' with "
-                "address 1 being for the main (on/off) switch and address 2 "
-                "being PWM-able"
-            )
-
     async def set_pwm_level(self, level) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"

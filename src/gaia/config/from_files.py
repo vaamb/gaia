@@ -435,7 +435,6 @@ class EngineConfig(metaclass=SingletonMeta):
                     EcosystemConfig.validate_hardware_dict(
                         hardware_dict={"uid": IO_uid, **IO_dict},
                         addresses_used=addresses_used,
-                        check_address=True,
                     )
                 except ValueError as e:
                     self.logger.error(
@@ -446,7 +445,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     self.logger.debug(
                         f"Hardware {IO_name} validated for ecosystem {ecosystem_name}.")
                 finally:
-                    addresses_used.extend(IO_dict["address"].split("&"))
+                    addresses_used.append(IO_dict["address"])
 
             # Check nycthemeral config
             self.logger.debug(
@@ -1820,7 +1819,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def validate_hardware_dict(
             hardware_dict: gv.HardwareConfigDict,
             addresses_used: list,
-            check_address: bool = True,
     ) -> None:
         try:
             hardware_config = gv.HardwareConfig(**hardware_dict)
@@ -1839,10 +1837,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware = hardware_cls._unsafe_from_config(hardware_config, None)
         # Replace default address with the actual address
         hardware_dict["address"] = hardware.address_repr
-        if (
-                check_address
-                and any(address in addresses_used for address in hardware.address_repr.split("&"))
-        ):
+        if hardware_dict["address"] in addresses_used:
             raise ValueError(f"Address {hardware_config.address} already used.")
 
     def create_new_hardware(
@@ -1911,11 +1906,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 if value is not None
             }
         )
-        check_address = (
-            "address" in updating_values
-        )  # Don't check address if not trying to update it
-        self.validate_hardware_dict(
-            hardware_dict, self._used_addresses(), check_address)
+        # Don't check address if not trying to update it. To do so, do not pass any address
+        # against which to check
+        used_addresses = self._used_addresses() if "address" in updating_values else []
+        self.validate_hardware_dict(hardware_dict, used_addresses)
         # Remove the validation uid from the dict
         hardware_dict.pop("uid")
         self.IO_dict[uid] = hardware_dict
