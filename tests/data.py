@@ -65,7 +65,7 @@ light_uid = "cpgCZFJGGYlIXlLL"
 light_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualLight",
     "active": True,
-    "address": "GPIO_5&GPIO_13",
+    "address": "GPIO_13",
     "model": "virtualgpioDimmable",
     "type": gv.HardwareType.light,
     "level": gv.HardwareLevel.environment,
@@ -80,7 +80,7 @@ heater_uid = "A0oZpCJ50D0ajfJs"
 heater_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualHeater",
     "active": True,
-    "address": "GPIO_26&GPIO_12",
+    "address": "GPIO_12",
     "model": "virtualgpioDimmable",
     "type": gv.HardwareType.heater,
     "level": gv.HardwareLevel.environment,

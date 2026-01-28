@@ -40,13 +40,13 @@ class gpioSwitch(gpioHardware, Switch):
 class gpioDimmer(gpioHardware, Dimmer):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not self._address_book.secondary.type == AddressType.GPIO:  # pragma: no cover
+        if not self.address.type == AddressType.GPIO:  # pragma: no cover
             raise ValueError(
                 "gpioDimmable address must be of type"
                 "'addressType1_addressNum1:GPIO_pinNumber'"
             )
-        self._pwm_pin: "Pin" | None = None
-        self._dimmer: "pwmio.PWMOut" | None = None
+        self._pwm_pin: Pin | None = None
+        self._dimmer: pwmio.PWMOut | None = None
 
     def _get_dimmer(self) -> "pwmio.PWMOut":
         if is_raspi():  # pragma: no cover
@@ -73,7 +73,7 @@ class gpioDimmer(gpioHardware, Dimmer):
     @property
     def pwm_pin(self) -> "Pin":
         if not self._pwm_pin:
-            self._pwm_pin = self._get_pin(self._address_book.secondary.main)
+            self._pwm_pin = self._get_pin()
         return self._pwm_pin
 
     @property
