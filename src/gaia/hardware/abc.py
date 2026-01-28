@@ -768,7 +768,7 @@ class Dimmer(Actuator):
                 "being PWM-able"
             )
 
-    async def set_pwm_level(self, level) -> None:
+    async def set_pwm_level(self, level) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
