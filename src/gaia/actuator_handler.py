@@ -435,18 +435,16 @@ class ActuatorHandler:
     def status(self) -> bool:
         return self._status
 
-    async def set_status(self, value: bool) -> None:
+    async def set_status(self, value: bool) -> bool:
         self._check_update_status_transaction()
         if self._status == value:
             # No need to update
-            return
-        await self._set_status(value)
+            return True
+        success = await self._set_status(value)
         self._any_status_change = True
-        self.logger.debug(
-            f"{self.group.capitalize()} has been turned "
-            f"{'on' if self.status else 'off'}.")
+        return success
 
-    async def _set_status(self, value: bool) -> None:
+    async def _set_status(self, value: bool) -> bool:
         self._status = value
         actuators_linked = self.get_linked_actuators()
         if not actuators_linked:
@@ -469,6 +467,11 @@ class ActuatorHandler:
             self.logger.warning(
                 f"Could not set all status to ´{value}´. The following actuators "
                 f"failed: {', '.join(ids)}")
+            return False
+        self.logger.debug(
+            f"{self.group.capitalize()} has been turned "
+            f"{'on' if self.status else 'off'}.")
+        return True
 
     async def turn_on(self) -> None:
         await self.set_status(True)
