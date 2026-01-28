@@ -49,7 +49,7 @@ class AHT20(TempHumSensor, i2cSensor):
                 )
         else:
             from gaia.hardware._compatibility import AHTx0
-        return AHTx0(self._get_i2c(), self._address_book.primary.main)
+        return AHTx0(self._get_i2c(), self.address.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
         try:
@@ -84,7 +84,7 @@ class ENS160(i2cSensor):
                 )
         else:
             from gaia.hardware._compatibility import ENS160 as _ENS160
-        return _ENS160(self._get_i2c(), self._address_book.primary.main)
+        return _ENS160(self._get_i2c(), self.address.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None, float | None]:
         # Data status from https://github.com/adafruit/Adafruit_CircuitPython_ENS160/blob/main/adafruit_ens160.py
@@ -167,7 +167,7 @@ class VEML7700(i2cSensor, LightSensor):
                 )
         else:
             from gaia.hardware._compatibility import VEML7700 as _VEML7700
-        return _VEML7700(self._get_i2c(), self._address_book.primary.main)
+        return _VEML7700(self._get_i2c(), self.address.main)
 
     # To catch data fast from light routine
     def _get_lux(self) -> float:
@@ -217,7 +217,7 @@ class VCNL4040(i2cSensor, LightSensor):
                 )
         else:
             from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
-        return _VCNL4040(self._get_i2c(), self._address_book.primary.main)
+        return _VCNL4040(self._get_i2c(), self.address.main)
 
     # To catch data fast from light routine
     def _get_lux(self) -> float:
@@ -267,7 +267,7 @@ class CapacitiveSensor(i2cSensor):
                 )
         else:
             from gaia.hardware._compatibility import Seesaw
-        return Seesaw(self._get_i2c(), self._address_book.primary.main)
+        return Seesaw(self._get_i2c(), self.address.main)
 
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")

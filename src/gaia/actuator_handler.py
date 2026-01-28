@@ -435,18 +435,16 @@ class ActuatorHandler:
     def status(self) -> bool:
         return self._status
 
-    async def set_status(self, value: bool) -> None:
+    async def set_status(self, value: bool) -> bool:
         self._check_update_status_transaction()
         if self._status == value:
             # No need to update
-            return
-        await self._set_status(value)
+            return True
+        success = await self._set_status(value)
         self._any_status_change = True
-        self.logger.debug(
-            f"{self.group.capitalize()} has been turned "
-            f"{'on' if self.status else 'off'}.")
+        return success
 
-    async def _set_status(self, value: bool) -> None:
+    async def _set_status(self, value: bool) -> bool:
         self._status = value
         actuators_linked = self.get_linked_actuators()
         if not actuators_linked:
@@ -455,12 +453,25 @@ class ActuatorHandler:
                 f"{'on' if self.status else 'off'} as it has no actuator linked "
                 f"to it."
             )
+        failed: list[tuple[str, str]] = []
         for actuator in actuators_linked:
             if isinstance(actuator, Switch):
                 if value:
-                    await actuator.turn_on()
+                    success = await actuator.turn_on()
                 else:
-                    await actuator.turn_off()
+                    success = await actuator.turn_off()
+                if not success:
+                    failed.append((actuator.name, actuator.uid))
+        if failed:
+            ids: list[str] = [f"{a_id[0]} ({a_id[1]})" for a_id in failed]
+            self.logger.warning(
+                f"Could not set all status to ´{value}´. The following actuators "
+                f"failed: {', '.join(ids)}")
+            return False
+        self.logger.debug(
+            f"{self.group.capitalize()} has been turned "
+            f"{'on' if self.status else 'off'}.")
+        return True
 
     async def turn_on(self) -> None:
         await self.set_status(True)
@@ -472,20 +483,31 @@ class ActuatorHandler:
     def level(self) -> float | None:
         return self._level
 
-    async def set_level(self, pwm_level: float) -> None:
+    async def set_level(self, pwm_level: float) -> bool:
         self._check_update_status_transaction()
         if self._level == pwm_level:
-            return
-        await self._set_level(pwm_level)
+            return True
+        success = await self._set_level(pwm_level)
         #self._any_status_change = True
-        self.logger.debug(
-            f"{self.group.capitalize()}'s level has been set to {pwm_level}%.")
+        return success
 
-    async def _set_level(self, pwm_level: float) -> None:
+    async def _set_level(self, pwm_level: float) -> bool:
         self._level = pwm_level
+        failed: list[tuple[str, str]] = []
         for actuator in self.get_linked_actuators():
             if isinstance(actuator, Dimmer):
-                await actuator.set_pwm_level(pwm_level)
+                success = await actuator.set_pwm_level(pwm_level)
+                if not success:
+                    failed.append((actuator.name, actuator.uid))
+        if failed:
+            ids: list[str] = [f"{a_id[0]} ({a_id[1]})" for a_id in failed]
+            self.logger.warning(
+                f"Could not set all the PWM level to ´{pwm_level}´. The following actuators "
+                f"failed: {', '.join(ids)}")
+            return False
+        self.logger.debug(
+            f"{self.group.capitalize()}'s PWM level has been set to {pwm_level}%.")
+        return True
 
     @property
     def countdown(self) -> float | None:

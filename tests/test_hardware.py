@@ -46,7 +46,7 @@ async def test_hardware_models(ecosystem: Ecosystem):
         }
         # Setup address
         if issubclass(hardware_cls, gpioHardware):
-            hardware_cfg["address"] = "GPIO_19&GPIO_12"
+            hardware_cfg["address"] = "GPIO_12"
         elif issubclass(hardware_cls, i2cHardware):
             hardware_cfg["address"] = "I2C_default"
         elif issubclass(hardware_cls, OneWireHardware):
@@ -101,10 +101,10 @@ async def test_hardware_models(ecosystem: Ecosystem):
             assert hardware.camera_dir
             assert await hardware.get_image((42, 21))
         if isinstance(hardware, Dimmer):
-            await hardware.set_pwm_level(100)
+            assert await hardware.set_pwm_level(100)
         if isinstance(hardware, Switch):
-            await hardware.turn_on()
-            await hardware.turn_off()
+            assert await hardware.turn_on()
+            assert await hardware.turn_off()
         if isinstance(hardware, WebSocketHardware):
             await hardware.unregister()
         print(f"Test succeeded for hardware '{hardware}'")
@@ -131,12 +131,8 @@ async def test_virtual_sensor(ecosystem: Ecosystem):
 def test_i2c_address_injection(ecosystem: Ecosystem):
     for hardware_uid in (i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid):
         hardware = ecosystem.hardware[hardware_uid]
-        assert hardware.address_book.primary.main not in ("default", "def", 0x0)
-        assert hardware.address_book.primary.multiplexer_address != 0x0
-
-        if hardware.address_book.secondary is not None:
-            assert hardware.address_book.secondary.main not in ("default", "def", 0x0)
-            assert hardware.address_book.secondary.multiplexer_address != 0x0
+        assert hardware.address.main not in ("default", "def", 0x0)
+        assert hardware.address.multiplexer_address != 0x0
 
 
 @pytest.mark.asyncio
