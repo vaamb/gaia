@@ -434,7 +434,10 @@ class Hardware(metaclass=_MetaHardware):
         if isinstance(hardware, Switch):
             await hardware.turn_off()
         if isinstance(hardware, Dimmer):
-            await hardware.set_pwm_level(0)
+            success = await hardware.set_pwm_level(0)
+            if not success:
+                hardware_logger.warning(
+                    f"Failed to set {hardware.name} ({hardware.uid})'s PWM level to 0")
         return hardware
 
     async def terminate(self) -> None:
@@ -442,7 +445,10 @@ class Hardware(metaclass=_MetaHardware):
         if isinstance(self, Switch):
             await self.turn_off()
         if isinstance(self, Dimmer):
-            await self.set_pwm_level(0)
+            success = await self.set_pwm_level(0)
+            if not success:
+                hardware_logger.warning(
+                    f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
         # Reset actuator handlers using this hardware
         for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
             if self in actuator_handler.get_linked_actuators():
