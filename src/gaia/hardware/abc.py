@@ -746,12 +746,12 @@ class Actuator(Hardware):
 
 
 class Switch(Actuator):
-    async def turn_on(self) -> None:
+    async def turn_on(self) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
-    async def turn_off(self) -> None:
+    async def turn_off(self) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
