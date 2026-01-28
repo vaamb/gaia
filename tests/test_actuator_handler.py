@@ -74,7 +74,8 @@ async def test_level(light_handler: ActuatorHandler):
 
     # Test level > 0
     async with light_handler.update_status_transaction():
-        await light_handler.set_level(42)
+        success = await light_handler.set_level(42)
+    assert success
     assert light_handler.level == 42
     for light in get_lights(light_handler.ecosystem):
         light: gpioDimmable
@@ -82,7 +83,8 @@ async def test_level(light_handler: ActuatorHandler):
 
     # Test level = 0
     async with light_handler.update_status_transaction():
-        await light_handler.set_level(0)
+        success = await light_handler.set_level(0)
+    assert success
     assert light_handler.level == 0
     for light in get_lights(light_handler.ecosystem):
         light: gpioDimmable
