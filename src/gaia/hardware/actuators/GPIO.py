@@ -21,17 +21,19 @@ class gpioSwitch(gpioHardware, Switch):
         super().__init__(*args, **kwargs)
         self.pin.init(mode=self.OUT)
 
-    def _turn_on(self) -> None:
+    def _turn_on(self) -> bool:
         self.pin.value(val=1)
+        return self.pin.value() == 1
 
-    async def turn_on(self) -> None:
-        await run_sync(self._turn_on)
+    async def turn_on(self) -> bool:
+        return await run_sync(self._turn_on)
 
-    def _turn_off(self) -> None:
+    def _turn_off(self) -> bool:
         self.pin.value(val=0)
+        return self.pin.value() == 0
 
-    async def turn_off(self) -> None:
-        await run_sync(self._turn_off)
+    async def turn_off(self) -> bool:
+        return await run_sync(self._turn_off)
 
 
 class gpioDimmer(gpioHardware, Dimmer):

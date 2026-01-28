@@ -432,7 +432,10 @@ class Hardware(metaclass=_MetaHardware):
         hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
         # Turn off hardware to no have any unwanted side effect at startup
         if isinstance(hardware, Switch):
-            await hardware.turn_off()
+            success = await hardware.turn_off()
+            if not success:
+                hardware_logger.warning(
+                    f"Failed to turn {hardware.name} ({hardware.uid}) off")
         if isinstance(hardware, Dimmer):
             await hardware.set_pwm_level(0)
         return hardware
@@ -440,7 +443,10 @@ class Hardware(metaclass=_MetaHardware):
     async def terminate(self) -> None:
         # Turn off hardware
         if isinstance(self, Switch):
-            await self.turn_off()
+            success = await self.turn_off()
+            if not success:
+                hardware_logger.warning(
+                    f"Failed to turn {self.name} ({self.uid}) off")
         if isinstance(self, Dimmer):
             await self.set_pwm_level(0)
         # Reset actuator handlers using this hardware
@@ -746,12 +752,12 @@ class Actuator(Hardware):
 
 
 class Switch(Actuator):
-    async def turn_on(self) -> None:
+    async def turn_on(self) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
-    async def turn_off(self) -> None:
+    async def turn_off(self) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover

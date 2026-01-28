@@ -86,8 +86,8 @@ async def test_hardware_models(ecosystem: Ecosystem):
         if isinstance(hardware, Dimmer):
             await hardware.set_pwm_level(100)
         if isinstance(hardware, Switch):
-            await hardware.turn_on()
-            await hardware.turn_off()
+            assert await hardware.turn_on()
+            assert await hardware.turn_off()
         print(f"Test succeeded for hardware '{hardware}'")
 
 
