@@ -26,8 +26,9 @@ if TYPE_CHECKING:  # pragma: no cover
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
+        import busio
     else:
-        from gaia.hardware._compatibility import Pin
+        from gaia.hardware._compatibility import busio, Pin
 
 
 class InvalidAddressError(ValueError):
@@ -612,7 +613,7 @@ class i2cHardware(Hardware):
 
         self._address = inject_default_address(self._address)
 
-    def _get_i2c(self):
+    def _get_i2c(self) -> busio.I2C:
         if self.multiplexer is not None:
             multiplexer_channel = self.address.multiplexer_channel
             return self.multiplexer.get_channel(multiplexer_channel)
@@ -631,7 +632,8 @@ class OneWireHardware(Hardware):
                 "to use a specific address or 'ONEWIRE_default' to use the default "
                 "address"
             )
-        # Chack that 1-wire is enabled
+        # Check that 1-wire is enabled
+        # TODO: move this in an async initialize fct
         if is_raspi():
             import subprocess
             lsmod = subprocess.Popen("lsmod", stdout=subprocess.PIPE)
@@ -769,7 +771,7 @@ class Dimmer(Actuator):
             hardware_logger.warning(
                 f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
 
-    async def set_pwm_level(self, level) -> bool:
+    async def set_pwm_level(self, level: float | int) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
