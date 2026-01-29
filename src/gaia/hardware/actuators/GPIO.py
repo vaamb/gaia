@@ -68,8 +68,8 @@ class gpioDimmer(gpioHardware, Dimmer):
             from gaia.hardware._compatibility import pwmio
         return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)
 
-    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
-        return await run_sync(self._set_pwm_level, duty_cycle_in_percent)
+    async def set_pwm_level(self, level: float | int) -> bool:
+        return await run_sync(self._set_pwm_level, level)
 
     def _set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
         duty_cycle_in_16_bit = duty_cycle_in_percent / 100 * (2**16 - 1)
