@@ -14,6 +14,8 @@ if t.TYPE_CHECKING:
 
 
 class BS18B20(OneWireHardware, TemperatureSensor):
+    __slots__ = ()
+
     def _get_device(self) -> "BS18B20":
         if is_raspi():
             from gaia.hardware.sensors._devices.gaia_bs18b20 import BS18B20 as _BS18B20

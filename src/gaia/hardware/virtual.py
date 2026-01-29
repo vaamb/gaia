@@ -2,6 +2,8 @@ from gaia.hardware.abc import Hardware
 
 
 class virtualHardware(Hardware):
+    __slots__ = ()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if (

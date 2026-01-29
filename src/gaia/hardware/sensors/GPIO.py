@@ -4,7 +4,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import BaseSensor, gpioHardware, hardware_logger
+from gaia.hardware.abc import BaseSensor, gpioSensor, hardware_logger
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 
@@ -19,12 +19,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   GPIO sensors
 # ---------------------------------------------------------------------------
-class DHTSensor(TempHumSensor, gpioHardware):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        # Load dht device.
-        # Rem: don't use pulseio as it uses 100% of one core in Pi3
-        # In Pi0: behaves correctly
+class DHTSensor(TempHumSensor, gpioSensor):
+    __slots__ = ()
+    # Rem: don't use pulseio as it uses 100% of one core in Pi3
+    # In Pi0: behaves correctly
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
         humidity: float | None = None
@@ -51,6 +49,8 @@ class DHTSensor(TempHumSensor, gpioHardware):
 
 
 class DHT11(DHTSensor):
+    __slots__ = ()
+
     def _get_device(self) -> "_DHT11":
         if is_raspi():  # pragma: no cover
             try:
@@ -67,6 +67,8 @@ class DHT11(DHTSensor):
 
 
 class DHT22(DHTSensor):
+    __slots__ = ()
+
     def _get_device(self) -> "_DHT22":
         if is_raspi():  # pragma: no cover
             try:
