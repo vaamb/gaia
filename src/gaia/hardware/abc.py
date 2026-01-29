@@ -395,6 +395,10 @@ class Hardware(metaclass=_MetaHardware):
             multiplexer_model=hardware_config.multiplexer_model,
         )
 
+    async def _on_initialize(self) -> None:
+        """Override in subclasses for initialization logic."""
+        pass
+
     @classmethod
     async def initialize(
             cls,
@@ -414,31 +418,17 @@ class Hardware(metaclass=_MetaHardware):
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
         hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
-        # Turn off hardware to no have any unwanted side effect at startup
-        if isinstance(hardware, Switch):
-            success = await hardware.turn_off()
-            if not success:
-                hardware_logger.warning(
-                    f"Failed to turn {hardware.name} ({hardware.uid}) off")
-        if isinstance(hardware, Dimmer):
-            success = await hardware.set_pwm_level(0)
-            if not success:
-                hardware_logger.warning(
-                    f"Failed to set {hardware.name} ({hardware.uid})'s PWM level to 0")
+        # Perform subclass-specific initialization routine
+        await hardware._on_initialize()
         return hardware
 
+    async def _on_terminate(self) -> None:
+        """Override in subclasses for termination logic."""
+        pass
+
     async def terminate(self) -> None:
-        # Turn off hardware
-        if isinstance(self, Switch):
-            success = await self.turn_off()
-            if not success:
-                hardware_logger.warning(
-                    f"Failed to turn {self.name} ({self.uid}) off")
-        if isinstance(self, Dimmer):
-            success = await self.set_pwm_level(0)
-            if not success:
-                hardware_logger.warning(
-                    f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+        # Perform subclass-specific termination routine
+        await self._on_terminate()
         # Reset actuator handlers using this hardware
         for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
             if self in actuator_handler.get_linked_actuators():
@@ -735,6 +725,20 @@ class Actuator(Hardware):
 
 
 class Switch(Actuator):
+    async def _on_initialize(self) -> None:
+        await super()._on_initialize()
+        success = await self.turn_off()
+        if not success:
+            hardware_logger.warning(
+                f"Failed to turn {self.name} ({self.uid}) off")
+
+    async def _on_terminate(self) -> None:
+        await super()._on_terminate()
+        success = await self.turn_off()
+        if not success:
+            hardware_logger.warning(
+                f"Failed to turn {self.name} ({self.uid}) off")
+
     async def turn_on(self) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
@@ -747,6 +751,20 @@ class Switch(Actuator):
 
 
 class Dimmer(Actuator):
+    async def _on_initialize(self) -> None:
+        await super()._on_initialize()
+        success = await self.set_pwm_level(0)
+        if not success:
+            hardware_logger.warning(
+                f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+
+    async def _on_terminate(self) -> None:
+        await super()._on_terminate()
+        success = await self.set_pwm_level(0)
+        if not success:
+            hardware_logger.warning(
+                f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+
     async def set_pwm_level(self, level) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
