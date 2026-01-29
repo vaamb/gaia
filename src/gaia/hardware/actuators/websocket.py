@@ -11,15 +11,14 @@ class WebSocketSwitch(Switch, WebSocketHardware):
     async def turn_on(self) -> bool:
         try:
             response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "on"})
-            response = gv.RequestResult.model_validate(response)
         except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
             return False
         else:
-            if response.status != gv.Result.success:
+            if response["status"] != "success":
                 base_msg = "Failed to turn on the switch"
-                if response.message:
-                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                if "message" in response:
+                    base_msg = f"{base_msg}. Error msg: `{response['message']}`."
                 self._logger.error(base_msg)
                 return False
             return True
@@ -28,15 +27,14 @@ class WebSocketSwitch(Switch, WebSocketHardware):
     async def turn_off(self) -> bool:
         try:
             response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "off"})
-            response = gv.RequestResult.model_validate(response)
         except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
             return False
         else:
-            if response.status != gv.Result.success:
+            if response["status"] != "success":
                 base_msg = "Failed to turn off the switch"
-                if response.message:
-                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                if "message" in response:
+                    base_msg = f"{base_msg}. Error msg: `{response['message']}`."
                 self._logger.error(base_msg)
                 return False
             return True

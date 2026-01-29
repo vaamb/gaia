@@ -179,7 +179,56 @@ class TestWebsocketHardware:
         response = await task
         assert response == msg * 2
 
-        # Stop the manager as otherwise the test will hang forever
+        # Stop the manager as otherwise the test can hang forever
+        await hardware._websocket_manager.stop()
+        # Hardware unregistration is taken care of by the ecosystem teardown
+
+    async def test_switch(self, ecosystem: Ecosystem):
+        hardware: WebSocketSwitch = ecosystem.hardware[ws_actuator_uid]
+        # Hardware registration is taken care of by the ecosystem setup
+
+        # Connect the device
+        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+        await websocket.send(hardware.uid)
+        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+
+        # Turn on
+        task = create_task(hardware.turn_on())
+        await sleep(0.1)
+        raw_response = await websocket.recv()
+        response = WebsocketMessage.model_validate_json(raw_response)
+        assert response.data == {"action": "turn_actuator", "data": "on"}
+        payload = WebsocketMessage(
+            uuid=response.uuid,
+            data={
+                "status": gv.Result.success,
+            }
+        ).model_dump_json()
+
+        await websocket.send(payload)
+        await sleep(0.1)
+        response = await task
+        assert response
+
+        # Turn off
+        task = create_task(hardware.turn_off())
+        await sleep(0.1)
+        raw_response = await websocket.recv()
+        response = WebsocketMessage.model_validate_json(raw_response)
+        assert response.data == {"action": "turn_actuator", "data": "off"}
+        payload = WebsocketMessage(
+            uuid=response.uuid,
+            data={
+                "status": gv.Result.success,
+            }
+        ).model_dump_json()
+
+        await websocket.send(payload)
+        await sleep(0.1)
+        response = await task
+        assert response
+
+        # Stop the manager as otherwise the test can hang forever
         await hardware._websocket_manager.stop()
         # Hardware unregistration is taken care of by the ecosystem teardown
 
