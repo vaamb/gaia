@@ -10,6 +10,8 @@ from gaia.utils import (
 
 
 class TemperatureSensor(BaseSensor):
+    __slots__ = ()
+
     measures_available = {
         Measure.temperature: Unit.celsius_degree,
     }
@@ -32,6 +34,8 @@ class TemperatureSensor(BaseSensor):
 
 
 class TempHumSensor(BaseSensor):
+    __slots__ = ()
+
     measures_available = {
         Measure.absolute_humidity: Unit.gram_per_cubic_m,
         Measure.dew_point: Unit.celsius_degree,

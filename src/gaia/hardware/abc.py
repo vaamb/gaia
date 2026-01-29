@@ -34,8 +34,9 @@ if TYPE_CHECKING:  # pragma: no cover
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
+        import busio
     else:
-        from gaia.hardware._compatibility import Pin
+        from gaia.hardware._compatibility import busio, Pin
 
 
 class InvalidAddressError(ValueError):
@@ -120,6 +121,7 @@ class WebsocketMessage(gv.BaseModel):
 # ---------------------------------------------------------------------------
 #   Hardware address
 # ---------------------------------------------------------------------------
+@dataclass(frozen=True)
 class Address:
     """Represents a hardware address with support for different connection types.
 
@@ -139,7 +141,8 @@ class Address:
     multiplexer_address: int | None
     multiplexer_channel: int | None
 
-    def __init__(self, address_string: str) -> None:
+    @classmethod
+    def from_str(cls, address_string: str) -> Self:
         """Initialize an Address from a string representation.
 
         Args:
@@ -181,11 +184,7 @@ class Address:
             else:
                 if pin_number not in pin_bcm_to_board:
                     raise InvalidAddressError(f"BCM pin {pin_number} is not a valid GPIO pin")
-
-            self.type = AddressType.GPIO
-            self.main = pin_number
-            self.multiplexer_address = None
-            self.multiplexer_channel = None
+            return cls(AddressType.GPIO, pin_number, None, None)
 
         # The hardware is using the I2C protocol
         elif address_type == "i2c":
@@ -213,29 +212,17 @@ class Address:
                         "'I2C_<multiplexer_addr>#<channel>@<device_addr>'"
                     ) from e
             else:
-                raise InvalidAddressError(f"Invalid address type: {address_type}. {self._hint()}")
-            self.type = AddressType.I2C
-            self.main = main
-            self.multiplexer_address = multiplexer_address
-            self.multiplexer_channel = multiplexer_channel
-
-        # The hardware is using the SPI protocol
-        elif address_type == "spi":
-            raise NotImplementedError("SPI address type is not currently supported.")
+                raise InvalidAddressError(f"Invalid address type: {address_type}. {cls._hint()}")
+            return cls(AddressType.I2C, main, multiplexer_address, multiplexer_channel)
 
         # The hardware is using the one wire protocol
         elif address_type == "onewire":
-            self.type = AddressType.ONEWIRE
-            self.main = address_number if address_number != "default" else None
-            self.multiplexer_address = None
-            self.multiplexer_channel = None
+            main = address_number if address_number != "default" else None
+            return cls(AddressType.ONEWIRE, main, None, None)
 
         # The hardware is a Pi Camera
         elif address_type.lower() == "picamera":
-            self.type = AddressType.PICAMERA
-            self.main = None
-            self.multiplexer_address = None
-            self.multiplexer_channel = None
+            return cls(AddressType.PICAMERA, None, None, None)
 
         # The hardware is using WebSockets
         elif address_type.lower() == "websocket":
@@ -244,14 +231,14 @@ class Address:
                     "Invalid websocket address format. Expected format: "
                     "'WEBSOCKET' or 'WEBSOCKET_<remote_ip_addr>'"
                 )
-            self.type = AddressType.WEBSOCKET
-            self.main = address_number
-            self.multiplexer_address = None
-            self.multiplexer_channel = None
+            return cls(AddressType.WEBSOCKET, address_number, None, None)
 
+        # The hardware is using the SPI protocol
+        elif address_type == "spi":
+            raise NotImplementedError("SPI address type is not currently supported.")
         # The address is not valid
         else:
-            raise InvalidAddressError(f"Invalid address type: {address_type}. {self._hint()}")
+            raise InvalidAddressError(f"Invalid address type: {address_type}. {cls._hint()}")
 
     def __repr__(self) -> str:
         if self.type == AddressType.PICAMERA:
@@ -395,8 +382,7 @@ class Hardware(metaclass=_MetaHardware):
         self._type: gv.HardwareType = type
         self._groups: set[str] = set(groups) if groups else set()
         self._model: str = model
-        self._name: str = name
-        self._address = Address(address)
+        self._address = Address.from_str(address)
         if multiplexer_model is None and self._address.is_multiplexed:
             raise ValueError("Multiplexed address should be used with a multiplexer.")
         if multiplexer_model is not None and not self._address.is_multiplexed:
@@ -439,6 +425,10 @@ class Hardware(metaclass=_MetaHardware):
             multiplexer_model=hardware_config.multiplexer_model,
         )
 
+    async def _on_initialize(self) -> None:
+        """Override in subclasses for initialization logic."""
+        pass
+
     @classmethod
     async def initialize(
             cls,
@@ -458,35 +448,17 @@ class Hardware(metaclass=_MetaHardware):
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
         hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
-        # Turn off hardware to no have any unwanted side effect at startup
-        if isinstance(hardware, Switch):
-            success = await hardware.turn_off()
-            if not success:
-                hardware_logger.warning(
-                    f"Failed to turn {hardware.name} ({hardware.uid}) off")
-        if isinstance(hardware, Dimmer):
-            success = await hardware.set_pwm_level(0)
-            if not success:
-                hardware_logger.warning(
-                    f"Failed to set {hardware.name} ({hardware.uid})'s PWM level to 0")
-        if isinstance(hardware, WebSocketHardware):
-            await hardware.register()
+        # Perform subclass-specific initialization routine
+        await hardware._on_initialize()
         return hardware
 
+    async def _on_terminate(self) -> None:
+        """Override in subclasses for termination logic."""
+        pass
+
     async def terminate(self) -> None:
-        # Turn off hardware
-        if isinstance(self, Switch):
-            success = await self.turn_off()
-            if not success:
-                hardware_logger.warning(
-                    f"Failed to turn {self.name} ({self.uid}) off")
-        if isinstance(self, Dimmer):
-            success = await self.set_pwm_level(0)
-            if not success:
-                hardware_logger.warning(
-                    f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
-        if isinstance(self, WebSocketHardware):
-            await self.unregister()
+        # Perform subclass-specific termination routine
+        await self._on_terminate()
         # Reset actuator handlers using this hardware
         for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
             if self in actuator_handler.get_linked_actuators():
@@ -620,6 +592,8 @@ class Hardware(metaclass=_MetaHardware):
 #   Subclasses based on address type
 # ---------------------------------------------------------------------------
 class gpioHardware(Hardware):
+    #__slots__ = ("_pin",)  # Find a way around the multiple inheritance issue
+
     IN = 0
     OUT = 1
 
@@ -654,6 +628,8 @@ class gpioHardware(Hardware):
 
 
 class i2cHardware(Hardware):
+    __slots__ = ()
+
     default_address: ClassVar[int | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -667,16 +643,18 @@ class i2cHardware(Hardware):
 
         def inject_default_address(address: Address) -> Address:
             # Using default address if address is 0
+            main = address.main
+            multiplexer_address = address.multiplexer_address
             if address.main == 0x0:
-                address.main = self.default_address
+                main = self.default_address
             if address.is_multiplexed:
                 if address.multiplexer_address == 0x0:
-                    address.multiplexer_address = self.multiplexer.address
-            return address
+                    multiplexer_address = self.multiplexer.address
+            return Address(address.type, main, multiplexer_address, address.multiplexer_channel)
 
         self._address = inject_default_address(self._address)
 
-    def _get_i2c(self):
+    def _get_i2c(self) -> busio.I2C:
         if self.multiplexer is not None:
             multiplexer_channel = self.address.multiplexer_channel
             return self.multiplexer.get_channel(multiplexer_channel)
@@ -685,6 +663,8 @@ class i2cHardware(Hardware):
 
 
 class OneWireHardware(Hardware):
+    __slots__ = ()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self.address.type == AddressType.ONEWIRE:  # pragma: no cover
@@ -693,7 +673,8 @@ class OneWireHardware(Hardware):
                 "to use a specific address or 'ONEWIRE_default' to use the default "
                 "address"
             )
-        # Chack that 1-wire is enabled
+        # Check that 1-wire is enabled
+        # TODO: move this in an async initialize fct
         if is_raspi():
             import subprocess
             lsmod = subprocess.Popen("lsmod", stdout=subprocess.PIPE)
@@ -710,6 +691,8 @@ class OneWireHardware(Hardware):
 
 
 class Camera(Hardware):
+    __slots__ = ("_device", "_camera_dir")
+
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies()
         super().__init__(*args, **kwargs)
@@ -791,6 +774,14 @@ class WebSocketHardware(Hardware):
         self._requests: dict[UUID: Future] = {}
         self._task: Task | None = None
         self._stop_event: Event = Event()
+
+    async def _on_initialize(self) -> None:
+        await super()._on_initialize()
+        await self.register()
+
+    async def _on_terminate(self) -> None:
+        await super()._on_terminate()
+        await self.unregister()
 
     @property
     def connected(self) -> bool:
@@ -878,6 +869,8 @@ class WebSocketHardware(Hardware):
 #   Subclasses based on hardware type/function
 # ---------------------------------------------------------------------------
 class Actuator(Hardware):
+    __slots__ = ()
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self.type not in gv.HardwareType.actuator:
@@ -885,6 +878,22 @@ class Actuator(Hardware):
 
 
 class Switch(Actuator):
+    __slots__ = ()
+
+    async def _on_initialize(self) -> None:
+        await super()._on_initialize()
+        success = await self.turn_off()
+        if not success:
+            hardware_logger.warning(
+                f"Failed to turn {self.name} ({self.uid}) off")
+
+    async def _on_terminate(self) -> None:
+        await super()._on_terminate()
+        success = await self.turn_off()
+        if not success:
+            hardware_logger.warning(
+                f"Failed to turn {self.name} ({self.uid}) off")
+
     async def turn_on(self) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
@@ -897,13 +906,31 @@ class Switch(Actuator):
 
 
 class Dimmer(Actuator):
-    async def set_pwm_level(self, level) -> bool:
+    __slots__ = ()
+
+    async def _on_initialize(self) -> None:
+        await super()._on_initialize()
+        success = await self.set_pwm_level(0)
+        if not success:
+            hardware_logger.warning(
+                f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+
+    async def _on_terminate(self) -> None:
+        await super()._on_terminate()
+        success = await self.set_pwm_level(0)
+        if not success:
+            hardware_logger.warning(
+                f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+
+    async def set_pwm_level(self, level: float | int) -> bool:
         raise NotImplementedError(
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
 
 class BaseSensor(Hardware):
+    __slots__ = ("_device",)
+
     measures_available: ClassVar[dict[Measure, Unit | None] | Ellipsis | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -969,6 +996,8 @@ class BaseSensor(Hardware):
 
 
 class LightSensor(BaseSensor):
+    __slots__ = ()
+
     async def get_lux(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
@@ -980,6 +1009,8 @@ class LightSensor(BaseSensor):
 #   Other simple subclasses
 # ---------------------------------------------------------------------------
 class PlantLevelHardware(Hardware):
+    __slots__ = ()
+
     def __init__(self, *args, **kwargs) -> None:
         kwargs["level"] = gv.HardwareLevel.plants
         super().__init__(*args, **kwargs)
@@ -994,10 +1025,14 @@ class PlantLevelHardware(Hardware):
 #   Composition subclasses
 # ---------------------------------------------------------------------------
 class gpioSensor(BaseSensor, gpioHardware):
+    __slots__ = ("_device", "_pin")
+
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class i2cSensor(BaseSensor, i2cHardware):
+    __slots__ = ()
+
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")

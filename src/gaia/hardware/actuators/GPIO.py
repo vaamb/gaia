@@ -18,9 +18,14 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class gpioSwitch(gpioHardware, Switch):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    __slots__ = ()
+
+    def _init_pin(self) -> None:
         self.pin.init(mode=self.OUT)
+
+    async def _on_initialize(self) -> None:
+        await super()._on_initialize()
+        await run_sync(self._init_pin)
 
     def _turn_on(self) -> bool:
         self.pin.value(val=1)
@@ -38,13 +43,10 @@ class gpioSwitch(gpioHardware, Switch):
 
 
 class gpioDimmer(gpioHardware, Dimmer):
+    __slots__ = ("_dimmer",)
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not self.address.type == AddressType.GPIO:  # pragma: no cover
-            raise ValueError(
-                "gpioDimmable address must be of type"
-                "'addressType1_addressNum1:GPIO_pinNumber'"
-            )
         self._dimmer: pwmio.PWMOut | None = None
 
     @property
@@ -66,8 +68,8 @@ class gpioDimmer(gpioHardware, Dimmer):
             from gaia.hardware._compatibility import pwmio
         return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)
 
-    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
-        return await run_sync(self._set_pwm_level, duty_cycle_in_percent)
+    async def set_pwm_level(self, level: float | int) -> bool:
+        return await run_sync(self._set_pwm_level, level)
 
     def _set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
         duty_cycle_in_16_bit = duty_cycle_in_percent / 100 * (2**16 - 1)
@@ -77,7 +79,7 @@ class gpioDimmer(gpioHardware, Dimmer):
 
 
 class gpioDimmable(gpioSwitch, gpioDimmer):
-    pass
+    __slots__ = ()
 
 
 gpio_actuator_models = {
