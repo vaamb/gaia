@@ -90,6 +90,7 @@ def called_through(function: str) -> bool:
 # ---------------------------------------------------------------------------
 #   Hardware address
 # ---------------------------------------------------------------------------
+@dataclass(frozen=True)
 class Address:
     """Represents a hardware address with support for different connection types.
 
@@ -109,7 +110,8 @@ class Address:
     multiplexer_address: int | None
     multiplexer_channel: int | None
 
-    def __init__(self, address_string: str) -> None:
+    @classmethod
+    def from_str(cls, address_string: str) -> Self:
         """Initialize an Address from a string representation.
 
         Args:
@@ -151,11 +153,7 @@ class Address:
             else:
                 if pin_number not in pin_bcm_to_board:
                     raise InvalidAddressError(f"BCM pin {pin_number} is not a valid GPIO pin")
-
-            self.type = AddressType.GPIO
-            self.main = pin_number
-            self.multiplexer_address = None
-            self.multiplexer_channel = None
+            return cls(AddressType.GPIO, pin_number, None, None)
 
         # The hardware is using the I2C protocol
         elif address_type == "i2c":
@@ -183,33 +181,24 @@ class Address:
                         "'I2C_<multiplexer_addr>#<channel>@<device_addr>'"
                     ) from e
             else:
-                raise InvalidAddressError(f"Invalid address type: {address_type}. {self._hint()}")
-            self.type = AddressType.I2C
-            self.main = main
-            self.multiplexer_address = multiplexer_address
-            self.multiplexer_channel = multiplexer_channel
+                raise InvalidAddressError(f"Invalid address type: {address_type}. {cls._hint()}")
+            return cls(AddressType.I2C, main, multiplexer_address, multiplexer_channel)
+
+        # The hardware is using the one wire protocol
+        elif address_type == "onewire":
+            main = address_number if address_number != "default" else None
+            return cls(AddressType.ONEWIRE, main, None, None)
+
+        # The hardware is a Pi Camera
+        elif address_type.lower() == "picamera":
+            return cls(AddressType.PICAMERA, None, None, None)
 
         # The hardware is using the SPI protocol
         elif address_type == "spi":
             raise NotImplementedError("SPI address type is not currently supported.")
-
-        # The hardware is using the one wire protocol
-        elif address_type == "onewire":
-            self.type = AddressType.ONEWIRE
-            self.main = address_number if address_number != "default" else None
-            self.multiplexer_address = None
-            self.multiplexer_channel = None
-
-        # The hardware is a Pi Camera
-        elif address_type.lower() == "picamera":
-            self.type = AddressType.PICAMERA
-            self.main = None
-            self.multiplexer_address = None
-            self.multiplexer_channel = None
-
         # The address is not valid
         else:
-            raise InvalidAddressError(f"Invalid address type: {address_type}. {self._hint()}")
+            raise InvalidAddressError(f"Invalid address type: {address_type}. {cls._hint()}")
 
     def __repr__(self) -> str:
         if self.type == AddressType.PICAMERA:
@@ -351,8 +340,7 @@ class Hardware(metaclass=_MetaHardware):
         self._type: gv.HardwareType = type
         self._groups: set[str] = set(groups) if groups else set()
         self._model: str = model
-        self._name: str = name
-        self._address = Address(address)
+        self._address = Address.from_str(address)
         if multiplexer_model is None and self._address.is_multiplexed:
             raise ValueError("Multiplexed address should be used with a multiplexer.")
         if multiplexer_model is not None and not self._address.is_multiplexed:
@@ -619,12 +607,14 @@ class i2cHardware(Hardware):
 
         def inject_default_address(address: Address) -> Address:
             # Using default address if address is 0
+            main = address.main
+            multiplexer_address = address.multiplexer_address
             if address.main == 0x0:
-                address.main = self.default_address
+                main = self.default_address
             if address.is_multiplexed:
                 if address.multiplexer_address == 0x0:
-                    address.multiplexer_address = self.multiplexer.address
-            return address
+                    multiplexer_address = self.multiplexer.address
+            return Address(address.type, main, multiplexer_address, address.multiplexer_channel)
 
         self._address = inject_default_address(self._address)
 
