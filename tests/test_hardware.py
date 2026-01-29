@@ -18,76 +18,90 @@ from .data import (
     ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid)
 
 
-@pytest.mark.asyncio
-async def test_hardware_models(ecosystem: Ecosystem):
-    for hardware_cls in hardware_models.values():
-        # Create required config
-        hardware_cls: Type[Hardware]
-        hardware_cfg: gv.HardwareConfigDict = {
-            "uid": create_uid(16),
-            "name": "VirtualTestHardware",
-            "address": None,
-            "model": None,
-            "type": None,
-            "level": None,
-            "measures": [],
-            "plants": [],
-            "multiplexer_model": None,
-        }
-        # Setup address
-        if issubclass(hardware_cls, gpioHardware):
-            hardware_cfg["address"] = "GPIO_12"
-        elif issubclass(hardware_cls, i2cHardware):
-            hardware_cfg["address"] = "I2C_default"
-        elif issubclass(hardware_cls, OneWireHardware):
-            hardware_cfg["address"] = "onewire_default"
-        elif issubclass(hardware_cls, PiCamera):
-            hardware_cfg["address"] = "picamera"
-        else:
-            raise ValueError("Unknown hardware address")
-        # Setup model
-        hardware_cfg["model"] = hardware_cls.__name__
-        # Setup type
-        if issubclass(hardware_cls, BaseSensor):
-            hardware_cfg["type"] = gv.HardwareType.sensor
-        elif issubclass(hardware_cls, Camera):
-            hardware_cfg["type"] = gv.HardwareType.camera
-        elif issubclass(hardware_cls, (Dimmer, Switch)):
-            hardware_cfg["type"] = gv.HardwareType.light
-        else:
-            raise ValueError("Unknown hardware type")
-        # Setup measures
-        if issubclass(hardware_cls, BaseSensor):
-            hardware_cfg["measures"] = [
+def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
+    base_cfg: gv.HardwareConfigDict = {
+        "uid": create_uid(16),
+        "name": "VirtualTestHardware",
+        "address": None,
+        "model": None,
+        "type": None,
+        "level": None,
+        "measures": [],
+        "plants": [],
+        "multiplexer_model": None,
+    }
+
+    # Setup address
+    if issubclass(hardware_cls, gpioHardware):
+        base_cfg["address"] = "GPIO_12"
+    elif issubclass(hardware_cls, i2cHardware):
+        base_cfg["address"] = "I2C_default"
+    elif issubclass(hardware_cls, OneWireHardware):
+        base_cfg["address"] = "onewire_default"
+    elif issubclass(hardware_cls, PiCamera):
+        base_cfg["address"] = "picamera"
+    else:
+        raise ValueError("Unknown hardware address")
+
+    # Setup model
+    base_cfg["model"] = hardware_cls.__name__
+
+    # Setup type
+    if issubclass(hardware_cls, BaseSensor):
+        base_cfg["type"] = gv.HardwareType.sensor
+    elif issubclass(hardware_cls, Camera):
+        base_cfg["type"] = gv.HardwareType.camera
+    elif issubclass(hardware_cls, (Dimmer, Switch)):
+        base_cfg["type"] = gv.HardwareType.light
+    else:
+        raise ValueError("Unknown hardware type")
+
+    # Setup measures
+    if issubclass(hardware_cls, BaseSensor):
+        if hardware_cls.measures_available is not Ellipsis:
+            base_cfg["measures"] = [
                 measure.name
                 for measure in hardware_cls.measures_available.keys()
             ]
-        # Setup plants
-        if issubclass(hardware_cls, PlantLevelHardware):
-            hardware_cfg["level"] = gv.HardwareLevel.plants
-            hardware_cfg["plants"] = ["VirtualTestPlant"]
         else:
-            hardware_cfg["level"] = gv.HardwareLevel.environment
+            base_cfg["measures"] = ["temperature|°C", "humidity|%"]
+    # Setup plants
+    if issubclass(hardware_cls, PlantLevelHardware):
+        base_cfg["level"] = gv.HardwareLevel.plants
+        base_cfg["plants"] = ["VirtualTestPlant"]
+    else:
+        base_cfg["level"] = gv.HardwareLevel.environment
 
-        # Test hardware
+    return base_cfg
+
+
+@pytest.mark.asyncio
+async def test_hardware_methods(ecosystem: Ecosystem):
+    for hardware_cls in hardware_models.values():
+        # Create required config
+        hardware_cls: Type[Hardware]
+        hardware_cfg = _get_hardware_config(hardware_cls)
+
+        # Make sure the hardware can be initialized
         hardware = hardware_cls._unsafe_from_config(
             gv.HardwareConfig(**hardware_cfg), ecosystem=ecosystem)
+        # Make sure the hardware has the required attributes and methods
         if isinstance(hardware, gpioHardware):
             assert hardware.pin
         if isinstance(hardware, i2cHardware):
-            hardware._get_i2c()
+            assert hardware._get_i2c() is not None
         if isinstance(hardware, PlantLevelHardware):
-            assert hardware.plants
+            assert len(hardware.plants) > 0
         if isinstance(hardware, BaseSensor):
             assert await hardware.get_data()
         if isinstance(hardware, Camera):
             assert hardware.camera_dir
             assert await hardware.get_image((42, 21))
         if isinstance(hardware, Dimmer):
-            assert await hardware.set_pwm_level(100)
+            assert isinstance(await hardware.set_pwm_level(100), bool)
         if isinstance(hardware, Switch):
-            assert await hardware.turn_on()
-            assert await hardware.turn_off()
+            assert isinstance(await hardware.turn_on(), bool)
+            assert isinstance(await hardware.turn_off(), bool)
         print(f"Test succeeded for hardware '{hardware}'")
 
 
