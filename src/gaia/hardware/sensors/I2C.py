@@ -70,9 +70,6 @@ class ENS160(i2cSensor):
         Measure.tvoc: Unit.ppm,
     }
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
     def _get_device(self) -> "_ENS160":
         if is_raspi():  # pragma: no cover
             try:
@@ -153,9 +150,6 @@ class VEML7700(i2cSensor, LightSensor):
         Measure.light: Unit.lux,
     }
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
     def _get_device(self) -> "_VEML7700":
         if is_raspi():  # pragma: no cover
             try:
@@ -202,9 +196,6 @@ class VCNL4040(i2cSensor, LightSensor):
     measures_available = {
         Measure.light: Unit.lux,
     }
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
 
     def _get_device(self) -> "_VCNL4040":
         if is_raspi():  # pragma: no cover
@@ -253,9 +244,6 @@ class CapacitiveSensor(i2cSensor):
         Measure.capacitive: None,
     }
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
     def _get_device(self) -> "Seesaw":
         if is_raspi():  # pragma: no cover
             try:
@@ -278,9 +266,6 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         Measure.moisture: Unit.RWC,
         Measure.temperature: Unit.celsius_degree,
     }
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
         moisture: float | None = None

@@ -3,11 +3,11 @@ from gaia.hardware.virtual import virtualHardware
 
 
 class virtualgpioSwitch(virtualHardware, gpioSwitch):
-    pass
+    __slots__ = ()
 
 
 class virtualgpioDimmable(virtualgpioSwitch, gpioDimmer):
-    pass
+    __slots__ = ()
 
 
 virtual_actuator_models = {

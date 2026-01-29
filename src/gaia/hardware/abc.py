@@ -550,6 +550,8 @@ class Hardware(metaclass=_MetaHardware):
 #   Subclasses based on address type
 # ---------------------------------------------------------------------------
 class gpioHardware(Hardware):
+    #__slots__ = ("_pin",)  # Find a way around the multiple inheritance issue
+
     IN = 0
     OUT = 1
 
@@ -584,6 +586,8 @@ class gpioHardware(Hardware):
 
 
 class i2cHardware(Hardware):
+    __slots__ = ()
+
     default_address: ClassVar[int | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -617,6 +621,8 @@ class i2cHardware(Hardware):
 
 
 class OneWireHardware(Hardware):
+    __slots__ = ()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self.address.type == AddressType.ONEWIRE:  # pragma: no cover
@@ -642,6 +648,8 @@ class OneWireHardware(Hardware):
 
 
 class Camera(Hardware):
+    __slots__ = ("_device", "_camera_dir")
+
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies()
         super().__init__(*args, **kwargs)
@@ -708,6 +716,8 @@ class Camera(Hardware):
 #   Subclasses based on hardware type/function
 # ---------------------------------------------------------------------------
 class Actuator(Hardware):
+    __slots__ = ()
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self.type not in gv.HardwareType.actuator:
@@ -715,6 +725,8 @@ class Actuator(Hardware):
 
 
 class Switch(Actuator):
+    __slots__ = ()
+
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.turn_off()
@@ -741,6 +753,8 @@ class Switch(Actuator):
 
 
 class Dimmer(Actuator):
+    __slots__ = ()
+
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.set_pwm_level(0)
@@ -762,6 +776,8 @@ class Dimmer(Actuator):
 
 
 class BaseSensor(Hardware):
+    __slots__ = ("_device",)
+
     measures_available: ClassVar[dict[Measure, Unit | None] | Ellipsis | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -827,6 +843,8 @@ class BaseSensor(Hardware):
 
 
 class LightSensor(BaseSensor):
+    __slots__ = ()
+
     async def get_lux(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
@@ -838,6 +856,8 @@ class LightSensor(BaseSensor):
 #   Other simple subclasses
 # ---------------------------------------------------------------------------
 class PlantLevelHardware(Hardware):
+    __slots__ = ()
+
     def __init__(self, *args, **kwargs) -> None:
         kwargs["level"] = gv.HardwareLevel.plants
         super().__init__(*args, **kwargs)
@@ -852,10 +872,14 @@ class PlantLevelHardware(Hardware):
 #   Composition subclasses
 # ---------------------------------------------------------------------------
 class gpioSensor(BaseSensor, gpioHardware):
+    __slots__ = ("_device", "_pin")
+
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class i2cSensor(BaseSensor, i2cHardware):
+    __slots__ = ()
+
     async def get_data(self) -> list[gv.SensorRecord]:
         raise NotImplementedError("This method must be implemented in a subclass")

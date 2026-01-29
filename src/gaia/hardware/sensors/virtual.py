@@ -22,14 +22,16 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class virtualSensor(virtualHardware, BaseSensor):
-    pass
+    __slots__ = ()
 
 
 class virtualDHT(DHTSensor, virtualSensor):
-    pass
+    __slots__ = ()
 
 
 class virtualDHT11(virtualDHT):
+    __slots__ = ()
+
     def _get_device(self) -> "_DHT11":
         from gaia.hardware._compatibility import DHT11 as _DHT11
 
@@ -40,6 +42,8 @@ class virtualDHT11(virtualDHT):
 
 
 class virtualDHT22(virtualDHT):
+    __slots__ = ()
+
     def _get_device(self) -> "_DHT22":
         from gaia.hardware._compatibility import DHT22 as _DHT22
 
@@ -50,6 +54,8 @@ class virtualDHT22(virtualDHT):
 
 
 class virtualAHT20(AHT20, virtualSensor):
+    __slots__ = ()
+
     def _get_device(self) -> "AHTx0":
         from gaia.hardware._compatibility import AHTx0
 
@@ -60,6 +66,8 @@ class virtualAHT20(AHT20, virtualSensor):
 
 
 class virtualVCNL4040(VCNL4040, virtualSensor):
+    __slots__ = ()
+
     def _get_device(self) -> "_VCNL4040":
         from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
 
@@ -70,6 +78,8 @@ class virtualVCNL4040(VCNL4040, virtualSensor):
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
+    __slots__ = ()
+
     def _get_device(self) -> "_VEML7700":
         from gaia.hardware._compatibility import VEML7700 as _VEML7700
 
@@ -80,6 +90,8 @@ class virtualVEML7700(VEML7700, virtualSensor):
 
 
 class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
+    __slots__ = ()
+
     def _get_device(self) -> "Seesaw":
         from gaia.hardware._compatibility import Seesaw as _Seesaw
 
@@ -90,6 +102,8 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
 
 
 class virtualENS160(ENS160, virtualSensor):
+    __slots__ = ()
+
     def _get_device(self) -> "_ENS160":
         from gaia.hardware._compatibility import ENS160 as _ENS160
 
