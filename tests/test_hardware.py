@@ -21,7 +21,7 @@ from gaia.utils import create_uid
 
 from .data import (
     debug_log_file, ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid,
-    sensor_uid, ws_actuator_uid)
+    sensor_uid, ws_switch_uid, ws_dimmer_uid)
 from .utils import get_logs_content
 
 
@@ -146,7 +146,7 @@ def test_i2c_address_injection(ecosystem: Ecosystem):
 @pytest.mark.asyncio
 class TestWebsocketHardware:
     async def test_hardware(self, ecosystem: Ecosystem):
-        hardware: WebSocketSwitch = ecosystem.hardware[ws_actuator_uid]
+        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
         # Hardware registration is taken care of by the ecosystem setup
 
         # Test device connection
@@ -184,7 +184,7 @@ class TestWebsocketHardware:
         # Hardware unregistration is taken care of by the ecosystem teardown
 
     async def test_switch(self, ecosystem: Ecosystem):
-        hardware: WebSocketSwitch = ecosystem.hardware[ws_actuator_uid]
+        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
         # Hardware registration is taken care of by the ecosystem setup
 
         # Connect the device
@@ -216,6 +216,37 @@ class TestWebsocketHardware:
         raw_response = await websocket.recv()
         response = WebsocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "turn_actuator", "data": "off"}
+        payload = WebsocketMessage(
+            uuid=response.uuid,
+            data={
+                "status": gv.Result.success,
+            }
+        ).model_dump_json()
+
+        await websocket.send(payload)
+        await sleep(0.1)
+        response = await task
+        assert response
+
+        # Stop the manager as otherwise the test can hang forever
+        await hardware._websocket_manager.stop()
+        # Hardware unregistration is taken care of by the ecosystem teardown
+
+    async def test_dimmer(self, ecosystem: Ecosystem):
+        hardware: WebSocketDimmer = ecosystem.hardware[ws_dimmer_uid]
+        # Hardware registration is taken care of by the ecosystem setup
+
+        # Connect the device
+        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+        await websocket.send(hardware.uid)
+        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+
+        # Turn on
+        task = create_task(hardware.set_pwm_level(42))
+        await sleep(0.1)
+        raw_response = await websocket.recv()
+        response = WebsocketMessage.model_validate_json(raw_response)
+        assert response.data == {"action": "set_level", "data": 42}
         payload = WebsocketMessage(
             uuid=response.uuid,
             data={

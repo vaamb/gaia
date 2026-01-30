@@ -151,12 +151,27 @@ ws_sensor_info: gv.AnonymousHardwareConfigDict = {
 }
 
 
-ws_actuator_uid = "pkMEVC918eJehEz7"
-ws_actuator_info: gv.AnonymousHardwareConfigDict = {
-    "name": "WSActuator",
+ws_switch_uid = "pkMEVC918eJehEz7"
+ws_switch_info: gv.AnonymousHardwareConfigDict = {
+    "name": "WSSwitch",
     "active": True,
     "address": "websocket_127.0.0.1",
     "model": "WebSocketSwitch",
+    "type": gv.HardwareType.heater,
+    "level": gv.HardwareLevel.environment,
+#    "groups": None,
+#    "measures": [],
+#    "plants": [],
+#    "multiplexer_model": None,
+}
+
+
+ws_dimmer_uid = "IVkqIEzUWSRDIYOq"
+ws_dimmer_info: gv.AnonymousHardwareConfigDict = {
+    "name": "WSDimmer",
+    "active": True,
+    "address": "websocket",
+    "model": "WebSocketDimmer",
     "type": gv.HardwareType.heater,
     "level": gv.HardwareLevel.environment,
 #    "groups": None,
@@ -180,7 +195,8 @@ IO_dict = {
     camera_uid: camera_info,
     inactive_uid: inactive_info,
     ws_sensor_uid: ws_sensor_info,
-    ws_actuator_uid: ws_actuator_info,
+    ws_switch_uid: ws_switch_info,
+    ws_dimmer_uid: ws_dimmer_info,
 }
 
 

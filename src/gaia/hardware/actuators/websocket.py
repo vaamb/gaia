@@ -2,8 +2,6 @@ from typing import Type
 
 from websockets import ConnectionClosedOK
 
-import gaia_validators as gv
-
 from gaia.hardware.abc import Dimmer, Hardware, Switch, WebSocketHardware
 
 
@@ -44,15 +42,14 @@ class WebSocketDimmer(Dimmer, WebSocketHardware):
     async def set_pwm_level(self, level) -> bool:
         try:
             response = await self._send_msg_and_wait({"action": "set_level", "data": level})
-            response = gv.RequestResult.model_validate(response)
         except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
             return False
         else:
-            if response.status != gv.Result.success:
+            if response["status"] != "success":
                 base_msg = f"Failed to set the level to {level}"
                 if response.message:
-                    base_msg = f"{base_msg}. Error msg: `{response.message}`."
+                    base_msg = f"{base_msg}. Error msg: `{response['message']}`."
                 self._logger.error(base_msg)
                 return False
             return True
