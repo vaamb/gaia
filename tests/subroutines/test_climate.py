@@ -9,7 +9,7 @@ from gaia import Ecosystem
 from gaia.subroutines.sensors import Sensors
 from gaia.subroutines.climate import Climate
 
-from ..data import heater_uid, humidifier_uid, temperature_cfg
+from .. import data
 
 
 @pytest.mark.asyncio
@@ -35,7 +35,7 @@ async def test_manageable(ecosystem: Ecosystem, climate_subroutine: Climate):
     assert climate_subroutine.manageable
 
     # Make sure a regulator is needed
-    climate_subroutine.ecosystem.config.delete_hardware(heater_uid)
+    climate_subroutine.ecosystem.config.delete_hardware(data.heater_uid)
     await ecosystem.refresh_hardware()
     assert not climate_subroutine.manageable
 
@@ -46,18 +46,23 @@ async def test_manageable(ecosystem: Ecosystem, climate_subroutine: Climate):
 def test_target(climate_subroutine: Climate):
     day = time(hour=12)
     target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, day)
-    assert target[0] == temperature_cfg["day"]
-    assert target[1] == temperature_cfg["hysteresis"]
+    assert target[0] == data.temperature_cfg["day"]
+    assert target[1] == data.temperature_cfg["hysteresis"]
 
     night = time(hour=22)
     target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, night)
-    assert target[0] == temperature_cfg["night"]
-    assert target[1] == temperature_cfg["hysteresis"]
+    assert target[0] == data.temperature_cfg["night"]
+    assert target[1] == data.temperature_cfg["hysteresis"]
 
 
 def test_hardware_needed(climate_subroutine: Climate):
     uids = climate_subroutine.get_hardware_needed_uid()
-    assert uids == {heater_uid, humidifier_uid}
+    assert uids == {
+        data.ws_dimmer_uid,
+        data.heater_uid,
+        data.humidifier_uid,
+        data.ws_switch_uid,
+    }
 
 
 def test_expected_actuators(climate_subroutine: Climate):
@@ -65,6 +70,7 @@ def test_expected_actuators(climate_subroutine: Climate):
     assert expected_actuators == {
         # Default actuator
         (gv.ClimateParameter.temperature, "increase"): "heater",
+        (gv.ClimateParameter.humidity, "decrease"): "dehumidifier",
         # Overridden actuator
         (gv.ClimateParameter.humidity, "increase"): "fogger",
     }
@@ -168,6 +174,7 @@ async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors)
 
     assert set(climate_subroutine.actuator_handlers) == {
         (gv.ClimateParameter.temperature, "increase"),  # "heater"
+        (gv.ClimateParameter.humidity, "decrease"),  # "dehumidifier"
         (gv.ClimateParameter.humidity, "increase"),  # "fogger"
     }
 
