@@ -137,7 +137,7 @@ class Address:
     __slots__ = ("type", "main", "multiplexer_address", "multiplexer_channel")
 
     type: AddressType
-    main: int | None
+    main: int | str | None
     multiplexer_address: int | None
     multiplexer_channel: int | None
 
@@ -771,7 +771,7 @@ class WebSocketHardware(Hardware):
             WebSocketHardware._websocket_manager = manager
         self._websocket_manager = WebSocketHardware._websocket_manager
         self._logger = getLogger(f"gaia.hardware.websocket.{self.uid}")
-        self._requests: dict[UUID: Future] = {}
+        self._requests: dict[UUID, Future] = {}
         self._task: Task | None = None
         self._stop_event: Event = Event()
 
@@ -792,6 +792,7 @@ class WebSocketHardware(Hardware):
         while not self._stop_event.is_set():
             connection = self._websocket_manager.get_connection(self.uid)
             if connection is not None:
+                wait_time = 1
                 try:
                     await self._listening_loop(connection)
                 except ConnectionClosed:
@@ -802,8 +803,6 @@ class WebSocketHardware(Hardware):
             except TimeoutError:
                 wait_time *= 2
                 wait_time = min(32, wait_time)
-            else:
-                wait_time = 1
 
     async def _listening_loop(self, connection: ServerConnection) -> None:
         async for msg in connection:
@@ -841,6 +840,8 @@ class WebSocketHardware(Hardware):
         except TimeoutError:
             self._logger.error(f"Timeout while waiting for response from device '{self.uid}'")
             raise
+        finally:
+            self._requests.pop(uuid, None)
 
     async def _execute_action(self, action: dict, error_msg: str) -> bool:
         try:
