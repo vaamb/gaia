@@ -74,8 +74,8 @@ class WebSocketHardwareManager:
         # If the device uid is registered, close the connection
         if device_uid not in self._registered_hardware:
             self.logger.warning(
-                f"Device {device_uid} is trying to connect but is not in the "
-                f"ecosystem config, closing connection")
+                f"Device {device_uid} is trying to connect but is not registered. "
+                f"Closing connection")
             await connection.close()
             return
         expected_ip = self._registered_hardware[device_uid]
