@@ -872,6 +872,7 @@ class WebSocketHardware(Hardware):
         self._stop_event.set()
         if self._task is not None:
             self._task.cancel()
+            await sleep(0)  # Allow the task to be canceled
             self._task = None
         # If not more hardware are registered, there is no need to keep the manager
         #  running
