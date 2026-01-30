@@ -6,6 +6,8 @@ import gaia_validators as gv
 
 from gaia.hardware.abc import BaseSensor, WebSocketHardware
 
+from websockets import ConnectionClosed
+
 
 SensorRecords = RootModel[list[gv.SensorRecord]]
 
@@ -16,7 +18,8 @@ class WebSocketSensor(BaseSensor, WebSocketHardware):
     async def get_data(self) -> list[gv.SensorRecord]:
         try:
             data = await self._send_msg_and_wait({"action": "send_data"})
-        except ConnectionError:
+            self._logger.error("Could not connect to the device")
+        except (ConnectionError, ConnectionClosed):
             return []
         try:
             data: list[gv.SensorRecord] = SensorRecords.model_validate(data).model_dump()
