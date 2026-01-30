@@ -828,7 +828,7 @@ class WebSocketHardware(Hardware):
         payload = WebsocketMessage(uuid=None, data=msg).model_dump_json()
         await connection.send(payload)
 
-    async def _send_msg_and_wait(self, msg: Any) -> Any:
+    async def _send_msg_and_wait(self, msg: Any, timeout: int | float = 60) -> Any:
         connection = self._websocket_manager.get_connection(self.uid)
         if connection is None:
             raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
@@ -836,7 +836,11 @@ class WebSocketHardware(Hardware):
         self._requests[uuid] = Future()
         payload = WebsocketMessage(uuid=uuid, data=msg).model_dump_json()
         await connection.send(payload)
-        return await self._requests[uuid]
+        try:
+            return await wait_for(self._requests[uuid], timeout)
+        except TimeoutError:
+            self._logger.error(f"Timeout while waiting for response from device '{self.uid}'")
+            raise
 
     async def register(self) -> None:
         if not self._websocket_manager.is_running:

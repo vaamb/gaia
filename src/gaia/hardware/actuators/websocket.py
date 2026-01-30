@@ -12,6 +12,9 @@ class WebSocketSwitch(Switch, WebSocketHardware):
         except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
             return False
+        except TimeoutError:
+            self._logger.error("Timeout while waiting for response from device")
+            return False
         else:
             if response["status"] != "success":
                 base_msg = "Failed to turn on the switch"
@@ -27,6 +30,9 @@ class WebSocketSwitch(Switch, WebSocketHardware):
             response = await self._send_msg_and_wait({"action": "turn_actuator", "data": "off"})
         except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
+            return False
+        except TimeoutError:
+            self._logger.error("Timeout while waiting for response from device")
             return False
         else:
             if response["status"] != "success":
@@ -44,6 +50,9 @@ class WebSocketDimmer(Dimmer, WebSocketHardware):
             response = await self._send_msg_and_wait({"action": "set_level", "data": level})
         except (ConnectionError, ConnectionClosedOK):
             self._logger.error("Could not connect to the device")
+            return False
+        except TimeoutError:
+            self._logger.error("Timeout while waiting for response from device")
             return False
         else:
             if response["status"] != "success":

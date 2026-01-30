@@ -179,6 +179,10 @@ class TestWebsocketHardware:
         response = await task
         assert response == msg * 2
 
+        # Test ´_send_msg_and_wait()´ timeout
+        with pytest.raises(TimeoutError):
+            await hardware._send_msg_and_wait(msg, timeout=0.1)
+
         # Stop the manager as otherwise the test can hang forever
         await hardware._websocket_manager.stop()
         # Hardware unregistration is taken care of by the ecosystem teardown
