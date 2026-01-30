@@ -286,7 +286,10 @@ class TestWebsocketHardware:
         data = [gv.SensorRecord("not_an_uid", "def_a_measure", 42, None)]
         payload = WebsocketMessage(
             uuid=response.uuid,
-            data=data
+            data={
+                "status": gv.Result.success,
+                "data": data,
+            }
         ).model_dump_json()
         await websocket.send(payload)
         await sleep(0.1)

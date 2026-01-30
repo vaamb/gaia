@@ -17,14 +17,15 @@ class WebSocketSensor(BaseSensor, WebSocketHardware):
 
     async def get_data(self) -> list[gv.SensorRecord]:
         try:
-            data = await self._send_msg_and_wait({"action": "send_data"})
-            self._logger.error("Could not connect to the device")
-        except (ConnectionError, ConnectionClosed):
+            response = await self._send_msg_and_wait({"action": "send_data"})
+        except (ConnectionError, ConnectionClosed, TimeoutError) as e:
+            self._logger.error(f"Could not connect: {e}")
             return []
         try:
+            data = response["data"]
             data: list[gv.SensorRecord] = SensorRecords.model_validate(data).model_dump()
-        except ValidationError:
-            self._logger.error(f"Received an invalid `SensorRecord`: {data}")
+        except (KeyError, ValidationError):
+            self._logger.error(f"Received an invalid response: {response}")
             return []
         else:
             return data
