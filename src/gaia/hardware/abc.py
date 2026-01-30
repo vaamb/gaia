@@ -842,6 +842,18 @@ class WebSocketHardware(Hardware):
             self._logger.error(f"Timeout while waiting for response from device '{self.uid}'")
             raise
 
+    async def _execute_action(self, action: dict, error_msg: str) -> bool:
+        try:
+            response = await self._send_msg_and_wait(action)
+        except (ConnectionError, ConnectionClosedOK, TimeoutError) as e:
+            self._logger.error(f"Could not connect: {e}")
+            return False
+        if response.get("status") != "success":
+            msg = response.get("message", "")
+            self._logger.error(f"{error_msg}. {msg}" if msg else error_msg)
+            return False
+        return True
+
     async def register(self) -> None:
         if not self._websocket_manager.is_running:
             await self._websocket_manager.start()
