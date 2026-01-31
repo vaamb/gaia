@@ -860,7 +860,7 @@ class WebSocketHardware(Hardware):
             await self._websocket_manager.start()
         await self._websocket_manager.register_hardware(self.uid, self.address.main)
         self._task = create_task(self._connection_loop())
-        await sleep(0.1)  # Allow the task to start
+        await sleep(0)  # Allow the task to start
 
     async def unregister(self) -> None:
         try:

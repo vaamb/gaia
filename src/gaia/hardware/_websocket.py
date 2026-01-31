@@ -57,7 +57,7 @@ class WebSocketHardwareManager:
         if self.is_running:
             raise RuntimeError("WebSocketHardwareManager is already running")
         self._running_task = create_task(self._start())
-        await sleep(0.1)  # Allow the task to start
+        await sleep(0)  # Allow the task to start
 
     async def stop(self) -> None:
         if not self.is_running:
