@@ -65,7 +65,8 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
 @pytest.mark.asyncio
 async def test_hardware(ecosystem: Ecosystem, engine_config: EngineConfig):
     # This test requires empty hardware
-    ecosystem._hardware = {}
+    for hardware_uid in [*ecosystem.hardware.keys()]:
+        await ecosystem.remove_hardware(hardware_uid)
 
     await ecosystem.add_hardware(data.hardware_uid)
     with get_logs_content(engine_config.logs_dir / data.debug_log_file) as logs:
