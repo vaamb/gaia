@@ -84,7 +84,7 @@ configure_hardware() {
     fi
 
     # Create backup
-    if [ ${IS_RASPI} ] && [ ! -f "${config_backup}" ]; then
+    if [ "${IS_RASPI}" = "true" ] && [ ! -f "${config_backup}" ]; then
         sudo cp "${config_file}" "${config_backup}"
         log INFO "Created backup of ${config_file} as ${config_backup}"
     fi
@@ -213,7 +213,7 @@ install_service() {
 cleanup() {
     local exit_code=$?
 
-    if [ ${exit_code} -ne 0 ]; then
+    if [ "${exit_code}" -ne 0 ]; then
         log ERROR "Installation failed. Check the log file for details: ${LOG_FILE}"
         rm -r "${GAIA_DIR}"
     else
