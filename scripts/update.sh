@@ -52,11 +52,11 @@ check_requirements() {
     fi
 
     # Check if the directory exists
-    if [[ ! -d "$GAIA_DIR" ]]; then
-        log ERROR "Gaia directory not found at $GAIA_DIR. Please check your installation."
+    if [[ ! -d "${GAIA_DIR}" ]]; then
+        log ERROR "Gaia directory not found at ${GAIA_DIR}. Please check your installation."
     fi
 
-    cd "$GAIA_DIR" || log ERROR "Failed to change to Gaia directory: $GAIA_DIR"
+    cd "${GAIA_DIR}" || log ERROR "Failed to change to Gaia directory: ${GAIA_DIR}"
 
     # Check if virtual environment exists
     if [[ ! -d "python_venv" ]]; then
@@ -66,8 +66,8 @@ check_requirements() {
 
 create_backup() {
     # Create backup directory
-    cp -r "$GAIA_DIR" "$BACKUP_DIR" ||
-        log ERROR "Failed to create backup directory: $BACKUP_DIR"
+    cp -r "${GAIA_DIR}" "${BACKUP_DIR}" ||
+        log ERROR "Failed to create backup directory: ${BACKUP_DIR}"
 }
 
 # Function to update a single repository
@@ -77,12 +77,12 @@ update_repo() {
 
     log INFO "\nChecking $repo_name..."
 
-    if [[ ! -d "$repo_dir/.git" ]]; then
-        log WARN "$repo_dir is not a git repository. Skipping."
+    if [[ ! -d "${repo_dir}/.git" ]]; then
+        log WARN "${repo_dir} is not a git repository. Skipping."
         return 1
     fi
 
-    cd "$repo_dir" || return 1
+    cd "${repo_dir}" || return 1
 
     # Get current branch and status
     local current_branch
@@ -91,15 +91,15 @@ update_repo() {
     has_changes=$(git status --porcelain)
 
     if [[ -n "$has_changes" ]]; then
-        log WARN "$repo_name has uncommitted changes. Stashing them..."
-        if [[ "$DRY_RUN" == false ]]; then
+        log WARN "${repo_name} has uncommitted changes. Stashing them..."
+        if [[ "${DRY_RUN}" == false ]]; then
             git stash save "Stashed by Gaia update script"
         fi
     fi
 
     # Fetch all updates
-    log INFO "Fetching updates for $repo_name..."
-    if [[ "$DRY_RUN" == false ]]; then
+    log INFO "Fetching updates for ${repo_name}..."
+    if [[ "${DRY_RUN}" == false ]]; then
         git fetch --all --tags --prune
     fi
 
@@ -109,42 +109,42 @@ update_repo() {
     local latest_tag
     latest_tag=$(git describe --tags "$(git rev-list --tags --max-count=1 2>/dev/null)" 2>/dev/null || echo "No tags found")
 
-    log "Current version: $current_tag"
-    log "Latest version:  $latest_tag"
+    log "Current version: ${current_tag}"
+    log "Latest version:  ${latest_tag}"
 
-    if [[ "$current_tag" == "$latest_tag" && "$FORCE_UPDATE" == false ]]; then
-        log WARN "$repo_name is already at the latest version. Use -f to force update."
+    if [[ "${current_tag}" == "${latest_tag}" && "${FORCE_UPDATE}" == false ]]; then
+        log WARN "{$repo_name} is already at the latest version. Use -f to force update."
         return 0
     fi
 
-    if [[ "$DRY_RUN" == true ]]; then
-        log INFO "[DRY RUN] Would update $repo_name from $current_tag to $latest_tag"
+    if [[ "${DRY_RUN}" == true ]]; then
+        log INFO "[DRY RUN] Would update ${repo_name} from ${current_tag} to ${latest_tag}"
         return 0
     fi
 
     # Checkout the latest tag
-    log INFO "Updating $repo_name to $latest_tag..."
-    git checkout "$latest_tag"
+    log INFO "Updating ${repo_name} to ${latest_tag}..."
+    git checkout "${latest_tag}"
 
     # Install the package in development mode
     if [[ -f "pyproject.toml" ]]; then
-        log INFO "Installing $repo_name..."
+        log INFO "Installing ${repo_name}..."
         pip install -e .
     fi
 
     # Return to the original branch if not on a detached HEAD
-    if [[ "$current_branch" != "HEAD" ]]; then
-        log INFO "Returning to branch $current_branch..."
-        git checkout "$current_branch"
+    if [[ "${current_branch}" != "HEAD" ]]; then
+        log INFO "Returning to branch ${current_branch}..."
+        git checkout "${current_branch}"
 
         # Apply stashed changes if any
-        if [[ -n "$has_changes" ]]; then
+        if [[ -n "${has_changes}" ]]; then
             log INFO "Restoring stashed changes..."
             git stash pop
         fi
     fi
 
-    log SUCCESS "$repo_name updated to $latest_tag"
+    log SUCCESS "${repo_name} updated to ${latest_tag}"
     return 0
 }
 
@@ -200,7 +200,7 @@ update_service() {
 cleanup() {
     local exit_code=$?
 
-    if [ ${exit_code} -ne 0 ]; then
+    if [ "${exit_code}" -ne 0 ]; then
         log WARN "Update failed. Check the log file for details: ${LOG_FILE}"
         if [[ -d "${BACKUP_DIR}" && "${DRY_RUN}" == false ]]; then
             log WARN "Attempting rollback from backup..."
