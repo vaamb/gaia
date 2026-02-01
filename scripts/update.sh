@@ -273,8 +273,6 @@ main () {
     else
         echo -e "\nThis was a dry run. No changes were made. Use ${YELLOW}$0${NC} without --dry-run to perform the updates."
     fi
-
-    exit 0
 }
 
 main "$@"
