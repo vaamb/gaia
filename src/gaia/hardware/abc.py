@@ -107,7 +107,7 @@ class Address:
     __slots__ = ("type", "main", "multiplexer_address", "multiplexer_channel")
 
     type: AddressType
-    main: int | None
+    main: int | str | None
     multiplexer_address: int | None
     multiplexer_channel: int | None
 
