@@ -95,6 +95,8 @@ class Light(SubroutineTemplate[Switch]):
         # Stop light routine
         self._task.cancel()
         self._task = None
+        # Reset light sensors
+        self.reset_light_sensors()
         # Deactivate actuator handler
         async with self.actuator_handler.update_status_transaction(activation=True):
             self.actuator_handler.deactivate()
