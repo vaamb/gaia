@@ -1,3 +1,4 @@
+import asyncio
 from asyncio import create_task, sleep
 
 import math
@@ -5,15 +6,16 @@ from typing import Type
 
 import pytest
 from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosed
 
 import gaia_validators as gv
 
-from gaia import Ecosystem, Engine
+from gaia import Ecosystem, Engine, EngineConfig
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
     _MetaHardware, BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
     Measure, OneWireHardware, PlantLevelHardware, Switch, Unit, WebSocketHardware,
-    WebSocketMessage)
+    WebSocketHardwareManager, WebSocketMessage)
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
 from gaia.hardware.camera import PiCamera
@@ -146,6 +148,36 @@ def test_i2c_address_injection(ecosystem: Ecosystem):
 
 @pytest.mark.asyncio
 class TestWebsocketHardware:
+    async def test_manager(self, engine_config: EngineConfig):
+        manager = WebSocketHardwareManager(engine_config)
+
+        # Make sure the manager start and can handle connections
+        await manager.start()
+        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to start
+        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+        await websocket.send("test")
+        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+            assert f"Device test is trying to connect" in logs
+
+        # Stop manager
+        await manager.stop()
+        # Make sure the connection is closed ...
+        with pytest.raises(ConnectionClosed):
+            await websocket.send("test")
+        # ... and that it can't be reconnected
+        await sleep(0.1)  # Allow for the connection to be closed
+        with pytest.raises(ConnectionRefusedError):
+            await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+
+        # Make sure the manager can handle new connections once restarted
+        await manager.start()
+        await sleep(0.1)
+        await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+
+        # And that it can be stopped again
+        await manager.stop()
+
     async def test_hardware(self, ecosystem: Ecosystem):
         hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
         # Hardware registration is taken care of by the ecosystem setup
