@@ -113,7 +113,7 @@ def called_through(function: str) -> bool:
 # ---------------------------------------------------------------------------
 #   Validation models
 # ---------------------------------------------------------------------------
-class WebsocketMessage(gv.BaseModel):
+class WebSocketMessage(gv.BaseModel):
     uuid: UUID | None = None
     data: Any
 
@@ -812,7 +812,7 @@ class WebSocketHardware(Hardware):
     async def _listening_loop(self, connection: ServerConnection) -> None:
         async for msg in connection:
             try:
-                parsed_msg = WebsocketMessage.model_validate_json(msg)
+                parsed_msg = WebSocketMessage.model_validate_json(msg)
                 uuid: UUID = parsed_msg.uuid
                 data: Any = parsed_msg.data
                 if uuid not in self._requests:
@@ -829,7 +829,7 @@ class WebSocketHardware(Hardware):
         connection = self._websocket_manager.get_connection(self.uid)
         if connection is None:
             raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
-        payload = WebsocketMessage(uuid=None, data=msg).model_dump_json()
+        payload = WebSocketMessage(uuid=None, data=msg).model_dump_json()
         await connection.send(payload)
 
     async def _send_msg_and_wait(self, msg: Any, timeout: int | float = 60) -> Any:
@@ -838,7 +838,7 @@ class WebSocketHardware(Hardware):
             raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
         uuid: UUID = uuid4()
         self._requests[uuid] = Future()
-        payload = WebsocketMessage(uuid=uuid, data=msg).model_dump_json()
+        payload = WebSocketMessage(uuid=uuid, data=msg).model_dump_json()
         await connection.send(payload)
         try:
             return await wait_for(self._requests[uuid], timeout)

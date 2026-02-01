@@ -13,7 +13,7 @@ from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
     _MetaHardware, BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
     Measure, OneWireHardware, PlantLevelHardware, Switch, Unit, WebSocketHardware,
-    WebsocketMessage)
+    WebSocketMessage)
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
 from gaia.hardware.camera import PiCamera
@@ -161,7 +161,7 @@ class TestWebsocketHardware:
         msg = "Test msg"
         await hardware._send_msg_and_forget(msg)
         raw_response = await websocket.recv()
-        response = WebsocketMessage.model_validate_json(raw_response)
+        response = WebSocketMessage.model_validate_json(raw_response)
         assert response.uuid is None
         assert response.data == msg
 
@@ -170,11 +170,11 @@ class TestWebsocketHardware:
         task = create_task(hardware._send_msg_and_wait(msg))
         await sleep(0.1)
         raw_response = await websocket.recv()
-        response = WebsocketMessage.model_validate_json(raw_response)
+        response = WebSocketMessage.model_validate_json(raw_response)
         assert response.uuid is not None
         assert response.data == msg
         # Get response, from device to Gaia
-        payload = WebsocketMessage(uuid=response.uuid, data=msg * 2).model_dump_json()
+        payload = WebSocketMessage(uuid=response.uuid, data=msg * 2).model_dump_json()
         await websocket.send(payload)
         await sleep(0.1)
         response = await task
@@ -201,10 +201,10 @@ class TestWebsocketHardware:
         task = create_task(hardware.turn_on())
         await sleep(0.1)
         raw_response = await websocket.recv()
-        response = WebsocketMessage.model_validate_json(raw_response)
+        response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "turn_actuator", "data": "on"}
 
-        payload = WebsocketMessage(
+        payload = WebSocketMessage(
             uuid=response.uuid,
             data={
                 "status": gv.Result.success,
@@ -219,10 +219,10 @@ class TestWebsocketHardware:
         task = create_task(hardware.turn_off())
         await sleep(0.1)
         raw_response = await websocket.recv()
-        response = WebsocketMessage.model_validate_json(raw_response)
+        response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "turn_actuator", "data": "off"}
 
-        payload = WebsocketMessage(
+        payload = WebSocketMessage(
             uuid=response.uuid,
             data={
                 "status": gv.Result.success,
@@ -250,10 +250,10 @@ class TestWebsocketHardware:
         task = create_task(hardware.set_pwm_level(42))
         await sleep(0.1)
         raw_response = await websocket.recv()
-        response = WebsocketMessage.model_validate_json(raw_response)
+        response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "set_level", "data": 42}
 
-        payload = WebsocketMessage(
+        payload = WebSocketMessage(
             uuid=response.uuid,
             data={
                 "status": gv.Result.success,
@@ -280,11 +280,11 @@ class TestWebsocketHardware:
         task = create_task(hardware.get_data())
         await sleep(0.1)
         raw_response = await websocket.recv()
-        response = WebsocketMessage.model_validate_json(raw_response)
+        response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "send_data"}
 
         data = [gv.SensorRecord("not_an_uid", "def_a_measure", 42, None)]
-        payload = WebsocketMessage(
+        payload = WebSocketMessage(
             uuid=response.uuid,
             data={
                 "status": gv.Result.success,
