@@ -169,10 +169,6 @@ update_packages() {
 }
 
 # Update scripts
-cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
-    log ERROR "Failed to copy scripts"
-chmod +x "${GAIA_DIR}/scripts/"*.sh
-
 update_scripts() {
     # Update scripts
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
