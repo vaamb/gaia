@@ -90,10 +90,21 @@ update_repo() {
     local has_changes
     has_changes=$(git status --porcelain)
 
+    local stash_created=false
     if [[ -n "$has_changes" ]]; then
         log WARN "${repo_name} has uncommitted changes. Stashing them..."
         if [[ "${DRY_RUN}" == false ]]; then
-            git stash save "Stashed by Gaia update script"
+            local stash_count_before
+            stash_count_before=$(git stash list | wc -l)
+            git stash push -m "Stashed by Gaia update script"
+            local stash_count_after
+            stash_count_after=$(git stash list | wc -l)
+            if [[ "${stash_count_after}" -gt "${stash_count_before}" ]]; then
+                stash_created=true
+                log INFO "Changes stashed successfully."
+            else
+                log WARN "Stash command ran but no stash was created."
+            fi
         fi
     fi
 
@@ -137,10 +148,13 @@ update_repo() {
         log INFO "Returning to branch ${current_branch}..."
         git checkout "${current_branch}"
 
-        # Apply stashed changes if any
-        if [[ -n "${has_changes}" ]]; then
+        # Apply stashed changes only if we actually created a stash
+        if [[ "${stash_created}" == true ]]; then
             log INFO "Restoring stashed changes..."
-            git stash pop
+            if ! git stash pop; then
+                log WARN "Failed to restore stashed changes (possible merge conflict)."
+                log WARN "Your changes are still in the stash. Use 'git stash list' and 'git stash pop' to recover them manually."
+            fi
         fi
     fi
 
