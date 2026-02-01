@@ -95,14 +95,14 @@ configure_hardware() {
         local line=$2
 
         if ! grep -q "^${pattern}" "${config_file}"; then
-            echo "${line}" >> "${config_file}";
+            echo "${line}" | sudo tee -a "${config_file}" > /dev/null
         fi
     }
 
     # Enable I2C
     if [ -f /etc/modules ]; then
         if ! grep -q "^i2c-dev" /etc/modules; then
-            echo "i2c-dev" >> /etc/modules;
+            echo "i2c-dev" | sudo tee -a "/etc/modules" > /dev/null
         fi
     fi
 
