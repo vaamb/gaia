@@ -9,8 +9,7 @@ from sqlalchemy_wrapper import SQLAlchemyWrapper
 
 from gaia import EcosystemConfig, Engine, EngineConfig
 
-from .data import debug_log_file, ecosystem_uid, sun_times
-from .utils import get_logs_content
+from .data import ecosystem_uid, sun_times
 
 
 def test_engine_singleton(engine: Engine, engine_config: EngineConfig):
@@ -44,7 +43,7 @@ def test_engine_plugins_needed(engine: Engine):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_engine_message_broker(engine: Engine):
+async def test_engine_message_broker(engine: Engine, logs_content):
     # Test when communication is disabled in config
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
     assert engine.use_message_broker is False
@@ -78,7 +77,7 @@ async def test_engine_message_broker(engine: Engine):
     # Test message broker and event handler initialization
     engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = url
     await engine.init_message_broker()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Initialising the event dispatcher" in logs
 
     assert engine._message_broker is not None
@@ -96,7 +95,7 @@ async def test_engine_message_broker(engine: Engine):
 
 
 @pytest.mark.asyncio
-async def test_engine_database(engine: Engine):
+async def test_engine_database(engine: Engine, logs_content):
     # Test when DB is disabled in config
     engine.config.app_config.USE_DATABASE = False
     assert engine.use_db is False
@@ -112,7 +111,7 @@ async def test_engine_database(engine: Engine):
     assert engine.use_db is True
 
     await engine.init_database()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Initialising the database" in logs
     assert isinstance(engine.db, SQLAlchemyWrapper)
 
@@ -125,7 +124,7 @@ async def test_engine_database(engine: Engine):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_engine_plugins(engine: Engine):
+async def test_engine_plugins(engine: Engine, logs_content):
     assert engine.config.app_config.COMMUNICATE_WITH_OURANOS is False
     assert engine.config.app_config.USE_DATABASE is False
     assert engine.plugins_needed is False
@@ -140,7 +139,7 @@ async def test_engine_plugins(engine: Engine):
     assert engine.plugins_needed is True
 
     await engine.init_plugins()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Initialising the plugins" in logs
     assert engine.plugins_initialized is True
 
@@ -154,17 +153,17 @@ async def test_engine_plugins(engine: Engine):
 
 
 @pytest.mark.asyncio
-async def test_engine_background_tasks(engine: Engine):
+async def test_engine_background_tasks(engine: Engine, logs_content):
     engine.start_background_tasks()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Starting the background tasks" in logs
     engine.stop_background_tasks()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Stopping the background tasks" in logs
 
 
 @pytest.mark.asyncio
-async def test_engine_states(engine: Engine):
+async def test_engine_states(engine: Engine, logs_content):
     assert not engine.started
     assert not engine.running
     assert not engine.paused
@@ -172,7 +171,7 @@ async def test_engine_states(engine: Engine):
     assert not engine.stopped
 
     await engine.start()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Starting Gaia ..." in logs
     assert engine.started
     assert engine.running
@@ -183,7 +182,7 @@ async def test_engine_states(engine: Engine):
         await engine.resume()
 
     engine.pause()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Pausing Gaia ..." in logs
     assert engine.started
     assert not engine.running
@@ -194,7 +193,7 @@ async def test_engine_states(engine: Engine):
         engine.pause()
 
     await engine.resume()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Resuming Gaia ..." in logs
     assert engine.started
     assert engine.running
@@ -206,7 +205,7 @@ async def test_engine_states(engine: Engine):
 
     engine.stop()
     await engine.shutdown()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Shutting down Gaia ..." in logs
     assert not engine.started
     assert not engine.running
@@ -218,11 +217,11 @@ async def test_engine_states(engine: Engine):
 
 
 @pytest.mark.asyncio
-async def test_engine_run(engine: Engine):
+async def test_engine_run(engine: Engine, logs_content):
     task = create_task(engine.run())
 
     await sleep(0.5)  # Allow to set up and start up
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Starting Gaia ..." in logs
 
     engine._handle_stop_signal()
@@ -231,14 +230,14 @@ async def test_engine_run(engine: Engine):
 
 
 @pytest.mark.asyncio
-async def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig):
+async def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig, logs_content):
     # Ecosystems are initialized during the engine initialization
     await engine.terminate_ecosystems()
     # /!\ Ecosystem need a runnable subroutine in order to start
     ecosystem_config.set_management("light", True)
 
     await engine.add_ecosystem(ecosystem_uid)
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert f"Ecosystem {ecosystem_uid} has been created" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* already exists"):
         await engine.add_ecosystem(ecosystem_uid)
@@ -246,7 +245,7 @@ async def test_ecosystem_managements(engine: Engine, ecosystem_config: Ecosystem
         await engine.stop_ecosystem(ecosystem_uid)
 
     await engine.start_ecosystem(ecosystem_uid)
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert f"Starting ecosystem {ecosystem_uid}" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         await engine.start_ecosystem(ecosystem_uid)
@@ -254,34 +253,34 @@ async def test_ecosystem_managements(engine: Engine, ecosystem_config: Ecosystem
         await engine.remove_ecosystem(ecosystem_uid)
 
     await engine.stop_ecosystem(ecosystem_uid)
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert f"Ecosystem {ecosystem_uid} has been stopped" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is not running"):
         await engine.stop_ecosystem(ecosystem_uid)
 
     await engine.remove_ecosystem(ecosystem_uid)
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert f"Ecosystem {ecosystem_uid} has been dismounted" in logs
     with pytest.raises(ValueError, match=r"Ecosystem .* is not linked to this engine"):
         await engine.start_ecosystem(ecosystem_uid)
 
 
 @pytest.mark.asyncio
-async def test_refresh_ecosystems_lighting_hours(engine: Engine):
+async def test_refresh_ecosystems_lighting_hours(engine: Engine, logs_content):
     # Simply dispatches work to `EngineConfig` and `Ecosystem`, methods are
     #  tested there
     engine.config._sun_times = {
         "home": {"last_update": date.today(), "data": sun_times}
     }
     await engine.refresh_ecosystems_lighting_hours()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Refreshing ecosystems lighting hours" in logs
 
 
 @pytest.mark.asyncio
-async def test_refresh_chaos(engine: Engine):
+async def test_refresh_chaos(engine: Engine, logs_content):
     # Simply dispatches work to `EcosystemConfig` and `EngineConfig`, methods are
     #  tested there
     await engine.update_chaos_time_window()
-    with get_logs_content(engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Updating ecosystems chaos time window" in logs

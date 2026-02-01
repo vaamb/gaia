@@ -9,7 +9,6 @@ from gaia.exceptions import HardwareNotFound, NonValidSubroutine
 from gaia.hardware.abc import _MetaHardware
 
 from . import data
-from .utils import get_logs_content
 
 
 def test_properties(
@@ -26,19 +25,19 @@ def test_properties(
 
 
 @pytest.mark.asyncio
-async def test_ecosystem_states(ecosystem: "Ecosystem"):
+async def test_ecosystem_states(ecosystem: "Ecosystem", logs_content):
     assert not ecosystem.started
 
     await ecosystem.start()
     assert ecosystem.started
-    with get_logs_content(ecosystem.engine.config.logs_dir / data.debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Ecosystem successfully started" in logs
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         await ecosystem.start()
 
     await ecosystem.stop()
     assert not ecosystem.started
-    with get_logs_content(ecosystem.engine.config.logs_dir / data.debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Ecosystem successfully stopped" in logs
     with pytest.raises(
         RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
@@ -63,20 +62,20 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
 
 
 @pytest.mark.asyncio
-async def test_hardware(ecosystem: Ecosystem, engine_config: EngineConfig):
+async def test_hardware(ecosystem: Ecosystem, logs_content):
     # This test requires empty hardware
     for hardware_uid in [*ecosystem.hardware.keys()]:
         await ecosystem.remove_hardware(hardware_uid)
 
     await ecosystem.add_hardware(data.hardware_uid)
-    with get_logs_content(engine_config.logs_dir / data.debug_log_file) as logs:
+    with logs_content() as logs:
         assert f"Hardware {data.hardware_info['name']} has been set up." in logs
 
     with pytest.raises(ValueError, match=r"Hardware .* is already mounted."):
         await ecosystem.add_hardware(data.hardware_uid)
 
     await ecosystem.remove_hardware(data.hardware_uid)
-    with get_logs_content(engine_config.logs_dir / data.debug_log_file) as logs:
+    with logs_content() as logs:
         assert f"Hardware {data.hardware_info['name']} has been dismounted." in logs
 
     with pytest.raises(HardwareNotFound, match=f"Hardware '{data.hardware_uid}' not found."):
