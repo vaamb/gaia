@@ -63,7 +63,7 @@ check_requirements() {
         log ERROR "Python ${MIN_PYTHON_VERSION} or higher is required"
 }
 
-is_pi () {
+maybe_pi () {
     ARCH=$(dpkg --print-architecture)
     if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] ; then
         return 0
@@ -242,7 +242,7 @@ main() {
     check_requirements
     log SUCCESS "System requirements met"
 
-    if is_pi; then
+    if maybe_pi; then
         log INFO "This is a Raspberry Pi. Configuring hardware interfaces..."
         configure_hardware
     else
