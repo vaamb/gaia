@@ -158,7 +158,7 @@ class TestWebsocketHardware:
         await websocket.send("test")
         await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
         with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
-            assert f"Device test is trying to connect" in logs
+            assert "Device test is trying to connect" in logs
 
         # Stop manager
         await manager.stop()
