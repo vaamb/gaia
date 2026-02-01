@@ -395,7 +395,7 @@ class Hardware(metaclass=_MetaHardware):
             ecosystem: Ecosystem,
     ) -> Self:
         if hardware_cfg.uid in _MetaHardware.instances:
-            raise ValueError(f"Hardware {hardware_cfg.uid} already exists.")
+            raise RuntimeError(f"Hardware {hardware_cfg.uid} already exists.")
         # Ensure a virtual hardware will be return if virtualization is enabled
         if (
                 ecosystem.engine.config.app_config.VIRTUALIZATION
