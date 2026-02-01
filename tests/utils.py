@@ -14,14 +14,6 @@ class EmitDict(TypedDict):
     namespace: str
 
 
-@contextmanager
-def get_logs_content(logger_path: Path):
-    with open(logger_path, "r+") as logger_handle:
-        logs = logger_handle.read()
-        yield logs
-        logger_handle.truncate(0)
-
-
 class MockDispatcher(AsyncDispatcher):
     def __init__(self, namespace: str):
         super().__init__(namespace)

@@ -6,8 +6,7 @@ from gaia import Ecosystem
 from gaia.hardware.abc import Measure
 from gaia.subroutines import Health, Light
 
-from ..data import camera_uid, debug_log_file
-from ..utils import get_logs_content
+from ..data import camera_uid
 
 
 @pytest.mark.asyncio
@@ -57,21 +56,19 @@ async def test_routine(health_subroutine: Health):
 
 
 @pytest.mark.asyncio
-async def test_light_switching(health_subroutine: Health, light_subroutine: Light):
-    log_dir = health_subroutine.ecosystem.engine.config.logs_dir / debug_log_file
-
+async def test_light_switching(health_subroutine: Health, light_subroutine: Light, logs_content):
     light_subroutine.enable()
     await light_subroutine.start()
 
     health_subroutine.enable()
     await health_subroutine.start()
 
-    with get_logs_content(log_dir):
+    with logs_content():
         pass  # Clear logs
 
     await health_subroutine._get_the_images()
 
-    with get_logs_content(log_dir) as logs:
+    with logs_content() as logs:
         assert "Light has been set to 'manual' mode" in logs
         assert "Light has been set to 'automatic' mode" in logs
 

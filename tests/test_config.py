@@ -11,9 +11,8 @@ from gaia.subroutines import subroutine_names
 from gaia.utils import get_yaml
 
 from .data import (
-    debug_log_file, ecosystem_info, ecosystem_name, humidifier_info, humidifier_uid,
+    ecosystem_info, ecosystem_name, humidifier_info, humidifier_uid,
     lighting_method, sensor_info, sensor_uid, sun_times)
-from .utils import get_logs_content
 
 
 # ---------------------------------------------------------------------------
@@ -49,12 +48,13 @@ class TestEngineConfig:
             self,
             engine_config: EngineConfig,
             ecosystem_config: EcosystemConfig,
+            logs_content,
     ):
         assert engine_config.home_sun_times is None
         ecosystem_config.nycthemeral_cycle["lighting"] = gv.LightMethod.elongate
         engine_config.home_coordinates = (0, 0)
         engine_config.refresh_sun_times()
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+        with logs_content() as logs:
             assert "have been refreshed" in logs
             assert "Failed to refresh" not in logs
         assert engine_config.home_sun_times is not None
@@ -82,12 +82,12 @@ class TestEngineConfig:
 @pytest.mark.asyncio
 class TestWatchdog:
     pytest.mark.asyncio(loop_scope="function")
-    async def test_config_files_watchdog(self, engine_config: EngineConfig):
+    async def test_config_files_watchdog(self, engine_config: EngineConfig, logs_content):
         yaml = get_yaml()
 
         # Start watchdog and make sure it can only be started once
         engine_config.start_watchdog()
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+        with logs_content() as logs:
             assert "Starting the configuration files watchdog" in logs
         with pytest.raises(RuntimeError):
             engine_config.start_watchdog()
@@ -97,7 +97,7 @@ class TestWatchdog:
         with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
             yaml.dump(engine_config.ecosystems_config_dict, cfg)
         await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+        with logs_content() as logs:
             assert "Change in ecosystems configuration file detected" in logs
 
         # Test watchdog for private cfg
@@ -105,12 +105,12 @@ class TestWatchdog:
         with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
             yaml.dump(engine_config.private_config, cfg)
         await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+        with logs_content() as logs:
             assert "Change in private configuration file detected" in logs
 
         # Stop watchdog and make sure it can only be stopped once
         engine_config.stop_watchdog()
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+        with logs_content() as logs:
             assert "Stopping the configuration files watchdog" in logs
         with pytest.raises(RuntimeError):
             engine_config.stop_watchdog()
@@ -167,7 +167,7 @@ class TestEcosystemConfigGeneral:
 
 @pytest.mark.asyncio
 class TestEcosystemConfigClimate:
-    async def test_chaos(self, ecosystem_config: EcosystemConfig):
+    async def test_chaos(self, ecosystem_config: EcosystemConfig, logs_content):
         today = datetime.now(timezone.utc).replace(
             hour=14, minute=0, second=0, microsecond=0)
 
@@ -197,7 +197,7 @@ class TestEcosystemConfigClimate:
         assert chaos_time_window["end"] == today + timedelta(days=duration)
 
         await ecosystem_config.update_chaos_time_window()
-        with get_logs_content(ecosystem_config.general.logs_dir / debug_log_file) as logs:
+        with logs_content() as logs:
             assert "Chaos time window is already up to date." in logs
 
         chaos_factor = ecosystem_config.get_chaos_factor(today + timedelta(days=1))

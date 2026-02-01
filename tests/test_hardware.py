@@ -1,4 +1,3 @@
-import asyncio
 from asyncio import create_task, sleep
 
 import math
@@ -23,9 +22,8 @@ from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
 
 from .data import (
-    debug_log_file, ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid,
-    sensor_uid, ws_dimmer_uid, ws_sensor_uid, ws_switch_uid)
-from .utils import get_logs_content
+     ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid,
+     ws_dimmer_uid, ws_sensor_uid, ws_switch_uid)
 
 
 def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
@@ -148,7 +146,7 @@ def test_i2c_address_injection(ecosystem: Ecosystem):
 
 @pytest.mark.asyncio
 class TestWebsocketHardware:
-    async def test_manager(self, engine_config: EngineConfig):
+    async def test_manager(self, engine_config: EngineConfig, logs_content):
         manager = WebSocketHardwareManager(engine_config)
 
         # Make sure the manager start and can handle connections
@@ -157,7 +155,7 @@ class TestWebsocketHardware:
         websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
         await websocket.send("test")
         await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
-        with get_logs_content(engine_config.logs_dir / debug_log_file) as logs:
+        with logs_content() as logs:
             assert "Device test is trying to connect" in logs
 
         # Stop manager
@@ -178,7 +176,7 @@ class TestWebsocketHardware:
         # And that it can be stopped again
         await manager.stop()
 
-    async def test_hardware(self, ecosystem: Ecosystem):
+    async def test_hardware(self, ecosystem: Ecosystem, logs_content):
         hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
         # Hardware registration is taken care of by the ecosystem setup
 
@@ -186,7 +184,7 @@ class TestWebsocketHardware:
         websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
         await websocket.send(hardware.uid)
         await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
-        with get_logs_content(ecosystem.engine.config.logs_dir / debug_log_file) as logs:
+        with logs_content() as logs:
             assert f"Device {hardware.uid} connected" in logs
 
         # Test ´_send_msg_and_forget()´

@@ -19,7 +19,6 @@ from gaia.database.models import ActuatorBuffer, SensorBuffer
 from gaia.events import Events as Events_, validate_payload
 
 from ..data import (
-    debug_log_file,
     ecosystem_name,
     ecosystem_uid,
     engine_uid,
@@ -36,7 +35,7 @@ from ..data import (
     temperature_cfg,
     wind_cfg,
 )
-from ..utils import get_logs_content, MockDispatcher
+from ..utils import MockDispatcher
 
 
 class Events(Events_):
@@ -144,10 +143,10 @@ async def test_send_payload(events_handler: Events, ecosystem: Ecosystem):
 
 
 @pytest.mark.asyncio
-async def test_on_connect(events_handler: Events):
+async def test_on_connect(events_handler: Events, logs_content):
     await events_handler.on_connect(None)
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Connection to the message broker successful" in logs
 
     response = events_handler._dispatcher.emit_store[0]
@@ -160,10 +159,10 @@ async def test_on_connect(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_on_register(events_handler: Events):
+async def test_on_register(events_handler: Events, logs_content):
     await events_handler.on_register()
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Received registration request" in logs
 
     response = events_handler._dispatcher.emit_store[0]
@@ -173,44 +172,45 @@ async def test_on_register(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_on_camera_token(events_handler: Events):
+async def test_on_camera_token(events_handler: Events, logs_content):
     test_token = "test_camera_token_123"
 
     await events_handler.on_camera_token(test_token)
 
     assert events_handler.camera_token == test_token
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Received camera token from Ouranos" in logs
 
 
 
 @pytest.mark.asyncio
-async def test_on_disconnect(events_handler: Events):
+async def test_on_disconnect(events_handler: Events, logs_content):
     await events_handler.on_disconnect()
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Received a disconnection request" in logs
 
 
 @pytest.mark.asyncio
-async def test_on_registration_ack_wrong_uuid(events_handler: Events):
+async def test_on_registration_ack_wrong_uuid(events_handler: Events, logs_content):
     await events_handler.on_registration_ack("wrong_uid")
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "wrongly formatted registration acknowledgment" in logs
 
     uuid_str = uuid.uuid4().__str__()
     await events_handler.on_registration_ack(uuid_str)
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "registration acknowledgment for another dispatcher" in logs
 
 
 @pytest.mark.asyncio
 async def test_on_registration_ack(
         engine_config: EngineConfig,
-        events_handler: Events
+        events_handler: Events,
+        logs_content,
 ):
     engine_config._private_config = PrivateConfigValidator(**{
         "places": {
@@ -224,7 +224,7 @@ async def test_on_registration_ack(
     host_uid = events_handler._dispatcher.host_uid.__str__()
     await events_handler.on_registration_ack(host_uid)
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "registration successful, sending initial ecosystems info" in logs
 
     responses = deque(events_handler._dispatcher.emit_store)
@@ -343,24 +343,28 @@ async def test_on_registration_ack(
 
 
 @pytest.mark.asyncio
-async def test_on_initialized_ack(events_handler: Events):
+async def test_on_initialized_ack(events_handler: Events, logs_content):
     await events_handler.on_initialization_ack(None)
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Ouranos successfully received ecosystems info" in logs
 
     await events_handler.on_initialization_ack(["base_info"])
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Non-received info: base_info" in logs
 
 
 @pytest.mark.asyncio
-async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
+async def test_on_turn_actuator(
+        events_handler: Events,
+        ecosystem: Ecosystem,
+        logs_content,
+):
     await ecosystem.enable_subroutine("light")
     await ecosystem.start_subroutine("light")
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         pass  # To clean up logs
 
     actuator_name: str = cast(str, gv.HardwareType.light.name)
@@ -378,7 +382,7 @@ async def test_on_turn_actuator(events_handler: Events, ecosystem: Ecosystem):
     })
     await events_handler.on_turn_actuator(turn_actuator_payload)
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "Received 'turn_actuator' event" in logs
         assert actuator_name in logs
         assert payload_mode.name in logs
@@ -506,12 +510,12 @@ async def test_send_picture_arrays(events_handler: Events, ecosystem: Ecosystem)
 
 
 @pytest.mark.asyncio
-async def test_upload_picture_arrays_no_token(events_handler: Events):
+async def test_upload_picture_arrays_no_token(events_handler: Events, logs_content):
     events_handler.camera_token = None
 
     await events_handler.upload_picture_arrays()
 
-    with get_logs_content(events_handler.engine.config.logs_dir / debug_log_file) as logs:
+    with logs_content() as logs:
         assert "No camera token found, cannot send picture arrays" in logs
 
 
