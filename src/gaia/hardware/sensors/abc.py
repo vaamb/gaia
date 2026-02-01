@@ -16,7 +16,7 @@ class TemperatureSensor(BaseSensor):
         Measure.temperature: Unit.celsius_degree,
     }
 
-    def _get_raw_data(self) -> tuple[float | None]:
+    def _get_raw_data(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
     async def get_data(self) -> list[gv.SensorRecord]:
