@@ -56,6 +56,7 @@ class WebSocketHardwareManager:
     async def start(self) -> None:
         if self.is_running:
             raise RuntimeError("WebSocketHardwareManager is already running")
+        self._stop_event.clear()  # Clear it in case the manager was stopped before
         self._running_task = create_task(self._start())
         await sleep(0)  # Allow the task to start
 
@@ -94,19 +95,20 @@ class WebSocketHardwareManager:
         self.device_connections[device_uid] = connection
         # Keep the connection open and remove it from the dictionary when it is closed
         try:
-            await self._stop_event.wait()
             done, pending = await asyncio.wait(
-                [self._stop_event.wait(), connection.wait_closed()],
+                [
+                    create_task(self._stop_event.wait()),
+                    create_task(connection.wait_closed()),
+                ],
                 return_when=asyncio.FIRST_COMPLETED
             )
             for task in pending:
                 task.cancel()
         except ConnectionClosed:
+            pass
+        finally:
             self.logger.debug(f"Device {device_uid} disconnected")
-            self.device_connections.pop(device_uid)
-        except Exception as e:
-            self.logger.error(f"Device {device_uid} disconnected with error: {e}")
-            self.device_connections.pop(device_uid)
+            self.device_connections.pop(device_uid, None)
 
     def get_connection(self, device_uid: str) -> ServerConnection | None:
         if device_uid not in self._registered_hardware:
