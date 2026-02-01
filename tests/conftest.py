@@ -16,6 +16,7 @@ from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHel
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.events import Events
+from gaia.hardware.abc import _MetaHardware
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, subroutine_names,
     Weather)
@@ -153,6 +154,12 @@ async def engine(engine_config: EngineConfig) -> YieldFixture[Engine]:
         await engine.terminate()
         SingletonMeta.detach_instance("Engine")
         del engine
+        not_cleared = [_ for _ in _MetaHardware.instances]
+        _MetaHardware.instances.clear()
+        if not_cleared:
+            raise RuntimeError(
+                f"{' ,'.join(not_cleared)} still have open instance(s)"
+            )
 
 
 @pytest_asyncio.fixture(scope="function")

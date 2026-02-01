@@ -436,7 +436,7 @@ class Hardware(metaclass=_MetaHardware):
             ecosystem: Ecosystem,
     ) -> Self:
         if hardware_cfg.uid in _MetaHardware.instances:
-            raise ValueError(f"Hardware {hardware_cfg.uid} already exists.")
+            raise RuntimeError(f"Hardware {hardware_cfg.uid} already exists.")
         # Ensure a virtual hardware will be return if virtualization is enabled
         if (
                 ecosystem.engine.config.app_config.VIRTUALIZATION
@@ -673,9 +673,11 @@ class OneWireHardware(Hardware):
                 "to use a specific address or 'ONEWIRE_default' to use the default "
                 "address"
             )
-        # Check that 1-wire is enabled
-        # TODO: move this in an async initialize fct
-        if is_raspi():
+
+    async def _on_initialize(self) -> None:
+        await super()._on_initialize()
+
+        def check_1w_enabled() -> None:
             import subprocess
             lsmod = subprocess.Popen("lsmod", stdout=subprocess.PIPE)
             grep = subprocess.Popen(("grep", "-i", "w1_"), stdin=lsmod.stdout)
@@ -684,6 +686,9 @@ class OneWireHardware(Hardware):
                 raise RuntimeError(
                     "1-wire is not enabled. Run `sudo raspi-config` and enable 1-wire."
                 )
+
+        if is_raspi():
+            await run_sync(check_1w_enabled)
 
     @property
     def device_address(self) -> str | None:
