@@ -7,6 +7,10 @@ class BaseConfig:
     TESTING = False
     DEVELOPMENT = False
 
+    @property
+    def PRODUCTION(self) -> bool:
+        return not any((self.DEBUG, self.TESTING, self.DEVELOPMENT))
+
     DIR = os.environ.get("GAIA_DIR") or os.getcwd()
 
     @property
@@ -50,3 +54,6 @@ class BaseConfig:
     PICTURE_TRANSFER_METHOD = os.environ.get("PICTURE_TRANSFER_METHOD", "broker")  # broker or upload
     SENSORS_LOOP_PERIOD = 10.0  # in s
     SENSORS_LOGGING_PERIOD = "*/10"  # in minute, cron-style
+
+    HARDWARE_WEBSOCKET_PORT: int = 19171
+    HARDWARE_WEBSOCKET_PASSWORD: str = "gaia"

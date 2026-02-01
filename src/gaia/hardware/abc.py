@@ -1,28 +1,36 @@
 from __future__ import annotations
 
+from asyncio import create_task, Event, Future, sleep, Task, wait_for
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import inspect
+from logging import getLogger
 from pathlib import Path
 import textwrap
 from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
+from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
+from pydantic import ValidationError
+from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.exceptions import HardwareNotFound
+from gaia.hardware._websocket import WebSocketHardwareManager
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
 if TYPE_CHECKING:  # pragma: no cover
-    from gaia import Ecosystem
+    from websockets import ServerConnection
+
+    from gaia import Ecosystem, EngineConfig
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -36,6 +44,9 @@ class InvalidAddressError(ValueError):
     pass
 
 
+# ---------------------------------------------------------------------------
+#   Enums
+# ---------------------------------------------------------------------------
 class Measure(Enum):
     """Enum representing different types of measurements that can be taken by hardware."""
     absolute_humidity = "absolute_humidity"
@@ -72,6 +83,17 @@ class AddressType(Enum):
     SPI = "SPI"
     ONEWIRE = "ONEWIRE"
     PICAMERA = "PICAMERA"
+    WEBSOCKET = "WEBSOCKET"
+
+
+# ---------------------------------------------------------------------------
+#   Utility functions
+# ---------------------------------------------------------------------------
+def ip_is_valid(address: str) -> bool:
+    import re
+
+    ip_regex: str = r"(?:([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\.(?!$)|$)){4}"
+    return bool(re.match(ip_regex, address))
 
 
 def str_to_hex(address: str) -> int:
@@ -86,6 +108,14 @@ def called_through(function: str) -> bool:
         if frame.function == function:
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+#   Validation models
+# ---------------------------------------------------------------------------
+class WebSocketMessage(gv.BaseModel):
+    uuid: UUID | None = None
+    data: Any
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +224,15 @@ class Address:
         elif address_type.lower() == "picamera":
             return cls(AddressType.PICAMERA, None, None, None)
 
+        # The hardware is using WebSockets
+        elif address_type.lower() == "websocket":
+            if address_number is not None and not ip_is_valid(address_number):
+                raise InvalidAddressError(
+                    "Invalid websocket address format. Expected format: "
+                    "'WEBSOCKET' or 'WEBSOCKET_<remote_ip_addr>'"
+                )
+            return cls(AddressType.WEBSOCKET, address_number, None, None)
+
         # The hardware is using the SPI protocol
         elif address_type == "spi":
             raise NotImplementedError("SPI address type is not currently supported.")
@@ -206,6 +245,8 @@ class Address:
             return f"{self.type.value}"
         elif self.type == AddressType.ONEWIRE:
             return f"{self.type.value}_{self.main if self.main is not None else 'default'}"
+        elif self.type == AddressType.WEBSOCKET:
+            return f"{self.type.value}_{self.main}" if self.main else f"{self.type.value}"
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
@@ -717,6 +758,134 @@ class Camera(Hardware):
             image_path = self.camera_dir / image_path
         await run_sync(image.write, image_path)
         return image_path
+
+
+class WebSocketHardware(Hardware):
+    _websocket_manager: WebSocketHardwareManager | None = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self._address.type == AddressType.WEBSOCKET:  # pragma: no cover
+            raise ValueError(
+                "WebSocketHardware address must be of type: 'WEBSOCKET' or "
+                "'WEBSOCKET_<remote_ip_addr>'"
+            )
+        # During data validation, ecosystem is not available
+        if self.ecosystem and WebSocketHardware._websocket_manager is None:
+            manager = WebSocketHardwareManager(self.ecosystem.engine.config)
+            WebSocketHardware._websocket_manager = manager
+        self._websocket_manager = WebSocketHardware._websocket_manager
+        self._logger = getLogger(f"gaia.hardware.websocket.{self.uid}")
+        self._requests: dict[UUID, Future] = {}
+        self._task: Task | None = None
+        self._stop_event: Event = Event()
+
+    async def _on_initialize(self) -> None:
+        await super()._on_initialize()
+        await self.register()
+
+    async def _on_terminate(self) -> None:
+        await super()._on_terminate()
+        await self.unregister()
+
+    @property
+    def connected(self) -> bool:
+        return self._websocket_manager.get_connection(self.uid) is not None
+
+    async def _connection_loop(self) -> None:
+        wait_time: int = 1
+        while not self._stop_event.is_set():
+            connection = self._websocket_manager.get_connection(self.uid)
+            if connection is not None:
+                wait_time = 1
+                try:
+                    await self._listening_loop(connection)
+                except ConnectionClosed:
+                    # The connection closed, try to reconnect
+                    pass
+            try:
+                await wait_for(self._stop_event.wait(), wait_time)
+            except TimeoutError:
+                wait_time *= 2
+                wait_time = min(32, wait_time)
+
+    async def _listening_loop(self, connection: ServerConnection) -> None:
+        async for msg in connection:
+            try:
+                parsed_msg = WebSocketMessage.model_validate_json(msg)
+                uuid: UUID = parsed_msg.uuid
+                data: Any = parsed_msg.data
+                if uuid not in self._requests:
+                    self.ecosystem.logger.error(
+                        f"Received a message with an unknown uuid {uuid}: {data}")
+                    continue
+                self._requests[uuid].set_result(data)
+            except ValidationError:
+                self.ecosystem.logger.error(
+                    f"Encountered an error while parsing the message {msg}")
+                continue
+
+    async def _send_msg_and_forget(self, msg: Any) -> None:
+        connection = self._websocket_manager.get_connection(self.uid)
+        if connection is None:
+            raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
+        payload = WebSocketMessage(uuid=None, data=msg).model_dump_json()
+        await connection.send(payload)
+
+    async def _send_msg_and_wait(self, msg: Any, timeout: int | float = 60) -> Any:
+        connection = self._websocket_manager.get_connection(self.uid)
+        if connection is None:
+            raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
+        uuid: UUID = uuid4()
+        self._requests[uuid] = Future()
+        payload = WebSocketMessage(uuid=uuid, data=msg).model_dump_json()
+        await connection.send(payload)
+        try:
+            return await wait_for(self._requests[uuid], timeout)
+        except TimeoutError:
+            self._logger.error(f"Timeout while waiting for response from device '{self.uid}'")
+            raise
+        finally:
+            self._requests.pop(uuid, None)
+
+    async def _execute_action(self, action: dict, error_msg: str) -> bool:
+        try:
+            response = await self._send_msg_and_wait(action)
+        except (ConnectionError, ConnectionClosedOK, TimeoutError) as e:
+            self._logger.error(f"Could not connect: {e}")
+            return False
+        if response.get("status") != "success":
+            msg = response.get("message", "")
+            self._logger.error(f"{error_msg}. {msg}" if msg else error_msg)
+            return False
+        return True
+
+    async def register(self) -> None:
+        if not self._websocket_manager.is_running:
+            await self._websocket_manager.start()
+        await self._websocket_manager.register_hardware(self.uid, self.address.main)
+        self._task = create_task(self._connection_loop())
+        await sleep(0)  # Allow the task to start
+
+    async def unregister(self) -> None:
+        try:
+            await self._send_msg_and_forget("disconnecting")
+        except (ConnectionError, ConnectionClosedOK):
+            # The device is not connected
+            pass
+        await self._websocket_manager.unregister_hardware(self.uid)
+        self._stop_event.set()
+        if self._task is not None:
+            self._task.cancel()
+            await sleep(0)  # Allow the task to be canceled
+            self._task = None
+        # If not more hardware are registered, there is no need to keep the manager
+        #  running
+        if (
+                self._websocket_manager.is_running
+                and self._websocket_manager.registered_hardware == 0
+        ):
+            await self._websocket_manager.stop()
 
 
 # ---------------------------------------------------------------------------

@@ -136,6 +136,51 @@ inactive_info: gv.AnonymousHardwareConfigDict = {
 }
 
 
+ws_sensor_uid = "P6lkNoGUGeTRm8kI"
+ws_sensor_info: gv.AnonymousHardwareConfigDict = {
+    "name": "RemoteSensor",
+    "active": True,
+    "address": "websocket",
+    "model": "WebSocketSensor",
+    "type": gv.HardwareType.sensor,
+    "level": gv.HardwareLevel.environment,
+#    "groups": None,
+    "measures": ["temperature|°C", "humidity|%"],
+#    "plants": [],
+#    "multiplexer_model": None,
+}
+
+
+ws_switch_uid = "pkMEVC918eJehEz7"
+ws_switch_info: gv.AnonymousHardwareConfigDict = {
+    "name": "WSSwitch",
+    "active": True,
+    "address": "websocket_127.0.0.1",
+    "model": "WebSocketSwitch",
+    "type": gv.HardwareType.humidifier,
+    "level": gv.HardwareLevel.environment,
+    "groups": ["fogger"],
+#    "measures": [],
+#    "plants": [],
+#    "multiplexer_model": None,
+}
+
+
+ws_dimmer_uid = "IVkqIEzUWSRDIYOq"
+ws_dimmer_info: gv.AnonymousHardwareConfigDict = {
+    "name": "WSDimmer",
+    "active": True,
+    "address": "websocket",
+    "model": "WebSocketDimmer",
+    "type": gv.HardwareType.dehumidifier,
+    "level": gv.HardwareLevel.environment,
+#    "groups": None,
+#    "measures": [],
+#    "plants": [],
+#    "multiplexer_model": None,
+}
+
+
 hardware_uid = sensor_uid
 hardware_info = sensor_info
 
@@ -149,6 +194,9 @@ IO_dict = {
     humidifier_uid: humidifier_info,
     camera_uid: camera_info,
     inactive_uid: inactive_info,
+    ws_sensor_uid: ws_sensor_info,
+    ws_switch_uid: ws_switch_info,
+    ws_dimmer_uid: ws_dimmer_info,
 }
 
 

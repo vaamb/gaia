@@ -5,7 +5,8 @@ import gaia_validators as gv
 from gaia import Ecosystem
 from gaia.subroutines import Sensors
 
-from ..data import i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid
+from ..data import (
+    i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid, ws_sensor_uid)
 
 
 @pytest.mark.asyncio
@@ -22,7 +23,12 @@ async def test_manageable(ecosystem: Ecosystem, sensors_subroutine: Sensors):
 
 def test_hardware_needed(sensors_subroutine: Sensors):
     uids = sensors_subroutine.get_hardware_needed_uid()
-    assert uids == {i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid}
+    assert uids == {
+        i2c_sensor_ens160_uid,
+        i2c_sensor_veml7700_uid,
+        sensor_uid,
+        ws_sensor_uid,
+    }
 
 
 @pytest.mark.asyncio

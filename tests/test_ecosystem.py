@@ -93,6 +93,9 @@ async def test_refresh(ecosystem: Ecosystem):
         data.sensor_uid,
         data.i2c_sensor_ens160_uid,
         data.i2c_sensor_veml7700_uid,
+        data.ws_switch_uid,
+        data.ws_dimmer_uid,
+        data.ws_sensor_uid,
     }
 
     assert {*ecosystem.hardware.keys()} == hardware_needed

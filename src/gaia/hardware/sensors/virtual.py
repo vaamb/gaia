@@ -1,10 +1,13 @@
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import BaseSensor
+import gaia_validators as gv
+
+from gaia.hardware.abc import BaseSensor, Measure
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, ENS160, VCNL4040, VEML7700)
+from gaia.hardware.sensors.websocket import WebSocketSensor
 from gaia.hardware.utils import hardware_logger
 from gaia.hardware.virtual import virtualHardware
 
@@ -113,6 +116,10 @@ class virtualENS160(ENS160, virtualSensor):
         return _ENS160(ecosystem=self.ecosystem)
 
 
+class virtualWebSocketSensor(WebSocketSensor, virtualSensor):
+    pass
+
+
 virtual_sensor_models: dict[str, Type[virtualSensor]] = {
     hardware.__name__: hardware
     for hardware in [
@@ -123,5 +130,6 @@ virtual_sensor_models: dict[str, Type[virtualSensor]] = {
         virtualVEML7700,
         virtualCapacitiveMoisture,
         virtualENS160,
+        virtualWebSocketSensor,
     ]
 }
