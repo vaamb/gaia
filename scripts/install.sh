@@ -54,7 +54,7 @@ check_requirements() {
     if [ ${#missing_deps[@]} -gt 0 ]; then
         log WARN "Missing required dependencies: ${missing_deps[*]}"
         log INFO "Attempting to install missing dependencies..."
-            sudo apt-get update && sudo apt-get install -y "${missing_deps[@]}" ||
+            sudo apt update && sudo apt install -y "${missing_deps[@]}" ||
                 log ERROR "Failed to install required packages"
     fi
 
