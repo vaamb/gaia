@@ -32,7 +32,7 @@ get_gaia_pid() {
     if [[ -f "${GAIA_DIR}/gaia.pid" ]]; then
         local pid
         pid=$(cat "${GAIA_DIR}/gaia.pid" 2>/dev/null || echo "")
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && pgrep -x "gaia" | grep -qw "$pid"; then
             echo "$pid"
         fi
     # Fallback to strict process match
