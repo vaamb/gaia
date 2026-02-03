@@ -138,24 +138,34 @@ update_repo() {
     git checkout "${latest_tag}"
 
     # Install the package in development mode
+    local install_failed=false
     if [[ -f "pyproject.toml" ]]; then
         log INFO "Installing ${repo_name}..."
-        pip install -e .
+        if ! pip install -e .; then
+            install_failed=true
+            log WARN "Failed to install ${repo_name}."
+        fi
     fi
 
-    # Return to the original branch if not on a detached HEAD
+    # Return to the original branch
     if [[ "${current_branch}" != "HEAD" ]]; then
         log INFO "Returning to branch ${current_branch}..."
         git checkout "${current_branch}"
+    else
+        log WARN "Was on detached HEAD before update. Remaining on ${latest_tag}."
+    fi
 
-        # Apply stashed changes only if we actually created a stash
-        if [[ "${stash_created}" == true ]]; then
-            log INFO "Restoring stashed changes..."
-            if ! git stash pop; then
-                log WARN "Failed to restore stashed changes (possible merge conflict)."
-                log WARN "Your changes are still in the stash. Use 'git stash list' and 'git stash pop' to recover them manually."
-            fi
+    # Apply stashed changes only if we actually created a stash
+    if [[ "${stash_created}" == true ]]; then
+        log INFO "Restoring stashed changes..."
+        if ! git stash pop; then
+            log WARN "Failed to restore stashed changes (possible merge conflict)."
+            log WARN "Your changes are still in the stash. Use 'git stash list' and 'git stash pop' to recover them manually."
         fi
+    fi
+
+    if [[ "${install_failed}" == true ]]; then
+        return 1
     fi
 
     log SUCCESS "${repo_name} updated to ${latest_tag}"
