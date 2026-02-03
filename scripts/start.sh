@@ -41,6 +41,16 @@ fi
 mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
 
 # Check if already running
+if [[ -f "${GAIA_DIR}/gaia.pid" ]]; then
+    PID=$(cat "${GAIA_DIR}/gaia.pid")
+    if kill -0 "$PID" 2>/dev/null && pgrep -x "gaia" | grep -qw "$PID"; then
+        log WARN "Gaia is already running with PID $PID"
+        log INFO "If you want to restart, please run: gaia restart"
+        exit 1
+    fi
+    # Stale PID file — process is gone, clean up and continue
+    rm -f "${GAIA_DIR}/gaia.pid"
+fi
 if pgrep -x "gaia" > /dev/null; then
     PID=$(pgrep -x "gaia" | head -n 1)
     log WARN "Gaia is already running with PID $PID"
