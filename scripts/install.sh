@@ -44,16 +44,23 @@ check_requirements() {
         command -v "$1" >/dev/null 2>&1
     }
 
+    # Map of command -> package name
+    declare -A cmd_to_pkg=(
+        [git]=git
+        [python3]=python3
+        [systemctl]=systemd
+    )
+
     # Check for required commands
-    for cmd in git python systemd; do
+    for cmd in "${!cmd_to_pkg[@]}"; do
         if ! command_exists "${cmd}"; then
-            missing_deps+=("${cmd}")
+            missing_deps+=("${cmd_to_pkg[$cmd]}")
         fi
     done
 
     if [[ ${#missing_deps[@]} -gt 0 ]]; then
-        log WARN "Missing required dependencies: ${missing_deps[*]}"
-        log INFO "Attempting to install missing dependencies..."
+        log WARN "Missing required packages: ${missing_deps[*]}"
+        log INFO "Attempting to install missing packages..."
             sudo apt update && sudo apt install -y "${missing_deps[@]}" ||
                 log ERROR "Failed to install required packages"
     fi
@@ -219,9 +226,9 @@ install_service() {
 cleanup() {
     local exit_code=$?
 
-    if [ "${exit_code}" -ne 0 ]; then
+    if [[ "${exit_code}" -ne 0 ]]; then
         log WARN "Installation failed. Check the log file for details: ${LOG_FILE}"
-        rm -rf "${GAIA_DIR}"
+        log WARN "Partial installation may remain at ${GAIA_DIR}. Remove it manually before retrying."
     else
         log SUCCESS "Installation completed successfully!"
     fi
