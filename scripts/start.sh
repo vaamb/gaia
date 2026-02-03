@@ -44,7 +44,7 @@ if pgrep -x "gaia" > /dev/null; then
     PID=$(pgrep -x "gaia" | head -n 1)
     log WARN "Gaia is already running with PID $PID"
     log INFO "If you want to restart, please run: gaia restart"
-    exit 0
+    exit 1
 fi
 
 # Change to Gaia directory
@@ -85,20 +85,19 @@ else
 
     deactivate ||
         log WARN "Failed to deactivate virtual environment"
+
+    # Verify that Gaia started successfully
+    sleep 2
+
+    # Check if process is still running
+    if ! kill -0 "$GAIA_PID" 2>/dev/null; then
+        # Process died, check error log
+        # Clean up PID file
+        [[ -f "${GAIA_DIR}/gaia.pid" ]] && rm -f "${GAIA_DIR}/gaia.pid"
+        log ERROR "Process failed to start."
+    fi
+
+    log SUCCESS "Gaia started successfully with PID $GAIA_PID"
+
+    exit 0
 fi
-
-# Verify that Gaia started successfully
-sleep 2
-
-# Check if process is still running
-if ! kill -0 "$GAIA_PID" 2>/dev/null; then
-    # Process died, check error log
-    log ERROR "Process failed to start."
-    # Clean up PID file
-    [[ -f "${GAIA_DIR}/gaia.pid" ]] && rm -f "${GAIA_DIR}/gaia.pid"
-    exit 1
-fi
-
-log SUCCESS "Gaia started successfully with PID $GAIA_PID"
-
-exit 0
