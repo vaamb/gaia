@@ -71,20 +71,20 @@ if [ "$FOREGROUND" = true ]; then
     EXIT_CODE=$?
     
     # Clean up and exit with the same code as Gaia
-    deactivate || log WARN "Failed to deactivate virtual environment"
+    deactivate ||
+        log WARN "Failed to deactivate virtual environment"
     log INFO "Gaia process exited with code $EXIT_CODE"
     exit $EXIT_CODE
 else
     # Run Gaia in the background and log the PID
     nohup python3 -m gaia > "${GAIA_DIR}/logs/stdout" 2>&1 &
-    log INFO "Gaia started in background mode"
-    log INFO "Gaia stdout and stderr output redirected to ${GAIA_DIR}/logs/stdout"
-    
-    deactivate ||
-        log ERROR "Failed to deactivate virtual environment"
-    
     GAIA_PID=$!
     echo "$GAIA_PID" > "${GAIA_DIR}/gaia.pid"
+    log INFO "Gaia started in background mode"
+    log INFO "Gaia stdout and stderr output redirected to ${GAIA_DIR}/logs/stdout"
+
+    deactivate ||
+        log WARN "Failed to deactivate virtual environment"
 fi
 
 # Verify that Gaia started successfully
