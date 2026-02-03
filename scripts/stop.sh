@@ -41,19 +41,10 @@ get_gaia_pid() {
     fi
 }
 
-is_running() {
-    # Check if Gaia is running
-    local pid
-    pid=$(get_gaia_pid)
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-        return 0
-    fi
-
-    return 1
-}
-
 # Check if Gaia is running
-if ! is_running; then
+GAIA_PID=$(get_gaia_pid)
+
+if [[ -z "$GAIA_PID" ]]; then
     log INFO "No running instance of Gaia found."
 
     # Clean up PID file if it exists
@@ -63,13 +54,6 @@ if ! is_running; then
     fi
 
     exit 0
-fi
-
-# Get the PID of the running process
-GAIA_PID=$(get_gaia_pid)
-
-if [[ -z "$GAIA_PID" ]]; then
-    log ERROR "Could not determine Gaia process ID"
 fi
 
 log INFO "Stopping Gaia (PID: $GAIA_PID)..."
@@ -97,7 +81,7 @@ if kill -15 "$GAIA_PID" 2>/dev/null; then
     fi
 
     # Verify the process was actually stopped
-    if is_running; then
+    if kill -0 "$GAIA_PID" 2>/dev/null; then
         log ERROR "Failed to stop Gaia. Process still running with PID: ${GAIA_PID}."
     fi
 
