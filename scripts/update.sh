@@ -65,8 +65,8 @@ check_requirements() {
 }
 
 create_backup() {
-    # Create backup directory
-    cp -r "${GAIA_DIR}" "${BACKUP_DIR}" ||
+    # Create backup directory, excluding python_venv (large and not relocatable)
+    rsync -a --exclude='python_venv' "${GAIA_DIR}/" "${BACKUP_DIR}/" ||
         log ERROR "Failed to create backup directory: ${BACKUP_DIR}"
 }
 
@@ -228,8 +228,8 @@ cleanup() {
         log WARN "Update failed. Check the log file for details: ${LOG_FILE}"
         if [[ -d "${BACKUP_DIR}" && "${DRY_RUN}" == false ]]; then
             log WARN "Attempting rollback from backup..."
-            cp -r "${BACKUP_DIR}" "${GAIA_DIR}"
-            rm -rf "${BACKUP_DIR}"
+            rsync -a "${BACKUP_DIR}/" "${GAIA_DIR}/" ||
+                log WARN "Rollback failed. Backup is preserved at ${BACKUP_DIR}"
         fi
     else
         if [[ -d "${BACKUP_DIR}" ]]; then
