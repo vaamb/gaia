@@ -195,7 +195,7 @@ copy_scripts() {
 update_profile() {
     # Update .profile
     ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
-        log ERROR "Failed to update shell profile"
+        log WARN "Failed to update shell profile"
 
     log INFO "Setting up systemd service..."
 }
@@ -204,7 +204,7 @@ install_service() {
     local service_file="${GAIA_DIR}/scripts/gaia.service"
 
     ${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${service_file}" ||
-        log ERROR "Failed to generate systemd service"
+        log WARN "Failed to generate systemd service"
 
     # Install service
     if ! sudo cp "${service_file}" "/etc/systemd/system/gaia.service"; then
@@ -220,8 +220,8 @@ cleanup() {
     local exit_code=$?
 
     if [ "${exit_code}" -ne 0 ]; then
-        log ERROR "Installation failed. Check the log file for details: ${LOG_FILE}"
-        rm -r "${GAIA_DIR}"
+        log WARN "Installation failed. Check the log file for details: ${LOG_FILE}"
+        rm -rf "${GAIA_DIR}"
     else
         log SUCCESS "Installation completed successfully!"
     fi
