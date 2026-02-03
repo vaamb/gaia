@@ -83,6 +83,11 @@ configure_hardware() {
         IS_RASPI=false
     fi
 
+    if [[ "${IS_RASPI}" = "false" ]]; then
+        log WARN "Cannot configure hardware for non-Raspberry Pi"
+        return 0
+    fi
+
     # Create backup
     if [[ ! -f "${config_backup}" ]]; then
         sudo cp "${config_file}" "${config_backup}"
