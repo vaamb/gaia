@@ -88,6 +88,7 @@ if kill -15 "$GAIA_PID" 2>/dev/null; then
     if kill -0 "$GAIA_PID" 2>/dev/null; then
         log WARN "Graceful shutdown failed. Force killing the process..."
         kill -9 "$GAIA_PID" 2>/dev/null || true
+        sleep .5
     fi
 
     # Clean up PID file
