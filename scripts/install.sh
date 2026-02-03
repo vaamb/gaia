@@ -19,7 +19,7 @@ readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null
 
 check_root() {
     # Check if running as root
-    if [ "${EUID}" -eq 0 ]; then
+    if [[ "${EUID}" -eq 0 ]]; then
         log WARN "Running as root is not recommended. Please run as a regular user with sudo privileges."
         read -p "Continue anyway? [y/N] " -n 1 -r
         echo
@@ -51,7 +51,7 @@ check_requirements() {
         fi
     done
 
-    if [ ${#missing_deps[@]} -gt 0 ]; then
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
         log WARN "Missing required dependencies: ${missing_deps[*]}"
         log INFO "Attempting to install missing dependencies..."
             sudo apt update && sudo apt install -y "${missing_deps[@]}" ||
@@ -65,7 +65,7 @@ check_requirements() {
 
 maybe_pi () {
     ARCH=$(dpkg --print-architecture)
-    if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] ; then
+    if [[ "$ARCH" = "armhf" ]] || [[ "$ARCH" = "arm64" ]] ; then
         return 0
     else
         return 1
@@ -78,13 +78,13 @@ configure_hardware() {
     local config_backup="${config_file}.bak.$(date +%Y%m%d%H%M%S)"
 
     IS_RASPI=true
-    if [ ! -f "${config_file}" ]; then
+    if [[ ! -f "${config_file}" ]]; then
         log WARN "${config_file} not found. This might not be a Raspberry Pi."
         IS_RASPI=false
     fi
 
     # Create backup
-    if [ "${IS_RASPI}" = "true" ] && [ ! -f "${config_backup}" ]; then
+    if [[ ! -f "${config_backup}" ]]; then
         sudo cp "${config_file}" "${config_backup}"
         log INFO "Created backup of ${config_file} as ${config_backup}"
     fi
@@ -100,7 +100,7 @@ configure_hardware() {
     }
 
     # Enable I2C
-    if [ -f /etc/modules ]; then
+    if [[ -f /etc/modules ]]; then
         if ! grep -q "^i2c-dev" /etc/modules; then
             echo "i2c-dev" | sudo tee -a "/etc/modules" > /dev/null
         fi
@@ -140,7 +140,7 @@ create_directories() {
 
 setup_python_venv() {
     # Setup Python virtual environment
-    if [ ! -d "python_venv" ]; then
+    if [[ ! -d "python_venv" ]]; then
         python3 -m venv "${GAIA_DIR}/python_venv" ||
             log ERROR "Failed to create Python virtual environment"
     else
@@ -156,7 +156,7 @@ install_gaia() {
 
     # Get Gaia repository
     log INFO "Cloning Gaia repository..."
-    if [ ! -d "${GAIA_DIR}/lib/gaia" ]; then
+    if [[ ! -d "${GAIA_DIR}/lib/gaia" ]]; then
         if ! git clone --branch "${GAIA_VERSION}" "${GAIA_REPO}" \
                 "${GAIA_DIR}/lib/gaia" > /dev/null 2>&1; then
             log ERROR "Failed to clone Gaia repository"
@@ -174,9 +174,10 @@ install_gaia() {
 
     # Install Gaia
     log INFO "Installing Gaia and its dependencies..."
-    pip install -e . || log ERROR "Failed to install Gaia and its dependencies"
+    pip install -e . ||
+        log ERROR "Failed to install Gaia and its dependencies"
     deactivate ||
-        log ERROR "Failed to deactivate virtual environment"
+        log WARN "Failed to deactivate virtual environment"
 }
 
 copy_scripts() {
@@ -232,7 +233,7 @@ main() {
     log INFO "Starting Gaia installation (v${GAIA_VERSION})"
 
     # Check if already installed
-    if [ -d "${GAIA_DIR}" ]; then
+    if [[ -d "${GAIA_DIR}" ]]; then
         log ERROR "Gaia appears to be already installed at ${GAIA_DIR}"
     fi
 
