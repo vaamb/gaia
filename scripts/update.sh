@@ -124,7 +124,7 @@ update_repo() {
     log "Latest version:  ${latest_tag}"
 
     if [[ "${current_tag}" == "${latest_tag}" && "${FORCE_UPDATE}" == false ]]; then
-        log WARN "{$repo_name} is already at the latest version. Use -f to force update."
+        log WARN "${repo_name} is already at the latest version. Use -f to force update."
         return 0
     fi
 
@@ -214,12 +214,12 @@ update_service() {
 cleanup() {
     local exit_code=$?
 
-    if [ "${exit_code}" -ne 0 ]; then
+    if [[ "${exit_code}" -ne 0 ]]; then
         log WARN "Update failed. Check the log file for details: ${LOG_FILE}"
         if [[ -d "${BACKUP_DIR}" && "${DRY_RUN}" == false ]]; then
             log WARN "Attempting rollback from backup..."
-            rm -rf "${GAIA_DIR}"
             cp -r "${BACKUP_DIR}" "${GAIA_DIR}"
+            rm -rf "${BACKUP_DIR}"
         fi
     else
         if [[ -d "${BACKUP_DIR}" ]]; then
