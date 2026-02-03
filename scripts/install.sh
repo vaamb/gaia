@@ -45,7 +45,7 @@ check_requirements() {
     }
 
     # Check for required commands
-    for cmd in git python3 systemctl; do
+    for cmd in git python systemd; do
         if ! command_exists "${cmd}"; then
             missing_deps+=("${cmd}")
         fi
