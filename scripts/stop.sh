@@ -26,7 +26,7 @@ mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
 # Log stop attempt
 log INFO "Attempting to stop Gaia..."
 
-# Function to check if Ouranos is running
+# Function to check if Gaia is running
 get_gaia_pid() {
     # Prefer PID file when available
     if [[ -f "${GAIA_DIR}/gaia.pid" ]]; then
@@ -42,7 +42,7 @@ get_gaia_pid() {
 }
 
 is_running() {
-    # Check if Ouranos is running
+    # Check if Gaia is running
     local pid
     pid=$(get_gaia_pid)
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
