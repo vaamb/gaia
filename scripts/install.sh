@@ -74,7 +74,8 @@ check_requirements() {
 }
 
 maybe_pi () {
-    ARCH=$(dpkg --print-architecture)
+    ARCH=$(dpkg --print-architecture) ||
+        return 1
     if [[ "$ARCH" = "armhf" ]] || [[ "$ARCH" = "arm64" ]] ; then
         return 0
     else
