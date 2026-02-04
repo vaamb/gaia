@@ -151,7 +151,11 @@ class Ecosystem:
         # Sync initialization of the ecosystem
         ecosystem = cls(ecosystem_id, engine)
         # Finalization of the initialization
-        await ecosystem._async_init()
+        try:
+            await ecosystem._async_init()
+        except Exception:
+            await ecosystem.terminate()
+            raise
         return ecosystem
 
     async def terminate(self) -> None:
