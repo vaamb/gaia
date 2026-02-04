@@ -327,14 +327,14 @@ class Ecosystem:
 
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
-        return set([  # noqa
+        return {  # noqa
             subroutine_name
             for subroutine_name, subroutine in self.subroutines.items()
             if subroutine.started
-        ])
+        }
 
     @property
-    def manageable_subroutines(self) -> dict:
+    def manageable_subroutines(self) -> dict[SubroutineNames, bool]:
         """Return a dict with the manageability status of the subroutines."""
         return {
             subroutine_name: subroutine.manageable
@@ -425,7 +425,7 @@ class Ecosystem:
             existing.add(hardware_uid)
             in_config = self.config.IO_dict.get(hardware_uid)
             if in_config is None:
-                # Hardware was remove from config, go to next
+                # Hardware was removed from config, go to next
                 continue
             # /!\ Do not hold a reference to hardware or its reference count will never reach 0
             current = gv.to_anonymous(self.hardware[hardware_uid].dict_repr(), "uid")
@@ -456,7 +456,7 @@ class Ecosystem:
             del self.hardware[hardware_uid], hardware
 
     # Ecosystem management
-    async def start(self):
+    async def start(self) -> None:
         """Start the Ecosystem
 
         When started, the Ecosystem will automatically start and stop the
@@ -493,7 +493,7 @@ class Ecosystem:
             self.logger.debug("Ecosystem successfully started.")
             self._started = True
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the Ecosystem"""
         if not self.started:
             raise RuntimeError("Cannot stop an ecosystem that hasn't started")
@@ -502,10 +502,10 @@ class Ecosystem:
         for subroutine in reversed(subroutines_to_stop):
             if self.subroutines[subroutine].started:
                 await self.subroutines[subroutine].stop()
-        if not any([
+        if not any(
                 self.subroutines[subroutine].started
                 for subroutine in self.subroutines
-        ]):
+        ):
             self.logger.debug("Ecosystem successfully stopped.")
         else:
             self.logger.error("Failed to stop the ecosystem.")
@@ -576,7 +576,7 @@ class Ecosystem:
         for handler_group in [*self.actuator_hub.actuator_handlers.keys()]:
             handler = self.actuator_hub.actuator_handlers[handler_group]
             handler.reset_cached_actuators()
-            # Maker sure all the handlers where deactivated when the subroutine finished
+            # Make sure all the handlers where deactivated when the subroutine finished
             assert not handler.active
             del self.actuator_hub.actuator_handlers[handler_group], handler
         # Terminate PIDs
