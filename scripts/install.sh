@@ -11,6 +11,8 @@ readonly GAIA_REPO="https://github.com/vaamb/gaia.git"
 # Default values
 readonly GAIA_DIR="${PWD}/gaia"
 
+UPDATED=false
+
 # Load logging functions
 readonly DATETIME=$(date +%Y%m%d_%H%M%S)
 readonly LOG_FILE="/tmp/gaia_install_${DATETIME}.log"
@@ -61,8 +63,9 @@ check_requirements() {
     if [[ ${#missing_deps[@]} -gt 0 ]]; then
         log WARN "Missing required packages: ${missing_deps[*]}"
         log INFO "Attempting to install missing packages..."
-            sudo apt update && sudo apt install -y "${missing_deps[@]}" ||
-                log ERROR "Failed to install required packages"
+        sudo apt update && sudo apt install -y "${missing_deps[@]}" ||
+            log ERROR "Failed to install required packages"
+        UPDATED=true
     fi
 
     # Check Python version
@@ -96,10 +99,8 @@ configure_hardware() {
     fi
 
     # Create backup
-    if [[ ! -f "${config_backup}" ]]; then
-        sudo cp "${config_file}" "${config_backup}"
-        log INFO "Created backup of ${config_file} as ${config_backup}"
-    fi
+      sudo cp "${config_file}" "${config_backup}"
+      log INFO "Created backup of ${config_file} as ${config_backup}"
 
     # Function to add configuration
     add_config() {
