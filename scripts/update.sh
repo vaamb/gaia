@@ -228,8 +228,11 @@ cleanup() {
         log WARN "Update failed. Check the log file for details: ${LOG_FILE}"
         if [[ -d "${BACKUP_DIR}" && "${DRY_RUN}" == false ]]; then
             log WARN "Attempting rollback from backup..."
-            rsync -a "${BACKUP_DIR}/" "${GAIA_DIR}/" ||
+            if ! rsync -a "${BACKUP_DIR}/" "${GAIA_DIR}/"; then
                 log WARN "Rollback failed. Backup is preserved at ${BACKUP_DIR}"
+            else
+                rm -rf "${BACKUP_DIR}"
+            fi
         fi
     else
         if [[ -d "${BACKUP_DIR}" ]]; then
