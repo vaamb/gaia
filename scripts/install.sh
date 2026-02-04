@@ -207,8 +207,6 @@ update_profile() {
     # Update .profile
     ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
         log WARN "Failed to update shell profile"
-
-    log INFO "Setting up systemd service..."
 }
 
 install_service() {
