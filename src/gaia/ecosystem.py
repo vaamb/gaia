@@ -645,7 +645,8 @@ class Ecosystem:
     health_data = plants_health
 
     # Climate
-    def climate_parameters_regulated(self) -> set[gv.ClimateParameter]:
+    @property
+    def regulated_climate_parameters(self) -> set[gv.ClimateParameter]:
         if self.get_subroutine_status("climate"):
             climate_subroutine: Climate = self.subroutines["climate"]
             return set(climate_subroutine.regulated_parameters)
