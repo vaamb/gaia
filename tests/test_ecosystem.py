@@ -5,7 +5,7 @@ import gaia_validators as gv
 
 from gaia import Ecosystem, EcosystemConfig, Engine, EngineConfig
 from gaia.config import defaults
-from gaia.exceptions import HardwareNotFound, NonValidSubroutine
+from gaia.exceptions import HardwareNotFound, SubroutineNotFound
 from gaia.hardware.abc import _MetaHardware
 
 from . import data
@@ -57,7 +57,7 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
     assert ecosystem.subroutines_started == set()
     await ecosystem.disable_subroutine("dummy")
 
-    with pytest.raises(NonValidSubroutine, match=r"is not valid."):
+    with pytest.raises(SubroutineNotFound, match=r"is not valid."):
         await ecosystem.enable_subroutine("WrongSubroutine")
 
 

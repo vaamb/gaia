@@ -9,7 +9,7 @@ import gaia_validators as gv
 from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
-from gaia.exceptions import HardwareNotFound, NonValidSubroutine
+from gaia.exceptions import HardwareNotFound, SubroutineNotFound
 from gaia.hardware.abc import Hardware
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
@@ -221,7 +221,7 @@ class Ecosystem:
         try:
             return self.subroutines[subroutine_name]
         except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+            raise SubroutineNotFound(f"Subroutine '{subroutine_name}' is not valid.")
 
     async def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
@@ -491,7 +491,7 @@ class Ecosystem:
             self.logger.debug("Ecosystem successfully stopped.")
         else:
             self.logger.error("Failed to stop the ecosystem.")
-            raise Exception(f"Failed to stop ecosystem {self.name}")
+            raise RuntimeError(f"Failed to stop ecosystem {self.name}")
         self._started = False
 
     async def set_lighting_method(

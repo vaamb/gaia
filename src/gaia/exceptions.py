@@ -1,8 +1,8 @@
-class NonValidSubroutine(ValueError):
+class NotFound(ValueError):
     pass
 
 
-class NotFound(ValueError):
+class SubroutineNotFound(NotFound):
     pass
 
 
