@@ -87,13 +87,13 @@ configure_hardware() {
     local config_file="/boot/config.txt"
     local config_backup="${config_file}.bak.$(date +%Y%m%d%H%M%S)"
 
-    IS_RASPI=true
+    is_raspi=true
     if [[ ! -f "${config_file}" ]]; then
         log WARN "${config_file} not found. This might not be a Raspberry Pi."
-        IS_RASPI=false
+        is_raspi=false
     fi
 
-    if [[ "${IS_RASPI}" = "false" ]]; then
+    if [[ "${is_raspi}" = "false" ]]; then
         log WARN "Cannot configure hardware for non-Raspberry Pi"
         return 0
     fi
@@ -133,7 +133,9 @@ configure_hardware() {
 
 install_requirements() {
     # Install system dependencies
-    sudo apt update
+    if [[ "${UPDATED}" = "false" ]]; then
+        sudo apt update
+    fi
     if ! sudo apt install -y libffi-dev libssl-dev python3-venv python3-pip; then
         log ERROR "Failed to install system dependencies."
     fi
