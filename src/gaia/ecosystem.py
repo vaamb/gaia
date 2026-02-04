@@ -9,7 +9,7 @@ import gaia_validators as gv
 from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
-from gaia.exceptions import HardwareNotFound, NonValidSubroutine
+from gaia.exceptions import HardwareNotFound, SubroutineNotFound
 from gaia.hardware.abc import Hardware
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
@@ -151,10 +151,16 @@ class Ecosystem:
         # Sync initialization of the ecosystem
         ecosystem = cls(ecosystem_id, engine)
         # Finalization of the initialization
-        await ecosystem._async_init()
+        try:
+            await ecosystem._async_init()
+        except Exception:
+            await ecosystem.terminate()
+            raise
         return ecosystem
 
     async def terminate(self) -> None:
+        if self._started:
+            raise RuntimeError("Cannot terminate a running ecosystem. Stop it first")
         # Terminate the subroutines first
         self.terminate_subroutines()
         # Terminate the actuator hub
@@ -221,7 +227,7 @@ class Ecosystem:
         try:
             return self.subroutines[subroutine_name]
         except KeyError:
-            raise NonValidSubroutine(f"Subroutine '{subroutine_name}' is not valid.")
+            raise SubroutineNotFound(f"Subroutine '{subroutine_name}' is not valid.")
 
     async def enable_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Enable a Subroutine
@@ -459,21 +465,33 @@ class Ecosystem:
         if self.started:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
         self.logger.info("Starting the ecosystem.")
-        # Update config
-        await self.config.update_chaos_time_window()
-        await self.refresh_lighting_hours()
-        # Start the virtual ecosystem
-        if self.virtualized:
-            self.virtual_self.start()
-        # Mount all the hardware
-        await self.refresh_hardware()
-        # Refresh subroutines
-        await self.refresh_subroutines()
-        # Send ecosystems info
-        if self.engine.message_broker_started and self.event_handler.registered:
-            await self.event_handler.send_ecosystems_info(self.uid)
-        self.logger.debug("Ecosystem successfully started.")
-        self._started = True
+        try:
+            # Update config
+            await self.config.update_chaos_time_window()
+            await self.refresh_lighting_hours()
+            # Start the virtual ecosystem
+            if self.virtualized:
+                self.virtual_self.start()
+            # Mount all the hardware
+            await self.refresh_hardware()
+            # Refresh subroutines
+            await self.refresh_subroutines()
+            # Send ecosystems info
+            if self.engine.message_broker_started and self.event_handler.registered:
+                await self.event_handler.send_ecosystems_info(self.uid)
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while starting the ecosystem. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+            )
+            subroutines_to_stop: list[SubroutineNames] = subroutine_names
+            for subroutine in reversed(subroutines_to_stop):
+                if self.subroutines[subroutine].started:
+                    await self.subroutines[subroutine].stop()
+            raise
+        else:
+            self.logger.debug("Ecosystem successfully started.")
+            self._started = True
 
     async def stop(self):
         """Stop the Ecosystem"""
@@ -491,7 +509,7 @@ class Ecosystem:
             self.logger.debug("Ecosystem successfully stopped.")
         else:
             self.logger.error("Failed to stop the ecosystem.")
-            raise Exception(f"Failed to stop ecosystem {self.name}")
+            raise RuntimeError(f"Failed to stop ecosystem {self.name}")
         self._started = False
 
     async def set_lighting_method(
