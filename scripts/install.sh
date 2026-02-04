@@ -11,6 +11,8 @@ readonly GAIA_REPO="https://github.com/vaamb/gaia.git"
 # Default values
 readonly GAIA_DIR="${PWD}/gaia"
 
+UPDATED=false
+
 # Load logging functions
 readonly DATETIME=$(date +%Y%m%d_%H%M%S)
 readonly LOG_FILE="/tmp/gaia_install_${DATETIME}.log"
@@ -19,7 +21,7 @@ readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null
 
 check_root() {
     # Check if running as root
-    if [ "${EUID}" -eq 0 ]; then
+    if [[ "${EUID}" -eq 0 ]]; then
         log WARN "Running as root is not recommended. Please run as a regular user with sudo privileges."
         read -p "Continue anyway? [y/N] " -n 1 -r
         echo
@@ -44,28 +46,37 @@ check_requirements() {
         command -v "$1" >/dev/null 2>&1
     }
 
+    # Map of command -> package name
+    declare -A cmd_to_pkg=(
+        [git]=git
+        [python3]=python3
+        [systemctl]=systemd
+    )
+
     # Check for required commands
-    for cmd in git python3 systemctl; do
+    for cmd in "${!cmd_to_pkg[@]}"; do
         if ! command_exists "${cmd}"; then
-            missing_deps+=("${cmd}")
+            missing_deps+=("${cmd_to_pkg[$cmd]}")
         fi
     done
 
-    if [ ${#missing_deps[@]} -gt 0 ]; then
-        log WARN "Missing required dependencies: ${missing_deps[*]}"
-        log INFO "Attempting to install missing dependencies..."
-            sudo apt-get update && sudo apt-get install -y "${missing_deps[@]}" ||
-                log ERROR "Failed to install required packages"
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        log WARN "Missing required packages: ${missing_deps[*]}"
+        log INFO "Attempting to install missing packages..."
+        sudo apt update && sudo apt install -y "${missing_deps[@]}" ||
+            die "Failed to install required packages"
+        UPDATED=true
     fi
 
     # Check Python version
     python3 -c "import sys; exit(0) if sys.version_info >= (${MIN_PYTHON_VERSION//./,}) else exit(1)" ||
-        log ERROR "Python ${MIN_PYTHON_VERSION} or higher is required"
+        die "Python ${MIN_PYTHON_VERSION} or higher is required"
 }
 
-is_pi () {
-    ARCH=$(dpkg --print-architecture)
-    if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] ; then
+maybe_pi () {
+    ARCH=$(dpkg --print-architecture) ||
+        return 1
+    if [[ "$ARCH" = "armhf" ]] || [[ "$ARCH" = "arm64" ]] ; then
         return 0
     else
         return 1
@@ -77,17 +88,20 @@ configure_hardware() {
     local config_file="/boot/config.txt"
     local config_backup="${config_file}.bak.$(date +%Y%m%d%H%M%S)"
 
-    IS_RASPI=true
-    if [ ! -f "${config_file}" ]; then
+    is_raspi=true
+    if [[ ! -f "${config_file}" ]]; then
         log WARN "${config_file} not found. This might not be a Raspberry Pi."
-        IS_RASPI=false
+        is_raspi=false
+    fi
+
+    if [[ "${is_raspi}" = "false" ]]; then
+        log WARN "Cannot configure hardware for non-Raspberry Pi"
+        return 0
     fi
 
     # Create backup
-    if [ ${IS_RASPI} ] && [ ! -f "${config_backup}" ]; then
-        sudo cp "${config_file}" "${config_backup}"
-        log INFO "Created backup of ${config_file} as ${config_backup}"
-    fi
+      sudo cp "${config_file}" "${config_backup}"
+      log INFO "Created backup of ${config_file} as ${config_backup}"
 
     # Function to add configuration
     add_config() {
@@ -95,14 +109,14 @@ configure_hardware() {
         local line=$2
 
         if ! grep -q "^${pattern}" "${config_file}"; then
-            echo "${line}" >> "${config_file}";
+            echo "${line}" | sudo tee -a "${config_file}" > /dev/null
         fi
     }
 
     # Enable I2C
-    if [ -f /etc/modules ]; then
+    if [[ -f /etc/modules ]]; then
         if ! grep -q "^i2c-dev" /etc/modules; then
-            echo "i2c-dev" >> /etc/modules;
+            echo "i2c-dev" | sudo tee -a "/etc/modules" > /dev/null
         fi
     fi
 
@@ -120,29 +134,33 @@ configure_hardware() {
 
 install_requirements() {
     # Install system dependencies
-    sudo apt update
+    if [[ "${UPDATED}" = "false" ]]; then
+        sudo apt update
+    fi
     if ! sudo apt install -y libffi-dev libssl-dev python3-venv python3-pip; then
-        log ERROR "Failed to install system dependencies."
+        die "Failed to install system dependencies."
     fi
 }
 
 create_directories() {
     # Create Gaia directory
-    mkdir -p "${GAIA_DIR}" || log ERROR "Failed to create directory: ${GAIA_DIR}"
-    cd "${GAIA_DIR}" || log ERROR "Failed to change to directory: ${GAIA_DIR}"
+    mkdir -p "${GAIA_DIR}" ||
+        die "Failed to create directory: ${GAIA_DIR}"
+    cd "${GAIA_DIR}" ||
+        die "Failed to change to directory: ${GAIA_DIR}"
 
     # Create required subdirectories
     for dir in logs scripts lib; do
         mkdir -p "${GAIA_DIR}/${dir}" ||
-            log ERROR "Failed to create directory: ${GAIA_DIR}/${dir}"
+            die "Failed to create directory: ${GAIA_DIR}/${dir}"
     done
 }
 
 setup_python_venv() {
     # Setup Python virtual environment
-    if [ ! -d "python_venv" ]; then
+    if [[ ! -d "python_venv" ]]; then
         python3 -m venv "${GAIA_DIR}/python_venv" ||
-            log ERROR "Failed to create Python virtual environment"
+            die "Failed to create Python virtual environment"
     else
         log WARN "Virtual environment already exists at ${GAIA_DIR}/python_venv"
     fi
@@ -152,53 +170,53 @@ install_gaia() {
     # Activate virtual environment
     # shellcheck source=/dev/null
     source "${GAIA_DIR}/python_venv/bin/activate" ||
-        log ERROR "Failed to activate Python virtual environment"
+        die "Failed to activate Python virtual environment"
 
     # Get Gaia repository
     log INFO "Cloning Gaia repository..."
-    if [ ! -d "${GAIA_DIR}/lib/gaia" ]; then
+    if [[ ! -d "${GAIA_DIR}/lib/gaia" ]]; then
         if ! git clone --branch "${GAIA_VERSION}" "${GAIA_REPO}" \
-                "${GAIA_DIR}/lib/gaia" > /dev/null 2>&1; then
-            log ERROR "Failed to clone Gaia repository"
+                "${GAIA_DIR}/lib/gaia" > /dev/null; then
+            die "Failed to clone Gaia repository"
         fi
 
         cd "${GAIA_DIR}/lib/gaia" ||
-            log ERROR "Failed to enter Gaia directory"
+            die "Failed to enter Gaia directory"
     else
-        log ERROR "Gaia installation detected at ${GAIA_DIR}/lib/gaia. Please update using the update script."
+        die "Gaia installation detected at ${GAIA_DIR}/lib/gaia. Please update using the update script."
     fi
 
     log INFO "Updating Python packaging tools..."
     pip install --upgrade pip setuptools wheel ||
-        log ERROR "Failed to update Python packaging tools"
+        die "Failed to update Python packaging tools"
 
     # Install Gaia
     log INFO "Installing Gaia and its dependencies..."
-    pip install -e . || log ERROR "Failed to install Gaia and its dependencies"
+    pip install -e . ||
+        die "Failed to install Gaia and its dependencies"
     deactivate ||
-        log ERROR "Failed to deactivate virtual environment"
+        log WARN "Failed to deactivate virtual environment"
+    cd "${GAIA_DIR}"
 }
 
 copy_scripts() {
     # Copy scripts
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
-        log ERROR "Failed to copy scripts"
+        die "Failed to copy scripts"
     chmod +x "${GAIA_DIR}/scripts/"*.sh
 }
 
 update_profile() {
     # Update .profile
     ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
-        log ERROR "Failed to update shell profile"
-
-    info "Setting up systemd service..."
+        log WARN "Failed to update shell profile"
 }
 
 install_service() {
     local service_file="${GAIA_DIR}/scripts/gaia.service"
 
     ${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${service_file}" ||
-        log ERROR "Failed to generate systemd service"
+        log WARN "Failed to generate systemd service"
 
     # Install service
     if ! sudo cp "${service_file}" "/etc/systemd/system/gaia.service"; then
@@ -213,16 +231,15 @@ install_service() {
 cleanup() {
     local exit_code=$?
 
-    if [ ${exit_code} -ne 0 ]; then
-        log ERROR "Installation failed. Check the log file for details: ${LOG_FILE}"
-        rm -r "${GAIA_DIR}"
+    if [[ "${exit_code}" -ne 0 ]]; then
+        log WARN "Installation failed. Check the log file for details: ${LOG_FILE}"
+        log WARN "Partial installation may remain at ${GAIA_DIR}. Remove it manually before retrying."
     else
         log SUCCESS "Installation completed successfully!"
     fi
 
     # Reset terminal colors
     echo -e "${NC}"
-    exit ${exit_code}
 }
 
 main() {
@@ -232,8 +249,8 @@ main() {
     log INFO "Starting Gaia installation (v${GAIA_VERSION})"
 
     # Check if already installed
-    if [ -d "${GAIA_DIR}" ]; then
-        log ERROR "Gaia appears to be already installed at ${GAIA_DIR}"
+    if [[ -d "${GAIA_DIR}" ]]; then
+        die "Gaia appears to be already installed at ${GAIA_DIR}"
     fi
 
     # Check requirements and permissions
@@ -242,7 +259,7 @@ main() {
     check_requirements
     log SUCCESS "System requirements met"
 
-    if is_pi; then
+    if maybe_pi; then
         log INFO "This is a Raspberry Pi. Configuring hardware interfaces..."
         configure_hardware
     else

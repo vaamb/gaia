@@ -27,7 +27,7 @@ gaia() {
     start) "\${GAIA_DIR}/scripts/start.sh" ;;
     stop) "\${GAIA_DIR}/scripts/stop.sh" ;;
     restart) "\${GAIA_DIR}/scripts/stop.sh" && "\${GAIA_DIR}/scripts/start.sh" ;;
-    status) systemctl --user status gaia.service ;;
+    status) systemctl status gaia.service ;;
     logs) tail -f "\${GAIA_DIR}/logs/gaia.log" ;;
     stdout) tail -f "\${GAIA_DIR}/logs/stdout" ;;
     update) "\${GAIA_DIR}/scripts/update.sh" ;;
