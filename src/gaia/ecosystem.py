@@ -151,6 +151,18 @@ class Ecosystem:
             ecosystem_id: str,
             engine: Engine | None = None,
     ) -> Self:
+        """Create and initialize a new Ecosystem instance.
+
+        This is the preferred way to create an Ecosystem, as it handles
+        async hardware initialization. If initialization fails, all
+        resources are cleaned up before re-raising the exception.
+
+        :param ecosystem_id: The name or UID of the ecosystem as defined
+                             in the configuration.
+        :param engine: The Engine instance to attach to. If None, a new
+                       Engine will be created.
+        :return: A fully initialized Ecosystem instance.
+        """
         # Sync initialization of the ecosystem
         ecosystem = cls(ecosystem_id, engine)
         # Finalization of the initialization
@@ -162,6 +174,14 @@ class Ecosystem:
         return ecosystem
 
     async def terminate(self) -> None:
+        """Release all resources held by the ecosystem.
+
+        This method cleans up subroutines, actuator handlers, and hardware.
+        It should be called when the ecosystem is no longer needed.
+
+        :raises RuntimeError: If the ecosystem is currently running. Call
+                              stop() first.
+        """
         if self._started:
             raise RuntimeError("Cannot terminate a running ecosystem. Stop it first")
         # Terminate the subroutines first
@@ -229,6 +249,12 @@ class Ecosystem:
     def get_subroutine(self, subroutine_name: Literal["health"]) -> Health: ...
 
     def get_subroutine(self, subroutine_name: SubroutineNames) -> SubroutineTemplate:
+        """Retrieve a subroutine by name.
+
+        :param subroutine_name: The name of the subroutine to retrieve.
+        :return: The subroutine instance.
+        :raises SubroutineNotFound: If no subroutine exists with the given name.
+        """
         try:
             return self.subroutines[subroutine_name]
         except KeyError:
@@ -274,7 +300,7 @@ class Ecosystem:
     async def stop_subroutine(self, subroutine_name: SubroutineNames) -> None:
         """Stop a Subroutine
 
-        :param subroutine_name: The name of the Subroutine to stop
+        :param subroutine_name: The name of the subroutine to stop
         """
         self.logger.debug(f"Stopping the subroutine '{subroutine_name}'.")
         subroutine = self.get_subroutine(subroutine_name)
@@ -287,6 +313,10 @@ class Ecosystem:
             )
 
     async def refresh_subroutine(self, subroutine_name: SubroutineNames) -> None:
+        """Refresh a subroutine's state based on current configuration.
+
+        :param subroutine_name: The name of the subroutine to refresh.
+        """
         subroutine = self.get_subroutine(subroutine_name)
         try:
             await subroutine.refresh()
@@ -297,6 +327,11 @@ class Ecosystem:
             )
 
     def get_subroutine_status(self, subroutine_name: SubroutineNames) -> bool:
+        """Check whether a subroutine is currently running.
+
+        :param subroutine_name: The name of the subroutine to check.
+        :return: True if the subroutine is started, False otherwise.
+        """
         subroutine = self.get_subroutine(subroutine_name)
         return subroutine.started
 
@@ -327,6 +362,11 @@ class Ecosystem:
             await self.start_subroutine(subroutine)
 
     def terminate_subroutines(self) -> None:
+        """Remove all subroutine instances from the ecosystem.
+
+        This does not gracefully stop subroutines — use stop_subroutine() for that.
+        Called during ecosystem termination to release subroutine resources.
+        """
         for subroutine_name in [*self.subroutines.keys()]:
             del self.subroutines[subroutine_name]
 
@@ -484,6 +524,10 @@ class Ecosystem:
             pid.reset_direction()
 
     async def terminate_hardware(self) -> None:
+        """Terminate and dismount all hardware.
+
+        Called during ecosystem termination to release hardware resources.
+        """
         for hardware_uid in [*self.hardware.keys()]:
             hardware = self.hardware[hardware_uid]
             await hardware.terminate()
@@ -608,9 +652,19 @@ class Ecosystem:
             self,
             actuator_group: str,
     ) -> ActuatorHandler:
+        """Retrieve the actuator handler for a specific actuator group.
+
+        :param actuator_group: The name of the actuator group (e.g., 'light').
+        :return: The ActuatorHandler managing the specified group.
+        """
         return self.actuator_hub.get_handler(actuator_group)
 
     def terminate_actuator_hub(self) -> None:
+        """Release all actuator handlers and PIDs.
+
+        Called during ecosystem termination. All handlers must be inactive
+        (their managing subroutines must have stopped).
+        """
         # Terminate actuator handlers
         for handler_group in [*self.actuator_hub.actuator_handlers.keys()]:
             handler = self.actuator_hub.actuator_handlers[handler_group]
