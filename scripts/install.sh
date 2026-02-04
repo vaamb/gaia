@@ -235,7 +235,6 @@ cleanup() {
 
     # Reset terminal colors
     echo -e "${NC}"
-    exit ${exit_code}
 }
 
 main() {
