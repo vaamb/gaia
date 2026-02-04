@@ -21,24 +21,23 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            log ERROR "Unknown parameter: $1"
-            exit 1
+            die "Unknown parameter: $1"
             ;;
     esac
 done
 
 # Check if GAIA_DIR is set
 if [[ -z "${GAIA_DIR:-}" ]]; then
-    log ERROR "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
+    die "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
 fi
 
 # Check if the directory exists
 if [[ ! -d "$GAIA_DIR" ]]; then
-    log ERROR "Gaia directory not found at $GAIA_DIR. Please check your installation."
+    die "Gaia directory not found at $GAIA_DIR. Please check your installation."
 fi
 
 # Create logs directory if it doesn't exist
-mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
+mkdir -p "${GAIA_DIR}/logs" || die "Failed to create logs directory"
 
 # Check if already running
 if [[ -f "${GAIA_DIR}/gaia.pid" ]]; then
@@ -59,17 +58,17 @@ if pgrep -x "gaia" > /dev/null; then
 fi
 
 # Change to Gaia directory
-cd "$GAIA_DIR" || log ERROR "Failed to change to Gaia directory: $GAIA_DIR"
+cd "$GAIA_DIR" || die "Failed to change to Gaia directory: $GAIA_DIR"
 
 # Check if virtual environment exists
 if [[ ! -d "python_venv" ]]; then
-    log ERROR "Python virtual environment not found. Please run the install script first."
+    die "Python virtual environment not found. Please run the install script first."
 fi
 
 # Activate virtual environment
 # shellcheck source=/dev/null
 if ! source "python_venv/bin/activate"; then
-    log ERROR "Failed to activate Python virtual environment"
+    die "Failed to activate Python virtual environment"
 fi
 
 # Start Gaia
@@ -105,7 +104,7 @@ else
         # Process died, check error log
         # Clean up PID file
         [[ -f "${GAIA_DIR}/gaia.pid" ]] && rm -f "${GAIA_DIR}/gaia.pid"
-        log ERROR "Process failed to start."
+        die "Process failed to start."
     fi
 
     log SUCCESS "Gaia started successfully with PID $GAIA_PID"

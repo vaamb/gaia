@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         *)
-            log ERROR "Unknown option: $1"
+            die "Unknown option: $1"
             ;;
     esac
 done
@@ -48,26 +48,26 @@ done
 check_requirements() {
     # Check if GAIA_DIR is set
     if [[ -z "${GAIA_DIR:-}" ]]; then
-        log ERROR "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
+        die "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
     fi
 
     # Check if the directory exists
     if [[ ! -d "${GAIA_DIR}" ]]; then
-        log ERROR "Gaia directory not found at ${GAIA_DIR}. Please check your installation."
+        die "Gaia directory not found at ${GAIA_DIR}. Please check your installation."
     fi
 
-    cd "${GAIA_DIR}" || log ERROR "Failed to change to Gaia directory: ${GAIA_DIR}"
+    cd "${GAIA_DIR}" || die "Failed to change to Gaia directory: ${GAIA_DIR}"
 
     # Check if virtual environment exists
     if [[ ! -d "python_venv" ]]; then
-        log ERROR "Python virtual environment not found. Please run the install script first."
+        die "Python virtual environment not found. Please run the install script first."
     fi
 }
 
 create_backup() {
     # Create backup directory, excluding python_venv (large and not relocatable)
     rsync -a --exclude='python_venv' "${GAIA_DIR}/" "${BACKUP_DIR}/" ||
-        log ERROR "Failed to create backup directory: ${BACKUP_DIR}"
+        die "Failed to create backup directory: ${BACKUP_DIR}"
 }
 
 # Function to update a single repository
@@ -120,8 +120,8 @@ update_repo() {
     local latest_tag
     latest_tag=$(git describe --tags "$(git rev-list --tags --max-count=1 2>/dev/null)" 2>/dev/null || echo "No tags found")
 
-    log "Current version: ${current_tag}"
-    log "Latest version:  ${latest_tag}"
+    log INFO "Current version: ${current_tag}"
+    log INFO "Latest version:  ${latest_tag}"
 
     if [[ "${current_tag}" == "${latest_tag}" && "${FORCE_UPDATE}" == false ]]; then
         log WARN "${repo_name} is already at the latest version. Use -f to force update."
@@ -182,7 +182,7 @@ update_packages() {
     # Activate virtual environment
     # shellcheck source=/dev/null
     if ! source "python_venv/bin/activate"; then
-        log ERROR "Failed to activate Python virtual environment"
+        die "Failed to activate Python virtual environment"
     fi
 
     # Update package
@@ -196,20 +196,20 @@ update_packages() {
 update_scripts() {
     # Update scripts
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
-        log ERROR "Failed to copy scripts"
+        die "Failed to copy scripts"
     chmod +x "${GAIA_DIR}/scripts/"*.sh
 }
 
 update_profile() {
     ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
-        log ERROR "Failed to update shell profile"
+        die "Failed to update shell profile"
 }
 
 update_service() {
     local service_file="${GAIA_DIR}/scripts/gaia.service"
 
     ${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${service_file}" ||
-        log ERROR "Failed to generate systemd service"
+        die "Failed to generate systemd service"
 
     # Update service
     if ! sudo cp "${service_file}" "/etc/systemd/system/gaia.service"; then

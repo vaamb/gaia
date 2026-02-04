@@ -3,11 +3,8 @@ if [ -z "$LOG_FILE" ]; then
   exit 1 # Exit if LOG_FILE is not set
 fi
 
-# Constants for log levels
-readonly INFO=INFO
-readonly WARN=WARN
-readonly ERROR=ERROR
-readonly SUCCESS=SUCCESS
+# Create the log dir if it doesn't already exists
+mkdir -p "$(dirname "$LOG_FILE")"
 
 # Colors for output
 if [[ -t 1 ]]; then
@@ -26,31 +23,32 @@ fi
 
 # Function to log messages
 log() {
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local timestamp=$(date '+%H:%M:%S')
+    local full_timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     case "$1" in
         INFO)
-            echo -e "${LIGHT_YELLOW}$2${NC}"
-            echo -e "[${timestamp}] [INFO] $2" >> "${LOG_FILE}"
+            echo -e "${LIGHT_YELLOW}[${timestamp}]${NC}$2"
+            echo -e "[${full_timestamp}] [INFO] $2" >> "${LOG_FILE}"
             ;;
         WARN)
-            echo -e "${YELLOW}Warning: $2${NC}"
-            echo -e "[${timestamp}] [WARNING] $2" >> "${LOG_FILE}"
+            echo -e "${YELLOW}[${timestamp}]${NC}$2" >&2
+            echo -e "[${full_timestamp}] [WARNING] $2" >> "${LOG_FILE}"
             ;;
         ERROR)
-            echo -e "${RED}Error: $2${NC}"
-            echo -e "[${timestamp}] [ERROR] $2" >> "${LOG_FILE}"
-            exit 1
+            echo -e "${RED}[${timestamp}]${NC}$2" >&2
+            echo -e "[${full_timestamp}] [ERROR] [${BASH_SOURCE[1]}:${BASH_LINENO[0]}] $2" >> "${LOG_FILE}"
             ;;
         SUCCESS)
-            echo -e "${GREEN}$2${NC}"
-            echo -e "[${timestamp}] [SUCCESS] $2" >> "${LOG_FILE}"
-            ;;
-        *)
-            echo -e "$1"
-            echo -e "[${timestamp}] $1" >> "${LOG_FILE}"
+            echo -e "${GREEN}[${timestamp}]${NC}$2"
+            echo -e "[${full_timestamp}] [SUCCESS] $2" >> "${LOG_FILE}"
             ;;
     esac
+}
+
+die() {
+    log ERROR "$1"
+    exit 1
 }
 
 log INFO "Log file: ${LOG_FILE}"

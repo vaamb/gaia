@@ -64,13 +64,13 @@ check_requirements() {
         log WARN "Missing required packages: ${missing_deps[*]}"
         log INFO "Attempting to install missing packages..."
         sudo apt update && sudo apt install -y "${missing_deps[@]}" ||
-            log ERROR "Failed to install required packages"
+            die "Failed to install required packages"
         UPDATED=true
     fi
 
     # Check Python version
     python3 -c "import sys; exit(0) if sys.version_info >= (${MIN_PYTHON_VERSION//./,}) else exit(1)" ||
-        log ERROR "Python ${MIN_PYTHON_VERSION} or higher is required"
+        die "Python ${MIN_PYTHON_VERSION} or higher is required"
 }
 
 maybe_pi () {
@@ -138,19 +138,21 @@ install_requirements() {
         sudo apt update
     fi
     if ! sudo apt install -y libffi-dev libssl-dev python3-venv python3-pip; then
-        log ERROR "Failed to install system dependencies."
+        die "Failed to install system dependencies."
     fi
 }
 
 create_directories() {
     # Create Gaia directory
-    mkdir -p "${GAIA_DIR}" || log ERROR "Failed to create directory: ${GAIA_DIR}"
-    cd "${GAIA_DIR}" || log ERROR "Failed to change to directory: ${GAIA_DIR}"
+    mkdir -p "${GAIA_DIR}" ||
+        die "Failed to create directory: ${GAIA_DIR}"
+    cd "${GAIA_DIR}" ||
+        die "Failed to change to directory: ${GAIA_DIR}"
 
     # Create required subdirectories
     for dir in logs scripts lib; do
         mkdir -p "${GAIA_DIR}/${dir}" ||
-            log ERROR "Failed to create directory: ${GAIA_DIR}/${dir}"
+            die "Failed to create directory: ${GAIA_DIR}/${dir}"
     done
 }
 
@@ -158,7 +160,7 @@ setup_python_venv() {
     # Setup Python virtual environment
     if [[ ! -d "python_venv" ]]; then
         python3 -m venv "${GAIA_DIR}/python_venv" ||
-            log ERROR "Failed to create Python virtual environment"
+            die "Failed to create Python virtual environment"
     else
         log WARN "Virtual environment already exists at ${GAIA_DIR}/python_venv"
     fi
@@ -168,30 +170,30 @@ install_gaia() {
     # Activate virtual environment
     # shellcheck source=/dev/null
     source "${GAIA_DIR}/python_venv/bin/activate" ||
-        log ERROR "Failed to activate Python virtual environment"
+        die "Failed to activate Python virtual environment"
 
     # Get Gaia repository
     log INFO "Cloning Gaia repository..."
     if [[ ! -d "${GAIA_DIR}/lib/gaia" ]]; then
         if ! git clone --branch "${GAIA_VERSION}" "${GAIA_REPO}" \
                 "${GAIA_DIR}/lib/gaia" > /dev/null; then
-            log ERROR "Failed to clone Gaia repository"
+            die "Failed to clone Gaia repository"
         fi
 
         cd "${GAIA_DIR}/lib/gaia" ||
-            log ERROR "Failed to enter Gaia directory"
+            die "Failed to enter Gaia directory"
     else
-        log ERROR "Gaia installation detected at ${GAIA_DIR}/lib/gaia. Please update using the update script."
+        die "Gaia installation detected at ${GAIA_DIR}/lib/gaia. Please update using the update script."
     fi
 
     log INFO "Updating Python packaging tools..."
     pip install --upgrade pip setuptools wheel ||
-        log ERROR "Failed to update Python packaging tools"
+        die "Failed to update Python packaging tools"
 
     # Install Gaia
     log INFO "Installing Gaia and its dependencies..."
     pip install -e . ||
-        log ERROR "Failed to install Gaia and its dependencies"
+        die "Failed to install Gaia and its dependencies"
     deactivate ||
         log WARN "Failed to deactivate virtual environment"
     cd "${GAIA_DIR}"
@@ -200,7 +202,7 @@ install_gaia() {
 copy_scripts() {
     # Copy scripts
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
-        log ERROR "Failed to copy scripts"
+        die "Failed to copy scripts"
     chmod +x "${GAIA_DIR}/scripts/"*.sh
 }
 
@@ -248,7 +250,7 @@ main() {
 
     # Check if already installed
     if [[ -d "${GAIA_DIR}" ]]; then
-        log ERROR "Gaia appears to be already installed at ${GAIA_DIR}"
+        die "Gaia appears to be already installed at ${GAIA_DIR}"
     fi
 
     # Check requirements and permissions

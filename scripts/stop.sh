@@ -12,16 +12,16 @@ readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null
 
 # Check if GAIA_DIR is set
 if [[ -z "${GAIA_DIR:-}" ]]; then
-    log ERROR "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
+    die "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
 fi
 
 # Check if the directory exists
 if [[ ! -d "$GAIA_DIR" ]]; then
-    log ERROR "Gaia directory not found at $GAIA_DIR. Please check your installation."
+    die "Gaia directory not found at $GAIA_DIR. Please check your installation."
 fi
 
 # Ensure logs directory exists
-mkdir -p "${GAIA_DIR}/logs" || log ERROR "Failed to create logs directory"
+mkdir -p "${GAIA_DIR}/logs" || die "Failed to create logs directory"
 
 # Log stop attempt
 log INFO "Attempting to stop Gaia..."
@@ -82,11 +82,11 @@ if kill -15 "$GAIA_PID" 2>/dev/null; then
 
     # Verify the process was actually stopped
     if kill -0 "$GAIA_PID" 2>/dev/null; then
-        log ERROR "Failed to stop Gaia. Process still running with PID: ${GAIA_PID}."
+        die "Failed to stop Gaia. Process still running with PID: ${GAIA_PID}."
     fi
 
     log SUCCESS "Gaia stopped successfully."
     exit 0
 else
-    log ERROR "Failed to send stop signal to Gaia (PID: ${GAIA_PID}). You may need to run with sudo."
+    die "Failed to send stop signal to Gaia (PID: ${GAIA_PID}). You may need to run with sudo."
 fi
