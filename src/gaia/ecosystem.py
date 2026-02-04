@@ -372,11 +372,13 @@ class Ecosystem:
         self,
         hardware_group: str | gv.HardwareType,
     ) -> list[str]:
-        # Format hardware group
+        """Return the UIDs of all hardware belonging to a specific group.
+
+        :param hardware_group: The hardware group name or HardwareType enum.
+        :return: List of hardware UIDs that belong to the specified group.
+        """
         if isinstance(hardware_group, gv.HardwareType):
             hardware_group = cast(str, hardware_group.name)
-        hardware_group: str
-        # Return the UIDs of the hardware that belong to the hardware group
         return [
             uid
             for uid, hardware in self.hardware.items()
@@ -387,6 +389,13 @@ class Ecosystem:
             self,
             hardware_uid: str,
     ) -> Hardware:
+        """Mount a hardware device to the ecosystem.
+
+        :param hardware_uid: The UID of the hardware to mount, as defined in
+                             the configuration.
+        :return: The initialized Hardware instance.
+        :raises ValueError: If the hardware is already mounted.
+        """
         if hardware_uid in self.hardware:
             error_msg = f"Hardware {hardware_uid} is already mounted."
             self.logger.error(error_msg)
@@ -406,6 +415,11 @@ class Ecosystem:
             raise
 
     async def remove_hardware(self, hardware_uid: str) -> None:
+        """Dismount a hardware device from the ecosystem.
+
+        :param hardware_uid: The UID of the hardware to dismount.
+        :raises HardwareNotFound: If the hardware is not currently mounted.
+        """
         if not self.hardware.get(hardware_uid):
             error_msg = f"Hardware '{hardware_uid}' not found."
             self.logger.error(error_msg)
@@ -417,11 +431,24 @@ class Ecosystem:
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
     async def initialize_hardware(self) -> None:
+        """Mount all active hardware defined in the configuration.
+
+        This is called during ecosystem initialization to set up the initial
+        hardware state.
+        """
         for hardware_uid, hardware_cfg in self.config.IO_dict.items():
             if hardware_cfg["active"]:
                 await self.add_hardware(hardware_uid)
 
     async def refresh_hardware(self) -> None:
+        """Synchronize mounted hardware with the current configuration.
+
+        This method:
+        1. Dismounts hardware that is no longer in the configuration
+        2. Remounts hardware whose configuration has changed
+        3. Mounts newly added hardware
+        4. Resets actuator handlers and PIDs to reflect hardware changes
+        """
         needed: set[str] = set(
             hardware_uid for hardware_uid in self.config.IO_dict.keys()
             if self.config.IO_dict[hardware_uid]["active"]
