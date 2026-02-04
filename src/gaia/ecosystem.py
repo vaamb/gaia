@@ -459,21 +459,33 @@ class Ecosystem:
         if self.started:
             raise RuntimeError(f"Ecosystem {self.name} is already running")
         self.logger.info("Starting the ecosystem.")
-        # Update config
-        await self.config.update_chaos_time_window()
-        await self.refresh_lighting_hours()
-        # Start the virtual ecosystem
-        if self.virtualized:
-            self.virtual_self.start()
-        # Mount all the hardware
-        await self.refresh_hardware()
-        # Refresh subroutines
-        await self.refresh_subroutines()
-        # Send ecosystems info
-        if self.engine.message_broker_started and self.event_handler.registered:
-            await self.event_handler.send_ecosystems_info(self.uid)
-        self.logger.debug("Ecosystem successfully started.")
-        self._started = True
+        try:
+            # Update config
+            await self.config.update_chaos_time_window()
+            await self.refresh_lighting_hours()
+            # Start the virtual ecosystem
+            if self.virtualized:
+                self.virtual_self.start()
+            # Mount all the hardware
+            await self.refresh_hardware()
+            # Refresh subroutines
+            await self.refresh_subroutines()
+            # Send ecosystems info
+            if self.engine.message_broker_started and self.event_handler.registered:
+                await self.event_handler.send_ecosystems_info(self.uid)
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while starting the ecosystem. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+            )
+            subroutines_to_stop: list[SubroutineNames] = subroutine_names
+            for subroutine in reversed(subroutines_to_stop):
+                if self.subroutines[subroutine].started:
+                    await self.subroutines[subroutine].stop()
+            raise
+        else:
+            self.logger.debug("Ecosystem successfully started.")
+            self._started = True
 
     async def stop(self):
         """Stop the Ecosystem"""
