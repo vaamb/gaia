@@ -173,7 +173,7 @@ install_gaia() {
     log INFO "Cloning Gaia repository..."
     if [[ ! -d "${GAIA_DIR}/lib/gaia" ]]; then
         if ! git clone --branch "${GAIA_VERSION}" "${GAIA_REPO}" \
-                "${GAIA_DIR}/lib/gaia" > /dev/null 2>&1; then
+                "${GAIA_DIR}/lib/gaia" > /dev/null; then
             log ERROR "Failed to clone Gaia repository"
         fi
 
