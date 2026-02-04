@@ -193,6 +193,7 @@ install_gaia() {
         log ERROR "Failed to install Gaia and its dependencies"
     deactivate ||
         log WARN "Failed to deactivate virtual environment"
+    cd "${GAIA_DIR}"
 }
 
 copy_scripts() {
