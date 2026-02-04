@@ -139,6 +139,9 @@ class Ecosystem:
             f"status={self.started}, engine={self._engine})"
         )
 
+    # ---------------------------------------------------------------------------
+    #   Creation and deletion
+    # ---------------------------------------------------------------------------
     async def _async_init(self) -> None:
         await self.initialize_hardware()
 
@@ -171,9 +174,9 @@ class Ecosystem:
         if self.virtualized:
             self._virtual_self = None
 
-    """
-    API calls
-    """
+    # ---------------------------------------------------------------------------
+    #   Properties
+    # ---------------------------------------------------------------------------
     @property
     def uid(self) -> str:
         return self._uid
@@ -209,7 +212,9 @@ class Ecosystem:
     def virtualized(self) -> bool:
         return self._virtual_self is not None
 
-    # Subroutines management
+    # ---------------------------------------------------------------------------
+    #   Subroutines management
+    # ---------------------------------------------------------------------------
     @overload
     def get_subroutine(self, subroutine_name: Literal["sensors"]) -> Sensors: ...
     @overload
@@ -341,7 +346,9 @@ class Ecosystem:
             for subroutine_name, subroutine in self.subroutines.items()
         }
 
-    # Hardware management
+    # ---------------------------------------------------------------------------
+    #   Hardware management
+    # ---------------------------------------------------------------------------
     def _check_hardware_is_up_to_date(self) -> None:
         if not self.started:
             return
@@ -455,7 +462,9 @@ class Ecosystem:
             await hardware.terminate()
             del self.hardware[hardware_uid], hardware
 
-    # Ecosystem management
+    # ---------------------------------------------------------------------------
+    #   Lifecycle management
+    # ---------------------------------------------------------------------------
     async def start(self) -> None:
         """Start the Ecosystem
 
@@ -512,6 +521,9 @@ class Ecosystem:
             raise RuntimeError(f"Failed to stop ecosystem {self.name}")
         self._started = False
 
+    # ---------------------------------------------------------------------------
+    #   Config and specific subroutines interaction
+    # ---------------------------------------------------------------------------
     async def set_lighting_method(
             self,
             value: gv.LightMethod,
