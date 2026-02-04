@@ -327,7 +327,7 @@ class Ecosystem:
 
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
-        return {  # noqa
+        return {
             subroutine_name
             for subroutine_name, subroutine in self.subroutines.items()
             if subroutine.started
