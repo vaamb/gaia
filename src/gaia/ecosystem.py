@@ -159,6 +159,8 @@ class Ecosystem:
         return ecosystem
 
     async def terminate(self) -> None:
+        if self._started:
+            raise RuntimeError("Cannot terminate a running ecosystem. Stop it first")
         # Terminate the subroutines first
         self.terminate_subroutines()
         # Terminate the actuator hub
