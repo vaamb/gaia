@@ -1233,22 +1233,25 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.reset_nycthemeral_caches()
         await self.refresh_lighting_hours(send_info=send_info)
 
+    def _compute_nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
+        span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
+            gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
+        # If using fixed method, no check required
+        if span_method & gv.NycthemeralSpanMethod.fixed:
+            return gv.NycthemeralSpanMethod.fixed
+        # Else, we need to make sure we have suntimes for the nycthemeral target
+        else:
+            target = self.nycthemeral_span_target
+            sun_times = self.general.get_sun_times(target)
+            if sun_times is None:
+                return gv.NycthemeralSpanMethod.fixed
+            else:
+                return gv.NycthemeralSpanMethod.mimic
+
     @property
     def nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
         if self._nycthemeral_span_method_cache is None:
-            span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
-                gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
-            # If using fixed method, no check required
-            if span_method & gv.NycthemeralSpanMethod.fixed:
-                self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.fixed
-            # Else, we need to make sure we have suntimes for the nycthemeral target
-            else:
-                target = self.nycthemeral_span_target
-                sun_times = self.general.get_sun_times(target)
-                if sun_times is None:
-                    self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.fixed
-                else:
-                    self._nycthemeral_span_method_cache = gv.NycthemeralSpanMethod.mimic
+            self._nycthemeral_span_method_cache = self._compute_nycthemeral_span_method()
         return self._nycthemeral_span_method_cache
 
     @staticmethod
