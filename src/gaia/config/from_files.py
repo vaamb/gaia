@@ -1068,7 +1068,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self._nycthemeral_span_method_cache: gv.NycthemeralSpanMethod | None = None
         self._nycthemeral_span_hours_cache: gv.NycthemeralSpanConfig | None = None
         self._lighting_method_cache: gv.LightingMethod | None = None
-        self._lighting_hours_data: gv.LightingHours | None = None
+        self._lighting_hours_cache: gv.LightingHours | None = None
 
     def __repr__(self) -> str:  # pragma: no cover
         return (
@@ -1392,63 +1392,56 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
 
-    @property
-    def _lighting_hours_cache(self) -> gv.LightingHours | None:
-        #with self._nycthemeral_hours_lock:
-        return self._lighting_hours_data
+    def _compute_lighting_hours(self) -> gv.LightingHours:
+        # Start by getting morning_start and evening_end
+        nycthemeral_span: gv.NycthemeralSpanConfig = self.nycthemeral_span_hours
+        morning_start: time = nycthemeral_span.day
+        evening_end: time = nycthemeral_span.night
+        # Then fill in morning_end and evening_start
+        morning_end: time
+        evening_start: time
+        lighting_method: gv.LightingMethod = self.lighting_method
 
-    @_lighting_hours_cache.setter
-    def _lighting_hours_cache(self, lighting_hours: gv.LightingHours | None) -> None:
-        #with self._nycthemeral_hours_lock:
-        self._lighting_hours_data = lighting_hours
+        # Computation for 'fixed' lighting method
+        if lighting_method == gv.LightingMethod.fixed:
+            dt_morning_start: datetime = _to_dt(morning_start)
+            day_span: timedelta = _to_dt(evening_end) - dt_morning_start
+            half_day: datetime = dt_morning_start + (day_span / 2)
+            morning_end = (half_day - timedelta(milliseconds=1)).time()
+            evening_start = half_day.time()
+
+        # Computation for 'elongate' lighting method
+        elif lighting_method == gv.LightingMethod.elongate:
+            home_sun_times = self.general.home_sun_times
+            sunrise: datetime = _to_dt(home_sun_times["sunrise"])
+            sunset: datetime = _to_dt(home_sun_times["sunset"])
+            # Civil dawn can be None for high latitude at dates close to solstices.
+            # In this case, use an offset of 1h30
+            civil_dawn_time: time | None = home_sun_times["civil_dawn"]
+            offset: timedelta
+            if civil_dawn_time is None:
+                offset = timedelta(hours=1, minutes=30)
+            else:
+                civil_dawn: datetime = _to_dt(civil_dawn_time)
+                offset = sunrise - civil_dawn
+            morning_end = (sunrise + offset).time()
+            evening_start = (sunset - offset).time()
+        else:  # Should not be possible
+            raise ValueError
+
+        return gv.LightingHours(
+            morning_start=morning_start,
+            # Morning should not end later than evening
+            morning_end=min(morning_end, evening_end),
+            # Evening should not start before morning
+            evening_start=max(evening_start, morning_start),
+            evening_end=evening_end,
+        )
 
     @property
     def lighting_hours(self) -> gv.LightingHours:
         if self._lighting_hours_cache is None:
-            # Start by getting morning_start and evening_end
-            nycthemeral_span: gv.NycthemeralSpanConfig = self.nycthemeral_span_hours
-            morning_start: time = nycthemeral_span.day
-            evening_end: time = nycthemeral_span.night
-            # Then fill in morning_end and evening_start
-            morning_end: time
-            evening_start: time
-            lighting_method: gv.LightingMethod = self.lighting_method
-
-            # Computation for 'fixed' lighting method
-            if lighting_method == gv.LightingMethod.fixed:
-                dt_morning_start: datetime = _to_dt(morning_start)
-                day_span: timedelta = _to_dt(evening_end) - dt_morning_start
-                half_day: datetime = dt_morning_start + (day_span / 2)
-                morning_end = (half_day - timedelta(milliseconds=1)).time()
-                evening_start = half_day.time()
-
-            # Computation for 'elongate' lighting method
-            elif lighting_method == gv.LightingMethod.elongate:
-                home_sun_times = self.general.home_sun_times
-                sunrise: datetime = _to_dt(home_sun_times["sunrise"])
-                sunset: datetime = _to_dt(home_sun_times["sunset"])
-                # Civil dawn can be None for high latitude at dates close to solstices.
-                # In this case, use an offset of 1h30
-                civil_dawn_time: time | None = home_sun_times["civil_dawn"]
-                offset: timedelta
-                if civil_dawn_time is None:
-                    offset = timedelta(hours=1, minutes=30)
-                else:
-                    civil_dawn: datetime = _to_dt(civil_dawn_time)
-                    offset = sunrise - civil_dawn
-                morning_end = (sunrise + offset).time()
-                evening_start = (sunset - offset).time()
-            else:  # Should not be possible
-                raise ValueError
-
-            self._lighting_hours_cache = gv.LightingHours(
-                morning_start=morning_start,
-                # Morning should not end later than evening
-                morning_end=min(morning_end, evening_end),
-                # Evening should not start before morning
-                evening_start=max(evening_start, morning_start),
-                evening_end=evening_end,
-            )
+            self._lighting_hours_cache = self._compute_lighting_hours()
         return self._lighting_hours_cache
 
     @lighting_hours.setter
