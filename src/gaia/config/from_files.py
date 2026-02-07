@@ -1066,7 +1066,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
         #self._nycthemeral_hours_lock = Lock()  #TODO: was an RLock, check if ok
         self._nycthemeral_span_method_cache: gv.NycthemeralSpanMethod | None = None
-        self._nycthemeral_span_hours_data: gv.NycthemeralSpanConfig | None = None
+        self._nycthemeral_span_hours_cache: gv.NycthemeralSpanConfig | None = None
         self._lighting_method_cache: gv.LightingMethod | None = None
         self._lighting_hours_data: gv.LightingHours | None = None
 
@@ -1299,19 +1299,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
-
-    @property
-    def _nycthemeral_span_hours_cache(self) -> gv.NycthemeralSpanConfig | None:
-        #with self._nycthemeral_hours_lock:
-        return self._nycthemeral_span_hours_data
-
-    @_nycthemeral_span_hours_cache.setter
-    def _nycthemeral_span_hours_cache(
-            self,
-            span_hours: gv.NycthemeralSpanConfig | None,
-    ) -> None:
-        #with self._nycthemeral_hours:
-        self._nycthemeral_span_hours_data = span_hours
 
     @property
     def nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
