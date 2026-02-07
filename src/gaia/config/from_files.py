@@ -1065,10 +1065,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
         #self._nycthemeral_hours_lock = Lock()  #TODO: was an RLock, check if ok
-        self._nycthemeral_span_method_cache: gv.NycthemeralSpanMethod | None = None
-        self._nycthemeral_span_hours_cache: gv.NycthemeralSpanConfig | None = None
-        self._lighting_method_cache: gv.LightingMethod | None = None
-        self._lighting_hours_cache: gv.LightingHours | None = None
+        self._nycthemeral_span_method: gv.NycthemeralSpanMethod | None = None
+        self._nycthemeral_span_hours: gv.NycthemeralSpanConfig | None = None
+        self._lighting_method: gv.LightingMethod | None = None
+        self._lighting_hours: gv.LightingHours | None = None
 
     def __repr__(self) -> str:  # pragma: no cover
         return (
@@ -1087,10 +1087,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         await self._engine_config.save(ConfigType.ecosystems)
 
     def reset_nycthemeral_caches(self) -> None:
-        self._nycthemeral_span_method_cache = None
-        self._nycthemeral_span_hours_cache = None
-        self._lighting_method_cache = None
-        self._lighting_hours_cache = None
+        self._nycthemeral_span_method = None
+        self._nycthemeral_span_hours = None
+        self._lighting_method = None
+        self._lighting_hours = None
 
     def reset_caches(self) -> None:
         self.reset_nycthemeral_caches()
@@ -1250,9 +1250,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
-        if self._nycthemeral_span_method_cache is None:
-            self._nycthemeral_span_method_cache = self._compute_nycthemeral_span_method()
-        return self._nycthemeral_span_method_cache
+        if self._nycthemeral_span_method is None:
+            self._nycthemeral_span_method = self._compute_nycthemeral_span_method()
+        return self._nycthemeral_span_method
 
     @staticmethod
     def validate_nycthemeral_method(
@@ -1321,9 +1321,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
-        if self._nycthemeral_span_hours_cache is None:
-            self._nycthemeral_span_hours_cache = self._compute_nycthemeral_span_hours()
-        return self._nycthemeral_span_hours_cache
+        if self._nycthemeral_span_hours is None:
+            self._nycthemeral_span_hours = self._compute_nycthemeral_span_hours()
+        return self._nycthemeral_span_hours
 
     async def set_nycthemeral_span_hours(
             self,
@@ -1375,16 +1375,16 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def lighting_method(self) -> gv.LightingMethod:
-        if self._lighting_method_cache is None:
-            self._lighting_method_cache = self._compute_lighting_method()
-        return self._lighting_method_cache
+        if self._lighting_method is None:
+            self._lighting_method = self._compute_lighting_method()
+        return self._lighting_method
 
     @lighting_method.setter
     def lighting_method(self, light_method: gv.LightingMethod) -> None:
         if not self.general.app_config.TESTING:
             raise AttributeError("can't set attribute 'light_method'")
         self.nycthemeral_cycle["lighting"] = light_method
-        self._lighting_method_cache = None
+        self._lighting_method = None
 
     async def set_lighting_method(
             self,
@@ -1446,16 +1446,16 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def lighting_hours(self) -> gv.LightingHours:
-        if self._lighting_hours_cache is None:
-            self._lighting_hours_cache = self._compute_lighting_hours()
-        return self._lighting_hours_cache
+        if self._lighting_hours is None:
+            self._lighting_hours = self._compute_lighting_hours()
+        return self._lighting_hours
 
     @lighting_hours.setter
     def lighting_hours(self, lighting_hours: gv.LightingHours) -> None:
         if not self.general.app_config.TESTING:
             raise AttributeError(
                 "'lighting_hours' can only be set when 'TESTING' is True.")
-        self._lighting_hours_cache = lighting_hours
+        self._lighting_hours = lighting_hours
         # DO NOT USE THIS as it will overwrite the newly set value
         # self.reset_nycthemeral_caches()
 
