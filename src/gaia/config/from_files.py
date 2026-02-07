@@ -1959,8 +1959,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             hardware: list[str] | None = None,
     ) -> None:
         """
-        Create a new hardware
-        :param name: str, the name of the hardware to create
+        Create a new plant
+        :param name: str, the name of the plant to create
         :param species: str: the species of the plant to create
         :param sowing_date: datetime: the sowing date of the plant to create
         :param hardware: list: the name of the hardware linked to the plant
@@ -1977,7 +1977,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             plant_dict = gv.PlantConfig(**plant_dict).model_dump()
         except pydantic.ValidationError as e:
             raise ValueError(
-                f"Invalid hardware information provided. "
+                f"Invalid plant information provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
         uid = plant_dict.pop("uid")
@@ -2006,7 +2006,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             plant_dict = gv.PlantConfig(**plant_dict).model_dump()
         except pydantic.ValidationError as e:
             raise ValueError(
-                f"Invalid hardware information provided. "
+                f"Invalid plant information provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
         uid = plant_dict.pop("uid")
