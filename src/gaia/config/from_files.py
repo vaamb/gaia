@@ -1300,21 +1300,26 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
 
+    def _compute_nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
+        if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
+            target = self.nycthemeral_span_target
+            sun_times = self.general.get_sun_times(target)
+            if sun_times is not None:
+                assert sun_times["sunrise"] is not None
+                assert sun_times["sunset"] is not None
+                return gv.NycthemeralSpanConfig(
+                    day=sun_times["sunrise"],
+                    night=sun_times["sunset"],
+                )
+        return gv.NycthemeralSpanConfig(
+            day=self.nycthemeral_cycle["day"],
+            night=self.nycthemeral_cycle["night"],
+        )
+
     @property
     def nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
         if self._nycthemeral_span_hours_cache is None:
-            if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
-                target = self.nycthemeral_span_target
-                sun_times = self.general.get_sun_times(target)
-                if sun_times is not None:
-                    self._nycthemeral_span_hours_cache = gv.NycthemeralSpanConfig(
-                        day=sun_times["sunrise"],
-                        night=sun_times["sunset"],
-                    )
-            self._nycthemeral_span_hours_cache = gv.NycthemeralSpanConfig(
-                day=self.nycthemeral_cycle["day"],
-                night=self.nycthemeral_cycle["night"],
-            )
+            self._nycthemeral_span_hours_cache = self._compute_nycthemeral_span_hours()
         return self._nycthemeral_span_hours_cache
 
     async def set_nycthemeral_span_hours(
