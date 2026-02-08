@@ -11,14 +11,14 @@ from ..data import camera_uid
 
 @pytest.mark.asyncio
 async def test_manageable(ecosystem: Ecosystem, health_subroutine: Health):
-    camera_cfg = health_subroutine.config.IO_dict[camera_uid].copy()
+    camera_cfg = health_subroutine.config.hardware_dict[camera_uid].copy()
     assert health_subroutine.manageable
 
-    health_subroutine.config.IO_dict[camera_uid]["measures"] = []
+    health_subroutine.config.hardware_dict[camera_uid]["measures"] = []
     await ecosystem.refresh_hardware()
     assert not health_subroutine.manageable
 
-    health_subroutine.config.IO_dict[camera_uid] = camera_cfg
+    health_subroutine.config.hardware_dict[camera_uid] = camera_cfg
     await ecosystem.refresh_hardware()
     assert health_subroutine.manageable
 

@@ -67,7 +67,7 @@ class _EcosystemPayloads:
 
     @property
     def hardware(self) -> list[gv.HardwareConfig]:
-        hardware_dict = self.config.IO_dict
+        hardware_dict = self.config.hardware_dict
         return [
             gv.HardwareConfig(uid=key, **value)
             for key, value in hardware_dict.items()
@@ -393,8 +393,8 @@ class Ecosystem:
         if not self.started:
             return
         hardware_needed: set[str] = set(
-            hardware_uid for hardware_uid in self.config.IO_dict.keys()
-            if self.config.IO_dict[hardware_uid]["active"]
+            hardware_uid for hardware_uid in self.config.hardware_dict.keys()
+            if self.config.hardware_dict[hardware_uid]["active"]
         )
         hardware_existing: set[str] = set(self._hardware.keys())
         if hardware_needed != hardware_existing:
@@ -476,7 +476,7 @@ class Ecosystem:
         This is called during ecosystem initialization to set up the initial
         hardware state.
         """
-        for hardware_uid, hardware_cfg in self.config.IO_dict.items():
+        for hardware_uid, hardware_cfg in self.config.hardware_dict.items():
             if hardware_cfg["active"]:
                 await self.add_hardware(hardware_uid)
 
@@ -490,14 +490,14 @@ class Ecosystem:
         4. Resets actuator handlers and PIDs to reflect hardware changes
         """
         needed: set[str] = set(
-            hardware_uid for hardware_uid in self.config.IO_dict.keys()
-            if self.config.IO_dict[hardware_uid]["active"]
+            hardware_uid for hardware_uid in self.config.hardware_dict.keys()
+            if self.config.hardware_dict[hardware_uid]["active"]
         )
         existing: set[str] = set()
         stale: set[str] = set()
         for hardware_uid in self.hardware:
             existing.add(hardware_uid)
-            in_config = self.config.IO_dict.get(hardware_uid)
+            in_config = self.config.hardware_dict.get(hardware_uid)
             if in_config is None:
                 # Hardware was removed from config, go to next
                 continue

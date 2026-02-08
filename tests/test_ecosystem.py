@@ -107,8 +107,8 @@ async def test_refresh(ecosystem: Ecosystem):
     ecosystem.config.delete_hardware(data.heater_uid)
     assert {*ecosystem.hardware.keys()} != hardware_needed
     # ... refresh the hardware whose config has changed
-    ecosystem.config.IO_dict[data.light_uid]["level"] = gv.HardwareLevel.plants
-    light_cfg = ecosystem.config.IO_dict[data.light_uid]
+    ecosystem.config.hardware_dict[data.light_uid]["level"] = gv.HardwareLevel.plants
+    light_cfg = ecosystem.config.hardware_dict[data.light_uid]
     outdated_cfg = ecosystem.hardware[data.light_uid].dict_repr()
     assert gv.to_anonymous(outdated_cfg, "uid") != light_cfg
     await ecosystem.refresh_hardware()

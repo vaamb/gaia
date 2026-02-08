@@ -635,7 +635,7 @@ async def test_delete_weather_event(events_handler: Events, logs_content):
 
 @pytest.mark.asyncio
 async def test_create_hardware(events_handler: Events, logs_content):
-    events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]["IO"] = {}
+    events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]["hardware"] = {}
     valid_hardware_info = {
         **humidifier_info,
         "model": "gpioSwitch",
