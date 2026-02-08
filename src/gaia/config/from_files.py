@@ -36,6 +36,7 @@ from gaia.utils import (
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.engine import Engine
+    from gaia.events import PayloadName
 
 
 class ValidationError(ValueError):
@@ -1171,6 +1172,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         ]
 
     """EnvironmentConfig related parameters"""
+    async def _send_payload_if_possible(self, payload_type: PayloadName) -> None:
+        """Send payload if engine is connected, logging any errors."""
+        if not (self.general.engine_set_up and self.general.engine.message_broker_started):
+            return
+        try:
+            await self.general.engine.event_handler.send_payload_if_connected(
+                payload_type, ecosystem_uids=[self.uid])
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while sending {payload_type}. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+            )
+
     @property
     def environment(self) -> EnvironmentConfigDict:
         """
@@ -1486,19 +1500,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self._lighting_method = self._compute_lighting_method()
         self._lighting_hours = self._compute_lighting_hours()
 
-        if (
-                send_info
-                and self.general.engine_set_up
-                and self.general.engine.message_broker_started
-        ):
-            try:
-                await self.general.engine.event_handler.send_payload_if_connected(
-                    "nycthemeral_info", ecosystem_uids=[self.uid])
-            except Exception as e:  # pragma: no cover
-                self.logger.error(
-                    f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
-                )
+        if send_info:
+            await self._send_payload_if_possible("nycthemeral_info")
 
     @property
     def chaos_config(self) -> gv.ChaosConfig:
@@ -1531,13 +1534,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             await self._update_chaos_time_window()
-            if (
-                    send_info
-                    and self.general.engine_set_up
-                    and self.general.engine.message_broker_started
-            ):
-                await self.general.engine.event_handler.send_payload_if_connected(
-                    "chaos_parameters")
+            if send_info:
+                await self._send_payload_if_possible("chaos_parameters")
         else:
             self.logger.debug("Chaos time window is already up to date.")
 
