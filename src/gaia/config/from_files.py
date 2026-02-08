@@ -1065,7 +1065,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
-        #self._nycthemeral_hours_lock = Lock()  #TODO: was an RLock, check if ok
         self._nycthemeral_span_method: gv.NycthemeralSpanMethod | None = None
         self._nycthemeral_span_hours: gv.NycthemeralSpanConfig | None = None
         self._lighting_method: gv.LightingMethod | None = None
@@ -1807,7 +1806,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if uid not in used_ids:
                 return uid
 
-    def _used_addresses(self):
+    def _used_addresses(self) -> list[str]:
         return [
             self.IO_dict[hardware]["address"]
             for hardware in self.IO_dict
@@ -1817,7 +1816,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def validate_hardware_dict(
             hardware_dict: gv.HardwareConfigDict,
             addresses_used: list,
-    ) -> None:
+    ) -> gv.HardwareConfigDict:
         try:
             hardware_config = gv.HardwareConfig(**hardware_dict)
         except pydantic.ValidationError as e:
@@ -1837,6 +1836,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_dict["address"] = hardware.address_repr
         if hardware_dict["address"] in addresses_used:
             raise ValueError(f"Address {hardware_config.address} already used.")
+        return hardware_dict
 
     def create_new_hardware(
             self,
@@ -1878,7 +1878,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "plants": plants,
             "multiplexer_model": multiplexer_model,
         })
-        self.validate_hardware_dict(hardware_dict, self._used_addresses())
+        hardware_dict = self.validate_hardware_dict(hardware_dict, self._used_addresses())
         uid = hardware_dict.pop("uid")
         self.IO_dict.update({uid: hardware_dict})
 
@@ -1907,7 +1907,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Don't check address if not trying to update it. To do so, do not pass any address
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
-        self.validate_hardware_dict(hardware_dict, used_addresses)
+        hardware_dict = self.validate_hardware_dict(hardware_dict, used_addresses)
         # Remove the validation uid from the dict
         hardware_dict.pop("uid")
         self.IO_dict[uid] = hardware_dict
@@ -1942,7 +1942,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
 
     @staticmethod
-    def supported_hardware() -> list:
+    def supported_hardware() -> list[str]:
         return [h for h in hardware_models]
 
     # ---------------------------------------------------------------------------
@@ -2023,7 +2023,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def delete_plant(self, uid: str) -> None:
         """
-        Delete a hardware from the config
+        Delete a plant from the config
         :param uid: str, the uid of the hardware to delete
         """
         try:
