@@ -402,6 +402,24 @@ class EngineConfig(metaclass=SingletonMeta):
                 "`engine_config.with config_files_lock():` block"
             )
 
+    def _log_nycthemeral_method_issues(
+            self,
+            method: gv.LightingMethod | gv.NycthemeralSpanMethod,
+            ecosystem_cfg: EcosystemConfigDict,
+    ) -> None:
+        """Validate method and log warning if it will fall back to 'fixed'."""
+        try:
+            EcosystemConfig.validate_nycthemeral_method(
+                method, ecosystem_cfg, self.private_config["places"])
+        except ValidationError as e:
+            method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
+            ecosystem_name = ecosystem_cfg["name"]
+            self.logger.warning(
+                f"{method_name} method cannot be set to '{method.name}' for "
+                f"ecosystem {ecosystem_name} Will fall back to 'fixed'. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+            )
+
     async def _load_ecosystems_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
@@ -454,24 +472,10 @@ class EngineConfig(metaclass=SingletonMeta):
             nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
 
             span_method = safe_enum_from_name(gv.NycthemeralSpanMethod, nycthemeral_cfg["span"])
-            try:
-                EcosystemConfig.validate_nycthemeral_method(
-                    span_method, ecosystem_cfg, self.private_config["places"])
-            except ValidationError as e:
-                self.logger.warning(
-                    f"Nycthemeral span method cannot be set to '{span_method.name}' "
-                    f"for ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`")
+            self._log_nycthemeral_method_issues(span_method, ecosystem_cfg)
 
             lighting_method = safe_enum_from_name(gv.LightingMethod, nycthemeral_cfg["lighting"])
-            try:
-                EcosystemConfig.validate_nycthemeral_method(
-                    lighting_method, ecosystem_cfg, self.private_config["places"])
-            except ValidationError as e:
-                self.logger.warning(
-                    f"Lighting method cannot be set to '{lighting_method.name}' "
-                    f"for ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`")
+            self._log_nycthemeral_method_issues(lighting_method, ecosystem_cfg)
 
         if unfixable_error:
             raise ValidationError(
