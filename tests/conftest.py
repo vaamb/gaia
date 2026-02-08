@@ -147,9 +147,9 @@ async def engine_config(engine_config_master: EngineConfig, logs_content) -> Yie
         engine_config_master.ecosystems_config_dict = ecosystem_config
         engine_config_master.private_config = private_config
         engine_config_master.chaos_memory = {}
-        engine_config_master.sun_times = {}
+        engine_config_master._sun_times = {}
         if engine_config_master.started:
-            engine_config_master.stop_watchdog()
+            engine_config_master.watchdog.stop()
         if engine_config_master.cache_dir.iterdir():
             shutil.rmtree(engine_config_master.cache_dir)
             engine_config_master._dirs.pop("CACHE_DIR")

@@ -919,59 +919,51 @@ class EngineConfig(metaclass=SingletonMeta):
     def units(self) -> dict[str, str]:
         return self.private_config.get("units", {})
 
-    @property
-    def sun_times(self) -> dict[str, SunTimesCacheData]:
-        return self._sun_times
-
-    @sun_times.setter
-    def sun_times(self, sun_times: dict[str, SunTimesCacheData]) -> None:
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'sun_times'")
-        self._sun_times = sun_times
+    def _compute_sun_times(self, place: str, coord: gv.Coordinates) -> gv.SunTimesDict:
+        today = date.today()
+        sun_times = get_sun_times(coord).model_dump()
+        if sun_times["sunrise"] is None:  # sunset is None too
+            # Handle high and low latitude specificities
+            if (
+                    # Range of polar day in Northern hemisphere
+                    3 < today.month <= 9
+                    and coord.latitude > 0
+                    # Range of polar day in Southern hemisphere
+                    or not (3 < today.month <= 9)
+                    and coord.latitude < 0
+            ):
+                day_night = "day"
+            else:
+                day_night = "night"
+            self.logger.warning(
+                f"Sun times of '{place}' has no sunrise and sunset (due to "
+                f"polar {day_night}). Replacing values to allow coherent "
+                f"lighting."
+            )
+            midnight = datetime.combine(today, time(hour=0))
+            msec = timedelta(milliseconds=1)
+            if day_night == "day":
+                sun_times["sunrise"] = midnight.time()  # Sunrise
+                sun_times["sunset"] = (midnight - msec).time()  # Sunset
+            else:
+                sun_times["sunrise"] = midnight.time()  # Sunrise
+                sun_times["sunset"] = (midnight + msec).time()  # Sunset
+        return sun_times
 
     def get_sun_times(self, place: str) -> gv.SunTimesDict | None:
         coord = self.get_place(place)
         if coord is None:
             return None
-        sun_times = self.sun_times.get(place)
+        sun_times_cache = self._sun_times.get(place)
         today = date.today()
-        if sun_times is None or sun_times["last_update"] < today:
-            new_sun_times = get_sun_times(coord).model_dump()
-            # Handle high and low latitude specificities
-            if (
-                # Range of polar day in Northern hemisphere
-                3 < today.month <= 9
-                and coord.latitude > 0
-                # Range of polar day in Southern hemisphere
-                or not (3 < today.month <= 9)
-                and coord.latitude < 0
-            ):
-                day_night = "day"
-            else:
-                day_night = "night"
-            if new_sun_times["sunrise"] is None:  # sunset is None too
-                self.logger.warning(
-                    f"Sun times of '{place}' has no sunrise and sunset (due to "
-                    f"polar {day_night}). Replacing values to allow coherent "
-                    f"lighting."
-                )
-                midnight = datetime.combine(today, time(hour=0))
-                msec = timedelta(milliseconds=1)
-                if day_night == "day":
-                    new_sun_times["sunrise"] = midnight.time()          # Sunrise
-                    new_sun_times["sunset"] = (midnight - msec).time()  # Sunset
-                else:
-                    new_sun_times["sunrise"] = midnight.time()          # Sunrise
-                    new_sun_times["sunset"] = (midnight + msec).time()  # Sunset
-            self.set_sun_times(place, new_sun_times)
-        return self.sun_times[place]["data"]
-
-    def set_sun_times(self, place: str, sun_times: gv.SunTimesDict) -> None:
-        validated_sun_times: gv.SunTimesDict = gv.SunTimes(**sun_times).model_dump()
+        if sun_times_cache is not None and sun_times_cache["last_update"] >= today:
+            return sun_times_cache["data"]
+        sun_times = self._compute_sun_times(place, coord)
         self._sun_times[place] = SunTimesCacheData(
-            last_update=date.today(),
-            data=validated_sun_times,
+            last_update=today,
+            data=sun_times,
         )
+        return sun_times
 
     @property
     def home_sun_times(self) -> gv.SunTimesDict | None:
