@@ -1104,15 +1104,21 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self._config_dict["status"] = value
 
     async def save(self) -> None:
+        """Persist the ecosystem configuration to the ecosystems.cfg file."""
         await self._engine_config.save(ConfigType.ecosystems)
 
     def reset_nycthemeral_caches(self) -> None:
+        """Clear cached nycthemeral span and lighting values.
+
+        Forces recomputation on next access.
+        """
         self._nycthemeral_span_method = None
         self._nycthemeral_span_hours = None
         self._lighting_method = None
         self._lighting_hours = None
 
     def reset_caches(self) -> None:
+        """Clear all cached configuration values."""
         self.reset_nycthemeral_caches()
 
     async def _send_payload_if_possible(self, payload_type: PayloadName) -> None:
@@ -1148,6 +1154,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             management: str | gv.ManagementFlags,
     ) -> bool:
+        """Check if a management capability is enabled.
+
+        :param management: The management flag name or enum to check.
+        :return: True if the management capability is enabled.
+        """
         validated_management = safe_enum_from_name(gv.ManagementFlags, management)
         # If management has dependencies, load them
         if validated_management >= 256:
@@ -1165,6 +1176,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             management: str | gv.ManagementFlags,
             value: bool,
     ) -> None:
+        """Enable or disable a management capability.
+
+        :param management: The management flag name or enum to set.
+        :param value: True to enable, False to disable.
+        """
         validated_management = safe_enum_from_name(gv.ManagementFlags, management)
         management_name: str = validated_management.name
         if validated_management >= 256 and value:
@@ -1179,6 +1195,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self._config_dict["management"][management_name] = value
 
     def get_subroutines_enabled(self) -> list[str]:
+        """Return the list of subroutine names that are enabled for this ecosystem."""
         return [
             subroutine
             for subroutine in subroutine_dict
@@ -1218,6 +1235,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             **value: gv.NycthemeralCycleConfigDict,
     ) -> None:
+        """Set all nycthemeral cycle parameters at once.
+
+        :param value: Nycthemeral cycle configuration with target, span, day,
+                      night, and lighting keys.
+        :raises ValueError: If the provided parameters are invalid.
+        """
         try:
             validated_value = gv.NycthemeralCycleConfig(**value).model_dump()
         except pydantic.ValidationError as e:
@@ -1242,6 +1265,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             target: str | None,
             send_info: bool = False,
     ) -> None:
+        """Set the target location for nycthemeral span calculations.
+
+        :param target: Name of a place defined in private config, or None.
+        :param send_info: Whether to send updated info to connected clients.
+        :raises ValueError: If the target place is not defined.
+        """
         if target is not None:
             place = self.general.get_place(target)
             if place is None:
@@ -1259,6 +1288,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             ecosystem_dict: EcosystemConfigDict,
             places_dict: dict[str, gv.Coordinates],
     ) -> None:
+        """Validate that a nycthemeral or lighting method can be used.
+
+        :param method: The lighting or nycthemeral span method to validate.
+        :param ecosystem_dict: The ecosystem configuration dictionary.
+        :param places_dict: Dictionary of available places with coordinates.
+        :raises ValidationError: If the method requires a target that is not
+                                 available or configured.
+        """
         if method == 0:  # Fixed, no target needed
             return
         # Try to get the target
@@ -1332,6 +1369,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             method: gv.NycthemeralSpanMethod,
             send_info: bool = True,
     ) -> None:
+        """Set the method for determining nycthemeral span (day/night periods).
+
+        :param method: Either 'fixed' or 'mimic' to follow a target location.
+        :param send_info: Whether to send updated info to connected clients.
+        :raises ValidationError: If the method requires unavailable configuration.
+        """
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
         self.validate_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
@@ -1538,6 +1581,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return self.general.get_chaos_memory(self.uid)["time_window"]
 
     async def update_chaos_time_window(self, send_info: bool = True) -> None:
+        """Update the chaos time window if it hasn't been updated today.
+
+        Randomly determines whether a chaos period should begin based on the
+        configured frequency.
+
+        :param send_info: Whether to send chaos_parameters payload to clients.
+        """
         self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             await self._update_chaos_time_window()
@@ -1570,6 +1620,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         await self.general.save(CacheType.chaos)
 
     def get_chaos_factor(self, now: datetime | None = None) -> float:
+        """Calculate the current chaos factor based on time within chaos window.
+
+        Returns a sinusoidal factor that peaks at the middle of the chaos period.
+
+        :param now: The current time, defaults to now in UTC.
+        :return: A float from 1.0 (no chaos) to chaos intensity (peak chaos).
+        """
         beginning = self.chaos_time_window["beginning"]
         end = self.chaos_time_window["end"]
         if beginning is None or end is None:
@@ -1603,6 +1660,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return self.environment["climate"]
 
     def has_climate_parameter(self, parameter: str | gv.ClimateParameter) -> bool:
+        """Check if a climate parameter is configured for this ecosystem."""
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         return parameter in self.climate
 
@@ -1610,6 +1668,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             parameter: str | gv.ClimateParameter,
     ) -> gv.ClimateConfig:
+        """Get the configuration for a specific climate parameter.
+
+        :param parameter: The climate parameter name or enum.
+        :return: The climate configuration for the parameter.
+        :raises UndefinedParameter: If the parameter is not configured.
+        """
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             data = self.climate[parameter]
@@ -1626,6 +1690,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             parameter: str | gv.ClimateParameter,
             **value: gv.AnonymousClimateConfigDict,
     ) -> None:
+        """Set or create a climate parameter configuration.
+
+        :param parameter: The climate parameter name or enum.
+        :param value: The climate configuration values.
+        :raises ValueError: If the provided values are invalid.
+        """
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             validated_value = gv.AnonymousClimateConfig(**value).model_dump()
@@ -1641,6 +1711,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             parameter: str | gv.ClimateParameter,
             **value: gv.AnonymousClimateConfigDict,
     ) -> None:
+        """Update an existing climate parameter configuration.
+
+        :param parameter: The climate parameter name or enum.
+        :param value: The climate configuration values to update.
+        :raises UndefinedParameter: If the parameter does not exist.
+        """
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         if not self.climate.get(parameter):
             raise UndefinedParameter(
@@ -1653,6 +1729,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             parameter: str | gv.ClimateParameter,
     ) -> None:
+        """Delete a climate parameter from the configuration.
+
+        :param parameter: The climate parameter name or enum.
+        :raises UndefinedParameter: If the parameter does not exist.
+        """
         parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             del self.climate[parameter]
@@ -1672,10 +1753,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return self.environment["weather"]
 
     def has_weather_parameter(self, parameter: str | gv.WeatherParameter) -> bool:
+        """Check if a weather parameter is configured for this ecosystem."""
         parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         return parameter in self.weather
 
     def get_weather_parameter(self, parameter: str | gv.WeatherParameter) -> gv.WeatherConfig:
+        """Get the configuration for a specific weather parameter.
+
+        :param parameter: The weather parameter name or enum.
+        :return: The weather configuration for the parameter.
+        :raises UndefinedParameter: If the parameter is not configured.
+        """
         parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         try:
             data = self.weather[parameter]
@@ -1692,6 +1780,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             parameter: str | gv.WeatherParameter,
             **value: gv.AnonymousWeatherConfigDict,
     ) -> None:
+        """Set or create a weather parameter configuration.
+
+        :param parameter: The weather parameter name or enum.
+        :param value: The weather configuration values.
+        :raises ValueError: If the provided values are invalid.
+        """
         parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         try:
             validated_value = gv.AnonymousWeatherConfig(**value).model_dump()
@@ -1707,6 +1801,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             parameter: str | gv.WeatherParameter,
             **value: gv.AnonymousWeatherConfigDict,
     ) -> None:
+        """Update an existing weather parameter configuration.
+
+        :param parameter: The weather parameter name or enum.
+        :param value: The weather configuration values to update.
+        :raises UndefinedParameter: If the parameter does not exist.
+        """
         parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         if not self.weather.get(parameter):
             raise UndefinedParameter(
@@ -1719,6 +1819,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             parameter: str | gv.WeatherParameter,
     ) -> None:
+        """Delete a weather parameter from the configuration.
+
+        :param parameter: The weather parameter name or enum.
+        :raises UndefinedParameter: If the parameter does not exist.
+        """
         parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         try:
             del self.weather[parameter]
@@ -1732,6 +1837,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     #   Actuator couples
     # ---------------------------------------------------------------------------
     def get_climate_actuators(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+        """Get actuator couples for all climate parameters.
+
+        Merges default actuator couples with those defined in climate config.
+        """
         return {
             **defaults.actuator_couples,
             **{
@@ -1745,6 +1854,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         }
 
     def get_weather_actuators(self) -> dict[gv.WeatherParameter, gv.ActuatorCouple]:
+        """Get actuator couples for all weather parameters."""
         return {
             weather_parameter: gv.ActuatorCouple(
                 increase=weather_cfg["linked_actuator"] \
@@ -1756,15 +1866,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         }
 
     def get_actuator_couples(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+        """Get all actuator couples (climate and weather combined)."""
         return self.get_climate_actuators() | self.get_weather_actuators()
 
     def get_actuator_to_parameter(self) -> dict[str, gv.ClimateParameter]:
+        """Get a mapping from actuator group names to their parameters."""
         return defaults.get_actuator_to_parameter(self.get_actuator_couples())
 
     def get_actuator_to_direction(self) -> dict[str, Literal["increase", "decrease"]]:
+        """Get a mapping from actuator group names to their direction."""
         return defaults.get_actuator_to_direction(self.get_actuator_couples())
 
     def get_valid_actuator_groups(self) -> set[str]:
+        """Get the set of valid actuator group names for this ecosystem."""
         return {
             actuator_group
             for actuator_group in self.get_actuator_to_parameter().keys()
@@ -1789,6 +1903,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_type: gv.HardwareType,
         level: gv.HardwareLevel | list[gv.HardwareLevel] | None = None,
     ) -> list[str]:
+        """Get UIDs of hardware matching the given type and level.
+
+        :param hardware_type: The type of hardware to filter by.
+        :param level: The hardware level(s) to filter by, or None for all.
+        :return: List of matching hardware UIDs.
+        """
         level = level or [lvl for lvl in gv.HardwareLevel]
         if not isinstance(level, list):
             level = [level]
@@ -1817,6 +1937,16 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             hardware_dict: gv.HardwareConfigDict,
             addresses_used: list,
     ) -> gv.HardwareConfigDict:
+        """Validate a hardware configuration dictionary.
+
+        Note: This method modifies hardware_dict in place, updating the
+        'address' field with the resolved address.
+
+        :param hardware_dict: The hardware configuration to validate.
+        :param addresses_used: List of addresses already in use.
+        :return: The validated (and possibly modified) hardware dict.
+        :raises ValueError: If validation fails or address is already used.
+        """
         try:
             hardware_config = gv.HardwareConfig(**hardware_dict)
         except pydantic.ValidationError as e:
@@ -1887,6 +2017,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             uid: str,
             **updating_values: gv.AnonymousHardwareConfigDict,
     ) -> None:
+        """Update an existing hardware configuration.
+
+        :param uid: The UID of the hardware to update.
+        :param updating_values: The values to update.
+        :raises HardwareNotFound: If no hardware with the given UID exists.
+        :raises ValueError: If the updated configuration is invalid.
+        """
         if uid not in self.hardware_dict:
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
@@ -1925,6 +2062,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
 
     def get_hardware_uid(self, name: str) -> str:
+        """Get the UID of a hardware by its name.
+
+        :param name: The name of the hardware.
+        :return: The UID of the hardware.
+        :raises HardwareNotFound: If no hardware with the given name exists.
+        """
         for uid, hardware in self.hardware_dict.items():
             if hardware["name"] == name:
                 return uid
@@ -1933,6 +2076,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         )
 
     def get_hardware_config(self, uid: str) -> gv.HardwareConfig:
+        """Get the full configuration for a hardware by its UID.
+
+        :param uid: The UID of the hardware.
+        :return: The hardware configuration.
+        :raises HardwareNotFound: If no hardware with the given UID exists.
+        """
         try:
             hardware_config = self.hardware_dict[uid]
             return gv.HardwareConfig(uid=uid, **hardware_config)
@@ -1943,6 +2092,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @staticmethod
     def supported_hardware() -> list[str]:
+        """Return the list of supported hardware model names."""
         return [h for h in hardware_models]
 
     # ---------------------------------------------------------------------------
@@ -1997,6 +2147,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             uid: str,
             **updating_values: gv.AnonymousPlantConfigDict,
     ) -> None:
+        """Update an existing plant configuration.
+
+        :param uid: The UID of the plant to update.
+        :param updating_values: The values to update.
+        :raises PlantNotFound: If no plant with the given UID exists.
+        :raises ValueError: If the updated configuration is invalid.
+        """
         if uid not in self.plants_dict:
             raise PlantNotFound(
                 f"No plant with uid '{uid}' found in the plant config."
@@ -2022,9 +2179,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.plants_dict[uid] = plant_dict
 
     def delete_plant(self, uid: str) -> None:
-        """
-        Delete a plant from the config
-        :param uid: str, the uid of the hardware to delete
+        """Delete a plant from the configuration.
+
+        :param uid: The UID of the plant to delete.
+        :raises PlantNotFound: If no plant with the given UID exists.
         """
         try:
             del self.plants_dict[uid]
@@ -2034,6 +2192,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
 
     def get_plant_uid(self, name: str) -> str:
+        """Get the UID of a plant by its name.
+
+        :param name: The name of the plant.
+        :return: The UID of the plant.
+        :raises PlantNotFound: If no plant with the given name exists.
+        """
         for uid, plant in self.plants_dict.items():
             if plant["name"] == name:
                 return uid
@@ -2042,6 +2206,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         )
 
     def get_plant_config(self, uid: str) -> gv.PlantConfig:
+        """Get the full configuration for a plant by its UID.
+
+        :param uid: The UID of the plant.
+        :return: The plant configuration.
+        :raises PlantNotFound: If no plant with the given UID exists.
+        """
         try:
             plant_config = self.plants_dict[uid]
             return gv.PlantConfig(uid=uid, **plant_config)
