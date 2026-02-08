@@ -568,7 +568,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 cfg[uid]["environment"]["climate"], RootClimateValidator, exclude_defaults=True)
             cfg[uid]["plants"] = validate_from_root_model(
                 cfg[uid]["plants"], RootPlantsValidator, exclude_defaults=True)
-        # Dump it
+        # Dump the data
         config_path = self.get_file_path(ConfigType.ecosystems)
         await _dump_yaml(cfg, config_path)
         # Update the checksum
@@ -682,14 +682,12 @@ class EngineConfig(metaclass=SingletonMeta):
                     #  and send the data if it is connected.
 
     async def _watchdog_loop(self) -> None:
-        # Make private config file trackable by the file watchdog
-        config_path = self.get_file_path(ConfigType.private)
-        if config_path not in self._config_files_checksum:
-            self._config_files_checksum[config_path] = await self._file_checksum(config_path)
-        # Make ecosystems config file trackable by the file watchdog
-        config_path = self.get_file_path(ConfigType.ecosystems)
-        if config_path not in self._config_files_checksum:
-            self._config_files_checksum[config_path] = await self._file_checksum(config_path)
+        if not self.configs_loaded:
+            raise RuntimeError(
+                "Configuration files need to be loaded in order to start "
+                "the config files watchdog. To do so, use the "
+                "`EngineConfig().initialize_configs()` method."
+            )
 
         # Start the actual loop
         sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
