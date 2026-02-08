@@ -1254,28 +1254,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.reset_nycthemeral_caches()
         await self.refresh_lighting_hours(send_info=send_info)
 
-    def _compute_nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
-        span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
-            gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
-        # Log any incompatibilities with the nycthemeral span method chosen
-        self._log_nycthemeral_method_issues(span_method)
-        # If using fixed method, no check required
-        if span_method & gv.NycthemeralSpanMethod.fixed:
-            return gv.NycthemeralSpanMethod.fixed
-        # Else, we need to make sure we have suntimes for the nycthemeral target
-        target = self.nycthemeral_span_target
-        sun_times = self.general.get_sun_times(target)
-        if sun_times is None:
-            return gv.NycthemeralSpanMethod.fixed
-        else:
-            return gv.NycthemeralSpanMethod.mimic
-
-    @property
-    def nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
-        if self._nycthemeral_span_method is None:
-            self._nycthemeral_span_method = self._compute_nycthemeral_span_method()
-        return self._nycthemeral_span_method
-
     @staticmethod
     def validate_nycthemeral_method(
             method: gv.LightingMethod | gv.NycthemeralSpanMethod,
@@ -1327,6 +1305,28 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"{method_name} method cannot be set to '{method.name}'. Will "
                 f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__}: {e}`"
             )
+
+    def _compute_nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
+        span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
+            gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
+        # Log any incompatibilities with the nycthemeral span method chosen
+        self._log_nycthemeral_method_issues(span_method)
+        # If using fixed method, no check required
+        if span_method & gv.NycthemeralSpanMethod.fixed:
+            return gv.NycthemeralSpanMethod.fixed
+        # Else, we need to make sure we have suntimes for the nycthemeral target
+        target = self.nycthemeral_span_target
+        sun_times = self.general.get_sun_times(target)
+        if sun_times is None:
+            return gv.NycthemeralSpanMethod.fixed
+        else:
+            return gv.NycthemeralSpanMethod.mimic
+
+    @property
+    def nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
+        if self._nycthemeral_span_method is None:
+            self._nycthemeral_span_method = self._compute_nycthemeral_span_method()
+        return self._nycthemeral_span_method
 
     async def set_nycthemeral_span_method(
             self,
