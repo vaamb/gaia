@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Condition, Event, Lock, Task
-from contextlib import asynccontextmanager, suppress
+from contextlib import suppress
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
@@ -41,6 +41,9 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 class ValidationError(ValueError):
     pass
+
+
+DEFAULT_PLACE = "home"
 
 
 # ---------------------------------------------------------------------------
@@ -900,7 +903,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def home_coordinates(self) -> gv.Coordinates:
-        home = self.get_place("home")
+        home = self.get_place(DEFAULT_PLACE)
         if home is None:
             raise UndefinedParameter(
                 "No location named 'home' was found in the private "
@@ -910,7 +913,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @home_coordinates.setter
     def home_coordinates(self, value: tuple[float, float] | CoordinatesDict) -> None:
-        self.set_place("home", coordinates=value)
+        self.set_place(DEFAULT_PLACE, coordinates=value)
 
     @property
     def units(self) -> dict[str, str]:
@@ -972,7 +975,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def home_sun_times(self) -> gv.SunTimesDict | None:
-        return self.get_sun_times("home")
+        return self.get_sun_times(DEFAULT_PLACE)
 
     def refresh_sun_times(self) -> None:
         self.logger.info("Updating sun times.")
@@ -1309,7 +1312,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Try to get the target
         target: str
         if (method & gv.LightingMethod.elongate) == gv.LightingMethod.elongate:
-            target = "home"
+            target = DEFAULT_PLACE
         elif (method & gv.NycthemeralSpanMethod.mimic) == gv.NycthemeralSpanMethod.mimic:
             nyct_cfg: gv.NycthemeralCycleConfigDict = \
                 ecosystem_dict["environment"]["nycthemeral_cycle"]
@@ -1456,7 +1459,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if lighting_method & gv.LightingMethod.fixed:
             return gv.LightingMethod.fixed
         # Otherwise, we need to make sure we have suntimes for "home"
-        sun_times = self.general.get_sun_times("home")
+        sun_times = self.general.get_sun_times(DEFAULT_PLACE)
         if sun_times is None:
             return gv.LightingMethod.fixed
         else:
