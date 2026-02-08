@@ -84,19 +84,39 @@ class Engine(metaclass=SingletonMeta):
         # Sync initialization of the ecosystem
         engine = cls(engine_config)
         # Finalization of the initialization
-        await engine._async_init()
+        try:
+            await engine._async_init()
+        except Exception:
+            await engine.terminate()
+            raise
         return engine
 
     async def terminate(self) -> None:
-        # Terminate the ecosystems first
+        """Clean up all engine resources.
+
+        Terminates ecosystems, stops plugins, watchdog, and background tasks.
+        Must be called after stop() on a started engine.
+        """
+        if self.started:
+            raise RuntimeError("Cannot terminate a running engine. Stop it first.")
+        self.logger.info("Terminating Gaia ...")
+        # Terminate the ecosystems
         await self.terminate_ecosystems()
-        # Stop plugins and background tasks
+        # Stop plugins
         if self.plugins_initialized:
             await self.stop_plugins()
-        # Reset the WebSocketHardwareManager
+        # Stop watchdog (EngineConfig.started checks if watchdog task exists)
+        if self.config.started:
+            self.config.stop_watchdog()
+        # Stop background tasks (scheduler.running is an APScheduler property)
+        if self.scheduler.running:
+            self.stop_background_tasks()
+        # Reset references
         WebSocketHardware._websocket_manager = None
         self._db = None
         self._message_broker = None
+        self._shut_down = True
+        self.logger.info("Gaia terminated.")
 
     @property
     def plugins_needed(self) -> bool:
@@ -689,36 +709,32 @@ class Engine(metaclass=SingletonMeta):
 
     def _handle_stop_signal(self) -> None:
         self.logger.info("Received a 'stop' signal")
-        self.stop()
+        self._stop_event.set()  # Just set the event, let the loop handle it
 
-    def stop(self) -> None:
-        """Shutdown the Engine"""
+    async def stop(self) -> None:
+        """Stop the Engine.
+
+        Stops all running ecosystems and cancels the engine loop task.
+        Call terminate() after this to clean up resources.
+        """
         if not self.started:
             raise RuntimeError("Cannot stop a non-started engine.")
         if self.stopped:
             raise RuntimeError("Cannot stop an already stopped engine.")
-        self._stop_event.set()
-
-    async def shutdown(self) -> None:
         if self.running:
             self.pause()
-        self.logger.info("Shutting down Gaia ...")
-        # Stop the loop
-        # Set the cleaning up event
+        self.logger.info("Stopping Gaia ...")
+        # Set stop event
         self._stop_event.set()
-        # Send a config signal so the loops unlocks ... and stops
+        # Send a config signal so the loop unlocks and stops
         async with self.config.new_config:
             self.config.new_config.notify_all()
         self.task.cancel()
         self.task = None
-        # Stop and dismount ecosystems
+        # Stop ecosystems
         for ecosystem_uid in [*self.ecosystems_started]:
             await self.stop_ecosystem(ecosystem_uid)
-        await self.terminate()
-        self.config.stop_watchdog()
-        self.stop_background_tasks()
-        self._shut_down = True
-        self.logger.info("Gaia has shut down")
+        self.logger.info("Gaia stopped.")
 
     def add_signal_handler(self) -> None:
         assert threading.current_thread() is threading.main_thread()
@@ -739,4 +755,5 @@ class Engine(metaclass=SingletonMeta):
         self.add_signal_handler()
         await self.start()
         await self.wait()
-        await self.shutdown()
+        await self.stop()
+        await self.terminate()

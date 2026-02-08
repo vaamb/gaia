@@ -203,10 +203,12 @@ async def test_engine_states(engine: Engine, logs_content):
     with pytest.raises(RuntimeError):
         await engine.resume()
 
-    engine.stop()
-    await engine.shutdown()
+    await engine.stop()
     with logs_content() as logs:
-        assert "Shutting down Gaia ..." in logs
+        assert "Stopping Gaia ..." in logs
+    await engine.terminate()
+    with logs_content() as logs:
+        assert "Terminating Gaia ..." in logs
     assert not engine.started
     assert not engine.running
     assert not engine.paused
