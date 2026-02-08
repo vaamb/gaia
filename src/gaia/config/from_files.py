@@ -652,6 +652,8 @@ class EngineConfig(metaclass=SingletonMeta):
         return await run_sync(_file_checksum, file_path)
 
     async def _get_changed_config_files(self) -> set[ConfigType]:
+        # /!\ must be used with the config_files_lock acquired
+        self._check_files_lock_acquired()
         changed: set[ConfigType] = set()
         for file_path, old_checksum in self._config_files_checksum.items():
             new_checksum = await self._file_checksum(file_path)
