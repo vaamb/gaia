@@ -282,6 +282,104 @@ class ChaosMemoryRootValidator(RootModel):
 # ---------------------------------------------------------------------------
 #   EngineConfig class
 # ---------------------------------------------------------------------------
+class ChecksumTracker:
+    """Tracks file checksums for change detection."""
+
+    def __init__(self):
+        self._checksums: dict[Path, bytes] = {}
+
+    async def compute(self, path: Path) -> bytes:
+        """Compute checksum (no lock needed - just reads file)."""
+        return await run_sync(_file_checksum, path)
+
+    async def update(self, path: Path, hash_: bytes | None = None) -> None:
+        """Update stored checksum for a path."""
+        if hash_ is None:
+            hash_ = await self.compute(path)
+        self._checksums[path] = hash_
+
+    async def has_changed(self, path: Path) -> bool:
+        """Check if file changed since last update."""
+        current = await self.compute(path)
+        stored = self._checksums.get(path)
+        return stored is None or current != stored
+
+    async def get_changed(self) -> set[Path]:
+        """Return paths that have changed."""
+        return {p for p in self._checksums if await self.has_changed(p)}
+
+
+class ConfigWatchdog:
+    def __init__(self, engine_config: EngineConfig, checksum_tracker: ChecksumTracker) -> None:
+        self._engine_config = engine_config
+        self._checksum_tracker = checksum_tracker
+        self.logger = logging.getLogger("gaia.engine.config.watchdog")
+        self.logger.debug("Initializing ConfigWatchdog")
+        self._stop_event = Event()
+        self._task: Task | None = None
+        self.new_config = Condition()
+
+    @property
+    def started(self) -> bool:
+        return self._task is not None
+
+    async def _routine(self) -> None:
+        changed_paths = await self._checksum_tracker.get_changed()
+        if changed_paths:
+            private_path = self._engine_config.get_file_path(ConfigType.private)
+            ecosystems_path = self._engine_config.get_file_path(ConfigType.ecosystems)
+
+            if private_path in changed_paths:
+                self.logger.info(
+                    "Change in private configuration file detected. Updating it.")
+                await self._engine_config.load(ConfigType.private)
+            if ecosystems_path in changed_paths:
+                self.logger.info(
+                    "Change in ecosystems configuration file detected. Updating it.")
+                await self._engine_config.load(ConfigType.ecosystems)
+            async with self.new_config:
+                self.new_config.notify_all()
+                # This unblocks the engine loop. It will then refresh
+                #  ecosystems, update sun times, ecosystem lighting hours
+                #  and send the data if it is connected.
+
+    async def _loop(self) -> None:
+        sleep_period = self._engine_config.app_config.CONFIG_WATCHER_PERIOD / 1000
+        self.logger.info(
+            f"Starting watchdog loop with an interval of {sleep_period:.3f} s.")
+        while not self._stop_event.is_set():
+            try:
+                await self._routine()
+            except Exception as e:  # pragma: no cover
+                self.logger.error(f"Watchdog error: `{e.__class__.__name__}: {e}`.")
+            await event_wait(self._stop_event, sleep_period)
+
+    def start(self) -> None:
+        if not self._engine_config.configs_loaded:  # pragma: no cover
+            raise RuntimeError(
+                "Configuration files need to be loaded in order to start "
+                "the config files watchdog. To do so, use the "
+                "`EngineConfig().initialize_configs()` method."
+            )
+
+        if self.started:  # pragma: no cover
+            raise RuntimeError("Watchdog already running")
+
+        self._stop_event.clear()
+        self.logger.info("Starting the configuration files watchdog.")
+        self._task = asyncio.create_task(self._loop(), name="config-watchdog")
+        self.logger.debug("Configuration files watchdog successfully started.")
+
+    def stop(self) -> None:
+        if not self.started:  # pragma: no cover
+            raise RuntimeError("Watchdog is not running")
+
+        self.logger.info("Stopping the configuration files watchdog.")
+        self._stop_event.set()
+        self._task = None
+        self.logger.debug("Configuration files watchdog successfully stopped.")
+
+
 class EngineConfig(metaclass=SingletonMeta):
     """Class to interact with the configuration files
 
@@ -306,29 +404,25 @@ class EngineConfig(metaclass=SingletonMeta):
         self._sun_times: dict[str, SunTimesCacheData] = {}
         self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
-        self._config_files_checksum: dict[Path, H] = {}
+        self._checksum_tracker = ChecksumTracker()
         self._config_files_lock = Lock()
-        self.new_config = Condition()
-        self._stop_event = Event()
-        self._task: Task | None = None
+        self._watchdog: ConfigWatchdog = ConfigWatchdog(self, self._checksum_tracker)
         self.configs_loaded: bool = False
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"EngineConfig(watchdog={self.started})"
 
     @property
-    def started(self) -> bool:
-        return self._task is not None
+    def watchdog(self) -> ConfigWatchdog:
+        return self._watchdog
 
     @property
-    def task(self) -> Task:
-        if self._task is None:
-            raise AttributeError("'task' has not been set up")
-        return self._task
+    def started(self) -> bool:
+        return self.watchdog.started
 
-    @task.setter
-    def task(self, task: Task | None) -> None:
-        self._task = task
+    @property
+    def new_config(self) -> Condition:
+        return self.watchdog.new_config
 
     @property
     def engine(self) -> "Engine":
@@ -395,7 +489,7 @@ class EngineConfig(metaclass=SingletonMeta):
         if not self._config_files_lock.locked():
             raise RuntimeError(
                 "This method must be called within a "
-                "`engine_config.with config_files_lock():` block"
+                "`engine_config.with config_files_lock:` block"
             )
 
     def _log_nycthemeral_method_issues(
@@ -416,25 +510,11 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"ERROR msg: `{e.__class__.__name__}: {e}`"
             )
 
-    async def _load_ecosystems_config(self) -> None:
-        # /!\ must be used with the config_files_lock acquired
-        self._check_files_lock_acquired()
-        # Load raw data
-        config_path = self.get_file_path(ConfigType.ecosystems)
-        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
-        # Validate the data structure
-        try:
-            validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
-        except pydantic.ValidationError as e:  # pragma: no cover
-            self.logger.error(
-                f"Could not load ecosystems configuration file. "
-                f"ERROR msg(s): `{format_pydantic_error(e)}`."
-            )
-            raise e
-
-        # Validate the data logic
+    async def _validate_ecosystems_logic(
+            self, ecosystem_configs: dict[str, EcosystemConfigDict],
+    ) -> dict[str, EcosystemConfigDict]:
         unfixable_error: bool = False
-        for ecosystem_uid, ecosystem_cfg in validated.items():
+        for ecosystem_uid, ecosystem_cfg in ecosystem_configs.items():
             ecosystem_cfg: EcosystemConfigDict
             ecosystem_name: str = ecosystem_cfg["name"]
             # Check hardware config
@@ -478,10 +558,32 @@ class EngineConfig(metaclass=SingletonMeta):
                 "Could not validate ecosystems config. Check the log for more "
                 "details."
             )
+        return ecosystem_configs
+
+    async def _load_ecosystems_config(self) -> None:
+        # /!\ must be used with the config_files_lock acquired
+        self._check_files_lock_acquired()
+        # Load raw data
+        config_path = self.get_file_path(ConfigType.ecosystems)
+        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
+        checksum = await self._checksum_tracker.compute(config_path)
+        # Validate the data structure
+        try:
+            validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
+        except pydantic.ValidationError as e:  # pragma: no cover
+            self.logger.error(
+                f"Could not load ecosystems configuration file. "
+                f"ERROR msg(s): `{format_pydantic_error(e)}`."
+            )
+            raise e
+        # Validate the data logic
+        validated = await self._validate_ecosystems_logic(validated)
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
+        # Update the checksum
+        await self._checksum_tracker.update(config_path, checksum)
         # Dump the config as a yaml file as it may have been updated by pydantic
-        await self._dump_ecosystems_config()
+        #await self._dump_ecosystems_config()
         # Reset ecosystems caches
         for ecosystem_config in self.ecosystems_config.values():
             ecosystem_config.reset_caches()
@@ -492,6 +594,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # Load raw data
         config_path = self.get_file_path(ConfigType.private)
         unvalidated: PrivateConfigDict = await _load_yaml(config_path)
+        checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
             validated = PrivateConfigValidator(**unvalidated).model_dump()
@@ -503,6 +606,8 @@ class EngineConfig(metaclass=SingletonMeta):
             raise e
         # Room for possible future data logic validation
         self._private_config = validated
+        # Update the checksum
+        await self._checksum_tracker.update(config_path, checksum)
 
     async def _load_chaos_memory(self) -> None:
         self.logger.debug("Trying to load chaos memory.")
@@ -533,11 +638,11 @@ class EngineConfig(metaclass=SingletonMeta):
         """Load config files"""
         match cfg_type:
             case ConfigType.ecosystems:
-                async with self.config_files_lock():
+                async with self.config_files_lock:
                     self.logger.debug("Loading ecosystems configuration file.")
                     await self._load_ecosystems_config()
             case ConfigType.private:
-                async with self.config_files_lock():
+                async with self.config_files_lock:
                     self.logger.debug("Loading private configuration file.")
                     await self._load_private_config()
             case CacheType.chaos:
@@ -559,11 +664,11 @@ class EngineConfig(metaclass=SingletonMeta):
                 cfg[uid]["environment"]["climate"], RootClimateValidator, exclude_defaults=True)
             cfg[uid]["plants"] = validate_from_root_model(
                 cfg[uid]["plants"], RootPlantsValidator, exclude_defaults=True)
-        # Dump it
+        # Dump the data
         config_path = self.get_file_path(ConfigType.ecosystems)
         await _dump_yaml(cfg, config_path)
         # Update the checksum
-        self._config_files_checksum[config_path] = await self._file_checksum(config_path)
+        await self._checksum_tracker.update(config_path)
 
     async def _dump_private_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
@@ -572,7 +677,7 @@ class EngineConfig(metaclass=SingletonMeta):
         config_path = self.get_file_path(ConfigType.private)
         await _dump_yaml(self._private_config, config_path)
         # Update the checksum
-        self._config_files_checksum[config_path] = await self._file_checksum(config_path)
+        await self._checksum_tracker.update(config_path)
 
     async def _dump_chaos_memory(self) -> None:
         chaos_path = self.get_file_path(CacheType.chaos)
@@ -583,11 +688,11 @@ class EngineConfig(metaclass=SingletonMeta):
             return
         match cfg_type:
             case ConfigType.ecosystems:
-                async with self.config_files_lock():
+                async with self.config_files_lock:
                     self.logger.debug("Saving ecosystems configuration file.")
                     await self._dump_ecosystems_config()
             case ConfigType.private:
-                async with self.config_files_lock():
+                async with self.config_files_lock:
                     self.logger.debug("Saving private configuration file.")
                     await self._dump_private_config()
             case CacheType.chaos:
@@ -618,7 +723,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.warning(
                 "No custom `private.cfg` configuration file detected. "
                 "Creating a default file.")
-            async with self.config_files_lock():
+            async with self.config_files_lock:
                 await self._create_private_config_file()
         # Load ecosystems config
         ecosystems_cfg_path: Path = self.get_file_path(ConfigType.ecosystems)
@@ -628,113 +733,16 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.warning(
                 "No custom `ecosystems.cfg` configuration file detected. "
                 "Creating a default file.")
-            async with self.config_files_lock():
+            async with self.config_files_lock:
                 await self._create_ecosystems_config_file()
-        # Update checksums
-        self._config_files_checksum[private_cfg_path] = \
-            await run_sync(_file_checksum, private_cfg_path)
-        self._config_files_checksum[ecosystems_cfg_path] = \
-            await run_sync(_file_checksum, ecosystems_cfg_path)
         # Load chaos cache
         await self.load(CacheType.chaos)
         # Mark as loaded
         self.configs_loaded = True
 
-    # File watchdog
-    async def _file_checksum(self, file_path: Path) -> H:
-        # /!\ must be used with the config_files_lock acquired
-        self._check_files_lock_acquired()
-        return await run_sync(_file_checksum, file_path)
-
-    async def _get_changed_config_files(self) -> set[ConfigType]:
-        changed: set[ConfigType] = set()
-        for file_path, old_checksum in self._config_files_checksum.items():
-            new_checksum = await self._file_checksum(file_path)
-            if new_checksum != old_checksum:
-                changed.add(ConfigType(file_path.name))
-        return changed
-
-    async def _watchdog_routine(self) -> None:
-        # Fill config files modification dict
-        async with self.config_files_lock():
-            changed_configs = await self._get_changed_config_files()
-            if changed_configs:
-                if ConfigType.private in changed_configs:
-                    self.logger.info(
-                        "Change in private configuration file detected. Updating it.")
-                    await self._load_private_config()
-                    cfg_path = self.get_file_path(ConfigType.private)
-                    self._config_files_checksum[cfg_path] = \
-                        await run_sync(_file_checksum, cfg_path)
-                if ConfigType.ecosystems in changed_configs:
-                    self.logger.info(
-                        "Change in ecosystems configuration file detected. Updating it.")
-                    await self._load_ecosystems_config()
-                    cfg_path = self.get_file_path(ConfigType.ecosystems)
-                    self._config_files_checksum[cfg_path] = \
-                        await run_sync(_file_checksum, cfg_path)
-                async with self.new_config:
-                    self.new_config.notify_all()
-                    # This unblocks the engine loop. It will then refresh
-                    #  ecosystems, update sun times, ecosystem lighting hours
-                    #  and send the data if it is connected.
-
-    async def _watchdog_loop(self) -> None:
-        # Make private config file trackable by the file watchdog
-        config_path = self.get_file_path(ConfigType.private)
-        if config_path not in self._config_files_checksum:
-            self._config_files_checksum[config_path] = await self._file_checksum(config_path)
-        # Make ecosystems config file trackable by the file watchdog
-        config_path = self.get_file_path(ConfigType.ecosystems)
-        if config_path not in self._config_files_checksum:
-            self._config_files_checksum[config_path] = await self._file_checksum(config_path)
-
-        # Start the actual loop
-        sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
-        self.logger.info(
-            f"Starting the configuration files watchdog loop. It will run every "
-            f"{sleep_period:.3f} s.")
-        while not self._stop_event.is_set():
-            try:
-                await self._watchdog_routine()
-            except Exception as e:  # pragma: no cover
-                self.logger.error(
-                    f"Encountered an error while running the watchdog routine. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
-            await event_wait(self._stop_event, sleep_period)
-
-    def start_watchdog(self) -> None:
-        if not self.configs_loaded:  # pragma: no cover
-            raise RuntimeError(
-                "Configuration files need to be loaded in order to start "
-                "the config files watchdog. To do so, use the "
-                "`EngineConfig().initialize_configs()` method."
-            )
-
-        if self.started:  # pragma: no cover
-            raise RuntimeError("Configuration files watchdog is already running")
-
-        self.logger.info("Starting the configuration files watchdog.")
-        self.task = asyncio.create_task(
-            self._watchdog_loop(), name="config-watchdog_loop")
-        self.logger.debug("Configuration files watchdog successfully started.")
-
-    def stop_watchdog(self) -> None:
-        if not self.started:  # pragma: no cover
-            raise RuntimeError("Configuration files watchdog is not running")
-
-        self.logger.info("Stopping the configuration files watchdog.")
-        self._stop_event.set()
-        self.task = None
-        self.logger.debug("Configuration files watchdog successfully stopped.")
-
-    @asynccontextmanager
-    async def config_files_lock(self):
-        """A context manager that makes sure only one process access file
-        content at the time"""
-        async with self._config_files_lock:
-            yield
+    @property
+    def config_files_lock(self):
+        return self._config_files_lock
 
     # API
     def _create_new_ecosystem_uid(self) -> str:

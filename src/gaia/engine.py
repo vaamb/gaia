@@ -117,7 +117,7 @@ class Engine(metaclass=SingletonMeta):
             await self.stop_plugins()
         # Stop watchdog (EngineConfig.started checks if watchdog task exists)
         if self.config.started:
-            self.config.stop_watchdog()
+            self.config.watchdog.stop()
         # Stop background tasks (scheduler.running is an APScheduler property)
         if self.scheduler.running:
             self.stop_background_tasks()
@@ -686,7 +686,7 @@ class Engine(metaclass=SingletonMeta):
             )
         # Load the ecosystem configs into memory and start the watchdog
         await self.config.initialize_configs()
-        self.config.start_watchdog()
+        self.config.watchdog.start()
         # Start background tasks and plugins
         self.start_background_tasks()
         if self.plugins_initialized:
