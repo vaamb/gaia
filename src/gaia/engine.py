@@ -92,6 +92,8 @@ class Engine(metaclass=SingletonMeta):
         return engine
 
     async def terminate(self) -> None:
+        if self.started:
+            raise RuntimeError("Cannot terminate a running engine. Stop it first")
         # Terminate the ecosystems first
         await self.terminate_ecosystems()
         # Stop plugins and background tasks
