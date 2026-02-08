@@ -327,8 +327,8 @@ class EngineConfig(metaclass=SingletonMeta):
         return self._task
 
     @task.setter
-    def task(self, thread: Task | None) -> None:
-        self._task = thread
+    def task(self, task: Task | None) -> None:
+        self._task = task
 
     @property
     def engine(self) -> "Engine":
