@@ -472,6 +472,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # Load raw data
         config_path = self.get_file_path(ConfigType.ecosystems)
         unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
+        checksum = await self._file_checksum(config_path)
         # Validate the data structure
         try:
             validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
@@ -486,7 +487,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
         # Update the checksum
-        self._config_files_checksum[config_path] = await self._file_checksum(config_path)
+        self._config_files_checksum[config_path] = checksum
         # Dump the config as a yaml file as it may have been updated by pydantic
         #await self._dump_ecosystems_config()
         # Reset ecosystems caches
@@ -499,6 +500,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # Load raw data
         config_path = self.get_file_path(ConfigType.private)
         unvalidated: PrivateConfigDict = await _load_yaml(config_path)
+        checksum = await self._file_checksum(config_path)
         # Validate the data structure
         try:
             validated = PrivateConfigValidator(**unvalidated).model_dump()
@@ -511,7 +513,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # Room for possible future data logic validation
         self._private_config = validated
         # Update the checksum
-        self._config_files_checksum[config_path] = await self._file_checksum(config_path)
+        self._config_files_checksum[config_path] = checksum
 
     async def _load_chaos_memory(self) -> None:
         self.logger.debug("Trying to load chaos memory.")
