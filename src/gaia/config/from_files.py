@@ -791,7 +791,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def ecosystems_uid(self) -> list[str]:
-        return [i for i in self.ecosystems_config_dict.keys()]
+        return list(self.ecosystems_config_dict.keys())
 
     @property
     def ecosystems_name(self) -> list:
