@@ -216,7 +216,7 @@ class EcosystemConfigValidator(gv.BaseModel):
     management: gv.ManagementConfig = Field(default_factory=gv.ManagementConfig)
     environment: EnvironmentConfigValidator = Field(
         default_factory=EnvironmentConfigValidator)
-    IO: dict[str, gv.AnonymousHardwareConfig] = Field(default_factory=dict)
+    hardware: dict[str, gv.AnonymousHardwareConfig] = Field(default_factory=dict, validation_alias="IO")
     plants: dict[str, gv.AnonymousPlantConfig] = Field(default_factory=dict)
 
 
@@ -225,7 +225,7 @@ class EcosystemConfigDict(TypedDict):
     status: bool
     management: gv.ManagementConfigDict
     environment: EnvironmentConfigDict
-    IO: dict[str, gv.AnonymousHardwareConfigDict]
+    hardware: dict[str, gv.AnonymousHardwareConfigDict]
     plants: dict[str, gv.AnonymousPlantConfigDict]
 
 
@@ -233,7 +233,7 @@ class RootEcosystemsConfigValidator(RootModel):
     root: dict[str, EcosystemConfigValidator]
 
 
-# Custom models to shorten climate, IO and plants configs when dumping to YAML
+# Custom models to shorten climate, hardware and plants configs when dumping to YAML
 class RootClimateValidator(RootModel):
     root: dict[gv.ClimateParameter, gv.AnonymousClimateConfig]
 
@@ -248,7 +248,7 @@ class _SerializableAnonymousHardwareConfig(gv.AnonymousHardwareConfig):
     measures: list[_SerializableMeasure] = Field(default_factory=list, validation_alias="measure")
 
 
-class RootIOValidator(RootModel):
+class RootHardwareValidator(RootModel):
     root: dict[str, _SerializableAnonymousHardwareConfig]
 
 
@@ -427,26 +427,26 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.debug(
                 f"Checking hardware config for ecosystem {ecosystem_name}.")
             addresses_used: list[str] = []
-            for IO_uid, IO_dict in ecosystem_cfg["IO"].items():
-                IO_dict: gv.HardwareConfigDict
-                IO_name: str = IO_dict["name"]
+            for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+                hardware_dict: gv.HardwareConfigDict
+                hardware_name: str = hardware_dict["name"]
                 self.logger.debug(
-                    f"Checking hardware {IO_name} for ecosystem {ecosystem_name}.")
+                    f"Checking hardware {hardware_name} for ecosystem {ecosystem_name}.")
                 try:
                     EcosystemConfig.validate_hardware_dict(
-                        hardware_dict={"uid": IO_uid, **IO_dict},
+                        hardware_dict={"uid": hardware_uid, **hardware_dict},
                         addresses_used=addresses_used,
                     )
                 except ValueError as e:
                     self.logger.error(
-                        f"Could not validate hardware config for hardware {IO_name} "
+                        f"Could not validate hardware config for hardware {hardware_name} "
                         f"in ecosystem {ecosystem_name}. ERROR msg(s): `{e}`.")
                     unfixable_error = True
                 else:
                     self.logger.debug(
-                        f"Hardware {IO_name} validated for ecosystem {ecosystem_name}.")
+                        f"Hardware {hardware_name} validated for ecosystem {ecosystem_name}.")
                 finally:
-                    addresses_used.append(IO_dict["address"])
+                    addresses_used.append(hardware_dict["address"])
 
             # Check nycthemeral config
             self.logger.debug(
@@ -553,8 +553,8 @@ class EngineConfig(metaclass=SingletonMeta):
         cfg = deepcopy(self.ecosystems_config_dict)
         # Format it
         for uid in cfg:
-            cfg[uid]["IO"] = validate_from_root_model(
-                cfg[uid]["IO"], RootIOValidator, exclude_defaults=True)
+            cfg[uid]["hardware"] = validate_from_root_model(
+                cfg[uid]["hardware"], RootHardwareValidator, exclude_defaults=True)
             cfg[uid]["environment"]["climate"] = validate_from_root_model(
                 cfg[uid]["environment"]["climate"], RootClimateValidator, exclude_defaults=True)
             cfg[uid]["plants"] = validate_from_root_model(
@@ -762,7 +762,7 @@ class EngineConfig(metaclass=SingletonMeta):
         # Make extra sure no "complex" field is overridden
         updating_values.pop("management", None)
         updating_values.pop("environment", None)
-        updating_values.pop("IO", None)
+        updating_values.pop("hardware", None)
         ecosystem.update(updating_values)
 
     def delete_ecosystem(self, ecosystem_id: str) -> None:
@@ -1065,7 +1065,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.uid = ids.uid
         name = ids.name.replace(" ", "_")
         self.logger = logging.getLogger(f"gaia.engine.{name}.config")
-        #self._nycthemeral_hours_lock = Lock()  #TODO: was an RLock, check if ok
         self._nycthemeral_span_method: gv.NycthemeralSpanMethod | None = None
         self._nycthemeral_span_hours: gv.NycthemeralSpanConfig | None = None
         self._lighting_method: gv.LightingMethod | None = None
@@ -1081,7 +1080,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     #   Properties and common utilities
     # ---------------------------------------------------------------------------
     @property
-    def __dict(self) -> EcosystemConfigDict:
+    def _config_dict(self) -> EcosystemConfigDict:
         return self._engine_config.ecosystems_config_dict[self.uid]
 
     @property
@@ -1090,19 +1089,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def name(self) -> str:
-        return self.__dict["name"]
+        return self._config_dict["name"]
 
     @name.setter
     def name(self, value: str) -> None:
-        self.__dict["name"] = value
+        self._config_dict["name"] = value
 
     @property
     def status(self) -> bool:
-        return self.__dict["status"]
+        return self._config_dict["status"]
 
     @status.setter
     def status(self, value: bool) -> None:
-        self.__dict["status"] = value
+        self._config_dict["status"] = value
 
     async def save(self) -> None:
         await self._engine_config.save(ConfigType.ecosystems)
@@ -1134,11 +1133,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     # ---------------------------------------------------------------------------
     @property
     def managements(self) -> gv.ManagementConfigDict:
-        return self.__dict["management"]
+        return self._config_dict["management"]
 
     @managements.setter
     def managements(self, value: gv.ManagementConfigDict) -> None:
-        self.__dict["management"] = gv.ManagementConfig(**value).model_dump()
+        self._config_dict["management"] = gv.ManagementConfig(**value).model_dump()
 
     @property
     def management_flag(self) -> int:
@@ -1177,7 +1176,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 self.logger.warning(
                     f"{management_name.upper()} management has unmet dependencies: "
                     f"{dep}. This might lead to issues if it is not enabled.")
-        self.__dict["management"][management_name] = value
+        self._config_dict["management"][management_name] = value
 
     def get_subroutines_enabled(self) -> list[str]:
         return [
@@ -1195,10 +1194,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Returns the environment config for the ecosystem
         """
         try:
-            return self.__dict["environment"]
+            return self._config_dict["environment"]
         except KeyError:  # pragma: no cover
-            self.__dict["environment"] = EnvironmentConfigValidator().model_dump()
-            return self.__dict["environment"]
+            self._config_dict["environment"] = EnvironmentConfigValidator().model_dump()
+            return self._config_dict["environment"]
 
     # ---------------------------------------------------------------------------
     #      Nycthemeral cycle parameters
@@ -1298,7 +1297,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """Validate method and log warning if it will fall back to 'fixed'."""
         try:
             self.validate_nycthemeral_method(
-                method, self.__dict, self.general.private_config["places"])
+                method, self._config_dict, self.general.private_config["places"])
         except ValidationError as e:
             method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
             self.logger.warning(
@@ -1335,7 +1334,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
         self.validate_nycthemeral_method(
-            method, self.__dict, self.general.private_config["places"])
+            method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
@@ -1425,7 +1424,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
         self.validate_nycthemeral_method(
-            method, self.__dict, self.general.private_config["places"])
+            method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
@@ -1772,22 +1771,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         }
 
     # ---------------------------------------------------------------------------
-    #   Hardware/IO parameters
+    #   Hardware parameters
     # ---------------------------------------------------------------------------
     @property
-    def IO_dict(self) -> dict[str, gv.AnonymousHardwareConfigDict]:
+    def hardware_dict(self) -> dict[str, gv.AnonymousHardwareConfigDict]:
         """
-        Returns the IOs (hardware) present in the ecosystem
+        Returns the hardware present in the ecosystem
         """
         try:
-            return self.__dict["IO"]
+            return self._config_dict["hardware"]
         except KeyError:  # pragma: no cover
-            self.__dict["IO"] = {}
-            return self.__dict["IO"]
+            self._config_dict["hardware"] = {}
+            return self._config_dict["hardware"]
 
-    def get_IO_group_uids(
+    def get_hardware_group_uids(
         self,
-        IO_type: gv.HardwareType,
+        hardware_type: gv.HardwareType,
         level: gv.HardwareLevel | list[gv.HardwareLevel] | None = None,
     ) -> list[str]:
         level = level or [lvl for lvl in gv.HardwareLevel]
@@ -1795,29 +1794,29 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             level = [level]
         return [
             uid
-            for uid in self.IO_dict
-            if self.IO_dict[uid]["type"] in IO_type
-            and self.IO_dict[uid]["level"] in level
+            for uid in self.hardware_dict
+            if self.hardware_dict[uid]["type"] in hardware_type
+               and self.hardware_dict[uid]["level"] in level
         ]
 
     def _create_new_short_uid(self) -> str:
-        used_ids = {*self.IO_dict.keys(), *self.plants_dict.keys()}
+        used_ids = {*self.hardware_dict.keys(), *self.plants_dict.keys()}
         while True:
             uid = create_uid(uid_length=16)
             if uid not in used_ids:
                 return uid
 
-    def _used_addresses(self):
+    def _used_addresses(self) -> list[str]:
         return [
-            self.IO_dict[hardware]["address"]
-            for hardware in self.IO_dict
+            self.hardware_dict[hardware]["address"]
+            for hardware in self.hardware_dict
         ]
 
     @staticmethod
     def validate_hardware_dict(
             hardware_dict: gv.HardwareConfigDict,
             addresses_used: list,
-    ) -> None:
+    ) -> gv.HardwareConfigDict:
         try:
             hardware_config = gv.HardwareConfig(**hardware_dict)
         except pydantic.ValidationError as e:
@@ -1837,6 +1836,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_dict["address"] = hardware.address_repr
         if hardware_dict["address"] in addresses_used:
             raise ValueError(f"Address {hardware_config.address} already used.")
+        return hardware_dict
 
     def create_new_hardware(
             self,
@@ -1878,20 +1878,20 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "plants": plants,
             "multiplexer_model": multiplexer_model,
         })
-        self.validate_hardware_dict(hardware_dict, self._used_addresses())
+        hardware_dict = self.validate_hardware_dict(hardware_dict, self._used_addresses())
         uid = hardware_dict.pop("uid")
-        self.IO_dict.update({uid: hardware_dict})
+        self.hardware_dict.update({uid: hardware_dict})
 
     def update_hardware(
             self,
             uid: str,
             **updating_values: gv.AnonymousHardwareConfigDict,
     ) -> None:
-        if uid not in self.IO_dict:
+        if uid not in self.hardware_dict:
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
             )
-        hardware_dict = self.IO_dict[uid].copy()
+        hardware_dict = self.hardware_dict[uid].copy()
         hardware_dict: gv.HardwareConfigDict = \
             cast(gv.HardwareConfigDict, hardware_dict)
         # Replace uid with a special uid for validation so it doesn't conflict
@@ -1907,10 +1907,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Don't check address if not trying to update it. To do so, do not pass any address
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
-        self.validate_hardware_dict(hardware_dict, used_addresses)
+        hardware_dict = self.validate_hardware_dict(hardware_dict, used_addresses)
         # Remove the validation uid from the dict
         hardware_dict.pop("uid")
-        self.IO_dict[uid] = hardware_dict
+        self.hardware_dict[uid] = hardware_dict
 
     def delete_hardware(self, uid: str) -> None:
         """
@@ -1918,14 +1918,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param uid: str, the uid of the hardware to delete
         """
         try:
-            del self.IO_dict[uid]
+            del self.hardware_dict[uid]
         except KeyError:
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
             )
 
     def get_hardware_uid(self, name: str) -> str:
-        for uid, hardware in self.IO_dict.items():
+        for uid, hardware in self.hardware_dict.items():
             if hardware["name"] == name:
                 return uid
         raise HardwareNotFound(
@@ -1934,7 +1934,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_hardware_config(self, uid: str) -> gv.HardwareConfig:
         try:
-            hardware_config = self.IO_dict[uid]
+            hardware_config = self.hardware_dict[uid]
             return gv.HardwareConfig(uid=uid, **hardware_config)
         except KeyError:
             raise HardwareNotFound(
@@ -1942,7 +1942,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
 
     @staticmethod
-    def supported_hardware() -> list:
+    def supported_hardware() -> list[str]:
         return [h for h in hardware_models]
 
     # ---------------------------------------------------------------------------
@@ -1954,10 +1954,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Returns the plants present in the ecosystem
         """
         try:
-            return self.__dict["plants"]
+            return self._config_dict["plants"]
         except KeyError:  # pragma: no cover
-            self.__dict["plants"] = {}
-            return self.__dict["plants"]
+            self._config_dict["plants"] = {}
+            return self._config_dict["plants"]
 
     def create_new_plant(
             self,
@@ -2023,7 +2023,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def delete_plant(self, uid: str) -> None:
         """
-        Delete a hardware from the config
+        Delete a plant from the config
         :param uid: str, the uid of the hardware to delete
         """
         try:

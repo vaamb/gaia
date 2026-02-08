@@ -137,7 +137,7 @@ class TestEcosystemConfigGeneral:
     ):
         assert ecosystem_config.general.__dict__ is engine_config.__dict__
         assert (
-            ecosystem_config._EcosystemConfig__dict
+            ecosystem_config._config_dict
             is engine_config.ecosystems_config_dict[ecosystem_config.uid]
         )
 
