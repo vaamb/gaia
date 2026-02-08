@@ -402,6 +402,9 @@ class EngineConfig(metaclass=SingletonMeta):
                 "`engine_config.with config_files_lock:` block"
             )
 
+    async def _file_checksum(self, file_path: Path) -> H:
+        return await run_sync(_file_checksum, file_path)
+
     async def _validate_ecosystems_logic(
             self, ecosystem_configs: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
@@ -647,14 +650,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self.configs_loaded = True
 
     # File watchdog
-    async def _file_checksum(self, file_path: Path) -> H:
-        # /!\ must be used with the config_files_lock acquired
-        self._check_files_lock_acquired()
-        return await run_sync(_file_checksum, file_path)
-
     async def _get_changed_config_files(self) -> set[ConfigType]:
-        # /!\ must be used with the config_files_lock acquired
-        self._check_files_lock_acquired()
         changed: set[ConfigType] = set()
         for file_path, old_checksum in self._config_files_checksum.items():
             new_checksum = await self._file_checksum(file_path)
@@ -663,25 +659,23 @@ class EngineConfig(metaclass=SingletonMeta):
         return changed
 
     async def _watchdog_routine(self) -> None:
-        # Fill config files modification dict
-        async with self.config_files_lock:
-            changed_configs = await self._get_changed_config_files()
-            if changed_configs:
-                if ConfigType.private in changed_configs:
-                    self.logger.info(
-                        "Change in private configuration file detected. Updating it.")
-                    # Data loading will update the checksum
-                    await self._load_private_config()
-                if ConfigType.ecosystems in changed_configs:
-                    self.logger.info(
-                        "Change in ecosystems configuration file detected. Updating it.")
-                    # Data loading will update the checksum
-                    await self._load_ecosystems_config()
-                async with self.new_config:
-                    self.new_config.notify_all()
-                    # This unblocks the engine loop. It will then refresh
-                    #  ecosystems, update sun times, ecosystem lighting hours
-                    #  and send the data if it is connected.
+        changed_configs = await self._get_changed_config_files()
+        if changed_configs:
+            if ConfigType.private in changed_configs:
+                self.logger.info(
+                    "Change in private configuration file detected. Updating it.")
+                # Data loading will update the checksum
+                await self.load(ConfigType.private)
+            if ConfigType.ecosystems in changed_configs:
+                self.logger.info(
+                    "Change in ecosystems configuration file detected. Updating it.")
+                # Data loading will update the checksum
+                await self.load(ConfigType.ecosystems)
+            async with self.new_config:
+                self.new_config.notify_all()
+                # This unblocks the engine loop. It will then refresh
+                #  ecosystems, update sun times, ecosystem lighting hours
+                #  and send the data if it is connected.
 
     async def _watchdog_task(self) -> None:
         if not self.configs_loaded:
