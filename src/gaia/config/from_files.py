@@ -399,7 +399,7 @@ class EngineConfig(metaclass=SingletonMeta):
         if not self._config_files_lock.locked():
             raise RuntimeError(
                 "This method must be called within a "
-                "`engine_config.with config_files_lock():` block"
+                "`engine_config.with config_files_lock:` block"
             )
 
     async def _load_ecosystems_config(self) -> None:
@@ -533,11 +533,11 @@ class EngineConfig(metaclass=SingletonMeta):
         """Load config files"""
         match cfg_type:
             case ConfigType.ecosystems:
-                async with self.config_files_lock():
+                async with self.config_files_lock:
                     self.logger.debug("Loading ecosystems configuration file.")
                     await self._load_ecosystems_config()
             case ConfigType.private:
-                async with self.config_files_lock():
+                async with self.config_files_lock:
                     self.logger.debug("Loading private configuration file.")
                     await self._load_private_config()
             case CacheType.chaos:
@@ -583,11 +583,11 @@ class EngineConfig(metaclass=SingletonMeta):
             return
         match cfg_type:
             case ConfigType.ecosystems:
-                async with self.config_files_lock():
+                async with self.config_files_lock:
                     self.logger.debug("Saving ecosystems configuration file.")
                     await self._dump_ecosystems_config()
             case ConfigType.private:
-                async with self.config_files_lock():
+                async with self.config_files_lock:
                     self.logger.debug("Saving private configuration file.")
                     await self._dump_private_config()
             case CacheType.chaos:
@@ -618,7 +618,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.warning(
                 "No custom `private.cfg` configuration file detected. "
                 "Creating a default file.")
-            async with self.config_files_lock():
+            async with self.config_files_lock:
                 await self._create_private_config_file()
         # Load ecosystems config
         ecosystems_cfg_path: Path = self.get_file_path(ConfigType.ecosystems)
@@ -628,7 +628,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self.logger.warning(
                 "No custom `ecosystems.cfg` configuration file detected. "
                 "Creating a default file.")
-            async with self.config_files_lock():
+            async with self.config_files_lock:
                 await self._create_ecosystems_config_file()
         # Update checksums
         self._config_files_checksum[private_cfg_path] = \
@@ -656,7 +656,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     async def _watchdog_routine(self) -> None:
         # Fill config files modification dict
-        async with self.config_files_lock():
+        async with self.config_files_lock:
             changed_configs = await self._get_changed_config_files()
             if changed_configs:
                 if ConfigType.private in changed_configs:
@@ -729,12 +729,9 @@ class EngineConfig(metaclass=SingletonMeta):
         self.task = None
         self.logger.debug("Configuration files watchdog successfully stopped.")
 
-    @asynccontextmanager
-    async def config_files_lock(self):
-        """A context manager that makes sure only one process access file
-        content at the time"""
-        async with self._config_files_lock:
-            yield
+    @property
+    def config_files_lock(self):
+        return self._config_files_lock
 
     # API
     def _create_new_ecosystem_uid(self) -> str:
