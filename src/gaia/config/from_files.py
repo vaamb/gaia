@@ -309,6 +309,77 @@ class ChecksumTracker:
         return {p for p in self._checksums if await self.has_changed(p)}
 
 
+class ConfigWatchdog:
+    def __init__(self, engine_config: EngineConfig, checksum_tracker: ChecksumTracker) -> None:
+        self._engine_config = engine_config
+        self._checksum_tracker = checksum_tracker
+        self.logger = logging.getLogger("gaia.engine.config.watchdog")
+        self.logger.debug("Initializing ConfigWatchdog")
+        self._stop_event = Event()
+        self._task: Task | None = None
+        self.new_config = Condition()
+
+    @property
+    def started(self) -> bool:
+        return self._task is not None
+
+    async def _routine(self) -> None:
+        changed_paths = await self._checksum_tracker.get_changed()
+        if changed_paths:
+            private_path = self._engine_config.get_file_path(ConfigType.private)
+            ecosystems_path = self._engine_config.get_file_path(ConfigType.ecosystems)
+
+            if private_path in changed_paths:
+                self.logger.info(
+                    "Change in private configuration file detected. Updating it.")
+                await self._engine_config.load(ConfigType.private)
+            if ecosystems_path in changed_paths:
+                self.logger.info(
+                    "Change in ecosystems configuration file detected. Updating it.")
+                await self._engine_config.load(ConfigType.ecosystems)
+            async with self.new_config:
+                self.new_config.notify_all()
+                # This unblocks the engine loop. It will then refresh
+                #  ecosystems, update sun times, ecosystem lighting hours
+                #  and send the data if it is connected.
+
+    async def _loop(self) -> None:
+        sleep_period = self._engine_config.app_config.CONFIG_WATCHER_PERIOD / 1000
+        self.logger.info(
+            f"Starting watchdog loop with an interval of {sleep_period:.3f} s.")
+        while not self._stop_event.is_set():
+            try:
+                await self._routine()
+            except Exception as e:  # pragma: no cover
+                self.logger.error(f"Watchdog error: `{e.__class__.__name__}: {e}`.")
+            await event_wait(self._stop_event, sleep_period)
+
+    def start(self) -> None:
+        if not self._engine_config.configs_loaded:  # pragma: no cover
+            raise RuntimeError(
+                "Configuration files need to be loaded in order to start "
+                "the config files watchdog. To do so, use the "
+                "`EngineConfig().initialize_configs()` method."
+            )
+
+        if self.started:  # pragma: no cover
+            raise RuntimeError("Watchdog already running")
+
+        self._stop_event.clear()
+        self.logger.info("Starting the configuration files watchdog.")
+        self._task = asyncio.create_task(self._loop(), name="config-watchdog")
+        self.logger.debug("Configuration files watchdog successfully started.")
+
+    def stop(self) -> None:
+        if not self.started:  # pragma: no cover
+            raise RuntimeError("Watchdog is not running")
+
+        self.logger.info("Stopping the configuration files watchdog.")
+        self._stop_event.set()
+        self._task = None
+        self.logger.debug("Configuration files watchdog successfully stopped.")
+
+
 class EngineConfig(metaclass=SingletonMeta):
     """Class to interact with the configuration files
 
@@ -335,27 +406,23 @@ class EngineConfig(metaclass=SingletonMeta):
         # Watchdog threading securities
         self._checksum_tracker = ChecksumTracker()
         self._config_files_lock = Lock()
-        self.new_config = Condition()
-        self._stop_event = Event()
-        self._task: Task | None = None
+        self._watchdog: ConfigWatchdog = ConfigWatchdog(self, self._checksum_tracker)
         self.configs_loaded: bool = False
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"EngineConfig(watchdog={self.started})"
 
     @property
-    def started(self) -> bool:
-        return self._task is not None
+    def watchdog(self) -> ConfigWatchdog:
+        return self._watchdog
 
     @property
-    def task(self) -> Task:
-        if self._task is None:
-            raise AttributeError("'task' has not been set up")
-        return self._task
+    def started(self) -> bool:
+        return self.watchdog.started
 
-    @task.setter
-    def task(self, thread: Task | None) -> None:
-        self._task = thread
+    @property
+    def new_config(self) -> Condition:
+        return self.watchdog.new_config
 
     @property
     def engine(self) -> "Engine":
@@ -672,75 +739,6 @@ class EngineConfig(metaclass=SingletonMeta):
         await self.load(CacheType.chaos)
         # Mark as loaded
         self.configs_loaded = True
-
-    # File watchdog
-    async def _watchdog_routine(self) -> None:
-        changed_paths = await self._checksum_tracker.get_changed()
-        if changed_paths:
-            private_path = self.get_file_path(ConfigType.private)
-            ecosystems_path = self.get_file_path(ConfigType.ecosystems)
-
-            if private_path in changed_paths:
-                self.logger.info(
-                    "Change in private configuration file detected. Updating it.")
-                await self.load(ConfigType.private)
-            if ecosystems_path in changed_paths:
-                self.logger.info(
-                    "Change in ecosystems configuration file detected. Updating it.")
-                await self.load(ConfigType.ecosystems)
-            async with self.new_config:
-                self.new_config.notify_all()
-                # This unblocks the engine loop. It will then refresh
-                #  ecosystems, update sun times, ecosystem lighting hours
-                #  and send the data if it is connected.
-
-    async def _watchdog_task(self) -> None:
-        if not self.configs_loaded:
-            raise RuntimeError(
-                "Configuration files need to be loaded in order to start "
-                "the config files watchdog. To do so, use the "
-                "`EngineConfig().initialize_configs()` method."
-            )
-
-        # Start the actual loop
-        sleep_period = self.app_config.CONFIG_WATCHER_PERIOD / 1000
-        self.logger.info(
-            f"Starting the configuration files watchdog loop. It will run every "
-            f"{sleep_period:.3f} s.")
-        while not self._stop_event.is_set():
-            try:
-                await self._watchdog_routine()
-            except Exception as e:  # pragma: no cover
-                self.logger.error(
-                    f"Encountered an error while running the watchdog routine. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
-            await event_wait(self._stop_event, sleep_period)
-
-    def start_watchdog(self) -> None:
-        if not self.configs_loaded:  # pragma: no cover
-            raise RuntimeError(
-                "Configuration files need to be loaded in order to start "
-                "the config files watchdog. To do so, use the "
-                "`EngineConfig().initialize_configs()` method."
-            )
-
-        if self.started:  # pragma: no cover
-            raise RuntimeError("Configuration files watchdog is already running")
-
-        self.logger.info("Starting the configuration files watchdog.")
-        self.task = asyncio.create_task(
-            self._watchdog_task(), name="config-watchdog_loop")
-        self.logger.debug("Configuration files watchdog successfully started.")
-
-    def stop_watchdog(self) -> None:
-        if not self.started:  # pragma: no cover
-            raise RuntimeError("Configuration files watchdog is not running")
-
-        self.logger.info("Stopping the configuration files watchdog.")
-        self._stop_event.set()
-        self.task = None
-        self.logger.debug("Configuration files watchdog successfully stopped.")
 
     @property
     def config_files_lock(self):

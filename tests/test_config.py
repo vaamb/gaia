@@ -86,11 +86,11 @@ class TestWatchdog:
         yaml = get_yaml()
 
         # Start watchdog and make sure it can only be started once
-        engine_config.start_watchdog()
+        engine_config.watchdog.start()
         with logs_content() as logs:
             assert "Starting the configuration files watchdog" in logs
         with pytest.raises(RuntimeError):
-            engine_config.start_watchdog()
+            engine_config.watchdog.start()
 
         # Test watchdog for ecosystems cfg
         engine_config.create_ecosystem("Already fading away")
@@ -109,11 +109,11 @@ class TestWatchdog:
             assert "Change in private configuration file detected" in logs
 
         # Stop watchdog and make sure it can only be stopped once
-        engine_config.stop_watchdog()
+        engine_config.watchdog.stop()
         with logs_content() as logs:
             assert "Stopping the configuration files watchdog" in logs
         with pytest.raises(RuntimeError):
-            engine_config.stop_watchdog()
+            engine_config.watchdog.stop()
 
         # Restore config files
         with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
