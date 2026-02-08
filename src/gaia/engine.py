@@ -84,7 +84,11 @@ class Engine(metaclass=SingletonMeta):
         # Sync initialization of the ecosystem
         engine = cls(engine_config)
         # Finalization of the initialization
-        await engine._async_init()
+        try:
+            await engine._async_init()
+        except Exception:
+            await engine.terminate()
+            raise
         return engine
 
     async def terminate(self) -> None:
