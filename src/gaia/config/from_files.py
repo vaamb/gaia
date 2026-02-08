@@ -1360,18 +1360,18 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def _compute_lighting_method(self) -> gv.LightingMethod:
         lighting_method: gv.LightingMethod = safe_enum_from_name(
             gv.LightingMethod, self.nycthemeral_cycle["lighting"])
+        # During testing, we just accept any lighting method
         if self.general.app_config.TESTING:
             return lighting_method
-        # If using fixed method, no check required
-        elif lighting_method & gv.LightingMethod.fixed:
+        # If using fixed method, no check is required
+        if lighting_method & gv.LightingMethod.fixed:
             return gv.LightingMethod.fixed
-        # Else, we need to make sure we have suntimes for "home"
+        # Otherwise, we need to make sure we have suntimes for "home"
+        sun_times = self.general.get_sun_times("home")
+        if sun_times is None:
+            return gv.LightingMethod.fixed
         else:
-            sun_times = self.general.get_sun_times("home")
-            if sun_times is None:
-                return gv.LightingMethod.fixed
-            else:
-                return gv.LightingMethod.elongate
+            return gv.LightingMethod.elongate
 
     @property
     def lighting_method(self) -> gv.LightingMethod:
