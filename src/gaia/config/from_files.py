@@ -1469,8 +1469,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__}: {e}`"
             )
         # Raw nycthemeral span is silently replaced if needed
-        self.nycthemeral_span_method
-        self.nycthemeral_span_hours
+        self._nycthemeral_span_hours = self._compute_nycthemeral_span_hours()
+        self._nycthemeral_span_method = self._compute_nycthemeral_span_method()
 
         # Log warnings for issues with raw lighting method
         lighting = self.nycthemeral_cycle["lighting"]
@@ -1483,8 +1483,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__}: {e}`"
             )
         # Raw lighting method span is silently replaced if needed
-        self.lighting_method
-        self.lighting_hours
+        self._lighting_method = self._compute_lighting_method()
+        self._lighting_hours = self._compute_lighting_hours()
 
         if (
                 send_info
