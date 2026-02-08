@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Event, sleep, Task
+from enum import Enum
 import logging
 import logging.config
 from math import ceil
@@ -34,6 +35,15 @@ SIGNALS = (
 )
 
 
+class EngineState(Enum):
+    """Enumeration of possible engine states."""
+    INITIALIZED = "initialized"
+    RUNNING = "running"
+    PAUSED = "paused"
+    STOPPED = "stopped"
+    TERMINATED = "terminated"
+
+
 class Engine(metaclass=SingletonMeta):
     """An Engine class that will coordinate several Ecosystem instances.
 
@@ -62,9 +72,8 @@ class Engine(metaclass=SingletonMeta):
         self._db_started: bool = False
         self.plugins_initialized: bool = False
         self._task: Task | None = None
-        self._running_event = Event()
         self._stop_event = Event()
-        self._shut_down: bool = False
+        self._state: EngineState | None = None
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
@@ -75,6 +84,7 @@ class Engine(metaclass=SingletonMeta):
             await self.init_plugins()
         for ecosystem_uid in self.config.ecosystems_uid:
             await self.add_ecosystem(ecosystem_uid)
+        self._state = EngineState.INITIALIZED
 
     @classmethod
     async def initialize(
@@ -97,7 +107,7 @@ class Engine(metaclass=SingletonMeta):
         Terminates ecosystems, stops plugins, watchdog, and background tasks.
         Must be called after stop() on a started engine.
         """
-        if self.started:
+        if self._state in (EngineState.RUNNING, EngineState.PAUSED):
             raise RuntimeError("Cannot terminate a running engine. Stop it first.")
         self.logger.info("Terminating Gaia ...")
         # Terminate the ecosystems
@@ -115,7 +125,7 @@ class Engine(metaclass=SingletonMeta):
         WebSocketHardware._websocket_manager = None
         self._db = None
         self._message_broker = None
-        self._shut_down = True
+        self._state = EngineState.TERMINATED
         self.logger.info("Gaia terminated.")
 
     @property
@@ -404,13 +414,19 @@ class Engine(metaclass=SingletonMeta):
             await self.event_handler.send_ecosystems_info(ecosystem_uids=ecosystem_uids)
 
     async def _loop(self) -> None:
-        while not self._stop_event.is_set():
+        while True:
             async with self.config.new_config:
                 await self.config.new_config.wait()
             if self.running:
                 await self.refresh_ecosystems(send_info=True)
-            if not self._stop_event.is_set():
-                await sleep(0.1)  # Allow to do other stuff if too much config changes
+            if self.started:
+                await sleep(0.1)  # Allow to do other stuff if there are too much config changes
+            else:
+                break
+
+    async def _notify_loop(self) -> None:
+        async with self.config.new_config:
+            self.config.new_config.notify_all()
 
     """
     API calls
@@ -420,9 +436,16 @@ class Engine(metaclass=SingletonMeta):
         return self._uid
 
     @property
+    def state(self) -> EngineState:
+        """Return the current engine state."""
+        if self._state is None:
+            raise RuntimeError("State can only be accessed once the engine has been initialized.")
+        return self._state
+
+    @property
     def started(self) -> bool:
         """Indicate if the Engine has been started."""
-        return self._task is not None
+        return self._state in (EngineState.RUNNING, EngineState.PAUSED)
 
     @property
     def running(self) -> bool:
@@ -436,22 +459,22 @@ class Engine(metaclass=SingletonMeta):
             - The EngineConfig config files watchdog.
             - The plugins (the database and event broker if enabled)
         """
-        return self._running_event.is_set() and not self._stop_event.is_set()
+        return self._state == EngineState.RUNNING
 
     @property
     def paused(self) -> bool:
-        """Indicate if the Engine has paused its background tasks."""
-        return self.started and not self._running_event.is_set()
-
-    @property
-    def stopping(self) -> bool:
-        """Indicate if the Engine is stopping its background tasks."""
-        return self._stop_event.is_set() and not self.stopped
+        """Indicate if the Engine has paused ecosystem management."""
+        return self._state == EngineState.PAUSED
 
     @property
     def stopped(self) -> bool:
-        """Indicate if the Engine background tasks have been stopped and cleared."""
-        return self._shut_down
+        """Indicate if the Engine has stopped ecosystem management."""
+        return self._state == EngineState.STOPPED
+
+    @property
+    def terminated(self) -> bool:
+        """Indicate if the Engine background tasks have been stopped."""
+        return self._state == EngineState.TERMINATED
 
     @property
     def ecosystems(self) -> dict[str, Ecosystem]:
@@ -649,12 +672,12 @@ class Engine(metaclass=SingletonMeta):
         on the 'ecosystem.cfg' file and refresh the Ecosystems when changes are
         made in the file.
         """
-        if self.started:
-            raise RuntimeError("Engine can only be started once.")
-        if self.running:  # pragma: no cover
+        if self.running:
             raise RuntimeError("Engine can only be started once.")
         if self.stopped:
-            raise RuntimeError("Cannot restart a shut down engine.")
+            raise RuntimeError("Cannot restart a stopped engine.")
+        if self.terminated:
+            raise RuntimeError("Cannot restart a terminated engine.")
         self.logger.info("Starting Gaia ...")
         if self.plugins_needed and not self.plugins_initialized:
             raise RuntimeError(
@@ -670,42 +693,36 @@ class Engine(metaclass=SingletonMeta):
             await self.start_plugins()
         # Start the engine thread
         self.task = asyncio.create_task(self._loop(), name="engine-loop")
-        # Refresh ecosystems a first time
         await sleep(0)  # Allow _loop() to start
-        await self._resume()
+        # Set the state to running before unlocking the loop
+        self._state = EngineState.RUNNING
+        # Send a config signal so the loop unlocks and refreshes the ecosystems
+        await self._notify_loop()
+        self.scheduler.resume()
         self.logger.info("Gaia started.")
 
     async def wait(self):
-        if self.running:
-            self.logger.info("Running ...")
-            while self.running:
-                await sleep(0.5)
-        else:
+        if not self.started:
             raise RuntimeError("Gaia needs to be started in order to wait.")
+        self.logger.info("Running ...")
+        while not self._stop_event.is_set():
+            await sleep(0.5)
 
     def pause(self) -> None:
         if not self.running:
             raise RuntimeError("Cannot pause a non-started engine")
         self.logger.info("Pausing Gaia ...")
         self.scheduler.pause()
-        # Set the events so the loop continues but doesn't update anything
-        self._running_event.clear()
-
-    async def _resume(self) -> None:
-        if self.stopped:
-            raise RuntimeError("Cannot resume a stopped engine.")
-        # Set the events
-        self._running_event.set()
-        # Send a config signal so the loop unlocks and refreshed the ecosystems
-        async with self.config.new_config:
-            self.config.new_config.notify_all()
-        self.scheduler.resume()
+        self._state = EngineState.PAUSED
 
     async def resume(self) -> None:
-        if self.running:
-            raise RuntimeError("Cannot resume a running engine")
+        if not self._state == EngineState.PAUSED:
+            raise RuntimeError("Cannot resume a non-paused engine")
         self.logger.info("Resuming Gaia ...")
-        await self._resume()
+        # Send a config signal so the loop unlocks and refreshes the ecosystems
+        await self._notify_loop()
+        self.scheduler.resume()
+        self._state = EngineState.RUNNING
 
     def _handle_stop_signal(self) -> None:
         self.logger.info("Received a 'stop' signal")
@@ -719,21 +736,19 @@ class Engine(metaclass=SingletonMeta):
         """
         if not self.started:
             raise RuntimeError("Cannot stop a non-started engine.")
-        if self.stopped:
-            raise RuntimeError("Cannot stop an already stopped engine.")
-        if self.running:
-            self.pause()
+        if self.terminated:
+            raise RuntimeError("Cannot stop an already terminated engine.")
         self.logger.info("Stopping Gaia ...")
-        # Set stop event
+        # Set stop event (for wait() and signal handler communication)
         self._stop_event.set()
         # Send a config signal so the loop unlocks and stops
-        async with self.config.new_config:
-            self.config.new_config.notify_all()
+        await self._notify_loop()
         self.task.cancel()
         self.task = None
         # Stop ecosystems
         for ecosystem_uid in [*self.ecosystems_started]:
             await self.stop_ecosystem(ecosystem_uid)
+        self._state = EngineState.STOPPED
         self.logger.info("Gaia stopped.")
 
     def add_signal_handler(self) -> None:

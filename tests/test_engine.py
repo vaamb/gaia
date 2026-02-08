@@ -167,8 +167,8 @@ async def test_engine_states(engine: Engine, logs_content):
     assert not engine.started
     assert not engine.running
     assert not engine.paused
-    assert not engine.stopping
     assert not engine.stopped
+    assert not engine.terminated
 
     await engine.start()
     with logs_content() as logs:
@@ -176,8 +176,8 @@ async def test_engine_states(engine: Engine, logs_content):
     assert engine.started
     assert engine.running
     assert not engine.paused
-    assert not engine.stopping
     assert not engine.stopped
+    assert not engine.terminated
     with pytest.raises(RuntimeError):
         await engine.resume()
 
@@ -187,8 +187,8 @@ async def test_engine_states(engine: Engine, logs_content):
     assert engine.started
     assert not engine.running
     assert engine.paused
-    assert not engine.stopping
     assert not engine.stopped
+    assert not engine.terminated
     with pytest.raises(RuntimeError):
         engine.pause()
 
@@ -198,8 +198,8 @@ async def test_engine_states(engine: Engine, logs_content):
     assert engine.started
     assert engine.running
     assert not engine.paused
-    assert not engine.stopping
     assert not engine.stopped
+    assert not engine.terminated
     with pytest.raises(RuntimeError):
         await engine.resume()
 
@@ -212,8 +212,8 @@ async def test_engine_states(engine: Engine, logs_content):
     assert not engine.started
     assert not engine.running
     assert not engine.paused
-    assert not engine.stopping
-    assert engine.stopped
+    assert not engine.stopped
+    assert engine.terminated
     with pytest.raises(RuntimeError):
         await engine.resume()
 
