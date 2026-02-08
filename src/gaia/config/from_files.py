@@ -1077,24 +1077,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             f"engine_config={self._engine_config})"
         )
 
+    # ---------------------------------------------------------------------------
+    #   Properties and common utilities
+    # ---------------------------------------------------------------------------
     @property
     def __dict(self) -> EcosystemConfigDict:
         return self._engine_config.ecosystems_config_dict[self.uid]
-
-    def as_dict(self) -> EcosystemConfigDict:
-        return self.__dict
-
-    async def save(self) -> None:
-        await self._engine_config.save(ConfigType.ecosystems)
-
-    def reset_nycthemeral_caches(self) -> None:
-        self._nycthemeral_span_method = None
-        self._nycthemeral_span_hours = None
-        self._lighting_method = None
-        self._lighting_hours = None
-
-    def reset_caches(self) -> None:
-        self.reset_nycthemeral_caches()
 
     @property
     def general(self) -> EngineConfig:
@@ -1116,7 +1104,34 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def status(self, value: bool) -> None:
         self.__dict["status"] = value
 
-    """Parameters related to sub-routines control"""
+    async def save(self) -> None:
+        await self._engine_config.save(ConfigType.ecosystems)
+
+    def reset_nycthemeral_caches(self) -> None:
+        self._nycthemeral_span_method = None
+        self._nycthemeral_span_hours = None
+        self._lighting_method = None
+        self._lighting_hours = None
+
+    def reset_caches(self) -> None:
+        self.reset_nycthemeral_caches()
+
+    async def _send_payload_if_possible(self, payload_type: PayloadName) -> None:
+        """Send payload if engine is connected, logging any errors."""
+        if not (self.general.engine_set_up and self.general.engine.message_broker_started):
+            return
+        try:
+            await self.general.engine.event_handler.send_payload_if_connected(
+                payload_type, ecosystem_uids=[self.uid])
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while sending {payload_type}. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+            )
+
+    # ---------------------------------------------------------------------------
+    #   Ecosystem management (subroutine and other capabilities)
+    # ---------------------------------------------------------------------------
     @property
     def managements(self) -> gv.ManagementConfigDict:
         return self.__dict["management"]
@@ -1171,20 +1186,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if self.get_management(subroutine)
         ]
 
-    """EnvironmentConfig related parameters"""
-    async def _send_payload_if_possible(self, payload_type: PayloadName) -> None:
-        """Send payload if engine is connected, logging any errors."""
-        if not (self.general.engine_set_up and self.general.engine.message_broker_started):
-            return
-        try:
-            await self.general.engine.event_handler.send_payload_if_connected(
-                payload_type, ecosystem_uids=[self.uid])
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an error while sending {payload_type}. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-
+    # ---------------------------------------------------------------------------
+    #   Environment parameters
+    # ---------------------------------------------------------------------------
     @property
     def environment(self) -> EnvironmentConfigDict:
         """
@@ -1196,6 +1200,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.__dict["environment"] = EnvironmentConfigValidator().model_dump()
             return self.__dict["environment"]
 
+    # ---------------------------------------------------------------------------
+    #      Nycthemeral cycle parameters
+    # ---------------------------------------------------------------------------
     @property
     def nycthemeral_cycle(self) -> gv.NycthemeralCycleConfigDict:
         """
@@ -1501,6 +1508,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if send_info:
             await self._send_payload_if_possible("nycthemeral_info")
 
+    # ---------------------------------------------------------------------------
+    #      Chaos parameters
+    # ---------------------------------------------------------------------------
     @property
     def chaos_config(self) -> gv.ChaosConfig:
         return gv.ChaosConfig(**self.environment["chaos"])
@@ -1579,7 +1589,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "time_window": self.chaos_time_window,
         })
 
-    """Climate-related parameters"""
+    # ---------------------------------------------------------------------------
+    #      Climate parameters
+    # ---------------------------------------------------------------------------
     @property
     def climate(self) -> dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]:
         """
@@ -1650,7 +1662,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
 
-    """Weather-related parameters"""
+    # ---------------------------------------------------------------------------
+    #      Weather parameters
+    # ---------------------------------------------------------------------------
     @property
     def weather(self) -> dict[gv.WeatherParameter, gv.AnonymousWeatherConfigDict]:
         """
@@ -1715,7 +1729,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"'{self.name}' in ecosystems configuration file"
             )
 
-    """Actuator couples-related parameters"""
+    # ---------------------------------------------------------------------------
+    #   Actuator couples
+    # ---------------------------------------------------------------------------
     def get_climate_actuators(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
         return {
             **defaults.actuator_couples,
@@ -1755,7 +1771,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             for actuator_group in self.get_actuator_to_parameter().keys()
         }
 
-    """Parameters related to IO"""
+    # ---------------------------------------------------------------------------
+    #   Hardware/IO parameters
+    # ---------------------------------------------------------------------------
     @property
     def IO_dict(self) -> dict[str, gv.AnonymousHardwareConfigDict]:
         """
@@ -1927,7 +1945,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def supported_hardware() -> list:
         return [h for h in hardware_models]
 
-    """Plants-related methods"""
+    # ---------------------------------------------------------------------------
+    #   Plants parameters
+    # ---------------------------------------------------------------------------
     @property
     def plants_dict(self) -> dict[str, gv.AnonymousPlantConfigDict]:
         """
