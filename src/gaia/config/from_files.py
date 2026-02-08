@@ -402,25 +402,11 @@ class EngineConfig(metaclass=SingletonMeta):
                 "`engine_config.with config_files_lock:` block"
             )
 
-    async def _load_ecosystems_config(self) -> None:
-        # /!\ must be used with the config_files_lock acquired
-        self._check_files_lock_acquired()
-        # Load raw data
-        config_path = self.get_file_path(ConfigType.ecosystems)
-        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
-        # Validate the data structure
-        try:
-            validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
-        except pydantic.ValidationError as e:  # pragma: no cover
-            self.logger.error(
-                f"Could not load ecosystems configuration file. "
-                f"ERROR msg(s): `{format_pydantic_error(e)}`."
-            )
-            raise e
-
-        # Validate the data logic
+    async def _validate_ecosystems_logic(
+            self, ecosystem_configs: dict[str, EcosystemConfigDict],
+    ) -> dict[str, EcosystemConfigDict]:
         unfixable_error: bool = False
-        for ecosystem_uid, ecosystem_cfg in validated.items():
+        for ecosystem_uid, ecosystem_cfg in ecosystem_configs.items():
             ecosystem_cfg: EcosystemConfigDict
             ecosystem_name: str = ecosystem_cfg["name"]
             # Check hardware config
@@ -478,6 +464,25 @@ class EngineConfig(metaclass=SingletonMeta):
                 "Could not validate ecosystems config. Check the log for more "
                 "details."
             )
+        return ecosystem_configs
+
+    async def _load_ecosystems_config(self) -> None:
+        # /!\ must be used with the config_files_lock acquired
+        self._check_files_lock_acquired()
+        # Load raw data
+        config_path = self.get_file_path(ConfigType.ecosystems)
+        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
+        # Validate the data structure
+        try:
+            validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
+        except pydantic.ValidationError as e:  # pragma: no cover
+            self.logger.error(
+                f"Could not load ecosystems configuration file. "
+                f"ERROR msg(s): `{format_pydantic_error(e)}`."
+            )
+            raise e
+        # Validate the data logic
+        validated = await self._validate_ecosystems_logic(validated)
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
         # Dump the config as a yaml file as it may have been updated by pydantic
