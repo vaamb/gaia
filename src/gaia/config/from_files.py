@@ -1081,7 +1081,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     #   Properties and common utilities
     # ---------------------------------------------------------------------------
     @property
-    def __dict(self) -> EcosystemConfigDict:
+    def _config_dict(self) -> EcosystemConfigDict:
         return self._engine_config.ecosystems_config_dict[self.uid]
 
     @property
@@ -1090,19 +1090,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def name(self) -> str:
-        return self.__dict["name"]
+        return self._config_dict["name"]
 
     @name.setter
     def name(self, value: str) -> None:
-        self.__dict["name"] = value
+        self._config_dict["name"] = value
 
     @property
     def status(self) -> bool:
-        return self.__dict["status"]
+        return self._config_dict["status"]
 
     @status.setter
     def status(self, value: bool) -> None:
-        self.__dict["status"] = value
+        self._config_dict["status"] = value
 
     async def save(self) -> None:
         await self._engine_config.save(ConfigType.ecosystems)
@@ -1134,11 +1134,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     # ---------------------------------------------------------------------------
     @property
     def managements(self) -> gv.ManagementConfigDict:
-        return self.__dict["management"]
+        return self._config_dict["management"]
 
     @managements.setter
     def managements(self, value: gv.ManagementConfigDict) -> None:
-        self.__dict["management"] = gv.ManagementConfig(**value).model_dump()
+        self._config_dict["management"] = gv.ManagementConfig(**value).model_dump()
 
     @property
     def management_flag(self) -> int:
@@ -1177,7 +1177,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 self.logger.warning(
                     f"{management_name.upper()} management has unmet dependencies: "
                     f"{dep}. This might lead to issues if it is not enabled.")
-        self.__dict["management"][management_name] = value
+        self._config_dict["management"][management_name] = value
 
     def get_subroutines_enabled(self) -> list[str]:
         return [
@@ -1195,10 +1195,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Returns the environment config for the ecosystem
         """
         try:
-            return self.__dict["environment"]
+            return self._config_dict["environment"]
         except KeyError:  # pragma: no cover
-            self.__dict["environment"] = EnvironmentConfigValidator().model_dump()
-            return self.__dict["environment"]
+            self._config_dict["environment"] = EnvironmentConfigValidator().model_dump()
+            return self._config_dict["environment"]
 
     # ---------------------------------------------------------------------------
     #      Nycthemeral cycle parameters
@@ -1298,7 +1298,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """Validate method and log warning if it will fall back to 'fixed'."""
         try:
             self.validate_nycthemeral_method(
-                method, self.__dict, self.general.private_config["places"])
+                method, self._config_dict, self.general.private_config["places"])
         except ValidationError as e:
             method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
             self.logger.warning(
@@ -1335,7 +1335,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
         self.validate_nycthemeral_method(
-            method, self.__dict, self.general.private_config["places"])
+            method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
@@ -1425,7 +1425,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
         self.validate_nycthemeral_method(
-            method, self.__dict, self.general.private_config["places"])
+            method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours(send_info=send_info)
@@ -1780,10 +1780,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Returns the IOs (hardware) present in the ecosystem
         """
         try:
-            return self.__dict["IO"]
+            return self._config_dict["IO"]
         except KeyError:  # pragma: no cover
-            self.__dict["IO"] = {}
-            return self.__dict["IO"]
+            self._config_dict["IO"] = {}
+            return self._config_dict["IO"]
 
     def get_IO_group_uids(
         self,
@@ -1954,10 +1954,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Returns the plants present in the ecosystem
         """
         try:
-            return self.__dict["plants"]
+            return self._config_dict["plants"]
         except KeyError:  # pragma: no cover
-            self.__dict["plants"] = {}
-            return self.__dict["plants"]
+            self._config_dict["plants"] = {}
+            return self._config_dict["plants"]
 
     def create_new_plant(
             self,
