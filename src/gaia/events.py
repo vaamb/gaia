@@ -375,7 +375,7 @@ class Events(AsyncEventHandler):
 
     async def on_disconnect(self, *args) -> None:  # noqa
         self.logger.debug("Received a disconnection request.")
-        if self.engine.stopping:
+        if self.engine.stopped:
             self.logger.info("Engine requested to disconnect from the broker.")
             return  # The Engine takes care to shut down the scheduler and the jobs running
         elif self.registered:
