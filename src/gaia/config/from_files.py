@@ -1379,13 +1379,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self._lighting_method = self._compute_lighting_method()
         return self._lighting_method
 
-    @lighting_method.setter
-    def lighting_method(self, light_method: gv.LightingMethod) -> None:
-        if not self.general.app_config.TESTING:
-            raise AttributeError("can't set attribute 'light_method'")
-        self.nycthemeral_cycle["lighting"] = light_method
-        self._lighting_method = None
-
     async def set_lighting_method(
             self,
             method: gv.LightingMethod,
