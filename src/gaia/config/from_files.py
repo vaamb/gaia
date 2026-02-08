@@ -485,8 +485,10 @@ class EngineConfig(metaclass=SingletonMeta):
         validated = await self._validate_ecosystems_logic(validated)
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
+        # Update the checksum
+        self._config_files_checksum[config_path] = await self._file_checksum(config_path)
         # Dump the config as a yaml file as it may have been updated by pydantic
-        await self._dump_ecosystems_config()
+        #await self._dump_ecosystems_config()
         # Reset ecosystems caches
         for ecosystem_config in self.ecosystems_config.values():
             ecosystem_config.reset_caches()
@@ -508,6 +510,8 @@ class EngineConfig(metaclass=SingletonMeta):
             raise e
         # Room for possible future data logic validation
         self._private_config = validated
+        # Update the checksum
+        self._config_files_checksum[config_path] = await self._file_checksum(config_path)
 
     async def _load_chaos_memory(self) -> None:
         self.logger.debug("Trying to load chaos memory.")
@@ -635,11 +639,6 @@ class EngineConfig(metaclass=SingletonMeta):
                 "Creating a default file.")
             async with self.config_files_lock:
                 await self._create_ecosystems_config_file()
-        # Update checksums
-        self._config_files_checksum[private_cfg_path] = \
-            await run_sync(_file_checksum, private_cfg_path)
-        self._config_files_checksum[ecosystems_cfg_path] = \
-            await run_sync(_file_checksum, ecosystems_cfg_path)
         # Load chaos cache
         await self.load(CacheType.chaos)
         # Mark as loaded
@@ -669,17 +668,13 @@ class EngineConfig(metaclass=SingletonMeta):
                 if ConfigType.private in changed_configs:
                     self.logger.info(
                         "Change in private configuration file detected. Updating it.")
+                    # Data loading will update the checksum
                     await self._load_private_config()
-                    cfg_path = self.get_file_path(ConfigType.private)
-                    self._config_files_checksum[cfg_path] = \
-                        await run_sync(_file_checksum, cfg_path)
                 if ConfigType.ecosystems in changed_configs:
                     self.logger.info(
                         "Change in ecosystems configuration file detected. Updating it.")
+                    # Data loading will update the checksum
                     await self._load_ecosystems_config()
-                    cfg_path = self.get_file_path(ConfigType.ecosystems)
-                    self._config_files_checksum[cfg_path] = \
-                        await run_sync(_file_checksum, cfg_path)
                 async with self.new_config:
                     self.new_config.notify_all()
                     # This unblocks the engine loop. It will then refresh
