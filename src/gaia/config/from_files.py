@@ -681,7 +681,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     #  ecosystems, update sun times, ecosystem lighting hours
                     #  and send the data if it is connected.
 
-    async def _watchdog_loop(self) -> None:
+    async def _watchdog_task(self) -> None:
         if not self.configs_loaded:
             raise RuntimeError(
                 "Configuration files need to be loaded in order to start "
@@ -717,7 +717,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
         self.logger.info("Starting the configuration files watchdog.")
         self.task = asyncio.create_task(
-            self._watchdog_loop(), name="config-watchdog_loop")
+            self._watchdog_task(), name="config-watchdog_loop")
         self.logger.debug("Configuration files watchdog successfully started.")
 
     def stop_watchdog(self) -> None:
