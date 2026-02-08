@@ -94,7 +94,7 @@ class TestWatchdog:
 
         # Test watchdog for ecosystems cfg
         engine_config.create_ecosystem("Already fading away")
-        with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
+        with open(engine_config.gaia_dir / ConfigType.ecosystems.value, "w") as cfg:
             yaml.dump(engine_config.ecosystems_config_dict, cfg)
         await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
         with logs_content() as logs:
@@ -102,7 +102,7 @@ class TestWatchdog:
 
         # Test watchdog for private cfg
         engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
-        with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
+        with open(engine_config.gaia_dir / ConfigType.private.value, "w") as cfg:
             yaml.dump(engine_config.private_config, cfg)
         await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
         with logs_content() as logs:
@@ -116,9 +116,9 @@ class TestWatchdog:
             engine_config.stop_watchdog()
 
         # Restore config files
-        with open(engine_config.config_dir / ConfigType.ecosystems.value, "w") as cfg:
+        with open(engine_config.gaia_dir / ConfigType.ecosystems.value, "w") as cfg:
             yaml.dump(ecosystem_info, cfg)
-        with open(engine_config.config_dir / ConfigType.private.value, "w") as cfg:
+        with open(engine_config.gaia_dir / ConfigType.private.value, "w") as cfg:
             yaml.dump({}, cfg)
 
 

@@ -372,11 +372,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 return path
 
     @property
-    def base_dir(self) -> Path:
-        return self._get_dir("DIR")
-
-    @property
-    def config_dir(self) -> Path:
+    def gaia_dir(self) -> Path:
         return self._get_dir("DIR")
 
     @property
@@ -389,7 +385,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def get_file_path(self, file_type: ConfigType | CacheType) -> Path:
         if isinstance(file_type, ConfigType):
-            return self.config_dir / file_type.value
+            return self.gaia_dir / file_type.value
         if isinstance(file_type, CacheType):
             return self.cache_dir / file_type.value
         raise ValueError(f"Invalid file type: {file_type}")
