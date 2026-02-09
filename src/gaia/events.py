@@ -160,7 +160,6 @@ class Events(AsyncEventHandler):
         kwargs["namespace"] = "aggregator"
         super().__init__(**kwargs)
         self.engine: Engine = engine
-        self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
         self._resent_initialization_data: bool = False
         self._last_heartbeat: float = monotonic()
@@ -185,6 +184,10 @@ class Events(AsyncEventHandler):
             self._dispatcher.connected
             and monotonic() - self._last_heartbeat < 30.0
         )
+
+    @property
+    def ecosystems(self) -> dict[str, Ecosystem]:
+        return self.engine.ecosystems
 
     # ---------------------------------------------------------------------------
     #   Background jobs
@@ -582,15 +585,14 @@ class Events(AsyncEventHandler):
                 "parameter 'USE_DATABASE' to 'True'.")
         from gaia.database.models import ActuatorBuffer, SensorBuffer
 
+        buffers = [
+            (SensorBuffer, "buffered_sensors_data"),
+            (ActuatorBuffer, "buffered_actuators_data"),
+        ]
         async with self.db.scoped_session() as session:
-            sensor_buffer_iterator = await SensorBuffer.get_buffered_data(session)
-            async for payload in sensor_buffer_iterator:
-                payload_dict: gv.BufferedSensorsDataPayloadDict = payload.model_dump()
-                await self.emit(event="buffered_sensors_data", data=payload_dict)
-            actuator_buffer_iterator = await ActuatorBuffer.get_buffered_data(session)
-            async for payload in actuator_buffer_iterator:
-                payload_dict: gv.BufferedActuatorsStatePayloadDict = payload.model_dump()
-                await self.emit(event="buffered_actuators_data", data=payload_dict)
+            for buffer_cls, event_name in buffers:
+                async for payload in await buffer_cls.get_buffered_data(session):
+                    await self.emit(event=event_name, data=payload.model_dump())
 
     @validate_payload(gv.RequestResult)
     async def on_buffered_data_ack(self, data: gv.RequestResultDict) -> None:
