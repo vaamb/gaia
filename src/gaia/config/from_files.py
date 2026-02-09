@@ -448,12 +448,6 @@ class EngineConfig(metaclass=SingletonMeta):
     def app_config(self) -> GaiaConfig:
         return self._app_config
 
-    @app_config.setter
-    def app_config(self, app_config: GaiaConfig) -> None:
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'app_config'")
-        self._app_config = app_config
-
     def _get_dir(self, dir_name: str) -> Path:
         try:
             return self._dirs[dir_name]

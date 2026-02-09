@@ -143,7 +143,7 @@ async def engine_config(engine_config_master: EngineConfig, logs_content) -> Yie
     try:
         yield engine_config_master
     finally:
-        engine_config_master.app_config = app_config
+        engine_config_master._app_config = app_config
         engine_config_master.ecosystems_config_dict = ecosystem_config
         engine_config_master.private_config = private_config
         engine_config_master.chaos_memory = {}
