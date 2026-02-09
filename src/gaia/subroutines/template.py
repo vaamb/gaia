@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import logging
 import typing as t
 from time import monotonic
-from typing import Generic, Type, TypeVar
+from typing import Any, Generic, Type, TypeVar
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -12,10 +12,12 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.ecosystem import Ecosystem
 
 
-HARDWARE_TYPE = TypeVar("HARDWARE_TYPE")
+HardwareT = TypeVar("HardwareT")
 
 
-class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
+class SubroutineTemplate(ABC, Generic[HardwareT]):
+    _hardware_choices: dict[str, Type[HardwareT]]
+
     def __init__(self, ecosystem: Ecosystem) -> None:
         """Base class to manage an ecosystem subroutine"""
         self._ecosystem: Ecosystem = ecosystem
@@ -24,13 +26,13 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{eco_name}.{self.name}")
         self.logger.debug("Initializing ...")
-        self._hardware_choices: dict[str, Type[Type[HARDWARE_TYPE]]] = {}
         self._started: bool = False
 
-    def _finish__init__(self) -> None:
-        if not self._hardware_choices:
-            raise ValueError("No hardware choices specified.")
-        self.logger.debug("Initialization successfully.")
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if getattr(cls, "_hardware_choices", None) is None:
+            raise TypeError(
+                f"{cls.__name__} must define '_hardware_choices' class attribute")
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
@@ -81,12 +83,8 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         return self._compute_if_manageable()
 
     @property
-    def hardware_choices(self) -> dict[str, Type[HARDWARE_TYPE]]:
+    def hardware_choices(self) -> dict[str, Type[HardwareT]]:
         return self._hardware_choices
-
-    @hardware_choices.setter
-    def hardware_choices(self, choices: dict[str, Type[HARDWARE_TYPE]]) -> None:
-        self._hardware_choices = choices
 
     async def routine(self) -> None:
         name = self.__class__.__name__
@@ -104,7 +102,7 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         raise NotImplementedError("This method must be implemented in a subclass.")
 
     @property
-    def hardware(self) -> dict[str, HARDWARE_TYPE]:
+    def hardware(self) -> dict[str, HardwareT]:
         return {
             uid: self.ecosystem.hardware[uid]
             for uid in self.get_hardware_needed_uid()

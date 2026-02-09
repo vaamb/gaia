@@ -2,6 +2,8 @@ from gaia.subroutines.template import SubroutineTemplate
 
 
 class Dummy(SubroutineTemplate):
+    _hardware_choices = {}
+
     manageable_state = True
 
     def _compute_if_manageable(self) -> bool:
