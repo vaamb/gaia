@@ -35,6 +35,11 @@ if t.TYPE_CHECKING:  # pragma: no cover
 PT = TypeVar("PT", dict, list[dict])
 
 
+ENGINE_PAYLOADS: frozenset[PayloadName] = frozenset({"places_list"})
+HEARTBEAT_TIMEOUT: float = 30.0
+PING_INTERVAL: float = 15.0
+
+
 PayloadName = Literal[
     "actuators_data",
     "base_info",
@@ -49,9 +54,6 @@ PayloadName = Literal[
     "sensors_data",
     "weather",
 ]
-
-
-ENGINE_PAYLOADS: frozenset[PayloadName] = frozenset({"places_list"})
 
 
 payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
@@ -182,7 +184,7 @@ class Events(AsyncEventHandler):
     def is_connected(self) -> bool:
         return (
             self._dispatcher.connected
-            and monotonic() - self._last_heartbeat < 30.0
+            and monotonic() - self._last_heartbeat < HEARTBEAT_TIMEOUT
         )
 
     @property
@@ -207,7 +209,7 @@ class Events(AsyncEventHandler):
         while True:
             start = monotonic()
             await self.ping()
-            sleep_time = max(15 - (monotonic() - start), 0.01)
+            sleep_time = max(PING_INTERVAL - (monotonic() - start), 0.01)
             await sleep(sleep_time)
 
     async def ping(self) -> None:
