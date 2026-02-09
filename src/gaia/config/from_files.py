@@ -951,9 +951,12 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def refresh_sun_times(self) -> None:
         self.logger.info("Updating sun times.")
+        places = set(self._sun_times.keys())
+        self._sun_times.clear()
         places_ok: set[str] = set()
         places_failed: set[str] = set()
-        for place in self.places.keys():
+        places.update(self.places.keys())
+        for place in places:
             ok = self.get_sun_times(place)
             if ok:
                 places_ok.add(place)
