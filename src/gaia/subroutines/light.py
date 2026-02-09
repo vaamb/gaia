@@ -13,7 +13,7 @@ import gaia_validators as gv
 from gaia.actuator_handler import HystericalPID
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Actuator, LightSensor
+from gaia.hardware.abc import Actuator, Dimmer, LightSensor
 from gaia.subroutines.template import SubroutineTemplate
 from gaia.utils import is_time_between
 
