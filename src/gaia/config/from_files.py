@@ -1532,15 +1532,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self._lighting_hours = self._compute_lighting_hours()
         return self._lighting_hours
 
-    @lighting_hours.setter
-    def lighting_hours(self, lighting_hours: gv.LightingHours) -> None:
-        if not self.general.app_config.TESTING:
-            raise AttributeError(
-                "'lighting_hours' can only be set when 'TESTING' is True.")
-        self._lighting_hours = lighting_hours
-        # DO NOT USE THIS as it will overwrite the newly set value
-        # self.reset_nycthemeral_caches()
-
     async def refresh_lighting_hours(self, send_info: bool = True) -> None:
         self.logger.info("Refreshing lighting hours.")
 
