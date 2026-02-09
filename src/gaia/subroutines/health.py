@@ -21,7 +21,7 @@ from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.database.models import HealthBuffer, HealthRecord
+    from gaia.database.models import SensorBuffer, SensorRecord
     from gaia.subroutines.light import Light
 
 
@@ -233,7 +233,7 @@ class Health(SubroutineTemplate[Camera]):
         else:
             self.plants_health = gv.Empty()
 
-    async def _log_data(self, db_model: Type[HealthBuffer | HealthRecord]) -> None:
+    async def _log_data(self, db_model: Type[SensorBuffer | SensorRecord]) -> None:
         async with self.ecosystem.engine.db.scoped_session() as session:
             for record in self._plants_health:
                 session.add(
@@ -251,9 +251,9 @@ class Health(SubroutineTemplate[Camera]):
         if not self.ecosystem.engine.use_db:
             return
 
-        from gaia.database.models import HealthRecord
+        from gaia.database.models import SensorRecord
 
-        await self._log_data(HealthRecord)
+        await self._log_data(SensorRecord)
 
     async def send_data(self) -> None:
         # Check if we use the message broker
@@ -269,9 +269,9 @@ class Health(SubroutineTemplate[Camera]):
 
         finally:
             if not sent and self.ecosystem.engine.use_db:
-                from gaia.database.models import HealthBuffer
+                from gaia.database.models import SensorBuffer
 
-                await self._log_data(HealthBuffer)
+                await self._log_data(SensorBuffer)
 
     async def schedule_send_data(self) -> None:
         if not(

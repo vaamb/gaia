@@ -288,10 +288,10 @@ class Engine(metaclass=SingletonMeta):
     async def _reset_db_exchanges_uuid(self) -> None:
         # Reset buffered data's "exchange_uuid"
         from gaia.database.models import (
-            ActuatorBuffer, DataBufferMixin, HealthBuffer, SensorBuffer)
+            ActuatorBuffer, DataBufferMixin, SensorBuffer)
 
         async with self.db.scoped_session() as session:
-            for db_model in (ActuatorBuffer, HealthBuffer, SensorBuffer):
+            for db_model in (ActuatorBuffer, SensorBuffer):
                 db_model: DataBufferMixin
                 await db_model.reset_ongoing_exchanges(session)
 
