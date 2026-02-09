@@ -603,11 +603,12 @@ class Events(AsyncEventHandler):
         from gaia.database.models import ActuatorBuffer, DataBufferMixin, SensorBuffer
 
         async with self.db.scoped_session() as session:
-            for db_model in (ActuatorBuffer, SensorBuffer):
-                db_model: DataBufferMixin
-                if data["status"] == gv.Result.success:
+            if data["status"] == gv.Result.success:
+                for db_model in (ActuatorBuffer, SensorBuffer):
+                    db_model: DataBufferMixin
                     await db_model.mark_exchange_as_success(session, data["uuid"])
-                else:
+            else:
+                for db_model in (ActuatorBuffer, SensorBuffer):
                     self.logger.error(
                         f"Encountered an error while treating buffered data "
                         f"exchange `{data['uuid']}`. ERROR msg: "
