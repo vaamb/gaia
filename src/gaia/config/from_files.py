@@ -808,20 +808,6 @@ class EngineConfig(metaclass=SingletonMeta):
     def ecosystems_name(self) -> list:
         return [i["name"] for i in self.ecosystems_config_dict.values()]
 
-    @property
-    def id_to_name_dict(self) -> dict:
-        return {
-            ecosystem_uid: eco_cfg_dict["name"]
-            for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
-        }
-
-    @property
-    def name_to_id_dict(self) -> dict:
-        return {
-            eco_cfg_dict["name"]: ecosystem_uid
-            for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
-        }
-
     def get_ecosystems_expected_to_run(self) -> set[str]:
         return set([
             ecosystem_uid
@@ -837,13 +823,10 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def get_IDs(self, ecosystem_id: str) -> gv.IDs:
         if ecosystem_id in self.ecosystems_uid:
-            ecosystem_uid = ecosystem_id
-            ecosystem_name = self.id_to_name_dict[ecosystem_id]
-            return gv.IDs(ecosystem_uid, ecosystem_name)
-        elif ecosystem_id in self.ecosystems_name:
-            ecosystem_uid = self.name_to_id_dict[ecosystem_id]
-            ecosystem_name = ecosystem_id
-            return gv.IDs(ecosystem_uid, ecosystem_name)
+            return gv.IDs(ecosystem_id, self.ecosystems_config_dict[ecosystem_id]["name"])
+        for ecosystem_uid, ecosystem in self.ecosystems_config_dict.items():
+            if ecosystem["name"] == ecosystem_id:
+                return gv.IDs(ecosystem_uid, ecosystem["name"])
         raise EcosystemNotFound(
             f"Ecosystem with id '{ecosystem_id}' not found. 'ecosystem_id' parameter "
             f"should either be an ecosystem uid or an ecosystem name present in "
