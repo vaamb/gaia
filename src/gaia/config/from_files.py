@@ -707,7 +707,7 @@ class EngineConfig(metaclass=SingletonMeta):
     # Initialize configs
     async def _create_ecosystems_config_file(self):
         self._ecosystems_config_dict = {}
-        self._create_ecosystem("Default Ecosystem")
+        self.create_ecosystem("Default Ecosystem")
         await self._dump_ecosystems_config()
 
     async def _create_private_config_file(self):
@@ -755,13 +755,10 @@ class EngineConfig(metaclass=SingletonMeta):
             if uid not in used_ids:
                 return uid
 
-    def _create_ecosystem(self, ecosystem_name: str) -> None:
+    def create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
         ecosystem_cfg = EcosystemConfigValidator(name=ecosystem_name).model_dump()
         self.ecosystems_config_dict.update({uid: ecosystem_cfg})
-
-    def create_ecosystem(self, ecosystem_name: str) -> None:
-        self._create_ecosystem(ecosystem_name)
 
     def update_ecosystem_base_info(
             self,
