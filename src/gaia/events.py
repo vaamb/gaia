@@ -577,17 +577,13 @@ class Events(AsyncEventHandler):
             raise RuntimeError(
                 "The database is not enabled. To enable it, set configuration "
                 "parameter 'USE_DATABASE' to 'True'.")
-        from gaia.database.models import ActuatorBuffer, HealthBuffer, SensorBuffer
+        from gaia.database.models import ActuatorBuffer, SensorBuffer
 
         async with self.db.scoped_session() as session:
             sensor_buffer_iterator = await SensorBuffer.get_buffered_data(session)
             async for payload in sensor_buffer_iterator:
                 payload_dict: gv.BufferedSensorsDataPayloadDict = payload.model_dump()
                 await self.emit(event="buffered_sensors_data", data=payload_dict)
-            health_buffer_iterator = await HealthBuffer.get_buffered_data(session)
-            async for payload in health_buffer_iterator:
-                payload_dict: gv.BufferedHealthRecordPayloadDict = payload.model_dump()
-                await self.emit(event="buffered_health_data", data=payload_dict)
             actuator_buffer_iterator = await ActuatorBuffer.get_buffered_data(session)
             async for payload in actuator_buffer_iterator:
                 payload_dict: gv.BufferedActuatorsStatePayloadDict = payload.model_dump()
