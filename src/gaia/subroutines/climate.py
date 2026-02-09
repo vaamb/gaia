@@ -3,14 +3,14 @@ from __future__ import annotations
 from datetime import datetime, time
 from time import monotonic
 import typing as t
-from typing import Literal, TypeAlias
+from typing import Literal, Type, TypeAlias
 
 import gaia_validators as gv
 
 from gaia import config
 from gaia.actuator_handler import HystericalPID
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, Switch
+from gaia.hardware.abc import Actuator
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -31,17 +31,17 @@ REGULABLE_PARAMETERS: list[gv.ClimateParameter] = [
 ]
 
 
-class Climate(SubroutineTemplate[Dimmer | Switch]):
+class Climate(SubroutineTemplate[Actuator]):
+    _hardware_choices: dict[str, Type[Actuator]] = actuator_models
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.hardware_choices = actuator_models
         # Routine parameters
         loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
         self._actuator_handlers: dict[ClimateDirection, ActuatorHandler] | None = None
         self._pids: dict[gv.ClimateParameter, HystericalPID] | None = None
         self._sensor_miss: int = 0
-        self._finish__init__()
 
     """SubroutineTemplate methods"""
     async def _routine(self) -> None:

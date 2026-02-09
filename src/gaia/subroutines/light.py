@@ -6,13 +6,14 @@ from datetime import datetime, time
 from statistics import mean
 from time import monotonic
 import typing
+from typing import Type
 
 import gaia_validators as gv
 
 from gaia.actuator_handler import HystericalPID
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, LightSensor, Switch
+from gaia.hardware.abc import Actuator, LightSensor
 from gaia.subroutines.template import SubroutineTemplate
 from gaia.utils import is_time_between
 
@@ -29,11 +30,12 @@ DEFAULT_CLIMATE_CFG = gv.ClimateConfig(**{
 })
 
 
-class Light(SubroutineTemplate[Switch]):
+class Light(SubroutineTemplate[Actuator]):
+    _hardware_choices: dict[str, Type[Actuator]] = actuator_models
+
     def __init__(self, *args, **kwargs) -> None:
         # Parent template
         super().__init__(*args, **kwargs)
-        self.hardware_choices = actuator_models
         # Subroutine specific
         self._light_sensors: list[LightSensor] | None = None
         self._any_dimmable_light: bool | None = None
@@ -44,7 +46,6 @@ class Light(SubroutineTemplate[Switch]):
         self._loop_period: float = float(
             self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
         self._task: Task | None = None
-        self._finish__init__()
 
     """SubroutineTemplate methods"""
     async def _routine(self) -> None:
