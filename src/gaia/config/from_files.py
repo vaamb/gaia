@@ -806,11 +806,11 @@ class EngineConfig(metaclass=SingletonMeta):
         return [i["name"] for i in self.ecosystems_config_dict.values()]
 
     def get_ecosystems_expected_to_run(self) -> set[str]:
-        return set([
+        return {
             ecosystem_uid
             for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
             if eco_cfg_dict["status"]
-        ])
+        }
 
     def get_ecosystem_name(self, ecosystem_uid: str) -> str:
         try:
