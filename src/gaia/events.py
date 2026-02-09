@@ -374,14 +374,14 @@ class Events(AsyncEventHandler):
             self.logger.warning("Registration request could not be sent.")
 
     @validate_payload(RootModel[dict | None])
-    async def on_connect(self, environment: dict | None) -> None:  # noqa
+    async def on_connect(self, _environment: dict | None) -> None:
         self.logger.info(
             "Connection to the message broker successful. Will try to register "
             "the engine to Ouranos.")
         self._start_ping_task()
         await self.register()
 
-    async def on_disconnect(self, *args) -> None:  # noqa
+    async def on_disconnect(self, *_args) -> None:
         self.logger.debug("Received a disconnection request.")
         if self._ping_task is not None:
             self._ping_task.cancel()
