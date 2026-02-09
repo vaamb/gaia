@@ -143,12 +143,12 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
             await self.refresh()
             await self._start()
             self.logger.debug("Successfully started.")
-            self._started = True
         except Exception as e:
-            self._started = False
             self.logger.error(
                 f"Starting failed. ERROR msg: `{e.__class__.__name__}: {e}`.")
             raise e
+        else:
+            self._started = True
 
     async def stop(self) -> None:
         if not self.started:
@@ -156,11 +156,11 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         self.logger.debug("Stopping the subroutine.")
         try:
             await self._stop()
-            self._started = False
             self.logger.debug("Successfully stopped.")
         except Exception as e:
-            self._started = True
             self.logger.error(
                 f"Stopping failed. ERROR msg: `{e.__class__.__name__}: {e}`."
             )
             raise e
+        else:
+            self._started = False
