@@ -146,7 +146,7 @@ async def engine_config(engine_config_master: EngineConfig, logs_content) -> Yie
         engine_config_master._app_config = app_config
         engine_config_master._ecosystems_config_dict = ecosystem_config
         engine_config_master._private_config = private_config
-        engine_config_master.chaos_memory = {}
+        engine_config_master._chaos_memory = {}
         engine_config_master._sun_times = {}
         if engine_config_master.started:
             engine_config_master.watchdog.stop()

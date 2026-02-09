@@ -984,12 +984,6 @@ class EngineConfig(metaclass=SingletonMeta):
     def chaos_memory(self) -> dict[str, ChaosMemory]:
         return self._chaos_memory
 
-    @chaos_memory.setter
-    def chaos_memory(self, chaos_memory: dict[str, ChaosMemory]) -> None:
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'chaos_memory'")
-        self._chaos_memory = chaos_memory
-
     def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
 
