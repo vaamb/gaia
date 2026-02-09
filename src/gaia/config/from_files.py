@@ -755,12 +755,6 @@ class EngineConfig(metaclass=SingletonMeta):
     def ecosystems_config_dict(self) -> dict[str, EcosystemConfigDict]:
         return self._ecosystems_config_dict
 
-    @ecosystems_config_dict.setter
-    def ecosystems_config_dict(self, value: dict):
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'ecosystems_config_dict'")
-        self._ecosystems_config_dict = value
-
     @property
     def ecosystems_uid(self) -> list[str]:
         return list(self.ecosystems_config_dict.keys())
