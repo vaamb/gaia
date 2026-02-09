@@ -832,9 +832,6 @@ class EngineConfig(metaclass=SingletonMeta):
     def private_config(self) -> PrivateConfigDict:
         return self._private_config
 
-    # ---------------------------------------------------------------------------
-    #   Places and suntimes
-    # ---------------------------------------------------------------------------
     @property
     def places(self) -> dict[str, gv.Coordinates]:
         return self.private_config["places"]
