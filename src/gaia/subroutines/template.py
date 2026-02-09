@@ -37,6 +37,9 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
 
+    # ---------------------------------------------------------------------------
+    #   Abstract methods
+    # ---------------------------------------------------------------------------
     @abstractmethod
     async def _routine(self) -> None:
         raise NotImplementedError("This method must be implemented in a subclass")
@@ -53,7 +56,9 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
     async def _stop(self) -> None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
-    """API calls"""
+    # ---------------------------------------------------------------------------
+    #   Properties
+    # ---------------------------------------------------------------------------
     @property
     def ecosystem(self) -> Ecosystem:
         return self._ecosystem
@@ -86,16 +91,20 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
     def hardware_choices(self) -> dict[str, Type[HardwareT]]:
         return self._hardware_choices
 
+    # ---------------------------------------------------------------------------
+    #   API calls
+    # ---------------------------------------------------------------------------
     async def routine(self) -> None:
-        name = self.__class__.__name__
         start = monotonic()
         if not self.started:
             raise RuntimeError(
-                f"{name} subroutine has to be started to use its 'routine' method")
-        self.logger.debug(f"Starting {name} routine ...")
+                f"{self.name.capitalize()} subroutine has to be started to use "
+                f"its 'routine' method")
+        self.logger.debug(f"Starting {self.name} routine ...")
         await self._routine()
         routine_time = monotonic() - start
-        self.logger.debug(f"{name} routine finished in {routine_time:.1f} s.")
+        self.logger.debug(
+            f"{self.name.capitalize()} routine finished in {routine_time:.1f} s.")
 
     @abstractmethod
     def get_hardware_needed_uid(self) -> set[str]:
@@ -109,10 +118,10 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
         }
 
     async def refresh(self) -> None:
-        assert all([
+        assert all(
             hardware.model in self.hardware_choices
             for hardware in self.hardware.values()
-        ])
+        )
         # Make sure the routine is still manageable
         if not self._compute_if_manageable():
             self.logger.warning(
@@ -133,12 +142,12 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
             await self.refresh()
             await self._start()
             self.logger.debug("Successfully started.")
-            self._started = True
         except Exception as e:
-            self._started = False
             self.logger.error(
                 f"Starting failed. ERROR msg: `{e.__class__.__name__}: {e}`.")
-            raise e
+            raise
+        else:
+            self._started = True
 
     async def stop(self) -> None:
         if not self.started:
@@ -146,11 +155,11 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
         self.logger.debug("Stopping the subroutine.")
         try:
             await self._stop()
-            self._started = False
             self.logger.debug("Successfully stopped.")
         except Exception as e:
-            self._started = True
             self.logger.error(
                 f"Stopping failed. ERROR msg: `{e.__class__.__name__}: {e}`."
             )
-            raise e
+            raise
+        else:
+            self._started = False
