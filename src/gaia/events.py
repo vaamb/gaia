@@ -20,7 +20,7 @@ from pydantic import RootModel, ValidationError
 from dispatcher import AsyncEventHandler
 import gaia_validators as gv
 
-from gaia import Ecosystem, EcosystemConfig, Engine
+from gaia import Ecosystem, Engine
 from gaia.config.from_files import ConfigType
 from gaia.dependencies.camera import SerializableImagePayload
 from gaia.ecosystem import _EcosystemPayloads
