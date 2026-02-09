@@ -566,12 +566,8 @@ class Events(AsyncEventHandler):
         # Send back the updated info
         await self.engine.refresh_ecosystems(send_info=False)
         crud_link = crud_links_dict[event_name]
-        if not crud_link.payload_name:
-            self.logger.warning(
-                f"No CRUD payload linked to action '{action.name} {target}' "
-                f"was found. Updated data won't be sent to Ouranos.")
-        payload_name = crud_link.payload_name
-        await self.send_payload(payload_name=payload_name, ecosystem_uids=ecosystem_uid)
+        await self.send_payload(
+            payload_name=crud_link.payload_name, ecosystem_uids=ecosystem_uid)
 
     # ---------------------------------------------------------------------------
     #   Events for buffered data
