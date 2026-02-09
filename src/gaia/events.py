@@ -191,6 +191,10 @@ class Events(AsyncEventHandler):
     def ecosystems(self) -> dict[str, Ecosystem]:
         return self.engine.ecosystems
 
+    @staticmethod
+    def _format_error(e: Exception) -> str:
+      return f"{e.__class__.__name__}: {e}"
+
     # ---------------------------------------------------------------------------
     #   Background jobs
     # ---------------------------------------------------------------------------
@@ -225,7 +229,7 @@ class Events(AsyncEventHandler):
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while running the ping routine. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                    f"{self._format_error(e)}."
                 )
 
     async def on_pong(self) -> None:
@@ -309,7 +313,7 @@ class Events(AsyncEventHandler):
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while emitting event '{payload_name}'. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`.")
+                    f"{self._format_error(e)}.")
                 return False
             else:
                 if result:
@@ -527,7 +531,7 @@ class Events(AsyncEventHandler):
         if target in ("ecosystem", "place"):
             ecosystem_uid = None
         else:
-            ecosystem_uid: str = data["routing"]["ecosystem_uid"]
+            ecosystem_uid = data["routing"]["ecosystem_uid"]
         event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
         self.logger.info(f"Received CRUD request '{crud_uuid}' from Ouranos.")
 
@@ -541,7 +545,7 @@ class Events(AsyncEventHandler):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while treating CRUD request "
-                f"`{crud_uuid}`. ERROR msg: `{e.__class__.__name__}: {e}`.")
+                f"`{crud_uuid}`. {self._format_error(e)}.")
             await self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
@@ -603,8 +607,7 @@ class Events(AsyncEventHandler):
                 for db_model in (ActuatorBuffer, SensorBuffer):
                     self.logger.error(
                         f"Encountered an error while treating buffered data "
-                        f"exchange `{data['uuid']}`. ERROR msg: "
-                        f"`{data['message']}`.")
+                        f"exchange `{data['uuid']}`. ERROR msg: `{data['message']}`.")
                     await db_model.mark_exchange_as_failed(session, data["uuid"])
 
     # ---------------------------------------------------------------------------
@@ -613,7 +616,7 @@ class Events(AsyncEventHandler):
     def _iter_picture_arrays(
             self,
             ecosystem_uids: str | list[str] | None = None,
-    ) -> Iterator[tuple[str, list["SerializableImage"]]]:
+    ) -> Iterator[tuple[str, list[SerializableImage]]]:
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(f"Getting 'picture_arrays' for {humanize_list(uids)}.")
         for uid in uids:
@@ -673,6 +676,5 @@ class Events(AsyncEventHandler):
             return
         for uid, picture_arrays in self._iter_picture_arrays(ecosystem_uids):
             for image in picture_arrays:
-                image: SerializableImage
                 image.metadata["ecosystem_uid"] = uid
                 await self._upload_image(image)
