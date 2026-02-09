@@ -97,15 +97,16 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
     #   API calls
     # ---------------------------------------------------------------------------
     async def routine(self) -> None:
-        name = self.__class__.__name__
         start = monotonic()
         if not self.started:
             raise RuntimeError(
-                f"{name} subroutine has to be started to use its 'routine' method")
-        self.logger.debug(f"Starting {name} routine ...")
+                f"{self.name.capitalize()} subroutine has to be started to use "
+                f"its 'routine' method")
+        self.logger.debug(f"Starting {self.name} routine ...")
         await self._routine()
         routine_time = monotonic() - start
-        self.logger.debug(f"{name} routine finished in {routine_time:.1f} s.")
+        self.logger.debug(
+            f"{self.name.capitalize()} routine finished in {routine_time:.1f} s.")
 
     @abstractmethod
     def get_hardware_needed_uid(self) -> set[str]:
