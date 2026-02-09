@@ -735,7 +735,7 @@ class Camera(Hardware):
                 base_dir = Path(config_cls.DIR)
                 self._camera_dir = base_dir / "camera/orphan_camera"
             else:
-                base_dir = self.ecosystem.engine.config.base_dir
+                base_dir = self.ecosystem.engine.config.gaia_dir
                 self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
             if not self._camera_dir.exists():
                 self._camera_dir.mkdir(parents=True)

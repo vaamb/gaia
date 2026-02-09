@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Condition, Event, Lock, Task
-from contextlib import asynccontextmanager, suppress
+from contextlib import suppress
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
@@ -41,6 +41,9 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 class ValidationError(ValueError):
     pass
+
+
+DEFAULT_PLACE = "home"
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +415,9 @@ class EngineConfig(metaclass=SingletonMeta):
     def __repr__(self) -> str:  # pragma: no cover
         return f"EngineConfig(watchdog={self.started})"
 
+    # ---------------------------------------------------------------------------
+    #   Properties and common utilities
+    # ---------------------------------------------------------------------------
     @property
     def watchdog(self) -> ConfigWatchdog:
         return self._watchdog
@@ -442,12 +448,6 @@ class EngineConfig(metaclass=SingletonMeta):
     def app_config(self) -> GaiaConfig:
         return self._app_config
 
-    @app_config.setter
-    def app_config(self, app_config: GaiaConfig) -> None:
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'app_config'")
-        self._app_config = app_config
-
     def _get_dir(self, dir_name: str) -> Path:
         try:
             return self._dirs[dir_name]
@@ -466,11 +466,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 return path
 
     @property
-    def base_dir(self) -> Path:
-        return self._get_dir("DIR")
-
-    @property
-    def config_dir(self) -> Path:
+    def gaia_dir(self) -> Path:
         return self._get_dir("DIR")
 
     @property
@@ -483,17 +479,41 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def get_file_path(self, file_type: ConfigType | CacheType) -> Path:
         if isinstance(file_type, ConfigType):
-            return self.config_dir / file_type.value
+            return self.gaia_dir / file_type.value
         if isinstance(file_type, CacheType):
             return self.cache_dir / file_type.value
         raise ValueError(f"Invalid file type: {file_type}")
 
-    # Load and save configs and caches
+    # ---------------------------------------------------------------------------
+    #   Config and caches load and save
+    # ---------------------------------------------------------------------------
+    @property
+    def config_files_lock(self):
+        return self._config_files_lock
+
     def _check_files_lock_acquired(self) -> None:
         if not self._config_files_lock.locked():
             raise RuntimeError(
                 "This method must be called within a "
                 "`engine_config.with config_files_lock:` block"
+            )
+
+    def _log_nycthemeral_method_issues(
+            self,
+            method: gv.LightingMethod | gv.NycthemeralSpanMethod,
+            ecosystem_cfg: EcosystemConfigDict,
+    ) -> None:
+        """Validate method and log warning if it will fall back to 'fixed'."""
+        try:
+            EcosystemConfig.validate_nycthemeral_method(
+                method, ecosystem_cfg, self.private_config["places"])
+        except ValidationError as e:
+            method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
+            ecosystem_name = ecosystem_cfg["name"]
+            self.logger.warning(
+                f"{method_name} method cannot be set to '{method.name}' for "
+                f"ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`"
             )
 
     async def _validate_ecosystems_logic(
@@ -534,24 +554,10 @@ class EngineConfig(metaclass=SingletonMeta):
             nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
 
             span_method = safe_enum_from_name(gv.NycthemeralSpanMethod, nycthemeral_cfg["span"])
-            try:
-                EcosystemConfig.validate_nycthemeral_method(
-                    span_method, ecosystem_cfg, self.private_config["places"])
-            except ValidationError as e:
-                self.logger.warning(
-                    f"Nycthemeral span method cannot be set to '{span_method.name}' "
-                    f"for ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`")
+            self._log_nycthemeral_method_issues(span_method, ecosystem_cfg)
 
             lighting_method = safe_enum_from_name(gv.LightingMethod, nycthemeral_cfg["lighting"])
-            try:
-                EcosystemConfig.validate_nycthemeral_method(
-                    lighting_method, ecosystem_cfg, self.private_config["places"])
-            except ValidationError as e:
-                self.logger.warning(
-                    f"Lighting method cannot be set to '{lighting_method.name}' "
-                    f"for ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`")
+            self._log_nycthemeral_method_issues(lighting_method, ecosystem_cfg)
 
         if unfixable_error:
             raise ValidationError(
@@ -701,10 +707,12 @@ class EngineConfig(metaclass=SingletonMeta):
             case _:
                 raise ValueError(f"Unknown config type: {cfg_type}")
 
-    # Initialize configs
+    # ---------------------------------------------------------------------------
+    #   Config initialization
+    # ---------------------------------------------------------------------------
     async def _create_ecosystems_config_file(self):
         self._ecosystems_config_dict = {}
-        self._create_ecosystem("Default Ecosystem")
+        self.create_ecosystem("Default Ecosystem")
         await self._dump_ecosystems_config()
 
     async def _create_private_config_file(self):
@@ -740,11 +748,21 @@ class EngineConfig(metaclass=SingletonMeta):
         # Mark as loaded
         self.configs_loaded = True
 
+    # ---------------------------------------------------------------------------
+    #   Ecosystems config interface
+    # ---------------------------------------------------------------------------
     @property
-    def config_files_lock(self):
-        return self._config_files_lock
+    def ecosystems_config_dict(self) -> dict[str, EcosystemConfigDict]:
+        return self._ecosystems_config_dict
 
-    # API
+    @property
+    def ecosystems_uid(self) -> list[str]:
+        return list(self.ecosystems_config_dict.keys())
+
+    @property
+    def ecosystems_name(self) -> list[str]:
+        return [i["name"] for i in self.ecosystems_config_dict.values()]
+
     def _create_new_ecosystem_uid(self) -> str:
         used_ids = self.ecosystems_uid
         while True:
@@ -752,13 +770,10 @@ class EngineConfig(metaclass=SingletonMeta):
             if uid not in used_ids:
                 return uid
 
-    def _create_ecosystem(self, ecosystem_name: str) -> None:
+    def create_ecosystem(self, ecosystem_name: str) -> None:
         uid = self._create_new_ecosystem_uid()
         ecosystem_cfg = EcosystemConfigValidator(name=ecosystem_name).model_dump()
         self.ecosystems_config_dict.update({uid: ecosystem_cfg})
-
-    def create_ecosystem(self, ecosystem_name: str) -> None:
-        self._create_ecosystem(ecosystem_name)
 
     def update_ecosystem_base_info(
             self,
@@ -777,54 +792,12 @@ class EngineConfig(metaclass=SingletonMeta):
         ecosystem_ids = self.get_IDs(ecosystem_id)
         del self.ecosystems_config_dict[ecosystem_ids.uid]
 
-    @property
-    def ecosystems_config_dict(self) -> dict[str, EcosystemConfigDict]:
-        return self._ecosystems_config_dict
-
-    @ecosystems_config_dict.setter
-    def ecosystems_config_dict(self, value: dict):
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'ecosystems_config_dict'")
-        self._ecosystems_config_dict = value
-
-    @property
-    def private_config(self) -> PrivateConfigDict:
-        return self._private_config
-
-    @private_config.setter
-    def private_config(self, value: PrivateConfigDict):
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'private_config'")
-        self._private_config = value
-
-    @property
-    def ecosystems_uid(self) -> list[str]:
-        return [i for i in self.ecosystems_config_dict.keys()]
-
-    @property
-    def ecosystems_name(self) -> list:
-        return [i["name"] for i in self.ecosystems_config_dict.values()]
-
-    @property
-    def id_to_name_dict(self) -> dict:
-        return {
-            ecosystem_uid: eco_cfg_dict["name"]
-            for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
-        }
-
-    @property
-    def name_to_id_dict(self) -> dict:
-        return {
-            eco_cfg_dict["name"]: ecosystem_uid
-            for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
-        }
-
     def get_ecosystems_expected_to_run(self) -> set[str]:
-        return set([
+        return {
             ecosystem_uid
             for ecosystem_uid, eco_cfg_dict in self.ecosystems_config_dict.items()
             if eco_cfg_dict["status"]
-        ])
+        }
 
     def get_ecosystem_name(self, ecosystem_uid: str) -> str:
         try:
@@ -834,13 +807,10 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def get_IDs(self, ecosystem_id: str) -> gv.IDs:
         if ecosystem_id in self.ecosystems_uid:
-            ecosystem_uid = ecosystem_id
-            ecosystem_name = self.id_to_name_dict[ecosystem_id]
-            return gv.IDs(ecosystem_uid, ecosystem_name)
-        elif ecosystem_id in self.ecosystems_name:
-            ecosystem_uid = self.name_to_id_dict[ecosystem_id]
-            ecosystem_name = ecosystem_id
-            return gv.IDs(ecosystem_uid, ecosystem_name)
+            return gv.IDs(ecosystem_id, self.ecosystems_config_dict[ecosystem_id]["name"])
+        for ecosystem_uid, ecosystem in self.ecosystems_config_dict.items():
+            if ecosystem["name"] == ecosystem_id:
+                return gv.IDs(ecosystem_uid, ecosystem["name"])
         raise EcosystemNotFound(
             f"Ecosystem with id '{ecosystem_id}' not found. 'ecosystem_id' parameter "
             f"should either be an ecosystem uid or an ecosystem name present in "
@@ -848,7 +818,20 @@ class EngineConfig(metaclass=SingletonMeta):
             f"configuration use the function `create_ecosystem()`."
         )
 
-    """Private config parameters"""
+    def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
+        return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
+
+    @property
+    def ecosystems_config(self) -> dict[str, EcosystemConfig]:
+        return _MetaEcosystemConfig.instances
+
+    # ---------------------------------------------------------------------------
+    #   Private config interface
+    # ---------------------------------------------------------------------------
+    @property
+    def private_config(self) -> PrivateConfigDict:
+        return self._private_config
+
     @property
     def places(self) -> dict[str, gv.Coordinates]:
         return self.private_config["places"]
@@ -900,7 +883,7 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @property
     def home_coordinates(self) -> gv.Coordinates:
-        home = self.get_place("home")
+        home = self.get_place(DEFAULT_PLACE)
         if home is None:
             raise UndefinedParameter(
                 "No location named 'home' was found in the private "
@@ -910,75 +893,66 @@ class EngineConfig(metaclass=SingletonMeta):
 
     @home_coordinates.setter
     def home_coordinates(self, value: tuple[float, float] | CoordinatesDict) -> None:
-        self.set_place("home", coordinates=value)
+        self.set_place(DEFAULT_PLACE, coordinates=value)
 
-    @property
-    def units(self) -> dict[str, str]:
-        return self.private_config.get("units", {})
-
-    @property
-    def sun_times(self) -> dict[str, SunTimesCacheData]:
-        return self._sun_times
-
-    @sun_times.setter
-    def sun_times(self, sun_times: dict[str, SunTimesCacheData]) -> None:
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'sun_times'")
-        self._sun_times = sun_times
+    def _compute_sun_times(self, place: str, coord: gv.Coordinates) -> gv.SunTimesDict:
+        today = date.today()
+        sun_times = get_sun_times(coord).model_dump()
+        if sun_times["sunrise"] is None:  # sunset is None too
+            # Handle high and low latitude specificities
+            if (
+                    # Range of polar day in Northern hemisphere
+                    3 < today.month <= 9
+                    and coord.latitude > 0
+                    # Range of polar day in Southern hemisphere
+                    or not (3 < today.month <= 9)
+                    and coord.latitude < 0
+            ):
+                day_night = "day"
+            else:
+                day_night = "night"
+            self.logger.warning(
+                f"Sun times of '{place}' has no sunrise and sunset (due to "
+                f"polar {day_night}). Replacing values to allow coherent "
+                f"lighting."
+            )
+            midnight = datetime.combine(today, time(hour=0))
+            msec = timedelta(milliseconds=1)
+            if day_night == "day":
+                sun_times["sunrise"] = midnight.time()  # Sunrise
+                sun_times["sunset"] = (midnight - msec).time()  # Sunset
+            else:
+                sun_times["sunrise"] = midnight.time()  # Sunrise
+                sun_times["sunset"] = (midnight + msec).time()  # Sunset
+        return sun_times
 
     def get_sun_times(self, place: str) -> gv.SunTimesDict | None:
         coord = self.get_place(place)
         if coord is None:
             return None
-        sun_times = self.sun_times.get(place)
+        sun_times_cache = self._sun_times.get(place)
         today = date.today()
-        if sun_times is None or sun_times["last_update"] < today:
-            new_sun_times = get_sun_times(coord).model_dump()
-            # Handle high and low latitude specificities
-            if (
-                # Range of polar day in Northern hemisphere
-                3 < today.month <= 9
-                and coord.latitude > 0
-                # Range of polar day in Southern hemisphere
-                or not (3 < today.month <= 9)
-                and coord.latitude < 0
-            ):
-                day_night = "day"
-            else:
-                day_night = "night"
-            if new_sun_times["sunrise"] is None:  # sunset is None too
-                self.logger.warning(
-                    f"Sun times of '{place}' has no sunrise and sunset (due to "
-                    f"polar {day_night}). Replacing values to allow coherent "
-                    f"lighting."
-                )
-                midnight = datetime.combine(today, time(hour=0))
-                msec = timedelta(milliseconds=1)
-                if day_night == "day":
-                    new_sun_times["sunrise"] = midnight.time()          # Sunrise
-                    new_sun_times["sunset"] = (midnight - msec).time()  # Sunset
-                else:
-                    new_sun_times["sunrise"] = midnight.time()          # Sunrise
-                    new_sun_times["sunset"] = (midnight + msec).time()  # Sunset
-            self.set_sun_times(place, new_sun_times)
-        return self.sun_times[place]["data"]
-
-    def set_sun_times(self, place: str, sun_times: gv.SunTimesDict) -> None:
-        validated_sun_times: gv.SunTimesDict = gv.SunTimes(**sun_times).model_dump()
+        if sun_times_cache is not None and sun_times_cache["last_update"] >= today:
+            return sun_times_cache["data"]
+        sun_times = self._compute_sun_times(place, coord)
         self._sun_times[place] = SunTimesCacheData(
-            last_update=date.today(),
-            data=validated_sun_times,
+            last_update=today,
+            data=sun_times,
         )
+        return sun_times
 
     @property
     def home_sun_times(self) -> gv.SunTimesDict | None:
-        return self.get_sun_times("home")
+        return self.get_sun_times(DEFAULT_PLACE)
 
     def refresh_sun_times(self) -> None:
         self.logger.info("Updating sun times.")
+        places = set(self._sun_times.keys())
+        self._sun_times.clear()
         places_ok: set[str] = set()
         places_failed: set[str] = set()
-        for place in self.places.keys():
+        places.update(self.places.keys())
+        for place in places:
             ok = self.get_sun_times(place)
             if ok:
                 places_ok.add(place)
@@ -997,14 +971,15 @@ class EngineConfig(metaclass=SingletonMeta):
             )
 
     @property
+    def units(self) -> dict[str, str]:
+        return self.private_config.get("units", {})
+
+    # ---------------------------------------------------------------------------
+    #   Chaos cache
+    # ---------------------------------------------------------------------------
+    @property
     def chaos_memory(self) -> dict[str, ChaosMemory]:
         return self._chaos_memory
-
-    @chaos_memory.setter
-    def chaos_memory(self, chaos_memory: dict[str, ChaosMemory]) -> None:
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'chaos_memory'")
-        self._chaos_memory = chaos_memory
 
     def _create_chaos_memory(self, ecosystem_uid: str) -> dict[str, ChaosMemory]:
         return {ecosystem_uid: ChaosMemoryValidator().model_dump()}
@@ -1018,13 +993,6 @@ class EngineConfig(metaclass=SingletonMeta):
         if ecosystem_uid not in self._chaos_memory:
             self._chaos_memory.update(self._create_chaos_memory(ecosystem_uid))
         return self.chaos_memory[ecosystem_uid]
-
-    def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
-        return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
-
-    @property
-    def ecosystems_config(self) -> dict[str, EcosystemConfig]:
-        return _MetaEcosystemConfig.instances
 
 
 # ---------------------------------------------------------------------------
@@ -1309,7 +1277,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Try to get the target
         target: str
         if (method & gv.LightingMethod.elongate) == gv.LightingMethod.elongate:
-            target = "home"
+            target = DEFAULT_PLACE
         elif (method & gv.NycthemeralSpanMethod.mimic) == gv.NycthemeralSpanMethod.mimic:
             nyct_cfg: gv.NycthemeralCycleConfigDict = \
                 ecosystem_dict["environment"]["nycthemeral_cycle"]
@@ -1456,7 +1424,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if lighting_method & gv.LightingMethod.fixed:
             return gv.LightingMethod.fixed
         # Otherwise, we need to make sure we have suntimes for "home"
-        sun_times = self.general.get_sun_times("home")
+        sun_times = self.general.get_sun_times(DEFAULT_PLACE)
         if sun_times is None:
             return gv.LightingMethod.fixed
         else:
