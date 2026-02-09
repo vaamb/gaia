@@ -147,7 +147,7 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
         except Exception as e:
             self.logger.error(
                 f"Starting failed. ERROR msg: `{e.__class__.__name__}: {e}`.")
-            raise e
+            raise
         else:
             self._started = True
 
@@ -162,6 +162,6 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
             self.logger.error(
                 f"Stopping failed. ERROR msg: `{e.__class__.__name__}: {e}`."
             )
-            raise e
+            raise
         else:
             self._started = False
