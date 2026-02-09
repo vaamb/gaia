@@ -35,6 +35,9 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
 
+    # ---------------------------------------------------------------------------
+    #   Abstract methods
+    # ---------------------------------------------------------------------------
     @abstractmethod
     async def _routine(self) -> None:
         raise NotImplementedError("This method must be implemented in a subclass")
@@ -51,7 +54,9 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
     async def _stop(self) -> None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
-    """API calls"""
+    # ---------------------------------------------------------------------------
+    #   Properties
+    # ---------------------------------------------------------------------------
     @property
     def ecosystem(self) -> Ecosystem:
         return self._ecosystem
@@ -88,6 +93,9 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
     def hardware_choices(self, choices: dict[str, Type[HARDWARE_TYPE]]) -> None:
         self._hardware_choices = choices
 
+    # ---------------------------------------------------------------------------
+    #   API calls
+    # ---------------------------------------------------------------------------
     async def routine(self) -> None:
         name = self.__class__.__name__
         start = monotonic()
