@@ -235,11 +235,11 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     def filter_uids(self, ecosystem_uids: str | list[str] | None = None) -> list[str]:
         if ecosystem_uids is None:
-            return [uid for uid in self.ecosystems.keys()]
+            return list(self.ecosystems)
         else:
             if isinstance(ecosystem_uids, str):
                 ecosystem_uids = [ecosystem_uids]
-            return [uid for uid in ecosystem_uids if uid in self.ecosystems.keys()]
+            return [uid for uid in ecosystem_uids if uid in self.ecosystems]
 
     def get_payload(
             self,
