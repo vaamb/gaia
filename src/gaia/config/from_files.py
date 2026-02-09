@@ -805,7 +805,7 @@ class EngineConfig(metaclass=SingletonMeta):
         return list(self.ecosystems_config_dict.keys())
 
     @property
-    def ecosystems_name(self) -> list:
+    def ecosystems_name(self) -> list[str]:
         return [i["name"] for i in self.ecosystems_config_dict.values()]
 
     def get_ecosystems_expected_to_run(self) -> set[str]:
