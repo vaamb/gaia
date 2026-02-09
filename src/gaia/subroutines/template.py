@@ -24,13 +24,13 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{eco_name}.{self.name}")
         self.logger.debug("Initializing ...")
-        self._hardware_choices: dict[str, Type[Type[HARDWARE_TYPE]]] = {}
+        self._hardware_choices: dict[str, Type[HARDWARE_TYPE]] = {}
         self._started: bool = False
 
     def _finish__init__(self) -> None:
         if not self._hardware_choices:
             raise ValueError("No hardware choices specified.")
-        self.logger.debug("Initialization successfully.")
+        self.logger.debug("Initialization successful.")
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.ecosystem.uid}, status={self.started})"
@@ -111,10 +111,10 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         }
 
     async def refresh(self) -> None:
-        assert all([
+        assert all(
             hardware.model in self.hardware_choices
             for hardware in self.hardware.values()
-        ])
+        )
         # Make sure the routine is still manageable
         if not self._compute_if_manageable():
             self.logger.warning(
