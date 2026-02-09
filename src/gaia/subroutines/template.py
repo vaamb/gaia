@@ -12,10 +12,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.ecosystem import Ecosystem
 
 
-HARDWARE_TYPE = TypeVar("HARDWARE_TYPE")
+HardwareT = TypeVar("HardwareT")
 
 
-class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
+class SubroutineTemplate(ABC, Generic[HardwareT]):
     def __init__(self, ecosystem: Ecosystem) -> None:
         """Base class to manage an ecosystem subroutine"""
         self._ecosystem: Ecosystem = ecosystem
@@ -24,7 +24,7 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         self.logger: logging.Logger = logging.getLogger(
             f"gaia.engine.{eco_name}.{self.name}")
         self.logger.debug("Initializing ...")
-        self._hardware_choices: dict[str, Type[HARDWARE_TYPE]] = {}
+        self._hardware_choices: dict[str, Type[HardwareT]] = {}
         self._started: bool = False
 
     def _finish__init__(self) -> None:
@@ -86,11 +86,11 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         return self._compute_if_manageable()
 
     @property
-    def hardware_choices(self) -> dict[str, Type[HARDWARE_TYPE]]:
+    def hardware_choices(self) -> dict[str, Type[HardwareT]]:
         return self._hardware_choices
 
     @hardware_choices.setter
-    def hardware_choices(self, choices: dict[str, Type[HARDWARE_TYPE]]) -> None:
+    def hardware_choices(self, choices: dict[str, Type[HardwareT]]) -> None:
         self._hardware_choices = choices
 
     # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ class SubroutineTemplate(ABC, Generic[HARDWARE_TYPE]):
         raise NotImplementedError("This method must be implemented in a subclass.")
 
     @property
-    def hardware(self) -> dict[str, HARDWARE_TYPE]:
+    def hardware(self) -> dict[str, HardwareT]:
         return {
             uid: self.ecosystem.hardware[uid]
             for uid in self.get_hardware_needed_uid()
