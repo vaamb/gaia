@@ -51,6 +51,9 @@ PayloadName = Literal[
 ]
 
 
+ENGINE_PAYLOADS: frozenset[PayloadName] = frozenset({"places_list"})
+
+
 payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
     "actuators_data": gv.ActuatorsDataPayload,
     "base_info": gv.BaseInfoConfigPayload,
@@ -247,7 +250,7 @@ class Events(AsyncEventHandler):
             ecosystem_uids: str | list[str] | None = None,
     ) -> gv.EcosystemPayloadDict | list[gv.EcosystemPayloadDict] | None:
         self.logger.debug(f"Getting '{payload_name}' payload.")
-        if payload_name in ("places_list",):
+        if payload_name in ENGINE_PAYLOADS:
             return self._get_engine_payload(payload_name)
         else:
             return self._get_ecosystem_payload(payload_name, ecosystem_uids)
