@@ -39,9 +39,10 @@ class _PartialHealthRecord(TypedDict):
 
 
 class Health(SubroutineTemplate[Camera]):
+    _hardware_choices: dict[str, Type[Camera]] = camera_models
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.hardware_choices = camera_models
         # Picture size
         app_config = self.ecosystem.engine.config.app_config
         self._picture_size: tuple[int, int] = app_config.PICTURE_SIZE
@@ -49,7 +50,6 @@ class Health(SubroutineTemplate[Camera]):
         self._sending_data_task: Task | None = None
         self._plants_health: gv.HealthData | gv.Empty = gv.Empty()
         # self._data_lock = Lock()
-        self._finish__init__()
 
     """SubroutineTemplate methods"""
     async def _routine(self) -> None:

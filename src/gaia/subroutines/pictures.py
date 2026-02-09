@@ -4,7 +4,7 @@ import asyncio
 from asyncio import Task
 from math import ceil
 from time import monotonic
-from typing import TypedDict
+from typing import Type, TypedDict
 
 # from anyio.to_process import run_sync as run_sync_in_process  # Crashes somehow
 from anyio.to_thread import run_sync
@@ -32,9 +32,10 @@ _null_scored_image: ScoredImage = {
 
 
 class Pictures(SubroutineTemplate[Camera]):
+    _hardware_choices: dict[str, Type[Camera]] = camera_models
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.hardware_choices = camera_models
         # Frequencies
         app_config = self.ecosystem.engine.config.app_config
         picture_period: float = app_config.PICTURE_TAKING_PERIOD
@@ -57,7 +58,6 @@ class Pictures(SubroutineTemplate[Camera]):
         self._sending_data_task: Task | None = None
         self._background_arrays: dict[str, SerializableImage] = {}
         self._scored_images: dict[str, ScoredImage] = {}
-        self._finish__init__()
 
     async def _load_background_arrays(self) -> None:
         for camera_uid in self.hardware:

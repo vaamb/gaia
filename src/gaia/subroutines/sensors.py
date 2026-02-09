@@ -7,7 +7,7 @@ from math import floor
 from statistics import mean
 from time import monotonic
 import typing as t
-from typing import cast, Literal
+from typing import cast, Literal, Type
 
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -28,9 +28,10 @@ class _SensorFuture(Task):
 
 
 class Sensors(SubroutineTemplate[BaseSensor]):
+    _hardware_choices: dict[str, Type[BaseSensor]] = sensor_models
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.hardware_choices = sensor_models
         loop_period = float(self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
         self._slow_sensor_futures: set[_SensorFuture] = set()
@@ -39,7 +40,6 @@ class Sensors(SubroutineTemplate[BaseSensor]):
         self._sending_data_task: Task | None = None
         self._climate_routine_counter: int = 0
         self._climate_routine_task: Task | None = None
-        self._finish__init__()
 
     @property
     def _climate_routine_ratio(self) -> int:

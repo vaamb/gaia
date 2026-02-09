@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Coroutine
+from typing import Coroutine, Type
 
 from apscheduler.triggers.cron import CronTrigger
 
@@ -7,14 +7,15 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler, Timer
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Dimmer, Switch
+from gaia.hardware.abc import Actuator
 from gaia.subroutines.template import SubroutineTemplate
 
 
-class Weather(SubroutineTemplate[Dimmer | Switch]):
+class Weather(SubroutineTemplate[Actuator]):
+    _hardware_choices: dict[str, Type[Actuator]] = actuator_models
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.hardware_choices = actuator_models
         # Routine parameters
         self._actuator_handlers: dict[str, ActuatorHandler] | None = None
         self._jobs = set()
