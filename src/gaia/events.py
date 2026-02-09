@@ -12,7 +12,7 @@ import inspect
 import logging
 from time import monotonic
 import typing as t
-from typing import Any, Callable, cast, Literal, NamedTuple, Type, TypeVar
+from typing import Callable, cast, Iterator, Literal, NamedTuple, Type, TypeVar
 from uuid import UUID
 
 from pydantic import RootModel, ValidationError
@@ -20,7 +20,7 @@ from pydantic import RootModel, ValidationError
 from dispatcher import AsyncEventHandler
 import gaia_validators as gv
 
-from gaia import Ecosystem, EcosystemConfig, Engine
+from gaia import Ecosystem, Engine
 from gaia.config.from_files import ConfigType
 from gaia.dependencies.camera import SerializableImagePayload
 from gaia.ecosystem import _EcosystemPayloads
@@ -33,6 +33,11 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 PT = TypeVar("PT", dict, list[dict])
+
+
+ENGINE_PAYLOADS: frozenset[PayloadName] = frozenset({"places_list"})
+HEARTBEAT_TIMEOUT: float = 30.0
+PING_INTERVAL: float = 15.0
 
 
 PayloadName = Literal[
@@ -157,7 +162,6 @@ class Events(AsyncEventHandler):
         kwargs["namespace"] = "aggregator"
         super().__init__(**kwargs)
         self.engine: Engine = engine
-        self.ecosystems: dict[str, "Ecosystem"] = self.engine.ecosystems
         self.registered = False
         self._resent_initialization_data: bool = False
         self._last_heartbeat: float = monotonic()
@@ -180,26 +184,30 @@ class Events(AsyncEventHandler):
     def is_connected(self) -> bool:
         return (
             self._dispatcher.connected
-            and monotonic() - self._last_heartbeat < 30.0
+            and monotonic() - self._last_heartbeat < HEARTBEAT_TIMEOUT
         )
+
+    @property
+    def ecosystems(self) -> dict[str, Ecosystem]:
+        return self.engine.ecosystems
+
+    @staticmethod
+    def _format_error(e: Exception) -> str:
+      return f"{e.__class__.__name__}: {e}"
 
     # ---------------------------------------------------------------------------
     #   Background jobs
     # ---------------------------------------------------------------------------
-    def _schedule_jobs(self) -> None:
-        self._jobs_scheduled = True
-
-    def _unschedule_jobs(self) -> None:
-        self._jobs_scheduled = False
-
     def _start_ping_task(self) -> None:
+        if self._ping_task is not None:
+            self._ping_task.cancel()
         self._ping_task = asyncio.create_task(self._ping_loop(), name="events-ping")
 
     async def _ping_loop(self) -> None:
         while True:
             start = monotonic()
             await self.ping()
-            sleep_time = max(15 - (monotonic() - start), 0.01)
+            sleep_time = max(PING_INTERVAL - (monotonic() - start), 0.01)
             await sleep(sleep_time)
 
     async def ping(self) -> None:
@@ -221,7 +229,7 @@ class Events(AsyncEventHandler):
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while running the ping routine. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                    f"{self._format_error(e)}."
                 )
 
     async def on_pong(self) -> None:
@@ -233,11 +241,11 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     def filter_uids(self, ecosystem_uids: str | list[str] | None = None) -> list[str]:
         if ecosystem_uids is None:
-            return [uid for uid in self.ecosystems.keys()]
+            return list(self.ecosystems)
         else:
             if isinstance(ecosystem_uids, str):
                 ecosystem_uids = [ecosystem_uids]
-            return [uid for uid in ecosystem_uids if uid in self.ecosystems.keys()]
+            return [uid for uid in ecosystem_uids if uid in self.ecosystems]
 
     def get_payload(
             self,
@@ -245,7 +253,7 @@ class Events(AsyncEventHandler):
             ecosystem_uids: str | list[str] | None = None,
     ) -> gv.EcosystemPayloadDict | list[gv.EcosystemPayloadDict] | None:
         self.logger.debug(f"Getting '{payload_name}' payload.")
-        if payload_name in ("places_list",):
+        if payload_name in ENGINE_PAYLOADS:
             return self._get_engine_payload(payload_name)
         else:
             return self._get_ecosystem_payload(payload_name, ecosystem_uids)
@@ -305,7 +313,7 @@ class Events(AsyncEventHandler):
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while emitting event '{payload_name}'. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`.")
+                    f"{self._format_error(e)}.")
                 return False
             else:
                 if result:
@@ -366,15 +374,18 @@ class Events(AsyncEventHandler):
             self.logger.warning("Registration request could not be sent.")
 
     @validate_payload(RootModel[dict | None])
-    async def on_connect(self, environment: dict | None) -> None:  # noqa
+    async def on_connect(self, _environment: dict | None) -> None:
         self.logger.info(
             "Connection to the message broker successful. Will try to register "
             "the engine to Ouranos.")
         self._start_ping_task()
         await self.register()
 
-    async def on_disconnect(self, *args) -> None:  # noqa
+    async def on_disconnect(self, *_args) -> None:
         self.logger.debug("Received a disconnection request.")
+        if self._ping_task is not None:
+            self._ping_task.cancel()
+            self._ping_task = None
         if self.engine.stopped:
             self.logger.info("Engine requested to disconnect from the broker.")
             return  # The Engine takes care to shut down the scheduler and the jobs running
@@ -382,8 +393,6 @@ class Events(AsyncEventHandler):
             self.logger.warning("Dispatcher disconnected from the broker.")
         else:
             self.logger.error("Failed to register engine.")
-        if self._jobs_scheduled:
-            self._unschedule_jobs()
 
     async def on_register(self) -> None:
         self.registered = False
@@ -422,8 +431,6 @@ class Events(AsyncEventHandler):
     async def on_initialization_ack(self, missing_data: list | None = None) -> None:
         if missing_data is None:
             self.registered = True
-            if not self._jobs_scheduled:
-                self._schedule_jobs()
             self.logger.info("Ouranos successfully received ecosystems info.")
             if self.use_db:
                 await self.send_buffered_data()
@@ -498,21 +505,14 @@ class Events(AsyncEventHandler):
                 f"{action.name.capitalize()} {target} is not possible for this "
                 f"engine.")
 
-        if target in ("management", "time_parameters", "chaos_config"):
+        if target in ("management", "chaos_config"):
             # Need to update a setter
-            def get_attr_setter(config: EcosystemConfig, attr_name: str) -> Callable:
-                def inner(**value: dict):
-                    setattr(config, attr_name, value)
+            def attr_setter(**value: dict) -> None:
+                setattr(base_obj, crud_link.func_or_attr_name, value)
 
-                return inner
-
-            return get_attr_setter(base_obj, crud_link.func_or_attr_name)
+            return attr_setter
         else:
-
-            def get_function(obj: Any, func_name: str) -> Callable:
-                return getattr(obj, func_name)
-
-            return get_function(base_obj, crud_link.func_or_attr_name)
+            return getattr(base_obj, crud_link.func_or_attr_name)
 
     @validate_payload(gv.CrudPayload)
     async def on_crud(self, data: gv.CrudPayloadDict) -> None:
@@ -531,7 +531,7 @@ class Events(AsyncEventHandler):
         if target in ("ecosystem", "place"):
             ecosystem_uid = None
         else:
-            ecosystem_uid: str = data["routing"]["ecosystem_uid"]
+            ecosystem_uid = data["routing"]["ecosystem_uid"]
         event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
         self.logger.info(f"Received CRUD request '{crud_uuid}' from Ouranos.")
 
@@ -545,7 +545,7 @@ class Events(AsyncEventHandler):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while treating CRUD request "
-                f"`{crud_uuid}`. ERROR msg: `{e.__class__.__name__}: {e}`.")
+                f"`{crud_uuid}`. {self._format_error(e)}.")
             await self.emit(
                 event="crud_result",
                 data=gv.RequestResult(
@@ -568,12 +568,8 @@ class Events(AsyncEventHandler):
         # Send back the updated info
         await self.engine.refresh_ecosystems(send_info=False)
         crud_link = crud_links_dict[event_name]
-        if not crud_link.payload_name:
-            self.logger.warning(
-                f"No CRUD payload linked to action '{action.name} {target}' "
-                f"was found. Updated data won't be sent to Ouranos.")
-        payload_name = crud_link.payload_name
-        await self.send_payload(payload_name=payload_name, ecosystem_uids=ecosystem_uid)
+        await self.send_payload(
+            payload_name=crud_link.payload_name, ecosystem_uids=ecosystem_uid)
 
     # ---------------------------------------------------------------------------
     #   Events for buffered data
@@ -585,15 +581,14 @@ class Events(AsyncEventHandler):
                 "parameter 'USE_DATABASE' to 'True'.")
         from gaia.database.models import ActuatorBuffer, SensorBuffer
 
+        buffers = [
+            (SensorBuffer, "buffered_sensors_data"),
+            (ActuatorBuffer, "buffered_actuators_data"),
+        ]
         async with self.db.scoped_session() as session:
-            sensor_buffer_iterator = await SensorBuffer.get_buffered_data(session)
-            async for payload in sensor_buffer_iterator:
-                payload_dict: gv.BufferedSensorsDataPayloadDict = payload.model_dump()
-                await self.emit(event="buffered_sensors_data", data=payload_dict)
-            actuator_buffer_iterator = await ActuatorBuffer.get_buffered_data(session)
-            async for payload in actuator_buffer_iterator:
-                payload_dict: gv.BufferedActuatorsStatePayloadDict = payload.model_dump()
-                await self.emit(event="buffered_actuators_data", data=payload_dict)
+            for buffer_cls, event_name in buffers:
+                async for payload in await buffer_cls.get_buffered_data(session):
+                    await self.emit(event=event_name, data=payload.model_dump())
 
     @validate_payload(gv.RequestResult)
     async def on_buffered_data_ack(self, data: gv.RequestResultDict) -> None:
@@ -604,31 +599,37 @@ class Events(AsyncEventHandler):
         from gaia.database.models import ActuatorBuffer, DataBufferMixin, SensorBuffer
 
         async with self.db.scoped_session() as session:
-            for db_model in (ActuatorBuffer, SensorBuffer):
-                db_model: DataBufferMixin
-                if data["status"] == gv.Result.success:
+            if data["status"] == gv.Result.success:
+                for db_model in (ActuatorBuffer, SensorBuffer):
+                    db_model: DataBufferMixin
                     await db_model.mark_exchange_as_success(session, data["uuid"])
-                else:
+            else:
+                for db_model in (ActuatorBuffer, SensorBuffer):
                     self.logger.error(
                         f"Encountered an error while treating buffered data "
-                        f"exchange `{data['uuid']}`. ERROR msg: "
-                        f"`{data['message']}`.")
+                        f"exchange `{data['uuid']}`. ERROR msg: `{data['message']}`.")
                     await db_model.mark_exchange_as_failed(session, data["uuid"])
 
     # ---------------------------------------------------------------------------
     #   Pictures
     # ---------------------------------------------------------------------------
-    async def send_picture_arrays(
+    def _iter_picture_arrays(
             self,
             ecosystem_uids: str | list[str] | None = None,
-    ) -> None:
+    ) -> Iterator[tuple[str, list[SerializableImage]]]:
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(f"Getting 'picture_arrays' for {humanize_list(uids)}.")
-
         for uid in uids:
             picture_arrays = self.ecosystems[uid].picture_arrays
             if isinstance(picture_arrays, gv.Empty):
                 continue
+            yield uid, picture_arrays
+
+    async def send_picture_arrays(
+            self,
+            ecosystem_uids: str | list[str] | None = None,
+    ) -> None:
+        for uid, picture_arrays in self._iter_picture_arrays(ecosystem_uids):
             if self._resize_ratio != 1.0:
                 picture_arrays = [
                     picture_array.resize(ratio=self._resize_ratio)
@@ -673,14 +674,7 @@ class Events(AsyncEventHandler):
         if self.camera_token is None:
             self.logger.error("No camera token found, cannot send picture arrays.")
             return
-        uids = self.filter_uids(ecosystem_uids)
-        self.logger.debug(f"Getting 'picture_arrays' for {humanize_list(uids)}.")
-
-        for uid in uids:
-            picture_arrays = self.ecosystems[uid].picture_arrays
-            if isinstance(picture_arrays, gv.Empty):
-                continue
+        for uid, picture_arrays in self._iter_picture_arrays(ecosystem_uids):
             for image in picture_arrays:
-                image: SerializableImage
                 image.metadata["ecosystem_uid"] = uid
                 await self._upload_image(image)
