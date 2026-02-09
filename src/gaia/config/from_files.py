@@ -509,7 +509,7 @@ class EngineConfig(metaclass=SingletonMeta):
             ecosystem_name = ecosystem_cfg["name"]
             self.logger.warning(
                 f"{method_name} method cannot be set to '{method.name}' for "
-                f"ecosystem {ecosystem_name} Will fall back to 'fixed'. "
+                f"ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
                 f"ERROR msg: `{e.__class__.__name__}: {e}`"
             )
 
