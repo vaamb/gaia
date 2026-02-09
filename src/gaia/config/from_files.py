@@ -415,6 +415,9 @@ class EngineConfig(metaclass=SingletonMeta):
     def __repr__(self) -> str:  # pragma: no cover
         return f"EngineConfig(watchdog={self.started})"
 
+    # ---------------------------------------------------------------------------
+    #   Properties and common utilities
+    # ---------------------------------------------------------------------------
     @property
     def watchdog(self) -> ConfigWatchdog:
         return self._watchdog
@@ -487,7 +490,13 @@ class EngineConfig(metaclass=SingletonMeta):
             return self.cache_dir / file_type.value
         raise ValueError(f"Invalid file type: {file_type}")
 
-    # Load and save configs and caches
+    # ---------------------------------------------------------------------------
+    #   Config and caches load and save
+    # ---------------------------------------------------------------------------
+    @property
+    def config_files_lock(self):
+        return self._config_files_lock
+
     def _check_files_lock_acquired(self) -> None:
         if not self._config_files_lock.locked():
             raise RuntimeError(
@@ -704,7 +713,9 @@ class EngineConfig(metaclass=SingletonMeta):
             case _:
                 raise ValueError(f"Unknown config type: {cfg_type}")
 
-    # Initialize configs
+    # ---------------------------------------------------------------------------
+    #   Config initialization
+    # ---------------------------------------------------------------------------
     async def _create_ecosystems_config_file(self):
         self._ecosystems_config_dict = {}
         self.create_ecosystem("Default Ecosystem")
@@ -743,11 +754,27 @@ class EngineConfig(metaclass=SingletonMeta):
         # Mark as loaded
         self.configs_loaded = True
 
+    # ---------------------------------------------------------------------------
+    #   Ecosystems config interface
+    # ---------------------------------------------------------------------------
     @property
-    def config_files_lock(self):
-        return self._config_files_lock
+    def ecosystems_config_dict(self) -> dict[str, EcosystemConfigDict]:
+        return self._ecosystems_config_dict
 
-    # API
+    @ecosystems_config_dict.setter
+    def ecosystems_config_dict(self, value: dict):
+        if not self.app_config.TESTING:
+            raise AttributeError("can't set attribute 'ecosystems_config_dict'")
+        self._ecosystems_config_dict = value
+
+    @property
+    def ecosystems_uid(self) -> list[str]:
+        return list(self.ecosystems_config_dict.keys())
+
+    @property
+    def ecosystems_name(self) -> list[str]:
+        return [i["name"] for i in self.ecosystems_config_dict.values()]
+
     def _create_new_ecosystem_uid(self) -> str:
         used_ids = self.ecosystems_uid
         while True:
@@ -777,34 +804,6 @@ class EngineConfig(metaclass=SingletonMeta):
         ecosystem_ids = self.get_IDs(ecosystem_id)
         del self.ecosystems_config_dict[ecosystem_ids.uid]
 
-    @property
-    def ecosystems_config_dict(self) -> dict[str, EcosystemConfigDict]:
-        return self._ecosystems_config_dict
-
-    @ecosystems_config_dict.setter
-    def ecosystems_config_dict(self, value: dict):
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'ecosystems_config_dict'")
-        self._ecosystems_config_dict = value
-
-    @property
-    def private_config(self) -> PrivateConfigDict:
-        return self._private_config
-
-    @private_config.setter
-    def private_config(self, value: PrivateConfigDict):
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'private_config'")
-        self._private_config = value
-
-    @property
-    def ecosystems_uid(self) -> list[str]:
-        return list(self.ecosystems_config_dict.keys())
-
-    @property
-    def ecosystems_name(self) -> list[str]:
-        return [i["name"] for i in self.ecosystems_config_dict.values()]
-
     def get_ecosystems_expected_to_run(self) -> set[str]:
         return {
             ecosystem_uid
@@ -831,7 +830,29 @@ class EngineConfig(metaclass=SingletonMeta):
             f"configuration use the function `create_ecosystem()`."
         )
 
-    """Private config parameters"""
+    def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
+        return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
+
+    @property
+    def ecosystems_config(self) -> dict[str, EcosystemConfig]:
+        return _MetaEcosystemConfig.instances
+
+    # ---------------------------------------------------------------------------
+    #   Private config interface
+    # ---------------------------------------------------------------------------
+    @property
+    def private_config(self) -> PrivateConfigDict:
+        return self._private_config
+
+    @private_config.setter
+    def private_config(self, value: PrivateConfigDict):
+        if not self.app_config.TESTING:
+            raise AttributeError("can't set attribute 'private_config'")
+        self._private_config = value
+
+    # ---------------------------------------------------------------------------
+    #   Places and suntimes
+    # ---------------------------------------------------------------------------
     @property
     def places(self) -> dict[str, gv.Coordinates]:
         return self.private_config["places"]
@@ -894,10 +915,6 @@ class EngineConfig(metaclass=SingletonMeta):
     @home_coordinates.setter
     def home_coordinates(self, value: tuple[float, float] | CoordinatesDict) -> None:
         self.set_place(DEFAULT_PLACE, coordinates=value)
-
-    @property
-    def units(self) -> dict[str, str]:
-        return self.private_config.get("units", {})
 
     def _compute_sun_times(self, place: str, coord: gv.Coordinates) -> gv.SunTimesDict:
         today = date.today()
@@ -975,6 +992,13 @@ class EngineConfig(metaclass=SingletonMeta):
             )
 
     @property
+    def units(self) -> dict[str, str]:
+        return self.private_config.get("units", {})
+
+    # ---------------------------------------------------------------------------
+    #   Chaos cache
+    # ---------------------------------------------------------------------------
+    @property
     def chaos_memory(self) -> dict[str, ChaosMemory]:
         return self._chaos_memory
 
@@ -996,13 +1020,6 @@ class EngineConfig(metaclass=SingletonMeta):
         if ecosystem_uid not in self._chaos_memory:
             self._chaos_memory.update(self._create_chaos_memory(ecosystem_uid))
         return self.chaos_memory[ecosystem_uid]
-
-    def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
-        return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
-
-    @property
-    def ecosystems_config(self) -> dict[str, EcosystemConfig]:
-        return _MetaEcosystemConfig.instances
 
 
 # ---------------------------------------------------------------------------
