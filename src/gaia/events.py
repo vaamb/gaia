@@ -194,12 +194,6 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     #   Background jobs
     # ---------------------------------------------------------------------------
-    def _schedule_jobs(self) -> None:
-        self._jobs_scheduled = True
-
-    def _unschedule_jobs(self) -> None:
-        self._jobs_scheduled = False
-
     def _start_ping_task(self) -> None:
         if self._ping_task is not None:
             self._ping_task.cancel()
@@ -395,8 +389,6 @@ class Events(AsyncEventHandler):
             self.logger.warning("Dispatcher disconnected from the broker.")
         else:
             self.logger.error("Failed to register engine.")
-        if self._jobs_scheduled:
-            self._unschedule_jobs()
 
     async def on_register(self) -> None:
         self.registered = False
@@ -435,8 +427,6 @@ class Events(AsyncEventHandler):
     async def on_initialization_ack(self, missing_data: list | None = None) -> None:
         if missing_data is None:
             self.registered = True
-            if not self._jobs_scheduled:
-                self._schedule_jobs()
             self.logger.info("Ouranos successfully received ecosystems info.")
             if self.use_db:
                 await self.send_buffered_data()
