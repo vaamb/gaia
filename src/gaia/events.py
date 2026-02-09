@@ -503,21 +503,14 @@ class Events(AsyncEventHandler):
                 f"{action.name.capitalize()} {target} is not possible for this "
                 f"engine.")
 
-        if target in ("management", "time_parameters", "chaos_config"):
+        if target in ("management", "chaos_config"):
             # Need to update a setter
-            def get_attr_setter(config: EcosystemConfig, attr_name: str) -> Callable:
-                def inner(**value: dict):
-                    setattr(config, attr_name, value)
+            def attr_setter(**value: dict) -> None:
+                setattr(base_obj, crud_link.func_or_attr_name, value)
 
-                return inner
-
-            return get_attr_setter(base_obj, crud_link.func_or_attr_name)
+            return attr_setter
         else:
-
-            def get_function(obj: Any, func_name: str) -> Callable:
-                return getattr(obj, func_name)
-
-            return get_function(base_obj, crud_link.func_or_attr_name)
+            return getattr(base_obj, crud_link.func_or_attr_name)
 
     @validate_payload(gv.CrudPayload)
     async def on_crud(self, data: gv.CrudPayloadDict) -> None:
