@@ -12,7 +12,7 @@ import inspect
 import logging
 from time import monotonic
 import typing as t
-from typing import Any, Callable, cast, Literal, NamedTuple, Type, TypeVar
+from typing import Callable, cast, Iterator, Literal, NamedTuple, Type, TypeVar
 from uuid import UUID
 
 from pydantic import RootModel, ValidationError
@@ -615,17 +615,23 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     #   Pictures
     # ---------------------------------------------------------------------------
-    async def send_picture_arrays(
+    def _iter_picture_arrays(
             self,
             ecosystem_uids: str | list[str] | None = None,
-    ) -> None:
+    ) -> Iterator[tuple[str, list["SerializableImage"]]]:
         uids = self.filter_uids(ecosystem_uids)
         self.logger.debug(f"Getting 'picture_arrays' for {humanize_list(uids)}.")
-
         for uid in uids:
             picture_arrays = self.ecosystems[uid].picture_arrays
             if isinstance(picture_arrays, gv.Empty):
                 continue
+            yield uid, picture_arrays
+
+    async def send_picture_arrays(
+            self,
+            ecosystem_uids: str | list[str] | None = None,
+    ) -> None:
+        for uid, picture_arrays in self._iter_picture_arrays(ecosystem_uids):
             if self._resize_ratio != 1.0:
                 picture_arrays = [
                     picture_array.resize(ratio=self._resize_ratio)
@@ -670,13 +676,7 @@ class Events(AsyncEventHandler):
         if self.camera_token is None:
             self.logger.error("No camera token found, cannot send picture arrays.")
             return
-        uids = self.filter_uids(ecosystem_uids)
-        self.logger.debug(f"Getting 'picture_arrays' for {humanize_list(uids)}.")
-
-        for uid in uids:
-            picture_arrays = self.ecosystems[uid].picture_arrays
-            if isinstance(picture_arrays, gv.Empty):
-                continue
+        for uid, picture_arrays in self._iter_picture_arrays(ecosystem_uids):
             for image in picture_arrays:
                 image: SerializableImage
                 image.metadata["ecosystem_uid"] = uid
