@@ -832,12 +832,6 @@ class EngineConfig(metaclass=SingletonMeta):
     def private_config(self) -> PrivateConfigDict:
         return self._private_config
 
-    @private_config.setter
-    def private_config(self, value: PrivateConfigDict):
-        if not self.app_config.TESTING:
-            raise AttributeError("can't set attribute 'private_config'")
-        self._private_config = value
-
     # ---------------------------------------------------------------------------
     #   Places and suntimes
     # ---------------------------------------------------------------------------
