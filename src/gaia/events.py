@@ -193,6 +193,8 @@ class Events(AsyncEventHandler):
         self._jobs_scheduled = False
 
     def _start_ping_task(self) -> None:
+        if self._ping_task is not None:
+            self._ping_task.cancel()
         self._ping_task = asyncio.create_task(self._ping_loop(), name="events-ping")
 
     async def _ping_loop(self) -> None:
@@ -375,6 +377,9 @@ class Events(AsyncEventHandler):
 
     async def on_disconnect(self, *args) -> None:  # noqa
         self.logger.debug("Received a disconnection request.")
+        if self._ping_task is not None:
+            self._ping_task.cancel()
+            self._ping_task = None
         if self.engine.stopped:
             self.logger.info("Engine requested to disconnect from the broker.")
             return  # The Engine takes care to shut down the scheduler and the jobs running
