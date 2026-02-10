@@ -24,6 +24,7 @@ from gaia.utils import create_uid
 from .data import (
      ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid,
      ws_dimmer_uid, ws_sensor_uid, ws_switch_uid)
+from .utils import yield_control
 
 
 WEBSOCKET_URL: str = "ws://gaia-device:gaia@127.0.0.1:19171"
@@ -158,7 +159,7 @@ class TestWebsocketHardware:
         await manager.start()
         websocket = await connect(WEBSOCKET_URL)
         await websocket.send("test")
-        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
         with logs_content() as logs:
             assert "Device test is trying to connect" in logs
 
@@ -186,7 +187,7 @@ class TestWebsocketHardware:
         # Test device connection
         websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
         await websocket.send(hardware.uid)
-        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
         with logs_content() as logs:
             assert f"Device {hardware.uid} connected" in logs
 
@@ -201,7 +202,7 @@ class TestWebsocketHardware:
         # Test ´_send_msg_and_wait()´
         # Send message from Gaia to device
         task = create_task(hardware._send_msg_and_wait(msg))
-        await sleep(0.1)
+        await yield_control()
         raw_response = await websocket.recv()
         response = WebSocketMessage.model_validate_json(raw_response)
         assert response.uuid is not None
@@ -209,7 +210,7 @@ class TestWebsocketHardware:
         # Get response, from device to Gaia
         payload = WebSocketMessage(uuid=response.uuid, data=msg * 2).model_dump_json()
         await websocket.send(payload)
-        await sleep(0.1)
+        await yield_control()
         response = await task
         assert response == msg * 2
 
@@ -228,11 +229,11 @@ class TestWebsocketHardware:
         # Connect the device
         websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
         await websocket.send(hardware.uid)
-        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
 
         # Turn on
         task = create_task(hardware.turn_on())
-        await sleep(0.1)
+        await yield_control()
         raw_response = await websocket.recv()
         response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "turn_actuator", "data": "on"}
@@ -244,13 +245,13 @@ class TestWebsocketHardware:
             }
         ).model_dump_json()
         await websocket.send(payload)
-        await sleep(0.1)
+        await yield_control()
         response = await task
         assert response
 
         # Turn off
         task = create_task(hardware.turn_off())
-        await sleep(0.1)
+        await yield_control()
         raw_response = await websocket.recv()
         response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "turn_actuator", "data": "off"}
@@ -262,7 +263,7 @@ class TestWebsocketHardware:
             }
         ).model_dump_json()
         await websocket.send(payload)
-        await sleep(0.1)
+        await yield_control()
         response = await task
         assert response
 
@@ -277,11 +278,11 @@ class TestWebsocketHardware:
         # Connect the device
         websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
         await websocket.send(hardware.uid)
-        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
 
         # Turn on
         task = create_task(hardware.set_pwm_level(42))
-        await sleep(0.1)
+        await yield_control()
         raw_response = await websocket.recv()
         response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "set_level", "data": 42}
@@ -293,7 +294,7 @@ class TestWebsocketHardware:
             }
         ).model_dump_json()
         await websocket.send(payload)
-        await sleep(0.1)
+        await yield_control()
         response = await task
         assert response
 
@@ -308,10 +309,10 @@ class TestWebsocketHardware:
         # Connect the device
         websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
         await websocket.send(hardware.uid)
-        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
+        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
 
         task = create_task(hardware.get_data())
-        await sleep(0.1)
+        await yield_control()
         raw_response = await websocket.recv()
         response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "send_data"}
@@ -325,7 +326,7 @@ class TestWebsocketHardware:
             }
         ).model_dump_json()
         await websocket.send(payload)
-        await sleep(0.1)
+        await yield_control()
         response = await task
         assert response == data
 
