@@ -26,6 +26,9 @@ from .data import (
      ws_dimmer_uid, ws_sensor_uid, ws_switch_uid)
 
 
+WEBSOCKET_URL: str = "ws://gaia-device:gaia@127.0.0.1:19171"
+
+
 def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
     base_cfg: gv.HardwareConfigDict = {
         "uid": create_uid(16),
@@ -151,8 +154,7 @@ class TestWebsocketHardware:
 
         # Make sure the manager start and can handle connections
         await manager.start()
-        await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to start
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+        websocket = await connect(WEBSOCKET_URL)
         await websocket.send("test")
         await sleep(0.1)  # Allow for WebSocketHardwareManager background loop to spin
         with logs_content() as logs:
@@ -170,8 +172,7 @@ class TestWebsocketHardware:
 
         # Make sure the manager can handle new connections once restarted
         await manager.start()
-        await sleep(0.1)
-        await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+        await connect(WEBSOCKET_URL)
 
         # And that it can be stopped again
         await manager.stop()

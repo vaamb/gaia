@@ -25,6 +25,7 @@ class WebSocketHardwareManager:
         self._registered_hardware: dict[str, str] = {}
         self.device_connections: dict[str, ServerConnection] = {}
         self._running_task: Task | None = None
+        self._started_event: Event = Event()
         self._stop_event: Event = Event()
 
     @property
@@ -51,6 +52,7 @@ class WebSocketHardwareManager:
                 server_header=None,
                 process_request=basic_auth(credentials=("gaia-device", self._password))
         ):
+            self._started_event.set()
             await self._stop_event.wait()
 
     async def start(self) -> None:
@@ -58,12 +60,22 @@ class WebSocketHardwareManager:
             raise RuntimeError("WebSocketHardwareManager is already running")
         self._stop_event.clear()  # Clear it in case the manager was stopped before
         self._running_task = create_task(self._start())
-        await sleep(0)  # Allow the task to start
+        started = create_task(self._started_event.wait())
+        # The running task should serve forever and never return if everything goes correctly
+        done, _ = await asyncio.wait(
+            [started, self._running_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        # If the running task completed, the server failed to start.
+        #  .result() will re-raise the exception.
+        if self._running_task in done:
+            self._running_task.result()
 
     async def stop(self) -> None:
         if not self.is_running:
             raise RuntimeError("WebSocketHardwareManager is not currently running")
         self._stop_event.set()
+        self._started_event.clear()
         self._running_task.cancel()
         self._running_task = None
 
