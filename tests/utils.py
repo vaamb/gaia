@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-from pathlib import Path
+from asyncio import sleep
 from typing import TypedDict
 
 from dispatcher import AsyncDispatcher
@@ -12,6 +11,12 @@ class EmitDict(TypedDict):
     data: dict | list | str | tuple | None
     room: str
     namespace: str
+
+
+async def yield_control(iterations: int = 10) -> None:
+    """Yield control to the event loop to let background tasks process."""
+    for _ in range(iterations):
+        await sleep(0)
 
 
 class MockDispatcher(AsyncDispatcher):

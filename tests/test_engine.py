@@ -10,6 +10,7 @@ from sqlalchemy_wrapper import SQLAlchemyWrapper
 from gaia import EcosystemConfig, Engine, EngineConfig
 
 from .data import ecosystem_uid, sun_times
+from .utils import yield_control
 
 
 def test_engine_singleton(engine: Engine, engine_config: EngineConfig):
@@ -88,7 +89,7 @@ async def test_engine_message_broker(engine: Engine, logs_content):
     with patch.object(engine.message_broker._connected, "is_set", return_value=True):
         await engine.start_message_broker()
         # Give time for the message broker to start
-        await sleep(0.1)
+        await yield_control()
         assert engine.message_broker_started
         await engine.stop_message_broker()
         assert not engine.message_broker_started
@@ -222,7 +223,7 @@ async def test_engine_states(engine: Engine, logs_content):
 async def test_engine_run(engine: Engine, logs_content):
     task = create_task(engine.run())
 
-    await sleep(0.5)  # Allow to set up and start up
+    await yield_control()  # Allow to set up and start up
     with logs_content() as logs:
         assert "Starting Gaia ..." in logs
 
