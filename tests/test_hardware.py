@@ -89,37 +89,39 @@ def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
 
 
 @pytest.mark.asyncio
-async def test_hardware_methods(ecosystem: Ecosystem):
-    for hardware_cls in hardware_models.values():
-        # Create required config
-        hardware_cls: Type[Hardware]
-        hardware_cfg = _get_hardware_config(hardware_cls)
+@pytest.mark.parametrize(
+    "hardware_cls",
+    hardware_models.values(),
+    ids=hardware_models.keys(),
+)
+async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosystem):
+    # Create required config
+    hardware_cfg = _get_hardware_config(hardware_cls)
 
-        # Make sure the hardware can be initialized
-        hardware = hardware_cls._unsafe_from_config(
-            gv.HardwareConfig(**hardware_cfg), ecosystem=ecosystem)
-        # Make sure the hardware has the required attributes and methods
-        if isinstance(hardware, gpioHardware):
-            assert hardware.pin
-        if isinstance(hardware, i2cHardware):
-            assert hardware._get_i2c() is not None
-        if isinstance(hardware, WebSocketHardware):
-            await hardware.register()
-        if isinstance(hardware, PlantLevelHardware):
-            assert len(hardware.plants) > 0
-        if isinstance(hardware, BaseSensor):
-            assert isinstance(await hardware.get_data(), list)
-        if isinstance(hardware, Camera):
-            assert hardware.camera_dir
-            assert await hardware.get_image((42, 21))
-        if isinstance(hardware, Dimmer):
-            assert isinstance(await hardware.set_pwm_level(100), bool)
-        if isinstance(hardware, Switch):
-            assert isinstance(await hardware.turn_on(), bool)
-            assert isinstance(await hardware.turn_off(), bool)
-        if isinstance(hardware, WebSocketHardware):
-            await hardware.unregister()
-        print(f"Test succeeded for hardware '{hardware}'")
+    # Make sure the hardware can be initialized
+    hardware = hardware_cls._unsafe_from_config(
+        gv.HardwareConfig(**hardware_cfg), ecosystem=ecosystem)
+    # Make sure the hardware has the required attributes and methods
+    if isinstance(hardware, gpioHardware):
+        assert hardware.pin
+    if isinstance(hardware, i2cHardware):
+        assert hardware._get_i2c() is not None
+    if isinstance(hardware, WebSocketHardware):
+        await hardware.register()
+    if isinstance(hardware, PlantLevelHardware):
+        assert len(hardware.plants) > 0
+    if isinstance(hardware, BaseSensor):
+        assert isinstance(await hardware.get_data(), list)
+    if isinstance(hardware, Camera):
+        assert hardware.camera_dir
+        assert await hardware.get_image((42, 21))
+    if isinstance(hardware, Dimmer):
+        assert isinstance(await hardware.set_pwm_level(100), bool)
+    if isinstance(hardware, Switch):
+        assert isinstance(await hardware.turn_on(), bool)
+        assert isinstance(await hardware.turn_off(), bool)
+    if isinstance(hardware, WebSocketHardware):
+        await hardware.unregister()
 
 
 @pytest.mark.asyncio
