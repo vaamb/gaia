@@ -209,6 +209,14 @@ class HystericalPID:
 
 
 class Timer:
+    __slots__ = (
+        "_countdown",
+        "_future",
+        "_handle",
+        "_start_time",
+        "_task",
+    )
+
     def __init__(self, callback: Awaitable | Callable, countdown: float) -> None:
         self._start_time: float = time.monotonic()
         self._countdown: float = 0.0
