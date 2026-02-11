@@ -400,7 +400,7 @@ class ActuatorHandler:
                     await self.log_actuator_state(updated_data)
                     await self.schedule_send_actuator_state(updated_data)
                 if self._timer is not None:
-                    if self._timer.time_left is None:
+                    if self._timer.time_left() is None:
                         self.reset_timer()
                 self._updating = False
 
