@@ -396,7 +396,11 @@ class ActuatorHandler:
                 if not activation:
                     self._check_active()
                 yield
-            except Exception:
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while updating status transaction. "
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                )
                 raise
             finally:
                 if self._any_status_change:
@@ -469,7 +473,7 @@ class ActuatorHandler:
         if failed:
             ids: list[str] = [f"{a_id[0]} ({a_id[1]})" for a_id in failed]
             self.logger.warning(
-                f"Could not set all status to ´{value}´. The following actuators "
+                f"Could not set all status to '{value}'. The following actuators "
                 f"failed: {', '.join(ids)}")
             return False
         self.logger.debug(
@@ -506,7 +510,7 @@ class ActuatorHandler:
         if failed:
             ids: list[str] = [f"{a_id[0]} ({a_id[1]})" for a_id in failed]
             self.logger.warning(
-                f"Could not set all the PWM level to ´{pwm_level}´. The following actuators "
+                f"Could not set all the PWM level to '{pwm_level}'. The following actuators "
                 f"failed: {', '.join(ids)}")
             return False
         self.logger.debug(
@@ -713,7 +717,7 @@ class ActuatorHub:
         return self._actuator_handlers
 
     @property
-    def pids(self) -> WeakValueDictionary[str, HystericalPID]:
+    def pids(self) -> WeakValueDictionary[gv.ClimateParameter, HystericalPID]:
         return self._pids
 
     def get_pid(
@@ -769,11 +773,11 @@ class ActuatorHub:
             self,
             actuator_group: str | gv.HardwareType,
     ) -> ActuatorHandler:
-        if actuator_group not in self.ecosystem.config.get_actuator_to_parameter():
-            raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
-            actuator_group: str = cast(str, actuator_group.name)
+            actuator_group = cast(str, actuator_group.name)
+        if actuator_group not in self.ecosystem.config.get_actuator_to_parameter():
+            raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
         try:
             return self._actuator_handlers[actuator_group]
         except KeyError:
