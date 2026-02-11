@@ -237,6 +237,7 @@ class Timer:
             await callback()
         else:
             callback()
+        self._handle = None
 
     def cancel(self) -> None:
         self._task.cancel()
