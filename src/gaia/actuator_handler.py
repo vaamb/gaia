@@ -29,7 +29,7 @@ class PIDParameters(NamedTuple):
     Kd: float
 
 
-pid_values: dict[gv.ClimateParameter: PIDParameters] = {
+pid_values: dict[gv.ClimateParameter, PIDParameters] = {
     gv.ClimateParameter.temperature: PIDParameters(5.0, 0.5, 0.1),
     gv.ClimateParameter.humidity: PIDParameters(2.0, 0.5, 1.0),
     gv.ClimateParameter.light: PIDParameters(0.001, 0.0, 0.0),
