@@ -130,7 +130,7 @@ async def test_handler_timer_modification(light_handler: ActuatorHandler):
     timer -= decrease  # remaining ~ -0.05 sec
     assert timer < 0
     await sleep(decrease)
-    assert light_handler.countdown is None
+    assert not light_handler.countdown  # Either None or 0.0
 
 
 @pytest.mark.asyncio

@@ -237,16 +237,18 @@ class Timer:
             await callback()
         else:
             callback()
+        self._handle = None
 
     def cancel(self) -> None:
         self._task.cancel()
-        self._handle.cancel()
+        if self._handle is not None:
+            self._handle.cancel()
         self._future.cancel()
 
     def time_left(self) -> float | None:
         if self.done or self.cancelled:
             return None
-        return self._start_time + self._countdown - time.monotonic()
+        return max(self._start_time + self._countdown - time.monotonic(), 0.0)
 
     def modify_countdown(self, countdown_delta: float) -> None:
         if self.done:
@@ -400,7 +402,7 @@ class ActuatorHandler:
                     await self.log_actuator_state(updated_data)
                     await self.schedule_send_actuator_state(updated_data)
                 if self._timer is not None:
-                    if self._timer.time_left is None:
+                    if self._timer.time_left() is None:
                         self.reset_timer()
                 self._updating = False
 
