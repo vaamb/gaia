@@ -715,7 +715,7 @@ class ActuatorHub:
         return self._actuator_handlers
 
     @property
-    def pids(self) -> WeakValueDictionary[str, HystericalPID]:
+    def pids(self) -> WeakValueDictionary[gv.ClimateParameter, HystericalPID]:
         return self._pids
 
     def get_pid(
