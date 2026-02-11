@@ -246,7 +246,7 @@ class Timer:
     def time_left(self) -> float | None:
         if self.done or self.cancelled:
             return None
-        return self._start_time + self._countdown - time.monotonic()
+        return max(self._start_time + self._countdown - time.monotonic(), 0.0)
 
     def modify_countdown(self, countdown_delta: float) -> None:
         if self.done:
