@@ -29,7 +29,7 @@ class PIDParameters(NamedTuple):
     Kd: float
 
 
-pid_values: dict[gv.ClimateParameter: PIDParameters] = {
+pid_values: dict[gv.ClimateParameter, PIDParameters] = {
     gv.ClimateParameter.temperature: PIDParameters(5.0, 0.5, 0.1),
     gv.ClimateParameter.humidity: PIDParameters(2.0, 0.5, 1.0),
     gv.ClimateParameter.light: PIDParameters(0.001, 0.0, 0.0),
@@ -141,16 +141,16 @@ class HystericalPID:
 
         # Debug
         if self.actuator_hub.logger.level <= logging.DEBUG:
-            if output > 0.0 and not self.direction | Direction.increase:
+            if output > 0.0 and not self.direction & Direction.increase:
                 self.actuator_hub.logger.debug(
-                    f"PID output for {self.climate_parameter.name} is > 0 but no"
+                    f"PID output for {self.climate_parameter.name} is > 0 but no "
                     f"actuator able to increase {self.climate_parameter.name} "
                     f"has been detected. {self.climate_parameter.name.capitalize()} "
                     f"may remain under the targeted value."
                 )
-            if output < 0.0 and not self.direction | Direction.decrease:
+            if output < 0.0 and not self.direction & Direction.decrease:
                 self.actuator_hub.logger.debug(
-                    f"PID output for {self.climate_parameter.name} is < 0 but no"
+                    f"PID output for {self.climate_parameter.name} is < 0 but no "
                     f"actuator able to decrease {self.climate_parameter.name} "
                     f"has been detected. {self.climate_parameter.name.capitalize()} "
                     f"may remain above the targeted value."
@@ -158,29 +158,23 @@ class HystericalPID:
         return output
 
     def _hysteresis_internal(self, current_value: float) -> float | None:
-        target_min = self.target - self.hysteresis
-        target_max = self.target + self.hysteresis
+        target_low: float
+        target_high: float
 
         if self.last_output > 0.0:
-            if self.target <= current_value <= target_max:
-                self._reset_errors()
-                return 0.0
-            else:  # Out ouf targeted range, need PID
-                return None
-
+            target_low = self.target
+            target_high = self.target + self.hysteresis
         elif self.last_output < 0.0:
-            if target_min <= current_value <= self.target:
-                self._reset_errors()
-                return 0.0
-            else:  # Out ouf targeted range, need PID
-                return None
+            target_low = self.target - self.hysteresis
+            target_high = self.target
+        else:
+            target_low = self.target - self.hysteresis
+            target_high = self.target + self.hysteresis
 
-        else:  # self.last_output == 0:
-            if target_min <= current_value <= target_max:
-                self._reset_errors()
-                return 0.0
-            else:  # Out ouf targeted range, need PID
-                return None
+        if target_low <= current_value <= target_high:
+            self._reset_errors()
+            return 0.0
+        return None  # Out of targeted range, need PID
 
     def _pid_internal(self, current_value: float, sampling_time: float) -> float:
         if self._last_sampling_time is None or self._used_regularly:
