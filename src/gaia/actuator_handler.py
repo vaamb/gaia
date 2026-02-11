@@ -471,7 +471,7 @@ class ActuatorHandler:
         if failed:
             ids: list[str] = [f"{a_id[0]} ({a_id[1]})" for a_id in failed]
             self.logger.warning(
-                f"Could not set all status to ´{value}´. The following actuators "
+                f"Could not set all status to '{value}'. The following actuators "
                 f"failed: {', '.join(ids)}")
             return False
         self.logger.debug(
@@ -508,7 +508,7 @@ class ActuatorHandler:
         if failed:
             ids: list[str] = [f"{a_id[0]} ({a_id[1]})" for a_id in failed]
             self.logger.warning(
-                f"Could not set all the PWM level to ´{pwm_level}´. The following actuators "
+                f"Could not set all the PWM level to '{pwm_level}'. The following actuators "
                 f"failed: {', '.join(ids)}")
             return False
         self.logger.debug(
