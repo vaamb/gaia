@@ -141,16 +141,16 @@ class HystericalPID:
 
         # Debug
         if self.actuator_hub.logger.level <= logging.DEBUG:
-            if output > 0.0 and not self.direction | Direction.increase:
+            if output > 0.0 and not self.direction & Direction.increase:
                 self.actuator_hub.logger.debug(
-                    f"PID output for {self.climate_parameter.name} is > 0 but no"
+                    f"PID output for {self.climate_parameter.name} is > 0 but no "
                     f"actuator able to increase {self.climate_parameter.name} "
                     f"has been detected. {self.climate_parameter.name.capitalize()} "
                     f"may remain under the targeted value."
                 )
-            if output < 0.0 and not self.direction | Direction.decrease:
+            if output < 0.0 and not self.direction & Direction.decrease:
                 self.actuator_hub.logger.debug(
-                    f"PID output for {self.climate_parameter.name} is < 0 but no"
+                    f"PID output for {self.climate_parameter.name} is < 0 but no "
                     f"actuator able to decrease {self.climate_parameter.name} "
                     f"has been detected. {self.climate_parameter.name.capitalize()} "
                     f"may remain above the targeted value."
