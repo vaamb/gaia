@@ -158,29 +158,23 @@ class HystericalPID:
         return output
 
     def _hysteresis_internal(self, current_value: float) -> float | None:
-        target_min = self.target - self.hysteresis
-        target_max = self.target + self.hysteresis
+        target_low: float
+        target_high: float
 
         if self.last_output > 0.0:
-            if self.target <= current_value <= target_max:
-                self._reset_errors()
-                return 0.0
-            else:  # Out ouf targeted range, need PID
-                return None
-
+            target_low = self.target
+            target_high = self.target + self.hysteresis
         elif self.last_output < 0.0:
-            if target_min <= current_value <= self.target:
-                self._reset_errors()
-                return 0.0
-            else:  # Out ouf targeted range, need PID
-                return None
+            target_low = self.target - self.hysteresis
+            target_high = self.target
+        else:
+            target_low = self.target - self.hysteresis
+            target_high = self.target + self.hysteresis
 
-        else:  # self.last_output == 0:
-            if target_min <= current_value <= target_max:
-                self._reset_errors()
-                return 0.0
-            else:  # Out ouf targeted range, need PID
-                return None
+        if target_low <= current_value <= target_high:
+            self._reset_errors()
+            return 0.0
+        return None  # Out of targeted range, need PID
 
     def _pid_internal(self, current_value: float, sampling_time: float) -> float:
         if self._last_sampling_time is None or self._used_regularly:
