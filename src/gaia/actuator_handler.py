@@ -394,7 +394,11 @@ class ActuatorHandler:
                 if not activation:
                     self._check_active()
                 yield
-            except Exception:
+            except Exception as e:
+                self.logger.error(
+                    f"Encountered an error while updating status transaction. "
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                )
                 raise
             finally:
                 if self._any_status_change:
