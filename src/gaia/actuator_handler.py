@@ -77,8 +77,6 @@ class HystericalPID:
         self._used_regularly: bool = used_regularly
         self._last_input: float | None = None
         self._last_output: float = 0.0
-        # Attach the PID to the actuator hub PIDs store
-        self.actuator_hub.pids[climate_parameter] = self
 
     def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
@@ -317,8 +315,6 @@ class ActuatorHandler:
         self._updating: bool = False
         self._any_status_change: bool = False
         self._sending_data_task: Task | None = None
-        # Attach the handler to the actuator hub handlers store
-        self.actuator_hub.actuator_handlers[self.group] = self
 
     def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
@@ -737,6 +733,8 @@ class ActuatorHub:
                 minimum_output=-100.0,
                 maximum_output=100.0,
             )
+            # Attach the PID to the actuator hub PIDs store
+            self._pids[climate_parameter] = pid
             # The PID is attached to the PIDs store during its init
             return pid
 
@@ -786,6 +784,8 @@ class ActuatorHub:
             maybe_pid = self._get_actuator_pid(actuator_group)
             actuator_handler = ActuatorHandler(
                 self, actuator_type, direction, actuator_group, maybe_pid)
+            # Attach the handler to the actuator hub handlers store
+            self._actuator_handlers[actuator_group] = actuator_handler
             # The handler is attached to the handlers store during its init
             return actuator_handler
 
