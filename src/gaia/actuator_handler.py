@@ -315,8 +315,6 @@ class ActuatorHandler:
         self._updating: bool = False
         self._any_status_change: bool = False
         self._sending_data_task: Task | None = None
-        # Attach the handler to the actuator hub handlers store
-        self.actuator_hub.actuator_handlers[self.group] = self
 
     def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
@@ -786,6 +784,8 @@ class ActuatorHub:
             maybe_pid = self._get_actuator_pid(actuator_group)
             actuator_handler = ActuatorHandler(
                 self, actuator_type, direction, actuator_group, maybe_pid)
+            # Attach the handler to the actuator hub handlers store
+            self._actuator_handlers[actuator_group] = actuator_handler
             # The handler is attached to the handlers store during its init
             return actuator_handler
 
