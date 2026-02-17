@@ -55,6 +55,11 @@ die() {
 log INFO "Log file: ${LOG_FILE}"
 #<<<Logging<<<
 
+# Check if already installed
+if [[ -n "${GAIA_DIR:-}" ]]; then
+    die "Gaia appears to be already installed at ${GAIA_DIR}"
+fi
+
 # Version requirements
 readonly MIN_PYTHON_VERSION="3.11"
 readonly GAIA_VERSION="0.10.0"
