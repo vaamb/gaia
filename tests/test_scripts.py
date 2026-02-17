@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from pathlib import Path
+import re
 import tomllib
 from unittest import TestCase
 
@@ -50,8 +49,6 @@ class TestInstallScript(TestCase):
         assert install_version == toml_version
 
     def test_logging_sync(self):
-        import re
-
         pattern = re.compile(r"#>>>Logging>>>.*#<<<Logging<<<", re.DOTALL)
 
         install_code = _get_pattern(self.install_script_path, pattern)
