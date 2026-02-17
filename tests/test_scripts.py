@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 import tomllib
 from unittest import TestCase
@@ -13,12 +15,23 @@ def _get_var_value(var_name: str, script_path: Path) -> str:
     raise ValueError(f"Variable {var_name} not found in {script_path}")
 
 
+def _get_pattern(script_path: Path, pattern: re.Pattern) -> str:
+    with open(script_path, "r") as f:
+        script_text = f.read()
+
+    search = pattern.search(script_text)
+    if search is not None:
+        return search.group(0)
+    raise ValueError(f"Pattern {pattern} not found in {script_path}")
+
+
 class TestInstallScript(TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root_dir = Path(__file__).parents[1]
         cls.scripts_dir = cls.root_dir / "scripts"
         cls.install_script_path = cls.scripts_dir / "install.sh"
+        cls.logging_script_path = cls.scripts_dir / "logging.sh"
 
     def test_gaia_version(self):
         gaia_version = _get_var_value("GAIA_VERSION", self.install_script_path)
@@ -35,3 +48,13 @@ class TestInstallScript(TestCase):
         toml_version = toml_version[2:]
 
         assert install_version == toml_version
+
+    def test_logging_sync(self):
+        import re
+
+        pattern = re.compile(r"#>>>Logging>>>.*#<<<Logging<<<", re.DOTALL)
+
+        install_code = _get_pattern(self.install_script_path, pattern)
+        logging_code = _get_pattern(self.logging_script_path, pattern)
+
+        assert install_code == logging_code
