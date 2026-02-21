@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from asyncio import sleep
-from typing import TypedDict
+from typing import AsyncIterator, TypedDict
 
 from dispatcher import AsyncDispatcher
 
@@ -23,6 +23,16 @@ class MockDispatcher(AsyncDispatcher):
     def __init__(self, namespace: str):
         super().__init__(namespace)
         self.emit_store: list[EmitDict] = []
+
+    async def _listen(self) -> AsyncIterator[bytes]:
+        pass  # No used
+
+    async def _publish(self, namespace: str, payload: bytes, ttl: int | None = None,
+                       timeout: int | float | None = None) -> None:
+        pass  # Short-circuited
+
+    async def _broker_reachable(self) -> bool:
+        return True
 
     async def emit(
             self,
