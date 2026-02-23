@@ -115,11 +115,6 @@ class Engine(metaclass=SingletonMeta):
         # Stop plugins
         if self.plugins_initialized:
             await self.stop_plugins()
-        # Stop watchdog (EngineConfig.started checks if watchdog task exists)
-        if self.config.started:
-            self.config.watchdog.stop()
-        # Save the configs
-        await self.config.save_configs()
         # Stop background tasks (scheduler.running is an APScheduler property)
         if self.scheduler.running:
             self.stop_background_tasks()
@@ -688,7 +683,7 @@ class Engine(metaclass=SingletonMeta):
             )
         # Load the ecosystem configs into memory and start the watchdog
         await self.config.initialize_configs()
-        self.config.watchdog.start()
+        self.config.start_watchdog()
         # Start background tasks and plugins
         self.start_background_tasks()
         if self.plugins_initialized:
@@ -750,6 +745,11 @@ class Engine(metaclass=SingletonMeta):
         # Stop ecosystems
         for ecosystem_uid in [*self.ecosystems_started]:
             await self.stop_ecosystem(ecosystem_uid)
+        # Stop watchdog (EngineConfig.started checks if watchdog task exists)
+        if self.config.started:
+            self.config.stop_watchdog()
+        # Save the configs
+        await self.config.save_configs()
         self._state = EngineState.STOPPED
         self.logger.info("Gaia stopped.")
 
