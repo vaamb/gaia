@@ -39,7 +39,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.events import PayloadName
 
 
-class ValidationError(ValueError):
+class ConfigValidationError(ValueError):
     pass
 
 
@@ -507,7 +507,7 @@ class EngineConfig(metaclass=SingletonMeta):
         try:
             EcosystemConfig.validate_nycthemeral_method(
                 method, ecosystem_cfg, self.private_config["places"])
-        except ValidationError as e:
+        except ConfigValidationError as e:
             method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
             ecosystem_name = ecosystem_cfg["name"]
             self.logger.warning(
@@ -560,7 +560,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self._log_nycthemeral_method_issues(lighting_method, ecosystem_cfg)
 
         if unfixable_error:
-            raise ValidationError(
+            raise ConfigValidationError(
                 "Could not validate ecosystems config. Check the log for more "
                 "details."
             )
@@ -1286,12 +1286,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 ecosystem_dict["environment"]["nycthemeral_cycle"]
             target = nyct_cfg.get("target")
             if target is None:
-                raise ValidationError(
+                raise ConfigValidationError(
                     "Nycthemeral span method method cannot be 'mimic' as no "
                     "target is specified in the ecosystems configuration file."
                 )
         else:  # pragma: no cover
-            raise ValidationError(
+            raise ConfigValidationError(
                 "'method' should be either a valid lighting method or a valid "
                 "nycthemeral span method."
             )
@@ -1300,7 +1300,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Verify we have the target's coordinates
         place = places_dict.get(target, None)
         if place is None:
-            raise ValidationError(
+            raise ConfigValidationError(
                 f"{m} method cannot be '{method.name}' as the coordinates of "
                 f"'{target}' are not provided in the private configuration file."
             )
@@ -1314,7 +1314,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         try:
             self.validate_nycthemeral_method(
                 method, self._config_dict, self.general.private_config["places"])
-        except ValidationError as e:
+        except ConfigValidationError as e:
             method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
             self.logger.warning(
                 f"{method_name} method cannot be set to '{method.name}'. Will "
