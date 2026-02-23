@@ -495,7 +495,7 @@ class EngineConfig(metaclass=SingletonMeta):
         if not self._config_files_lock.locked():
             raise RuntimeError(
                 "This method must be called within a "
-                "`engine_config.with config_files_lock:` block"
+                "`async with engine_config.config_files_lock:` block"
             )
 
     def _log_nycthemeral_method_issues(
