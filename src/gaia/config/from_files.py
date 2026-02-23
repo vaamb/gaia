@@ -403,7 +403,6 @@ class EngineConfig(metaclass=SingletonMeta):
         self._app_config = GaiaConfigHelper.get_config()
         configure_logging(self.app_config)
         self._dirs: dict[str, Path] = {}
-        self._engine: Engine | None = None
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         self._sun_times: dict[str, SunTimesCacheData] = {}
@@ -431,20 +430,6 @@ class EngineConfig(metaclass=SingletonMeta):
     @property
     def new_config(self) -> Condition:
         return self.watchdog.new_config
-
-    @property
-    def engine(self) -> "Engine":
-        if self._engine is not None:
-            return self._engine
-        raise AttributeError("'engine' has not been set up")
-
-    @engine.setter
-    def engine(self, value: Engine) -> None:
-        self._engine = value
-
-    @property
-    def engine_set_up(self) -> bool:
-        return self._engine is not None
 
     @property
     def app_config(self) -> GaiaConfig:

@@ -1,5 +1,4 @@
 def test_relationship(engine_config, engine, ecosystem_config, ecosystem):
-    assert engine_config.engine is engine
     assert engine.config is engine_config
 
     assert ecosystem_config.general is engine_config

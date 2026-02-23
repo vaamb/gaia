@@ -54,7 +54,6 @@ class Engine(metaclass=SingletonMeta):
     """
     def __init__(self, engine_config: EngineConfig | None = None) -> None:
         self._config: EngineConfig = engine_config or EngineConfig()
-        self.config.engine = self
         self.logger: logging.Logger = logging.getLogger("gaia.engine")
         self.logger.info("Initializing Gaia.")
         self._ecosystems: dict[str, Ecosystem] = {}
