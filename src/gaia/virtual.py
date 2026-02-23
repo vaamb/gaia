@@ -391,4 +391,4 @@ class VirtualEcosystem:
 
     def start(self) -> None:
         self.reset()
-        self._start_time = datetime.now()
+        self._start_time = monotonic()
