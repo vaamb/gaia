@@ -193,7 +193,7 @@ class VirtualEcosystem:
         # Assumes only loss through walls
         self._exchange_surface: float = (
                 2 * dimension[2] * (dimension[0] + dimension[1])
-        )  # in W/K
+        )
         self._water_volume: float = water_volume
 
         self._light: float | None = None
@@ -229,7 +229,7 @@ class VirtualEcosystem:
         return self._exchange_surface
 
     @property
-    def heat_loss_coef(self) -> float:
+    def heat_loss_coef(self) -> float:  # in W/K
         return self.exchange_surface * self.INSULATION_U_VAL
 
     @property
