@@ -234,7 +234,7 @@ class VirtualEcosystem:
 
     @property
     def temperature(self) -> float:
-        if self.status is None:
+        if not self.status:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
             )
@@ -243,7 +243,7 @@ class VirtualEcosystem:
 
     @property
     def absolute_humidity(self) -> float:
-        if self.status is None:
+        if not self.status:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
             )
@@ -251,7 +251,7 @@ class VirtualEcosystem:
 
     @property
     def humidity(self) -> float:
-        if self.status is None:
+        if not self.status:
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
             )
@@ -259,7 +259,7 @@ class VirtualEcosystem:
 
     @property
     def light(self) -> float:
-        if self.get_actuator_status(gv.HardwareType.light) is None:
+        if not self.get_actuator_status(gv.HardwareType.light):
             raise RuntimeError(
                 "VirtualWorld must be started to get environmental values"
             )
