@@ -588,8 +588,6 @@ class EngineConfig(metaclass=SingletonMeta):
         self._ecosystems_config_dict = validated
         # Update the checksum
         await self._checksum_tracker.update(config_path, checksum)
-        # Dump the config as a yaml file as it may have been updated by pydantic
-        #await self._dump_ecosystems_config()
         # Reset ecosystems caches
         for ecosystem_config in self.ecosystems_config.values():
             ecosystem_config.reset_caches()
@@ -747,6 +745,11 @@ class EngineConfig(metaclass=SingletonMeta):
         await self.load(CacheType.chaos)
         # Mark as loaded
         self.configs_loaded = True
+
+    async def save_configs(self) -> None:
+        await self.save(ConfigType.ecosystems)
+        await self.save(ConfigType.private)
+        await self.save(CacheType.chaos)
 
     # ---------------------------------------------------------------------------
     #   Ecosystems config interface

@@ -118,6 +118,8 @@ class Engine(metaclass=SingletonMeta):
         # Stop watchdog (EngineConfig.started checks if watchdog task exists)
         if self.config.started:
             self.config.watchdog.stop()
+        # Save the configs
+        await self.config.save_configs()
         # Stop background tasks (scheduler.running is an APScheduler property)
         if self.scheduler.running:
             self.stop_background_tasks()
