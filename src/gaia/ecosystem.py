@@ -689,8 +689,12 @@ class Ecosystem:
             value: gv.LightMethod,
     ) -> None:
         await self.config.set_lighting_method(value)
-        if send_info and self.engine.message_broker_started:
-            await self._send_nycthemeral_info()
+
+    async def set_nycthemeral_cycle(
+            self,
+            **value: gv.NycthemeralCycleConfigDict,
+    ) -> None:
+        await self.config.set_nycthemeral_cycle(**value)
 
     # Health
     @property
