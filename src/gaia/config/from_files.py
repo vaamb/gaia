@@ -12,7 +12,6 @@ import logging
 from math import pi, sin
 from pathlib import Path
 import random
-import typing as t
 from typing import Any, cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
@@ -32,11 +31,6 @@ from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
     create_uid, get_yaml, humanize_list, is_time_between, json, SingletonMeta)
-
-
-if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.engine import Engine
-    from gaia.events import PayloadName
 
 
 class ConfigValidationError(ValueError):
