@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import typing as t
-from typing import cast, Literal, Type, TypedDict, TypeVar
+from typing import Any, cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -488,7 +488,7 @@ class EngineConfig(metaclass=SingletonMeta):
     #   Config and caches load and save
     # ---------------------------------------------------------------------------
     @property
-    def config_files_lock(self):
+    def config_files_lock(self) -> Lock:
         return self._config_files_lock
 
     def _check_files_lock_acquired(self) -> None:
@@ -710,12 +710,12 @@ class EngineConfig(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Config initialization
     # ---------------------------------------------------------------------------
-    async def _create_ecosystems_config_file(self):
+    async def _create_ecosystems_config_file(self) -> None:
         self._ecosystems_config_dict = {}
         self.create_ecosystem("Default Ecosystem")
         await self._dump_ecosystems_config()
 
-    async def _create_private_config_file(self):
+    async def _create_private_config_file(self) -> None:
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         await self._dump_private_config()
 
@@ -778,7 +778,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def update_ecosystem_base_info(
             self,
             ecosystem_id: str,
-            **updating_values: EcosystemBaseUpdateDict,
+            **updating_values: Any,  # EcosystemBaseUpdateDict
     ) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
         ecosystem = self.ecosystems_config_dict.get(ecosystem_ids.uid)
@@ -1982,7 +1982,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_hardware(
             self,
             uid: str,
-            **updating_values: gv.AnonymousHardwareConfigDict,
+            **updating_values: Any,  # gv.AnonymousHardwareConfigDict
     ) -> None:
         """Update an existing hardware configuration.
 
@@ -2112,7 +2112,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_plant(
             self,
             uid: str,
-            **updating_values: gv.AnonymousPlantConfigDict,
+            **updating_values: Any,  # gv.AnonymousPlantConfigDict
     ) -> None:
         """Update an existing plant configuration.
 
