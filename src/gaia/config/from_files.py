@@ -842,7 +842,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def get_place(self, place: str) -> gv.Coordinates | None:
         try:
             return gv.Coordinates(*self.places[place])
-        except KeyError:  # pragma: no cover
+        except KeyError:
             return None
 
     def set_place(
