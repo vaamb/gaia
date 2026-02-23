@@ -1552,19 +1552,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         #    await self._update_chaos_time_window()
         return self.general.get_chaos_memory(self.uid)["time_window"]
 
-    async def update_chaos_time_window(self, send_info: bool = True) -> None:
+    async def update_chaos_time_window(self) -> None:
         """Update the chaos time window if it hasn't been updated today.
 
         Randomly determines whether a chaos period should begin based on the
         configured frequency.
-
-        :param send_info: Whether to send chaos_parameters payload to clients.
         """
         self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             await self._update_chaos_time_window()
-            if send_info:
-                await self._send_payload_if_possible("chaos_parameters")
         else:
             self.logger.debug("Chaos time window is already up to date.")
 
