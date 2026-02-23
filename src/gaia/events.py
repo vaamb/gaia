@@ -35,11 +35,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 PT = TypeVar("PT", dict, list[dict])
 
 
-ENGINE_PAYLOADS: frozenset[PayloadName] = frozenset({"places_list"})
-HEARTBEAT_TIMEOUT: float = 30.0
-PING_INTERVAL: float = 15.0
-
-
 PayloadName = Literal[
     "actuators_data",
     "base_info",
@@ -53,6 +48,11 @@ PayloadName = Literal[
     "sensors_data",
     "weather",
 ]
+
+
+ENGINE_PAYLOADS: frozenset[PayloadName] = frozenset({"places_list"})
+HEARTBEAT_TIMEOUT: float = 30.0
+PING_INTERVAL: float = 15.0
 
 
 payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
