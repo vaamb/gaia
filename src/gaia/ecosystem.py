@@ -595,22 +595,6 @@ class Ecosystem:
     # ---------------------------------------------------------------------------
     #   Config and specific subroutines interaction
     # ---------------------------------------------------------------------------
-    async def set_lighting_method(
-            self,
-            value: gv.LightMethod,
-            send_info: bool = True,
-    ) -> None:
-        await self.config.set_lighting_method(value)
-        if send_info and self.engine.message_broker_started:
-            try:
-                await self.engine.event_handler.send_payload_if_connected(
-                    "nycthemeral_info", ecosystem_uids=[self.uid])
-            except Exception as e:
-                self.logger.error(
-                    f"Encountered an error while sending light data. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`"
-                )
-
     # Actuator
     @property
     def actuators_state(self) -> dict[str, gv.ActuatorStateDict]:
@@ -685,8 +669,29 @@ class Ecosystem:
         return gv.Empty()
 
     # Light
+    async def _send_nycthemeral_info(self) -> None:
+        try:
+            await self.engine.event_handler.send_payload_if_connected(
+                "nycthemeral_info", ecosystem_uids=[self.uid])
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while sending light data. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`"
+            )
+
     async def refresh_lighting_hours(self, send_info: bool = True) -> None:
-        await self.config.refresh_lighting_hours(send_info=send_info)
+        await self.config.refresh_lighting_hours()
+        if send_info and self.engine.message_broker_started:
+            await self._send_nycthemeral_info()
+
+    async def set_lighting_method(
+            self,
+            value: gv.LightMethod,
+            send_info: bool = True,
+    ) -> None:
+        await self.config.set_lighting_method(value)
+        if send_info and self.engine.message_broker_started:
+            await self._send_nycthemeral_info()
 
     # Health
     @property
