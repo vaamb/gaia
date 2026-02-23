@@ -191,7 +191,7 @@ class Events(AsyncEventHandler):
 
     @staticmethod
     def _format_error(e: Exception) -> str:
-      return f"{e.__class__.__name__}: {e}"
+        return f"ERROR msg: `{e.__class__.__name__}: {e}`"
 
     # ---------------------------------------------------------------------------
     #   Background jobs
@@ -603,10 +603,10 @@ class Events(AsyncEventHandler):
                     await db_model.mark_exchange_as_success(session, data["uuid"])
             else:
                 for db_model in (ActuatorBuffer, SensorBuffer):
-                    self.logger.error(
-                        f"Encountered an error while treating buffered data "
-                        f"exchange `{data['uuid']}`. ERROR msg: `{data['message']}`.")
                     await db_model.mark_exchange_as_failed(session, data["uuid"])
+                self.logger.error(
+                    f"Encountered an error while treating buffered data "
+                    f"exchange `{data['uuid']}`. ERROR msg: `{data['message']}`.")
 
     # ---------------------------------------------------------------------------
     #   Pictures
@@ -662,7 +662,7 @@ class Events(AsyncEventHandler):
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while uploading image. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                f"{self._format_error(e)}."
             )
 
     async def upload_picture_arrays(
