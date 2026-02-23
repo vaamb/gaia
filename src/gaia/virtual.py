@@ -290,7 +290,7 @@ class VirtualEcosystem:
             raise RuntimeError(
                 "The virtualEcosystem needs to be started " "before computing measures"
             )
-        now = monotonic() or now
+        now = now or monotonic()
         if (
             self._last_update is None
             or (now - self._last_update) > self.time_between_measures
