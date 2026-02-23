@@ -54,7 +54,6 @@ class Engine(metaclass=SingletonMeta):
     """
     def __init__(self, engine_config: EngineConfig | None = None) -> None:
         self._config: EngineConfig = engine_config or EngineConfig()
-        self.config.engine = self
         self.logger: logging.Logger = logging.getLogger("gaia.engine")
         self.logger.info("Initializing Gaia.")
         self._ecosystems: dict[str, Ecosystem] = {}
@@ -654,7 +653,7 @@ class Engine(metaclass=SingletonMeta):
     async def update_chaos_time_window(self, send_info: bool = True) -> None:
         self.logger.info("Updating ecosystems chaos time window.")
         for ecosystem in self.ecosystems.values():
-            await ecosystem.config.update_chaos_time_window(send_info=False)
+            await ecosystem.config.update_chaos_time_window()
         await self.config.save(CacheType.chaos)
         if send_info and self.message_broker_started:
             await self.event_handler.send_payload_if_connected("chaos_parameters")

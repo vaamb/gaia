@@ -12,7 +12,6 @@ import logging
 from math import pi, sin
 from pathlib import Path
 import random
-import typing as t
 from typing import Any, cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
@@ -32,11 +31,6 @@ from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
     create_uid, get_yaml, humanize_list, is_time_between, json, SingletonMeta)
-
-
-if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.engine import Engine
-    from gaia.events import PayloadName
 
 
 class ConfigValidationError(ValueError):
@@ -403,7 +397,6 @@ class EngineConfig(metaclass=SingletonMeta):
         self._app_config = GaiaConfigHelper.get_config()
         configure_logging(self.app_config)
         self._dirs: dict[str, Path] = {}
-        self._engine: Engine | None = None
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         self._sun_times: dict[str, SunTimesCacheData] = {}
@@ -431,20 +424,6 @@ class EngineConfig(metaclass=SingletonMeta):
     @property
     def new_config(self) -> Condition:
         return self.watchdog.new_config
-
-    @property
-    def engine(self) -> "Engine":
-        if self._engine is not None:
-            return self._engine
-        raise AttributeError("'engine' has not been set up")
-
-    @engine.setter
-    def engine(self, value: Engine) -> None:
-        self._engine = value
-
-    @property
-    def engine_set_up(self) -> bool:
-        return self._engine is not None
 
     @property
     def app_config(self) -> GaiaConfig:
@@ -1111,19 +1090,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """Clear all cached configuration values."""
         self.reset_nycthemeral_caches()
 
-    async def _send_payload_if_possible(self, payload_type: PayloadName) -> None:
-        """Send payload if engine is connected, logging any errors."""
-        if not (self.general.engine_set_up and self.general.engine.message_broker_started):
-            return
-        try:
-            await self.general.engine.event_handler.send_payload_if_connected(
-                payload_type, ecosystem_uids=[self.uid])
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an error while sending {payload_type}. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-
     # ---------------------------------------------------------------------------
     #   Ecosystem management (subroutine and other capabilities)
     # ---------------------------------------------------------------------------
@@ -1244,7 +1210,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "day": validated_value["day"], "night": validated_value["night"]}, False)
         await self.set_lighting_method(validated_value["lighting"], False)
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        await self.refresh_lighting_hours(send_info=True)
+        await self.refresh_lighting_hours()
 
     @property
     def nycthemeral_span_target(self) -> str | None:
@@ -1253,12 +1219,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_nycthemeral_span_target(
             self,
             target: str | None,
-            send_info: bool = False,
+            refresh: bool = True,
     ) -> None:
         """Set the target location for nycthemeral span calculations.
 
         :param target: Name of a place defined in private config, or None.
-        :param send_info: Whether to send updated info to connected clients.
+        :param refresh: Whether to refresh the lighting hours.
         :raises ValueError: If the target place is not defined.
         """
         if target is not None:
@@ -1270,7 +1236,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 )
         self.nycthemeral_cycle["target"] = target
         self.reset_nycthemeral_caches()
-        await self.refresh_lighting_hours(send_info=send_info)
+        if refresh:
+            await self.refresh_lighting_hours()
 
     @staticmethod
     def validate_nycthemeral_method(
@@ -1357,12 +1324,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_nycthemeral_span_method(
             self,
             method: gv.NycthemeralSpanMethod,
-            send_info: bool = True,
+            refresh: bool = True,
     ) -> None:
         """Set the method for determining nycthemeral span (day/night periods).
 
         :param method: Either 'fixed' or 'mimic' to follow a target location.
-        :param send_info: Whether to send updated info to connected clients.
+        :param refresh: Whether to refresh the lighting hours.
         :raises ValidationError: If the method requires unavailable configuration.
         """
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
@@ -1370,7 +1337,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        await self.refresh_lighting_hours(send_info=send_info)
+        if refresh:
+            await self.refresh_lighting_hours()
 
     def _compute_nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
         if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
@@ -1397,12 +1365,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_nycthemeral_span_hours(
             self,
             value: gv.NycthemeralSpanConfigDict,
-            send_info: bool = True,
+            refresh: bool = True,
     ) -> None:
         """Set time parameters
 
         :param value: A dict in the form {'day': '8h00', 'night': '22h00'}
-        :param send_info: A boolean indicating whether to send a "light_data" payload
+        :param refresh: Whether to refresh the lighting hours.
         """
         try:
             validated_value = gv.NycthemeralSpanConfig(**value).model_dump()
@@ -1413,7 +1381,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         self.environment["nycthemeral_cycle"].update(validated_value)
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        await self.refresh_lighting_hours(send_info=send_info)
+        if refresh:
+            await self.refresh_lighting_hours()
 
     @property
     def period_of_day(self) -> gv.PeriodOfDay:
@@ -1453,14 +1422,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_lighting_method(
             self,
             method: gv.LightingMethod,
-            send_info: bool = True,
+            refresh: bool = True,
     ) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
         self.validate_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        await self.refresh_lighting_hours(send_info=send_info)
+        if refresh:
+            await self.refresh_lighting_hours()
 
     def _compute_lighting_hours(self) -> gv.LightingHours:
         # Start by getting morning_start and evening_end
@@ -1514,7 +1484,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self._lighting_hours = self._compute_lighting_hours()
         return self._lighting_hours
 
-    async def refresh_lighting_hours(self, send_info: bool = True) -> None:
+    async def refresh_lighting_hours(self) -> None:
         self.logger.info("Refreshing lighting hours.")
 
         # Reset caches ...
@@ -1527,9 +1497,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # ... and the lighting method and hours
         self._lighting_method = self._compute_lighting_method()
         self._lighting_hours = self._compute_lighting_hours()
-
-        if send_info:
-            await self._send_payload_if_possible("nycthemeral_info")
 
     # ---------------------------------------------------------------------------
     #      Chaos parameters
@@ -1561,19 +1528,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         #    await self._update_chaos_time_window()
         return self.general.get_chaos_memory(self.uid)["time_window"]
 
-    async def update_chaos_time_window(self, send_info: bool = True) -> None:
+    async def update_chaos_time_window(self) -> None:
         """Update the chaos time window if it hasn't been updated today.
 
         Randomly determines whether a chaos period should begin based on the
         configured frequency.
-
-        :param send_info: Whether to send chaos_parameters payload to clients.
         """
         self.logger.info("Updating chaos time window.")
         if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
             await self._update_chaos_time_window()
-            if send_info:
-                await self._send_payload_if_possible("chaos_parameters")
         else:
             self.logger.debug("Chaos time window is already up to date.")
 
