@@ -687,7 +687,6 @@ class Ecosystem:
     async def set_lighting_method(
             self,
             value: gv.LightMethod,
-            send_info: bool = True,
     ) -> None:
         await self.config.set_lighting_method(value)
         if send_info and self.engine.message_broker_started:

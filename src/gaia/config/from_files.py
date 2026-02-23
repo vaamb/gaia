@@ -1235,7 +1235,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "day": validated_value["day"], "night": validated_value["night"]}, False)
         await self.set_lighting_method(validated_value["lighting"], False)
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        await self.refresh_lighting_hours(send_info=True)
+        await self.refresh_lighting_hours()
 
     @property
     def nycthemeral_span_target(self) -> str | None:
@@ -1244,12 +1244,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_nycthemeral_span_target(
             self,
             target: str | None,
-            send_info: bool = False,
+            refresh: bool = True,
     ) -> None:
         """Set the target location for nycthemeral span calculations.
 
         :param target: Name of a place defined in private config, or None.
-        :param send_info: Whether to send updated info to connected clients.
+        :param refresh: Whether to refresh the lighting hours.
         :raises ValueError: If the target place is not defined.
         """
         if target is not None:
@@ -1261,7 +1261,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 )
         self.nycthemeral_cycle["target"] = target
         self.reset_nycthemeral_caches()
-        await self.refresh_lighting_hours(send_info=send_info)
+        if refresh:
+            await self.refresh_lighting_hours()
 
     @staticmethod
     def validate_nycthemeral_method(
@@ -1348,12 +1349,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_nycthemeral_span_method(
             self,
             method: gv.NycthemeralSpanMethod,
-            send_info: bool = True,
+            refresh: bool = True,
     ) -> None:
         """Set the method for determining nycthemeral span (day/night periods).
 
         :param method: Either 'fixed' or 'mimic' to follow a target location.
-        :param send_info: Whether to send updated info to connected clients.
+        :param refresh: Whether to refresh the lighting hours.
         :raises ValidationError: If the method requires unavailable configuration.
         """
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
@@ -1361,7 +1362,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        await self.refresh_lighting_hours(send_info=send_info)
+        if refresh:
+            await self.refresh_lighting_hours()
 
     def _compute_nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
         if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
@@ -1388,12 +1390,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_nycthemeral_span_hours(
             self,
             value: gv.NycthemeralSpanConfigDict,
-            send_info: bool = True,
+            refresh: bool = True,
     ) -> None:
         """Set time parameters
 
         :param value: A dict in the form {'day': '8h00', 'night': '22h00'}
-        :param send_info: A boolean indicating whether to send a "light_data" payload
+        :param refresh: Whether to refresh the lighting hours.
         """
         try:
             validated_value = gv.NycthemeralSpanConfig(**value).model_dump()
@@ -1404,7 +1406,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         self.environment["nycthemeral_cycle"].update(validated_value)
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        await self.refresh_lighting_hours(send_info=send_info)
+        if refresh:
+            await self.refresh_lighting_hours()
 
     @property
     def period_of_day(self) -> gv.PeriodOfDay:
@@ -1444,14 +1447,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def set_lighting_method(
             self,
             method: gv.LightingMethod,
-            send_info: bool = True,
+            refresh: bool = True,
     ) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
         self.validate_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
-        await self.refresh_lighting_hours(send_info=send_info)
+        if refresh:
+            await self.refresh_lighting_hours()
 
     def _compute_lighting_hours(self) -> gv.LightingHours:
         # Start by getting morning_start and evening_end
@@ -1505,7 +1509,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self._lighting_hours = self._compute_lighting_hours()
         return self._lighting_hours
 
-    async def refresh_lighting_hours(self, send_info: bool = True) -> None:
+    async def refresh_lighting_hours(self) -> None:
         self.logger.info("Refreshing lighting hours.")
 
         # Reset caches ...
@@ -1518,9 +1522,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # ... and the lighting method and hours
         self._lighting_method = self._compute_lighting_method()
         self._lighting_hours = self._compute_lighting_hours()
-
-        if send_info:
-            await self._send_payload_if_possible("nycthemeral_info")
 
     # ---------------------------------------------------------------------------
     #      Chaos parameters
