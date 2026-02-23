@@ -603,10 +603,10 @@ class Events(AsyncEventHandler):
                     await db_model.mark_exchange_as_success(session, data["uuid"])
             else:
                 for db_model in (ActuatorBuffer, SensorBuffer):
-                    self.logger.error(
-                        f"Encountered an error while treating buffered data "
-                        f"exchange `{data['uuid']}`. ERROR msg: `{data['message']}`.")
                     await db_model.mark_exchange_as_failed(session, data["uuid"])
+                self.logger.error(
+                    f"Encountered an error while treating buffered data "
+                    f"exchange `{data['uuid']}`. ERROR msg: `{data['message']}`.")
 
     # ---------------------------------------------------------------------------
     #   Pictures
