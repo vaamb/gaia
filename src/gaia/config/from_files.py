@@ -509,7 +509,6 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"Checking hardware config for ecosystem {ecosystem_name}.")
             addresses_used: list[str] = []
             for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
-                hardware_dict: gv.HardwareConfigDict
                 hardware_name: str = hardware_dict["name"]
                 self.logger.debug(
                     f"Checking hardware {hardware_name} for ecosystem {ecosystem_name}.")
@@ -774,7 +773,7 @@ class EngineConfig(metaclass=SingletonMeta):
             **updating_values: Any,  # EcosystemBaseUpdateDict
     ) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
-        ecosystem = self.ecosystems_config_dict.get(ecosystem_ids.uid)
+        ecosystem = self.ecosystems_config_dict[ecosystem_ids.uid]
         # Make extra sure no "complex" field is overridden
         updating_values.pop("management", None)
         updating_values.pop("environment", None)
@@ -1859,8 +1858,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return [
             uid
             for uid in self.hardware_dict
-            if self.hardware_dict[uid]["type"] in hardware_type
-               and self.hardware_dict[uid]["level"] in level
+            if (
+                self.hardware_dict[uid]["type"] in hardware_type  # ty: ignore
+                and self.hardware_dict[uid]["level"] in level
+            )
         ]
 
     def _create_new_short_uid(self) -> str:
