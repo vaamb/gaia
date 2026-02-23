@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import typing as t
-from typing import cast, Literal, Type, TypedDict, TypeVar
+from typing import Any, cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -39,11 +39,13 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.events import PayloadName
 
 
-class ValidationError(ValueError):
+class ConfigValidationError(ValueError):
     pass
 
 
 DEFAULT_PLACE = "home"
+NORTHERN_SUMMER_START_MONTH = 3
+NORTHERN_SUMMER_END_MONTH = 9
 
 
 # ---------------------------------------------------------------------------
@@ -488,14 +490,14 @@ class EngineConfig(metaclass=SingletonMeta):
     #   Config and caches load and save
     # ---------------------------------------------------------------------------
     @property
-    def config_files_lock(self):
+    def config_files_lock(self) -> Lock:
         return self._config_files_lock
 
     def _check_files_lock_acquired(self) -> None:
         if not self._config_files_lock.locked():
             raise RuntimeError(
                 "This method must be called within a "
-                "`engine_config.with config_files_lock:` block"
+                "`async with engine_config.config_files_lock:` block"
             )
 
     def _log_nycthemeral_method_issues(
@@ -507,7 +509,7 @@ class EngineConfig(metaclass=SingletonMeta):
         try:
             EcosystemConfig.validate_nycthemeral_method(
                 method, ecosystem_cfg, self.private_config["places"])
-        except ValidationError as e:
+        except ConfigValidationError as e:
             method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
             ecosystem_name = ecosystem_cfg["name"]
             self.logger.warning(
@@ -516,7 +518,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"ERROR msg: `{e.__class__.__name__}: {e}`"
             )
 
-    async def _validate_ecosystems_logic(
+    def _validate_ecosystems_logic(
             self, ecosystem_configs: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
         unfixable_error: bool = False
@@ -560,7 +562,7 @@ class EngineConfig(metaclass=SingletonMeta):
             self._log_nycthemeral_method_issues(lighting_method, ecosystem_cfg)
 
         if unfixable_error:
-            raise ValidationError(
+            raise ConfigValidationError(
                 "Could not validate ecosystems config. Check the log for more "
                 "details."
             )
@@ -583,13 +585,11 @@ class EngineConfig(metaclass=SingletonMeta):
             )
             raise e
         # Validate the data logic
-        validated = await self._validate_ecosystems_logic(validated)
+        validated = self._validate_ecosystems_logic(validated)
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
         # Update the checksum
         await self._checksum_tracker.update(config_path, checksum)
-        # Dump the config as a yaml file as it may have been updated by pydantic
-        #await self._dump_ecosystems_config()
         # Reset ecosystems caches
         for ecosystem_config in self.ecosystems_config.values():
             ecosystem_config.reset_caches()
@@ -710,12 +710,12 @@ class EngineConfig(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Config initialization
     # ---------------------------------------------------------------------------
-    async def _create_ecosystems_config_file(self):
+    async def _create_ecosystems_config_file(self) -> None:
         self._ecosystems_config_dict = {}
         self.create_ecosystem("Default Ecosystem")
         await self._dump_ecosystems_config()
 
-    async def _create_private_config_file(self):
+    async def _create_private_config_file(self) -> None:
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         await self._dump_private_config()
 
@@ -748,6 +748,11 @@ class EngineConfig(metaclass=SingletonMeta):
         # Mark as loaded
         self.configs_loaded = True
 
+    async def save_configs(self) -> None:
+        await self.save(ConfigType.ecosystems)
+        await self.save(ConfigType.private)
+        await self.save(CacheType.chaos)
+
     # ---------------------------------------------------------------------------
     #   Ecosystems config interface
     # ---------------------------------------------------------------------------
@@ -778,7 +783,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def update_ecosystem_base_info(
             self,
             ecosystem_id: str,
-            **updating_values: EcosystemBaseUpdateDict,
+            **updating_values: Any,  # EcosystemBaseUpdateDict
     ) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
         ecosystem = self.ecosystems_config_dict.get(ecosystem_ids.uid)
@@ -839,7 +844,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def get_place(self, place: str) -> gv.Coordinates | None:
         try:
             return gv.Coordinates(*self.places[place])
-        except KeyError:  # pragma: no cover
+        except KeyError:
             return None
 
     def set_place(
@@ -895,22 +900,22 @@ class EngineConfig(metaclass=SingletonMeta):
     def home_coordinates(self, value: tuple[float, float] | CoordinatesDict) -> None:
         self.set_place(DEFAULT_PLACE, coordinates=value)
 
+    @staticmethod
+    def _is_polar_day(coord: gv.Coordinates, today: date) -> bool:
+        # Range of polar day in Northern hemisphere (and polar night in Southern hemisphere)
+        northern_polar_day = (
+            NORTHERN_SUMMER_START_MONTH < today.month <= NORTHERN_SUMMER_END_MONTH)
+        return (
+            (northern_polar_day and coord.latitude > 0)
+            or (not northern_polar_day and coord.latitude < 0)
+        )
+
     def _compute_sun_times(self, place: str, coord: gv.Coordinates) -> gv.SunTimesDict:
         today = date.today()
         sun_times = get_sun_times(coord).model_dump()
         if sun_times["sunrise"] is None:  # sunset is None too
             # Handle high and low latitude specificities
-            if (
-                    # Range of polar day in Northern hemisphere
-                    3 < today.month <= 9
-                    and coord.latitude > 0
-                    # Range of polar day in Southern hemisphere
-                    or not (3 < today.month <= 9)
-                    and coord.latitude < 0
-            ):
-                day_night = "day"
-            else:
-                day_night = "night"
+            day_night = "day" if self._is_polar_day(coord, today) else "night"
             self.logger.warning(
                 f"Sun times of '{place}' has no sunrise and sunset (due to "
                 f"polar {day_night}). Replacing values to allow coherent "
@@ -953,8 +958,8 @@ class EngineConfig(metaclass=SingletonMeta):
         places_failed: set[str] = set()
         places.update(self.places.keys())
         for place in places:
-            ok = self.get_sun_times(place)
-            if ok:
+            sun_times = self.get_sun_times(place)
+            if sun_times:
                 places_ok.add(place)
             else:
                 places_failed.add(place)
@@ -1283,12 +1288,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 ecosystem_dict["environment"]["nycthemeral_cycle"]
             target = nyct_cfg.get("target")
             if target is None:
-                raise ValidationError(
+                raise ConfigValidationError(
                     "Nycthemeral span method method cannot be 'mimic' as no "
                     "target is specified in the ecosystems configuration file."
                 )
         else:  # pragma: no cover
-            raise ValidationError(
+            raise ConfigValidationError(
                 "'method' should be either a valid lighting method or a valid "
                 "nycthemeral span method."
             )
@@ -1297,7 +1302,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Verify we have the target's coordinates
         place = places_dict.get(target, None)
         if place is None:
-            raise ValidationError(
+            raise ConfigValidationError(
                 f"{m} method cannot be '{method.name}' as the coordinates of "
                 f"'{target}' are not provided in the private configuration file."
             )
@@ -1311,7 +1316,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         try:
             self.validate_nycthemeral_method(
                 method, self._config_dict, self.general.private_config["places"])
-        except ValidationError as e:
+        except ConfigValidationError as e:
             method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
             self.logger.warning(
                 f"{method_name} method cannot be set to '{method.name}'. Will "
@@ -1982,7 +1987,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_hardware(
             self,
             uid: str,
-            **updating_values: gv.AnonymousHardwareConfigDict,
+            **updating_values: Any,  # gv.AnonymousHardwareConfigDict
     ) -> None:
         """Update an existing hardware configuration.
 
@@ -2112,7 +2117,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_plant(
             self,
             uid: str,
-            **updating_values: gv.AnonymousPlantConfigDict,
+            **updating_values: Any,  # gv.AnonymousPlantConfigDict
     ) -> None:
         """Update an existing plant configuration.
 
