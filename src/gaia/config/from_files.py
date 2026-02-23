@@ -44,6 +44,8 @@ class ConfigValidationError(ValueError):
 
 
 DEFAULT_PLACE = "home"
+NORTHERN_SUMMER_START_MONTH = 3
+NORTHERN_SUMMER_END_MONTH = 9
 
 
 # ---------------------------------------------------------------------------
@@ -898,22 +900,22 @@ class EngineConfig(metaclass=SingletonMeta):
     def home_coordinates(self, value: tuple[float, float] | CoordinatesDict) -> None:
         self.set_place(DEFAULT_PLACE, coordinates=value)
 
+    @staticmethod
+    def _is_polar_day(coord: gv.Coordinates, today: date) -> bool:
+        # Range of polar day in Northern hemisphere (and polar night in Southern hemisphere)
+        northern_polar_day = (
+            NORTHERN_SUMMER_START_MONTH < today.month <= NORTHERN_SUMMER_END_MONTH)
+        return (
+            (northern_polar_day and coord.latitude > 0)
+            or (not northern_polar_day and coord.latitude < 0)
+        )
+
     def _compute_sun_times(self, place: str, coord: gv.Coordinates) -> gv.SunTimesDict:
         today = date.today()
         sun_times = get_sun_times(coord).model_dump()
         if sun_times["sunrise"] is None:  # sunset is None too
             # Handle high and low latitude specificities
-            if (
-                    # Range of polar day in Northern hemisphere
-                    3 < today.month <= 9
-                    and coord.latitude > 0
-                    # Range of polar day in Southern hemisphere
-                    or not (3 < today.month <= 9)
-                    and coord.latitude < 0
-            ):
-                day_night = "day"
-            else:
-                day_night = "night"
+            day_night = "day" if self._is_polar_day(coord, today) else "night"
             self.logger.warning(
                 f"Sun times of '{place}' has no sunrise and sunset (due to "
                 f"polar {day_night}). Replacing values to allow coherent "
