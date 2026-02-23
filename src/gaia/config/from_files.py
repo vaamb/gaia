@@ -754,6 +754,15 @@ class EngineConfig(metaclass=SingletonMeta):
         await self.save(CacheType.chaos)
 
     # ---------------------------------------------------------------------------
+    #   Config watchdog
+    # ---------------------------------------------------------------------------
+    def start_watchdog(self) -> None:
+        self.watchdog.start()
+
+    def stop_watchdog(self) -> None:
+        self.watchdog.stop()
+
+    # ---------------------------------------------------------------------------
     #   Ecosystems config interface
     # ---------------------------------------------------------------------------
     @property
