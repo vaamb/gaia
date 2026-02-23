@@ -315,9 +315,9 @@ async def test_update_nycthemeral_config(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content, 3, 1)  # updated light_data, crud_result, and nycthemeral_cycle
+    assert_success(events_handler, logs_content, 2, 0)  # crud_result and nycthemeral_info
 
-    data_update = events_handler._dispatcher.emit_store[2]["data"]
+    data_update = events_handler._dispatcher.emit_store[1]["data"]
 
     verified = gv.NycthemeralCycleInfoPayload(**data_update[0])
     assert verified.data.span == span
