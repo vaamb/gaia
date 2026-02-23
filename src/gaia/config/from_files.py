@@ -1102,19 +1102,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """Clear all cached configuration values."""
         self.reset_nycthemeral_caches()
 
-    async def _send_payload_if_possible(self, payload_type: PayloadName) -> None:
-        """Send payload if engine is connected, logging any errors."""
-        if not (self.general.engine_set_up and self.general.engine.message_broker_started):
-            return
-        try:
-            await self.general.engine.event_handler.send_payload_if_connected(
-                payload_type, ecosystem_uids=[self.uid])
-        except Exception as e:
-            self.logger.error(
-                f"Encountered an error while sending {payload_type}. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-
     # ---------------------------------------------------------------------------
     #   Ecosystem management (subroutine and other capabilities)
     # ---------------------------------------------------------------------------
