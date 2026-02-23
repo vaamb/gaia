@@ -956,8 +956,8 @@ class EngineConfig(metaclass=SingletonMeta):
         places_failed: set[str] = set()
         places.update(self.places.keys())
         for place in places:
-            ok = self.get_sun_times(place)
-            if ok:
+            sun_times = self.get_sun_times(place)
+            if sun_times:
                 places_ok.add(place)
             else:
                 places_failed.add(place)
