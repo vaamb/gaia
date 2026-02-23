@@ -255,7 +255,12 @@ class RootPlantsValidator(RootModel):
 # ---------------------------------------------------------------------------
 #   Ecosystem chaos models
 # ---------------------------------------------------------------------------
-class ChaosMemoryValidator(gv.BaseModel):
+class ChaosMemory(TypedDict):
+    last_update: date
+    time_window: gv.TimeWindowDict
+
+
+class ChaosMemoryValidator(gv.BaseModel[ChaosMemory]):
     last_update: date = Field(default_factory=date.today)
     time_window: gv.TimeWindow = gv.TimeWindow()
 
@@ -264,11 +269,6 @@ class ChaosMemoryValidator(gv.BaseModel):
         if isinstance(value, str):
             return date.fromisoformat(value)
         return value
-
-
-class ChaosMemory(TypedDict):
-    last_update: date
-    time_window: gv.TimeWindow
 
 
 class ChaosMemoryRootValidator(RootModel):
@@ -1449,6 +1449,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Computation for 'elongate' lighting method
         elif lighting_method == gv.LightingMethod.elongate:
             home_sun_times = self.general.home_sun_times
+            # `lighting_method` should not be allowed to be set if `home_sun_times`
+            #  is not computable.
+            assert home_sun_times is not None
             sunrise: datetime = _to_dt(home_sun_times["sunrise"])
             sunset: datetime = _to_dt(home_sun_times["sunset"])
             # Civil dawn can be None for high latitude at dates close to solstices.
@@ -1518,7 +1521,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.environment["chaos"] = validated_values
 
     @property
-    def chaos_time_window(self) -> gv.TimeWindow:
+    def chaos_time_window(self) -> gv.TimeWindowDict:
         #chaos_memory = self.general.get_chaos_memory(self.uid)
         #if chaos_memory["last_update"] < date.today():
         #    await self._update_chaos_time_window()
@@ -1537,9 +1540,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.logger.debug("Chaos time window is already up to date.")
 
     async def _update_chaos_time_window(self) -> None:
-        chaos_memory = self.general.get_chaos_memory(self.uid)
-        beginning = chaos_memory["time_window"]["beginning"]
-        end = chaos_memory["time_window"]["end"]
+        beginning = self.chaos_time_window["beginning"]
+        end = self.chaos_time_window["end"]
         if beginning and end:
             if not (beginning <= datetime.now(timezone.utc) <= end):  # End of chaos period
                 beginning = None
@@ -1554,9 +1556,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     hour=14, minute=0, second=0, microsecond=0)
                 beginning = today
                 end = today + timedelta(days=self.chaos_config.duration)
-        chaos_memory["time_window"]["beginning"] = beginning
-        chaos_memory["time_window"]["end"] = end
-        chaos_memory["last_update"] = date.today()
+        self._engine_config.chaos_memory[self.uid] = {
+            "time_window": {
+                "beginning": beginning,
+                "end": end,
+            },
+            "last_update": date.today()
+        }
         await self.general.save(CacheType.chaos)
 
     def get_chaos_factor(self, now: datetime | None = None) -> float:
