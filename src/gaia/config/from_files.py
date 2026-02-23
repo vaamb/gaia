@@ -516,7 +516,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"ERROR msg: `{e.__class__.__name__}: {e}`"
             )
 
-    async def _validate_ecosystems_logic(
+    def _validate_ecosystems_logic(
             self, ecosystem_configs: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
         unfixable_error: bool = False
@@ -583,7 +583,7 @@ class EngineConfig(metaclass=SingletonMeta):
             )
             raise e
         # Validate the data logic
-        validated = await self._validate_ecosystems_logic(validated)
+        validated = self._validate_ecosystems_logic(validated)
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
         # Update the checksum
