@@ -95,10 +95,7 @@ async def _dump_yaml(data: dict, path: Path) -> None:
     await run_sync(dump_yaml_sync)
 
 
-H = TypeVar("H", int, bytes, str)
-
-
-def _file_checksum(file_path: Path, _buffer_size: int = 4096) -> H:
+def _file_checksum(file_path: Path, _buffer_size: int = 4096) -> bytes:
     try:
         with open(file_path, "rb") as file_obj:
             digest_obj = hashlib.md5(usedforsecurity=False)
@@ -1808,7 +1805,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             for weather_parameter, weather_cfg in self.weather.items()
         }
 
-    def get_actuator_couples(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+    def get_actuator_couples(self) -> dict[gv.ClimateParameter | gv.WeatherParameter, gv.ActuatorCouple]:
         """Get all actuator couples (climate and weather combined)."""
         return self.get_climate_actuators() | self.get_weather_actuators()
 
