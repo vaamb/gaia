@@ -43,7 +43,8 @@ class Sensors(SubroutineTemplate[BaseSensor]):
 
     @property
     def _climate_routine_ratio(self) -> int:
-        climate_loop_period: float = self.ecosystem.subroutines["climate"]._loop_period
+        climate_subroutine: Climate = self.ecosystem.get_subroutine("climate")
+        climate_loop_period: float = climate_subroutine._loop_period
         return floor(max(1.0, climate_loop_period / self._loop_period))
 
     async def _routine(self) -> None:
@@ -117,10 +118,10 @@ class Sensors(SubroutineTemplate[BaseSensor]):
             return
         # Refresh climate and light subroutines if they are running
         if self.ecosystem.get_subroutine_status("climate"):
-            climate_subroutine: Climate = self.ecosystem.subroutines["climate"]
+            climate_subroutine: Climate = self.ecosystem.get_subroutine("climate")
             await climate_subroutine.refresh()
         if self.ecosystem.get_subroutine_status("light"):
-            light_subroutine: Light = self.ecosystem.subroutines["light"]
+            light_subroutine: Light = self.ecosystem.get_subroutine("light")
             light_subroutine.reset_light_sensors()
 
     @property
@@ -285,8 +286,9 @@ class Sensors(SubroutineTemplate[BaseSensor]):
     async def trigger_climate_routine(self) -> None:
         if self._climate_routine_counter % self._climate_routine_ratio == 0:
             self._climate_routine_counter = 0
+            climate_subroutine: Climate = self.ecosystem.get_subroutine("climate")
             self._climate_routine_task = asyncio.create_task(
-                self.ecosystem.subroutines["climate"].routine(),
+                climate_subroutine.routine(),
                 name=f"{self.ecosystem.uid}-climate-routine",
             )
         self._climate_routine_counter += 1
