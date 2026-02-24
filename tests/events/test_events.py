@@ -492,7 +492,7 @@ async def test_send_buffered_data_and_ack(events_handler: Events, ecosystem: Eco
 
 @pytest.mark.asyncio
 async def test_send_picture_arrays(events_handler: Events, ecosystem: Ecosystem):
-    pictures_subroutine = ecosystem.subroutines["pictures"]
+    pictures_subroutine = ecosystem.get_subroutine("pictures")
     pictures_subroutine.config.set_management("camera", True)
     pictures_subroutine.enable()
     await pictures_subroutine.start()
@@ -532,7 +532,7 @@ async def test_upload_picture_arrays(mock_session, events_handler: Events, ecosy
     mock_session.return_value.__aenter__.return_value.post.return_value.__aenter__.return_value = mock_response
 
     # Enable camera and take a picture
-    pictures_subroutine = ecosystem.subroutines["pictures"]
+    pictures_subroutine = ecosystem.get_subroutine("pictures")
     pictures_subroutine.config.set_management("camera", True)
     pictures_subroutine.enable()
     await pictures_subroutine.start()

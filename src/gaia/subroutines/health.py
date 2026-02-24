@@ -135,7 +135,7 @@ class Health(SubroutineTemplate[Camera]):
         disturb animals.
         """
         # If webcam: turn it off and restart after
-        light_subroutine: Light = self.ecosystem.subroutines["light"]
+        light_subroutine: Light = self.ecosystem.get_subroutine("light")
         light_started = light_subroutine.started
         light_mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         light_status: bool = False
