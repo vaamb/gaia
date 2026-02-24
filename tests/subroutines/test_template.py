@@ -1,6 +1,7 @@
 import pytest
 
 from gaia import Ecosystem
+from gaia.subroutines import subroutine_dict, subroutine_names
 
 from ..data import sensor_info, sensor_uid
 from .dummy_subroutine import Dummy
@@ -8,6 +9,14 @@ from .dummy_subroutine import Dummy
 
 hardware_info = sensor_info
 hardware_uid = sensor_uid
+
+
+def test_subroutine_dict_sync():
+    # Ensure `subroutine_dict` key and values stay consistent
+    for subroutine_name, subroutine in subroutine_dict.items():
+        assert subroutine_name == subroutine.__name__.lower()
+    # Ensure `subroutine_names` and `subroutine_dict` keys remain identical
+    assert sorted(subroutine_names) == sorted(subroutine_dict.keys())
 
 
 @pytest.mark.asyncio
