@@ -811,7 +811,7 @@ class EngineConfig(metaclass=SingletonMeta):
         return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
 
     @property
-    def ecosystems_config(self) -> dict[str, EcosystemConfig]:
+    def ecosystems_config(self) -> WeakValueDictionary[str, EcosystemConfig]:
         return _MetaEcosystemConfig.instances
 
     # ---------------------------------------------------------------------------
