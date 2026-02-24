@@ -511,7 +511,7 @@ class EngineConfig(metaclass=SingletonMeta):
                     f"Checking hardware {hardware_name} for ecosystem {ecosystem_name}.")
                 try:
                     EcosystemConfig.validate_hardware_dict(
-                        hardware_dict={"uid": hardware_uid, **hardware_dict},
+                        gv.to_identified(hardware_dict, {"uid": hardware_uid}),
                         addresses_used=addresses_used,
                     )
                 except ValueError as e:
@@ -1943,19 +1943,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param multiplexer_model: str: the model of the multiplexer used if there is one
         """
         uid = self._create_new_short_uid()
-        hardware_dict = gv.HardwareConfigDict(**{
-            "uid": uid,
-            "name": name,
-            "active": active,
-            "address": address,
-            "type": type,
-            "level": level,
-            "groups": groups,
-            "model": model,
-            "measures": measures,
-            "plants": plants,
-            "multiplexer_model": multiplexer_model,
-        })
+        hardware_dict = gv.HardwareConfigDict(
+            uid=uid,
+            name=name,
+            active=active,
+            address=address,
+            type=type,
+            level=level,
+            groups=groups,
+            model=model,
+            measures=measures,
+            plants=plants,
+            multiplexer_model=multiplexer_model,
+        )
         hardware_dict = self.validate_hardware_dict(hardware_dict, self._used_addresses())
         uid = hardware_dict.pop("uid")
         self.hardware_dict.update({uid: hardware_dict})
@@ -2073,13 +2073,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param hardware: list: the name of the hardware linked to the plant
         """
         uid = self._create_new_short_uid()
-        plant_dict = gv.PlantConfigDict(**{
-            "uid": uid,
-            "name": name,
-            "species": species,
-            "sowing_date": sowing_date,
-            "hardware": hardware,
-        })
+        plant_dict = gv.PlantConfigDict(
+            uid=uid,
+            name=name,
+            species=species,
+            sowing_date=sowing_date,
+            hardware=hardware,
+        )
         try:
             plant_dict = gv.PlantConfig(**plant_dict).model_dump()
         except pydantic.ValidationError as e:
