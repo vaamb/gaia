@@ -548,7 +548,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.ecosystems)
-        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
+        unvalidated: dict = await _load_yaml(config_path)
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
@@ -574,7 +574,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.private)
-        unvalidated: PrivateConfigDict = await _load_yaml(config_path)
+        unvalidated: dict = await _load_yaml(config_path)
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
@@ -988,9 +988,9 @@ class EngineConfig(metaclass=SingletonMeta):
 #   EcosystemConfig class
 # ---------------------------------------------------------------------------
 class _MetaEcosystemConfig(type):
-    instances: dict[str, "EcosystemConfig"] = WeakValueDictionary()
+    instances: WeakValueDictionary[str, EcosystemConfig] = WeakValueDictionary()
 
-    def __call__(cls, *args, **kwargs) -> "EcosystemConfig":
+    def __call__(cls, *args, **kwargs) -> EcosystemConfig:
         try:
             ecosystem_id = kwargs["ecosystem_id"]
         except KeyError:
@@ -1011,8 +1011,8 @@ class _MetaEcosystemConfig(type):
         try:
             return cls.instances[ecosystem_uid]
         except KeyError:
-            ecosystem_config: EcosystemConfig = \
-                cls.__new__(cls, ecosystem_uid, *args, **kwargs)
+            ecosystem_config: EcosystemConfig = cast(
+                EcosystemConfig, cls.__new__(cls, ecosystem_uid, *args, **kwargs))
             ecosystem_config.__init__(*args, **kwargs)
             cls.instances[ecosystem_uid] = ecosystem_config
             return ecosystem_config
@@ -1252,7 +1252,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if method == 0:  # Fixed, no target needed
             return
         # Try to get the target
-        target: str
+        target: str | None
         if (method & gv.LightingMethod.elongate) == gv.LightingMethod.elongate:
             target = DEFAULT_PLACE
         elif (method & gv.NycthemeralSpanMethod.mimic) == gv.NycthemeralSpanMethod.mimic:
