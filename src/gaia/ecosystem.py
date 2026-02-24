@@ -12,7 +12,7 @@ from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, SubroutineNotFound
 from gaia.hardware.abc import Hardware
 from gaia.subroutines import (
-    Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
+    Climate, Health, Light, Pictures, Sensors, subroutine_dict,
     subroutine_names, SubroutineNames, SubroutineTemplate, Weather)
 from gaia.virtual import VirtualEcosystem
 
@@ -127,9 +127,10 @@ class Ecosystem:
         self._hardware: dict[str, Hardware] = {}
         self._alarms: list = []
         self.actuator_hub: ActuatorHub = ActuatorHub(self)
-        self._subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
-        for subroutine_name in subroutine_names:
-            self._subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
+        self._subroutines: dict[SubroutineNames, SubroutineTemplate] = {
+            name: subroutine_dict[name](self)
+            for name in subroutine_names
+        }
         self._started: bool = False
         self.logger.debug("Ecosystem initialization successful.")
 
