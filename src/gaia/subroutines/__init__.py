@@ -24,22 +24,19 @@ subroutine_names: list[SubroutineNames] = [
 
 
 class SubroutineDict(TypedDict):
-    sensors: Sensors
-    light: Light
-    climate: Climate
-    weather: Weather
-    pictures: Pictures
-    health: Health
+    sensors: type[Sensors]
+    light: type[Light]
+    climate: type[Climate]
+    weather: type[Weather]
+    pictures: type[Pictures]
+    health: type[Health]
 
 
 subroutine_dict: SubroutineDict = {
-    subroutine.__name__.lower(): subroutine
-    for subroutine in [
-        Sensors,
-        Light,
-        Climate,
-        Weather,
-        Pictures,
-        Health,
-    ]
+    "sensors": Sensors,
+    "light": Light,
+    "climate": Climate,
+    "weather": Weather,
+    "pictures": Pictures,
+    "health": Health,
 }

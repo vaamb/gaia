@@ -274,7 +274,7 @@ class Climate(SubroutineTemplate[Actuator]):
     async def _get_sensors_average(self) -> dict[str, float]:
         # Get the sensors average
         prior_sensor_miss = self._sensor_miss
-        sensors_subroutine: Sensors = self.ecosystem.subroutines["sensors"]
+        sensors_subroutine: Sensors = self.ecosystem.get_subroutine("sensors")
         sensors_data = sensors_subroutine.sensors_data
         sensors_average: dict[str, float]
 

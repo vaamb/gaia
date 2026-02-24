@@ -12,7 +12,7 @@ from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, SubroutineNotFound
 from gaia.hardware.abc import Hardware
 from gaia.subroutines import (
-    Climate, Health, Light, Pictures, Sensors, subroutine_dict, SubroutineDict,
+    Climate, Health, Light, Pictures, Sensors, subroutine_dict,
     subroutine_names, SubroutineNames, SubroutineTemplate, Weather)
 from gaia.virtual import VirtualEcosystem
 
@@ -127,9 +127,10 @@ class Ecosystem:
         self._hardware: dict[str, Hardware] = {}
         self._alarms: list = []
         self.actuator_hub: ActuatorHub = ActuatorHub(self)
-        self.subroutines: SubroutineDict = {}  # noqa: the dict is filled just after
-        for subroutine_name in subroutine_names:
-            self.subroutines[subroutine_name] = subroutine_dict[subroutine_name](self)
+        self._subroutines: dict[SubroutineNames, SubroutineTemplate] = {
+            name: subroutine_dict[name](self)
+            for name in subroutine_names
+        }
         self._started: bool = False
         self.logger.debug("Ecosystem initialization successful.")
 
@@ -256,7 +257,7 @@ class Ecosystem:
         :raises SubroutineNotFound: If no subroutine exists with the given name.
         """
         try:
-            return self.subroutines[subroutine_name]
+            return self._subroutines[subroutine_name]
         except KeyError:
             raise SubroutineNotFound(f"Subroutine '{subroutine_name}' is not valid.")
 
@@ -367,14 +368,14 @@ class Ecosystem:
         This does not gracefully stop subroutines — use stop_subroutine() for that.
         Called during ecosystem termination to release subroutine resources.
         """
-        for subroutine_name in [*self.subroutines.keys()]:
-            del self.subroutines[subroutine_name]
+        for subroutine_name in [*self._subroutines.keys()]:
+            del self._subroutines[subroutine_name]
 
     @property
     def subroutines_started(self) -> set[SubroutineNames]:
         return {
             subroutine_name
-            for subroutine_name, subroutine in self.subroutines.items()
+            for subroutine_name, subroutine in self._subroutines.items()
             if subroutine.started
         }
 
@@ -383,7 +384,7 @@ class Ecosystem:
         """Return a dict with the manageability status of the subroutines."""
         return {
             subroutine_name: subroutine.manageable
-            for subroutine_name, subroutine in self.subroutines.items()
+            for subroutine_name, subroutine in self._subroutines.items()
         }
 
     # ---------------------------------------------------------------------------
@@ -566,8 +567,8 @@ class Ecosystem:
             )
             subroutines_to_stop: list[SubroutineNames] = subroutine_names
             for subroutine in reversed(subroutines_to_stop):
-                if self.subroutines[subroutine].started:
-                    await self.subroutines[subroutine].stop()
+                if self._subroutines[subroutine].started:
+                    await self._subroutines[subroutine].stop()
             raise
         else:
             self.logger.debug("Ecosystem successfully started.")
@@ -578,13 +579,12 @@ class Ecosystem:
         if not self.started:
             raise RuntimeError("Cannot stop an ecosystem that hasn't started")
         self.logger.info("Shutting down the ecosystem.")
-        subroutines_to_stop: list[SubroutineNames] = subroutine_names
-        for subroutine in reversed(subroutines_to_stop):
-            if self.subroutines[subroutine].started:
-                await self.subroutines[subroutine].stop()
+        for subroutine in reversed(subroutine_names):
+            if self._subroutines[subroutine].started:
+                await self._subroutines[subroutine].stop()
         if not any(
-                self.subroutines[subroutine].started
-                for subroutine in self.subroutines
+                self._subroutines[subroutine].started
+                for subroutine in subroutine_names
         ):
             self.logger.debug("Ecosystem successfully stopped.")
         else:
@@ -664,7 +664,7 @@ class Ecosystem:
     @property
     def sensors_data(self) -> gv.SensorsData | gv.Empty:
         if self.get_subroutine_status("sensors"):
-            sensors_subroutine: Sensors = self.subroutines["sensors"]
+            sensors_subroutine: Sensors = self.get_subroutine("sensors")
             return sensors_subroutine.sensors_data
         return gv.Empty()
 
@@ -700,7 +700,7 @@ class Ecosystem:
     @property
     def plants_health(self) -> list[gv.HealthRecord] | gv.Empty:
         if self.get_subroutine_status("health"):
-            health_subroutine: Health = self.subroutines["health"]
+            health_subroutine: Health = self.get_subroutine("health")
             return health_subroutine.plants_health
         return gv.Empty()
 
@@ -710,7 +710,7 @@ class Ecosystem:
     @property
     def regulated_climate_parameters(self) -> set[gv.ClimateParameter]:
         if self.get_subroutine_status("climate"):
-            climate_subroutine: Climate = self.subroutines["climate"]
+            climate_subroutine: Climate = self.get_subroutine("climate")
             return set(climate_subroutine.regulated_parameters)
         return set()
 
@@ -718,7 +718,7 @@ class Ecosystem:
     @property
     def picture_arrays(self) -> list[SerializableImage] | gv.Empty:
         if self.get_subroutine_status("pictures"):
-            picture_subroutine: Pictures = self.subroutines["pictures"]
+            picture_subroutine: Pictures = self.get_subroutine("pictures")
             arrays = picture_subroutine.picture_arrays
             if arrays:
                 return arrays
