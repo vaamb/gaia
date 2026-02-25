@@ -9,13 +9,13 @@ from functools import partial
 import logging
 import time
 import typing
-from typing import Awaitable, cast, Callable, Literal, NamedTuple, Type
+from typing import Awaitable, cast, Callable, NamedTuple, Type
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
 from gaia.config import defaults
-from gaia.hardware.abc import Dimmer, Switch
+from gaia.hardware.abc import Actuator, Dimmer, Switch
 
 
 if typing.TYPE_CHECKING:
@@ -231,7 +231,7 @@ class Timer:
     def cancelled(self) -> bool:
         return self._task.cancelled()
 
-    async def _job(self, callback: Awaitable | Callable) -> None:
+    async def _job(self, callback: Callable) -> None:
         await self._future
         if asyncio.iscoroutinefunction(callback):
             await callback()
@@ -259,7 +259,10 @@ class Timer:
         loop = asyncio.get_running_loop()
         if self._handle:
             self._handle.cancel()
-        self._handle = loop.call_later(self.time_left(), self._future.set_result, None)
+        time_left = self.time_left()
+        if time_left is None or time_left <= 0.0:
+            time_left = 0.0
+        self._handle = loop.call_later(time_left, self._future.set_result, None)
 
 
 class ActuatorHandler:
@@ -309,8 +312,8 @@ class ActuatorHandler:
         self._level: float | None = None
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         self._timer: Timer | None = None
-        self._actuators: list[Switch | Dimmer] | None = None
-        self._last_expected_level: float | None = None
+        self._actuators: list[Actuator] | None = None
+        self._last_expected_level: float = 0.0
         self._update_lock: Lock = Lock()
         self._updating: bool = False
         self._any_status_change: bool = False
@@ -320,12 +323,15 @@ class ActuatorHandler:
         uid = self.actuator_hub.ecosystem.uid
         return f"ActuatorHandler({uid}, actuator_group={self.group})"
 
-    def get_linked_actuators(self) -> list[Switch | Dimmer]:
+    def get_linked_actuators(self) -> list[Actuator]:
         if self._actuators is None:
             self._actuators = [
                 hardware
                 for hardware in self.ecosystem.hardware.values()
-                if self.group in hardware.groups
+                if (
+                        self.group in hardware.groups
+                        and isinstance(hardware, Actuator)
+                )
             ]
         return self._actuators
 
