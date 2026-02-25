@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Coroutine, Type
+from typing import Any, Callable, Coroutine, Type
 
 from apscheduler.triggers.cron import CronTrigger
 
@@ -54,7 +54,7 @@ class Weather(SubroutineTemplate[Actuator]):
         # Close all jobs
         for job in [*self._jobs]:
             await self._remove_job(job)
-        self._timers = None
+        self._timers = {}
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
@@ -130,7 +130,7 @@ class Weather(SubroutineTemplate[Actuator]):
             actuator_handler: ActuatorHandler,
             duration: float,
             level: float,
-    ) -> Coroutine:
+    ) -> Callable[[], Coroutine[Any, Any, None]]:
         async def delayed_restoration(status, level, mode) -> None:
             self.logger.debug(
                 f"Job for `{job_name}` weather event is over. Restoring actuator "
@@ -141,7 +141,7 @@ class Weather(SubroutineTemplate[Actuator]):
                 await actuator_handler.set_mode(mode)
             del self._timers[job_name]
 
-        async def wrapper():
+        async def wrapper() -> None:
             self.logger.debug(
                 f"Activating job for `{job_name}` weather event. Turning actuator "
                 f"handler to {level}")
