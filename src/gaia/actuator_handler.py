@@ -561,9 +561,8 @@ class ActuatorHandler:
     ) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
             await self.set_mode(gv.ActuatorMode.automatic)
-            last_expected_level = self._last_expected_level
             outdated_expected_status = self.compute_expected_status(
-                last_expected_level)
+                self._last_expected_level)
             await self.set_status(outdated_expected_status)
         else:
             await self.set_mode(gv.ActuatorMode.manual)
