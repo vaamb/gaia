@@ -340,7 +340,7 @@ class Ecosystem:
         """Start and stop the Subroutines based on the 'ecosystem.cfg' file"""
         self.logger.debug("Refreshing the subroutines.")
         # Make sure the sensors and light subroutines are started first and stopped last
-        def order_subroutines(to_keep: set[str]) -> list:
+        def order_subroutines(to_keep: set[SubroutineNames]) -> list[SubroutineNames]:
             return [n for n in subroutine_names if n in to_keep]
 
         subroutines_enabled = self._config.get_subroutines_enabled()
