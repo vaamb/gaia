@@ -259,7 +259,10 @@ class Timer:
         loop = asyncio.get_running_loop()
         if self._handle:
             self._handle.cancel()
-        self._handle = loop.call_later(self.time_left(), self._future.set_result, None)
+        time_left = self.time_left()
+        if time_left is None or time_left <= 0.0:
+            time_left = 0.0
+        self._handle = loop.call_later(time_left, self._future.set_result, None)
 
 
 class ActuatorHandler:
