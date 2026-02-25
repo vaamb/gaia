@@ -662,7 +662,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Dump the data
         config_path = self.get_file_path(ConfigType.private)
-        await _dump_yaml(self._private_config, config_path)
+        await _dump_yaml(self._private_config, config_path)  # ty: ignore[invalid-argument-type]
         # Update the checksum
         await self._checksum_tracker.update(config_path)
 
