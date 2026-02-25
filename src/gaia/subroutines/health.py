@@ -12,7 +12,6 @@ from apscheduler.triggers.cron import CronTrigger
 import numpy as np
 
 import gaia_validators as gv
-from numpy import floating
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.hardware import camera_models
@@ -163,7 +162,7 @@ class Health(SubroutineTemplate[Camera]):
         return images
 
     @staticmethod
-    def _get_index(image0: SerializableImage, measure: Measure) -> floating[Any]:
+    def _get_index(image0: SerializableImage, measure: Measure) -> np.floating[Any]:
         image1 = image0.apply_rgb_formula(indices[measure])
         return np.mean(image1.array)
 
