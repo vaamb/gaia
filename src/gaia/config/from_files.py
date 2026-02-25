@@ -258,6 +258,23 @@ class RootPlantsValidator(RootModel):
     root: dict[str, gv.AnonymousPlantConfig]
 
 
+class AnonymousHardwareConfigDictInput(TypedDict):
+    name: str
+    active: bool
+    address: str
+    type: str | gv.HardwareType
+    level: str | gv.HardwareLevel
+    groups: list[str] | set[str] | None
+    model: str
+    measures: list[str | gv.MeasureDict] | None
+    plants: list[str] | None
+    multiplexer_model: str | None
+
+
+class HardwareConfigDictInput(AnonymousHardwareConfigDictInput):
+    uid: str
+
+
 # ---------------------------------------------------------------------------
 #   Ecosystem chaos models
 # ---------------------------------------------------------------------------
@@ -1897,7 +1914,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @staticmethod
     def validate_hardware_dict(
-            hardware_dict: gv.HardwareConfigDict,
+            hardware_dict: gv.HardwareConfigDict | HardwareConfigDictInput,
             addresses_used: list,
     ) -> gv.HardwareConfigDict:
         """Validate a hardware configuration dictionary.
@@ -1926,10 +1943,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Class initialization will later correct default address if needed
         hardware = hardware_cls._unsafe_from_config(hardware_config, None)
         # Replace default address with the actual address
-        hardware_dict["address"] = hardware.address_repr
-        if hardware_dict["address"] in addresses_used:
-            raise ValueError(f"Address {hardware_config.address} already used.")
-        return hardware_dict
+        validated_config = hardware_config.model_dump()
+        validated_config["address"] = hardware.address_repr
+        if validated_config["address"] in addresses_used:
+            raise ValueError(f"Address {validated_config['address']} already used.")
+        return validated_config
 
     def create_new_hardware(
             self,
@@ -1958,7 +1976,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param multiplexer_model: str: the model of the multiplexer used if there is one
         """
         uid = self._create_new_short_uid()
-        hardware_dict = gv.HardwareConfigDict(
+        hardware_dict = HardwareConfigDictInput(
             uid=uid,
             name=name,
             active=active,
@@ -1972,13 +1990,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             multiplexer_model=multiplexer_model,
         )
         hardware_dict = self.validate_hardware_dict(hardware_dict, self._used_addresses())
-        uid = hardware_dict.pop("uid")
-        self.hardware_dict.update({uid: hardware_dict})
+        uid = hardware_dict["uid"]
+        self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
 
     def update_hardware(
             self,
             uid: str,
-            **updating_values: Any,  # gv.AnonymousHardwareConfigDict
+            **updating_values: Unpack[AnonymousHardwareConfigDictInput],
     ) -> None:
         """Update an existing hardware configuration.
 
@@ -1991,9 +2009,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
             )
-        hardware_dict = self.hardware_dict[uid].copy()
-        hardware_dict: gv.HardwareConfigDict = \
-            cast(gv.HardwareConfigDict, hardware_dict)
+        anonymous_hardware_dict = self.hardware_dict[uid].copy()
+        hardware_dict = gv.to_identified(anonymous_hardware_dict, {"uid": uid})
         # Replace uid with a special uid for validation so it doesn't conflict
         # with existing hardware
         hardware_dict["uid"] = "__validation__"
@@ -2008,9 +2025,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
         hardware_dict = self.validate_hardware_dict(hardware_dict, used_addresses)
-        # Remove the validation uid from the dict
-        hardware_dict.pop("uid")
-        self.hardware_dict[uid] = hardware_dict
+        self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
 
     def delete_hardware(self, uid: str) -> None:
         """
@@ -2093,7 +2108,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             name=name,
             species=species,
             sowing_date=sowing_date,
-            hardware=hardware,
+            hardware=hardware or [],
         )
         try:
             plant_dict = gv.PlantConfig(**plant_dict).model_dump()
