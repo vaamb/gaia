@@ -1894,7 +1894,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             uid
             for uid in self.hardware_dict
             if (
-                self.hardware_dict[uid]["type"] in hardware_type  # ty: ignore
+                self.hardware_dict[uid]["type"] in hardware_type
                 and self.hardware_dict[uid]["level"] in level
             )
         ]
