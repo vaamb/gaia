@@ -1621,7 +1621,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def chaos_parameters(self) -> gv.ChaosParameters:
-        return gv.ChaosParameters(**{
+        # Valid ignore: implicit conversion from dict to model by pydantic
+        return gv.ChaosParameters(**{  # ty: ignore[invalid-argument-type]
             **self.environment["chaos"],
             "time_window": self.chaos_time_window,
         })
@@ -1664,7 +1665,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"'{self.name}' in ecosystems configuration file."
             )
         else:
-            return gv.ClimateConfig(parameter=parameter, **data)
+            # Valid ignore: implicit conversion from dict to model by pydantic
+            return gv.ClimateConfig(parameter=parameter, **data)  # ty: ignore[invalid-argument-type]
 
     def set_climate_parameter(
             self,
@@ -2065,7 +2067,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             hardware_config = self.hardware_dict[uid]
-            return gv.HardwareConfig(uid=uid, **hardware_config)
+            # Valid ignore: implicit conversion from dict to model by pydantic
+            return gv.HardwareConfig(uid=uid, **hardware_config)  # ty: ignore[invalid-argument-type]
         except KeyError:
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
