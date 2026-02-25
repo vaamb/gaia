@@ -231,7 +231,7 @@ class Timer:
     def cancelled(self) -> bool:
         return self._task.cancelled()
 
-    async def _job(self, callback: Awaitable | Callable) -> None:
+    async def _job(self, callback: Callable) -> None:
         await self._future
         if asyncio.iscoroutinefunction(callback):
             await callback()
