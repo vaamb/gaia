@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import sys
-from typing import Any, cast, Literal, Type, TypedDict, TypeVar
+from typing import Any, cast, Literal, Type, TypeAlias, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -273,6 +273,9 @@ class AnonymousHardwareConfigDictInput(TypedDict):
 
 class HardwareConfigDictInput(AnonymousHardwareConfigDictInput):
     uid: str
+
+
+EnvironmentParameter: TypeAlias = gv.ClimateParameter | gv.WeatherParameter
 
 
 # ---------------------------------------------------------------------------
@@ -1820,7 +1823,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Merges default actuator couples with those defined in climate config.
         """
         return {
-            **defaults.actuator_couples,
+            **defaults.climate_actuator_couples,
             **{
                 climate_parameter: gv.ActuatorCouple(
                     increase=climate_cfg["linked_actuators"]["increase"],
@@ -1843,7 +1846,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             for weather_parameter, weather_cfg in self.weather.items()
         }
 
-    def get_actuator_couples(self) -> dict[gv.ClimateParameter | gv.WeatherParameter, gv.ActuatorCouple]:
+    def get_actuator_couples(self) -> dict[EnvironmentParameter, gv.ActuatorCouple]:
         """Get all actuator couples (climate and weather combined)."""
         return self.get_climate_actuators() | self.get_weather_actuators()
 

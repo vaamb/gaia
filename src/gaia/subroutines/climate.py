@@ -150,7 +150,7 @@ class Climate(SubroutineTemplate[Actuator]):
             if potential_actuator is not None:
                 return potential_actuator
         # If not found in the config file, use the default actuator group
-        couple = config.defaults.actuator_couples[climate_direction[0]]
+        couple = config.defaults.climate_actuator_couples[climate_direction[0]]
         return getattr(couple, climate_direction[1])
 
     async def _mount_actuator_handler(self, climate_direction: ClimateDirection) -> None:

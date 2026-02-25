@@ -1,9 +1,13 @@
-from typing import Literal
+from typing import Literal, TypeAlias
 
 import gaia_validators as gv
 
 
-actuator_couples: dict[gv.ClimateParameter, gv.ActuatorCouple] = {
+EnvironmentParameter: TypeAlias = gv.ClimateParameter | gv.WeatherParameter
+
+
+# Default actuator couples for the climate parameters
+climate_actuator_couples: dict[gv.ClimateParameter, gv.ActuatorCouple] = {
     gv.ClimateParameter.temperature: gv.ActuatorCouple(
         increase=gv.HardwareType.heater, decrease=gv.HardwareType.cooler),
     gv.ClimateParameter.humidity: gv.ActuatorCouple(
@@ -16,13 +20,13 @@ actuator_couples: dict[gv.ClimateParameter, gv.ActuatorCouple] = {
 
 
 assert all([
-    climate_parameter in actuator_couples
+    climate_parameter in climate_actuator_couples
     for climate_parameter in gv.ClimateParameter
 ])
 
 
 def get_actuator_to_parameter(
-        actuator_couples: dict[gv.ClimateParameter, gv.ActuatorCouple],
+        actuator_couples: dict[EnvironmentParameter, gv.ActuatorCouple],
 ) -> dict[str, gv.ClimateParameter]:
     return {
         actuator: climate_parameter
@@ -31,11 +35,9 @@ def get_actuator_to_parameter(
         if actuator is not None
     }
 
-actuator_to_parameter = get_actuator_to_parameter(actuator_couples)
-
 
 def get_actuator_to_direction(
-        actuator_couples: dict[gv.ClimateParameter, gv.ActuatorCouple],
+        actuator_couples: dict[EnvironmentParameter, gv.ActuatorCouple],
 ) -> dict[str, Literal["increase", "decrease"]]:
     return {
         actuator: direction
@@ -43,5 +45,3 @@ def get_actuator_to_direction(
         for actuator, direction in zip((actuator_couple), ("increase", "decrease"))
         if actuator is not None
     }
-
-actuator_to_direction = get_actuator_to_direction(actuator_couples)
