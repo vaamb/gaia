@@ -4,7 +4,9 @@ from abc import ABC, abstractmethod
 import logging
 import typing as t
 from time import monotonic
-from typing import Any, Generic, Type, TypeVar
+from typing import cast, Any, Generic, Type, TypeVar
+
+from gaia.hardware import Hardware
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -12,7 +14,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.ecosystem import Ecosystem
 
 
-HardwareT = TypeVar("HardwareT")
+HardwareT = TypeVar("HardwareT", bound=Hardware)
 
 
 class SubroutineTemplate(ABC, Generic[HardwareT]):
@@ -113,7 +115,7 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
     @property
     def hardware(self) -> dict[str, HardwareT]:
         return {
-            uid: self.ecosystem.hardware[uid]
+            uid: cast(HardwareT, self.ecosystem.hardware[uid])
             for uid in self.get_hardware_needed_uid()
         }
 
