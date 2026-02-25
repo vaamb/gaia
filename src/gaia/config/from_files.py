@@ -1200,7 +1200,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :raises ValueError: If the provided parameters are invalid.
         """
         try:
-            validated_value = gv.NycthemeralCycleConfig(**value).model_dump()
+            validated_value: gv.NycthemeralCycleConfigDict = \
+                gv.NycthemeralCycleConfig(**value).model_dump()
         except pydantic.ValidationError as e:
             raise ValueError(
                 f"Invalid time parameters provided. "
@@ -1311,6 +1312,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return gv.NycthemeralSpanMethod.fixed
         # Else, we need to make sure we have suntimes for the nycthemeral target
         target = self.nycthemeral_span_target
+        if target is None:
+            return gv.NycthemeralSpanMethod.fixed
         sun_times = self.general.get_sun_times(target)
         if sun_times is None:
             return gv.NycthemeralSpanMethod.fixed
@@ -1345,6 +1348,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def _compute_nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
         if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
             target = self.nycthemeral_span_target
+            # With mimic as a span method, target should not be None
+            assert target is not None
             sun_times = self.general.get_sun_times(target)
             if sun_times is not None:
                 assert sun_times["sunrise"] is not None
@@ -1455,9 +1460,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Computation for 'elongate' lighting method
         elif lighting_method == gv.LightingMethod.elongate:
             home_sun_times = self.general.home_sun_times
-            # `lighting_method` should not be allowed to be set if `home_sun_times`
-            #  is not computable.
+            # `lighting_method` should not be allowed to be set to `elongate` if
+            #  `home_sun_times` is not computable.
             assert home_sun_times is not None
+            # `_compute_sun_times` should have computed virtual `sunrise` and
+            #  `sunset` times for polar days and nights
+            assert home_sun_times["sunrise"] is not None
+            assert home_sun_times["sunset"] is not None
             sunrise: datetime = _to_dt(home_sun_times["sunrise"])
             sunset: datetime = _to_dt(home_sun_times["sunset"])
             # Civil dawn can be None for high latitude at dates close to solstices.
