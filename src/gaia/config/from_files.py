@@ -12,6 +12,7 @@ import logging
 from math import pi, sin
 from pathlib import Path
 import random
+import sys
 from typing import Any, cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
@@ -31,6 +32,11 @@ from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
     create_uid, get_yaml, humanize_list, is_time_between, json, SingletonMeta)
+
+if sys.version_info < (3, 12):
+    from typing_extensions import Unpack
+else:
+    from typing import Unpack
 
 
 class ConfigValidationError(ValueError):
@@ -767,7 +773,7 @@ class EngineConfig(metaclass=SingletonMeta):
     def update_ecosystem_base_info(
             self,
             ecosystem_id: str,
-            **updating_values: Any,  # EcosystemBaseUpdateDict
+            **updating_values: Unpack[EcosystemBaseUpdateDict],
     ) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
         ecosystem = self.ecosystems_config_dict[ecosystem_ids.uid]
@@ -1185,7 +1191,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     async def set_nycthemeral_cycle(
             self,
-            **value: gv.NycthemeralCycleConfigDict,
+            **value: Unpack[gv.NycthemeralCycleConfigDict],
     ) -> None:
         """Set all nycthemeral cycle parameters at once.
 
@@ -1634,7 +1640,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def set_climate_parameter(
             self,
             parameter: str | gv.ClimateParameter,
-            **value: gv.AnonymousClimateConfigDict,
+            **value: Unpack[gv.AnonymousClimateConfigDict],
     ) -> None:
         """Set or create a climate parameter configuration.
 
@@ -1655,7 +1661,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_climate_parameter(
             self,
             parameter: str | gv.ClimateParameter,
-            **value: gv.AnonymousClimateConfigDict,
+            **value: Unpack[gv.AnonymousClimateConfigDict],
     ) -> None:
         """Update an existing climate parameter configuration.
 
@@ -1724,7 +1730,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def set_weather_parameter(
             self,
             parameter: str | gv.WeatherParameter,
-            **value: gv.AnonymousWeatherConfigDict,
+            **value: Unpack[gv.AnonymousWeatherConfigDict],
     ) -> None:
         """Set or create a weather parameter configuration.
 
@@ -1745,7 +1751,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_weather_parameter(
             self,
             parameter: str | gv.WeatherParameter,
-            **value: gv.AnonymousWeatherConfigDict,
+            **value: Unpack[gv.AnonymousWeatherConfigDict],
     ) -> None:
         """Update an existing weather parameter configuration.
 
