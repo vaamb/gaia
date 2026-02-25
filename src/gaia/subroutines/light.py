@@ -94,6 +94,7 @@ class Light(SubroutineTemplate[Actuator]):
     async def _stop(self) -> None:
         self.logger.info("Stopping light loop.")
         # Stop light routine
+        assert self._task is not None
         self._task.cancel()
         self._task = None
         # Reset light sensors
