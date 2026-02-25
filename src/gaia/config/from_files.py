@@ -2117,8 +2117,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid plant information provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
-        uid = plant_dict.pop("uid")
-        self.plants_dict.update({uid: plant_dict})
+        self.plants_dict[uid] = gv.to_anonymous(plant_dict, "uid")
 
     def update_plant(
             self,
@@ -2136,9 +2135,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise PlantNotFound(
                 f"No plant with uid '{uid}' found in the plant config."
             )
-        plant_dict = self.plants_dict[uid].copy()
-        plant_dict: gv.PlantConfigDict = cast(gv.PlantConfigDict, plant_dict)
-        plant_dict["uid"] = uid
+        anonymous_plant_dict = self.plants_dict[uid].copy()
+        plant_dict = gv.to_identified(anonymous_plant_dict, {"uid": uid})
         plant_dict.update(
             {
                 key: value
@@ -2153,8 +2151,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid plant information provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
-        uid = plant_dict.pop("uid")
-        self.plants_dict[uid] = plant_dict
+        self.plants_dict[uid] = gv.to_anonymous(plant_dict, "uid")
 
     def delete_plant(self, uid: str) -> None:
         """Delete a plant from the configuration.
