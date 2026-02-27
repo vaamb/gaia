@@ -236,6 +236,8 @@ class Climate(SubroutineTemplate[Actuator]):
             for direction in ("increase", "decrease"):
                 direction: Direction
                 actuator_group: str | None = getattr(actuator_couple, direction, None)
+                if actuator_group is None:
+                    continue
                 any_hardware = self.ecosystem.get_hardware_group_uids(actuator_group)
                 if actuator_group and any_hardware:
                     rv[(climate_param, direction)] = actuator_group
