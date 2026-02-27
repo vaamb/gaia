@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import inspect
-from logging import getLogger
+from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
-from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
+from typing import Any, ClassVar, Self, Type, TYPE_CHECKING
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -345,6 +345,7 @@ class Hardware(metaclass=_MetaHardware):
         "_ecosystem",
         "_groups",
         "_level",
+        "_logger",
         "_measures",
         "_model",
         "_multiplexer",
@@ -374,6 +375,7 @@ class Hardware(metaclass=_MetaHardware):
             # ecosystem can be `None` ONLY when `Hardware` is called through `validate_hardware_dict`
             if not called_through("validate_hardware_dict"):
                 raise RuntimeError("ecosystem can be set to `None` only during hardware validation")
+        self._logger: Logger = getLogger(f"gaia.hardware.{uid}")
         self._ecosystem: Ecosystem | None = ecosystem
         self._uid: str = uid
         self._name: str = name
@@ -775,7 +777,6 @@ class WebSocketHardware(Hardware):
             manager = WebSocketHardwareManager(self.ecosystem.engine.config)
             WebSocketHardware._websocket_manager = manager
         self._websocket_manager = WebSocketHardware._websocket_manager
-        self._logger = getLogger(f"gaia.hardware.websocket.{self.uid}")
         self._requests: dict[UUID, Future] = {}
         self._task: Task | None = None
         self._stop_event: Event = Event()
@@ -822,12 +823,12 @@ class WebSocketHardware(Hardware):
                 uuid: UUID = parsed_msg.uuid
                 data: Any = parsed_msg.data
                 if uuid not in self._requests:
-                    self.ecosystem.logger.error(
+                    self._logger.error(
                         f"Received a message with an unknown uuid {uuid}: {data}")
                     continue
                 self._requests[uuid].set_result(data)
             except ValidationError:
-                self.ecosystem.logger.error(
+                self._logger.error(
                     f"Encountered an error while parsing the message {msg}")
                 continue
 
