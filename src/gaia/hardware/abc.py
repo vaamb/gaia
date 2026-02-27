@@ -788,8 +788,8 @@ class Camera(Hardware):
             timestamp: datetime | None = image.metadata.get("timestamp", None)
             if timestamp is None:
                 timestamp = datetime.now(tz=timezone.utc)
-            image_path = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
-            image_path = self.camera_dir / image_path
+            file_name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
+            image_path = self.camera_dir / file_name
         await run_sync(image.write, image_path)
         return image_path
 
@@ -852,6 +852,10 @@ class WebSocketHardware(Hardware):
         async for msg in connection:
             try:
                 parsed_msg = WebSocketMessage.model_validate_json(msg)
+                # `WebSocketHardware` work on the master-slave model and should
+                #  never receive an unsolicited message (with no request UUID)
+                #  once the device has registered
+                assert parsed_msg.uuid is not None
                 uuid: UUID = parsed_msg.uuid
                 data: Any = parsed_msg.data
                 if uuid not in self._requests:
