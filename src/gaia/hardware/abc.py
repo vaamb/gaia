@@ -790,12 +790,18 @@ class WebSocketHardware(Hardware):
 
     @property
     def connected(self) -> bool:
-        return self._websocket_manager.get_connection(self.uid) is not None
+        return self.websocket_manager.get_connection(self.uid) is not None
+
+    @property
+    def websocket_manager(self) -> WebSocketHardwareManager:
+        if self._websocket_manager is None:
+            raise RuntimeError("WebsocketManager not initialized")
+        return self._websocket_manager
 
     async def _connection_loop(self) -> None:
         wait_time: int = 1
         while not self._stop_event.is_set():
-            connection = self._websocket_manager.get_connection(self.uid)
+            connection = self.websocket_manager.get_connection(self.uid)
             if connection is not None:
                 wait_time = 1
                 try:
@@ -826,14 +832,14 @@ class WebSocketHardware(Hardware):
                 continue
 
     async def _send_msg_and_forget(self, msg: Any) -> None:
-        connection = self._websocket_manager.get_connection(self.uid)
+        connection = self.websocket_manager.get_connection(self.uid)
         if connection is None:
             raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
         payload = WebSocketMessage(uuid=None, data=msg).model_dump_json()
         await connection.send(payload)
 
     async def _send_msg_and_wait(self, msg: Any, timeout: int | float = 60) -> Any:
-        connection = self._websocket_manager.get_connection(self.uid)
+        connection = self.websocket_manager.get_connection(self.uid)
         if connection is None:
             raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
         uuid: UUID = uuid4()
@@ -861,9 +867,9 @@ class WebSocketHardware(Hardware):
         return True
 
     async def register(self) -> None:
-        if not self._websocket_manager.is_running:
-            await self._websocket_manager.start()
-        await self._websocket_manager.register_hardware(self.uid, self.address.main)
+        if not self.websocket_manager.is_running:
+            await self.websocket_manager.start()
+        await self.websocket_manager.register_hardware(self.uid, self.address.main)
         self._task = create_task(self._connection_loop())
         await sleep(0)  # Allow the task to start
 
@@ -873,7 +879,7 @@ class WebSocketHardware(Hardware):
         except (ConnectionError, ConnectionClosedOK):
             # The device is not connected
             pass
-        await self._websocket_manager.unregister_hardware(self.uid)
+        await self.websocket_manager.unregister_hardware(self.uid)
         self._stop_event.set()
         if self._task is not None:
             self._task.cancel()
@@ -882,10 +888,10 @@ class WebSocketHardware(Hardware):
         # If not more hardware are registered, there is no need to keep the manager
         #  running
         if (
-                self._websocket_manager.is_running
-                and self._websocket_manager.registered_hardware == 0
+                self.websocket_manager.is_running
+                and self.websocket_manager.registered_hardware == 0
         ):
-            await self._websocket_manager.stop()
+            await self.websocket_manager.stop()
 
 
 # ---------------------------------------------------------------------------
