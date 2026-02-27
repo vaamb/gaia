@@ -36,6 +36,9 @@ def get_actuator_to_parameter(
     }
 
 
+actuator_to_parameter = get_actuator_to_parameter(climate_actuator_couples)
+
+
 def get_actuator_to_direction(
         actuator_couples: dict[EnvironmentParameter, gv.ActuatorCouple],
 ) -> dict[str, Literal["increase", "decrease"]]:
