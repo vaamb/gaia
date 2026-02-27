@@ -8,6 +8,7 @@ import inspect
 from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
+from types import EllipsisType
 from typing import Any, ClassVar, Self, Type, TYPE_CHECKING
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
@@ -967,7 +968,7 @@ class Dimmer(Actuator):
 class BaseSensor(Hardware):
     __slots__ = ("_device",)
 
-    measures_available: ClassVar[dict[Measure, Unit | None] | Ellipsis | None] = None
+    measures_available: ClassVar[dict[Measure, Unit | None] | EllipsisType | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
         if self.measures_available is None:
@@ -1005,6 +1006,7 @@ class BaseSensor(Hardware):
                     f"Measures must be specified for sensor model '{self.model}'."
                 )
             # ... and return them
+            assert isinstance(self.measures_available, dict)
             return self.measures_available
 
         # If we don't have any default measures available don't perform any check
@@ -1012,6 +1014,7 @@ class BaseSensor(Hardware):
             return formatted_measures
 
         # Otherwise, validate the measures
+        assert isinstance(self.measures_available, dict)
         err = ""
         for measure in formatted_measures:
             if measure not in self.measures_available:
