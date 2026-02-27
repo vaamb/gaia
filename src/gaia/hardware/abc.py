@@ -328,7 +328,9 @@ class _MetaHardware(type):
         try:
             return cls.instances[uid]
         except KeyError:
-            hardware = cls.__new__(cls, *args, **kwargs)
+            # Valid ignore: cls.__new__ in metaclass __call__ always returns an
+            #  instance of the concrete subclass
+            hardware: Hardware = cls.__new__(cls, *args, **kwargs)  # ty: ignore[invalid-assignment]
             hardware.__init__(*args, **kwargs)
             if kwargs.get("ecosystem"):
                 cls.instances[uid] = hardware
@@ -462,7 +464,9 @@ class Hardware(metaclass=_MetaHardware):
         hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
         # Perform subclass-specific initialization routine
         await hardware._on_initialize()
-        return hardware
+        # Valid ignore: hardware_cls is a subclass of cls, so `_unsafe_from_config`
+        #  returns a compatible Self
+        return hardware  # ty: ignore[invalid-return-type]
 
     async def _on_terminate(self) -> None:
         """Override in subclasses for termination logic."""
@@ -491,12 +495,14 @@ class Hardware(metaclass=_MetaHardware):
         return rv
 
     @classmethod
-    def get_mounted(cls) -> dict[str, Self]:
-        return _MetaHardware.instances
+    def get_mounted(cls) -> WeakValueDictionary[str, Self]:
+        # Valid ignore: instances stores all Hardware subclasses; Self narrowing is caller's responsibility
+        return _MetaHardware.instances  # ty: ignore[invalid-return-type]
 
     @classmethod
     def get_mounted_by_uid(cls, uid: str) -> Self | None:
-        return _MetaHardware.instances.get(uid)
+        # Valid ignore: instances stores all Hardware subclasses; Self narrowing is caller's responsibility
+        return _MetaHardware.instances.get(uid)  # ty: ignore[invalid-return-type]
 
     @classmethod
     def detach_instance(cls, uid: str) -> None:
@@ -592,15 +598,16 @@ class Hardware(metaclass=_MetaHardware):
             raise HardwareNotFound(f"{model} is not implemented.")
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
+        # Valid ignores: implicit conversion done by pydantic
         return gv.HardwareConfig(
             uid=self._uid,
             name=self._name,
             address=self.address_repr,
             type=self._type,
             level=self._level,
-            groups=self._groups,
+            groups=self._groups,  # ty: ignore[invalid-argument-type]
             model=self._model,
-            measures=self._measures,
+            measures=self._measures,  # ty: ignore[invalid-argument-type]
             plants=self._plants,
             multiplexer_model=self.multiplexer_model,
         ).model_dump(exclude_defaults=shorten)
