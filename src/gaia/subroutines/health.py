@@ -162,9 +162,9 @@ class Health(SubroutineTemplate[Camera]):
         return images
 
     @staticmethod
-    def _get_index(image0: SerializableImage, measure: Measure) -> np.floating[Any]:
+    def _get_index(image0: SerializableImage, measure: Measure) -> float:
         image1 = image0.apply_rgb_formula(indices[measure])
-        return np.mean(image1.array)
+        return float(np.mean(image1.array))
 
     @staticmethod
     async def _get_partial_record(
@@ -172,10 +172,10 @@ class Health(SubroutineTemplate[Camera]):
             measure: Measure,
     ) -> _PartialHealthRecord:
         index = await run_sync(Health._get_index, image0, measure)
-        return {
+        return _PartialHealthRecord(**{  # ty: ignore[missing-typed-dict-key]
             "measure": measure.value,
             "value": index,
-        }
+        })
 
     async def _get_records_for_image(
             self,
@@ -225,16 +225,19 @@ class Health(SubroutineTemplate[Camera]):
         timestamp = datetime.now(timezone.utc).replace(microsecond=0)
         if images:
             self.logger.info("Analyzing the images.")
-            self.plants_health = {
+            self.plants_health = gv.HealthData(**{  # ty: ignore[invalid-argument-type]
                 "timestamp": timestamp,
                 "records": await self._analyse_images(images),
-            }
+            })
         else:
             self.plants_health = gv.Empty()
 
     async def _log_data(self, db_model: Type[SensorBuffer | SensorRecord]) -> None:
         async with self.ecosystem.engine.db.scoped_session() as session:
-            for record in self._plants_health:
+            if gv.is_empty(self._plants_health):
+                self.logger.info("No health data to log.")
+                return
+            for record in self._plants_health.records:
                 session.add(
                     db_model(
                         ecosystem_uid=self.ecosystem.uid,
