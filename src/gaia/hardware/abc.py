@@ -322,7 +322,7 @@ class _MetaHardware(type):
         except KeyError:
             hardware = cls.__new__(cls, *args, **kwargs)
             hardware.__init__(*args, **kwargs)
-            if hardware.ecosystem is not None:
+            if kwargs.get("ecosystem"):
                 cls.instances[uid] = hardware
             return hardware
 
@@ -493,14 +493,20 @@ class Hardware(metaclass=_MetaHardware):
         _MetaHardware.instances.pop(uid)
 
     @property
-    def ecosystem(self) -> Ecosystem | None:
+    def is_linked(self) -> bool:
+        return self._ecosystem is not None
+
+    @property
+    def ecosystem(self) -> Ecosystem:
+        if self._ecosystem is None:
+            raise RuntimeError(
+                "Unlinked hardware should only be used for validation purposes."
+            )
         return self._ecosystem
 
     @property
     def ecosystem_uid(self) -> str | None:
-        if self._ecosystem is None:
-            return None
-        return self._ecosystem.uid
+        return self.ecosystem.uid
 
     @property
     def uid(self) -> str:
@@ -730,7 +736,7 @@ class Camera(Hardware):
     @property
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
-            if self.ecosystem is None:
+            if not self.is_linked:
                 from gaia.config import GaiaConfigHelper
 
                 config_cls = GaiaConfigHelper.get_config()
@@ -773,7 +779,7 @@ class WebSocketHardware(Hardware):
                 "'WEBSOCKET_<remote_ip_addr>'"
             )
         # During data validation, ecosystem is not available
-        if self.ecosystem and WebSocketHardware._websocket_manager is None:
+        if self.is_linked and WebSocketHardware._websocket_manager is None:
             manager = WebSocketHardwareManager(self.ecosystem.engine.config)
             WebSocketHardware._websocket_manager = manager
         self._websocket_manager = WebSocketHardware._websocket_manager
