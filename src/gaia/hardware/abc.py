@@ -171,6 +171,8 @@ class Address:
 
         # The hardware is using a standard GPIO pin
         if address_type in {"board", "bcm", "gpio"}:
+            # These hardware need to have an address specified
+            assert address_number is not None
             # Get the pin number in the proper format and validate it
             try:
                 pin_number = int(address_number)
@@ -189,6 +191,8 @@ class Address:
 
         # The hardware is using the I2C protocol
         elif address_type == "i2c":
+            # These hardware need to have a str address specified
+            assert isinstance(address_number, str)
             i2c_components = address_number.split("@")
             if len(i2c_components) == 1:
                 # Format: "I2C_0x10", no multiplexer used
@@ -248,10 +252,13 @@ class Address:
             return f"{self.type.value}_{self.main if self.main is not None else 'default'}"
         elif self.type == AddressType.WEBSOCKET:
             return f"{self.type.value}_{self.main}" if self.main else f"{self.type.value}"
+        assert isinstance(self.main, int)
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
         if self.is_multiplexed:
+            # For type narrowing, it is tested in `is_multiplexed`
+            assert self.multiplexer_address is not None
             return (
                 f"{self.type.value}_{rep_f(self.multiplexer_address)}#"
                 f"{self.multiplexer_channel}@{rep_f(self.main)}"
@@ -391,6 +398,8 @@ class Hardware(metaclass=_MetaHardware):
         if multiplexer_model is not None and not self._address.is_multiplexed:
             raise ValueError("Multiplexer can only be used with a multiplexed address.")
         if multiplexer_model:
+            # For type narrowing, if `multiplexer_model` is set, so is `address.multiplexer_address`
+            assert self._address.multiplexer_address is not None
             multiplexer_cls = multiplexer_models[multiplexer_model]
             self._multiplexer = multiplexer_cls(
                 i2c_address=self._address.multiplexer_address)
@@ -633,6 +642,8 @@ class gpioHardware(Hardware):
         else:
             from gaia.hardware._compatibility import Pin
         address = self.address.main
+        # GPIO hardware should have str addresses
+        assert isinstance(address, int)
         return Pin(address)
 
 
@@ -654,9 +665,13 @@ class i2cHardware(Hardware):
             # Using default address if address is 0
             main = address.main
             multiplexer_address = address.multiplexer_address
+            # I2C hardware should have non-null address
+            assert main is not None
             if address.main == 0x0:
                 main = self.default_address
             if address.is_multiplexed:
+                # For type narrowing, it is tested in `is_multiplexed`
+                assert self.multiplexer is not None
                 if address.multiplexer_address == 0x0:
                     multiplexer_address = self.multiplexer.address
             return Address(address.type, main, multiplexer_address, address.multiplexer_channel)
@@ -666,6 +681,8 @@ class i2cHardware(Hardware):
     def _get_i2c(self) -> busio.I2C:
         if self.multiplexer is not None:
             multiplexer_channel = self.address.multiplexer_channel
+            # For type narrowing, it is set at the same time as `multiplexer`
+            assert multiplexer_channel is not None
             return self.multiplexer.get_channel(multiplexer_channel)
         else:
             return get_i2c()
@@ -701,6 +718,7 @@ class OneWireHardware(Hardware):
 
     @property
     def device_address(self) -> str | None:
+        assert not isinstance(self.address.main, int)
         return self.address.main
 
 
@@ -877,6 +895,7 @@ class WebSocketHardware(Hardware):
     async def register(self) -> None:
         if not self.websocket_manager.is_running:
             await self.websocket_manager.start()
+        assert not isinstance(self.address.main, int)
         await self.websocket_manager.register_hardware(self.uid, self.address.main)
         self._task = create_task(self._connection_loop())
         await sleep(0)  # Allow the task to start
