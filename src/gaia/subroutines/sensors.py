@@ -16,6 +16,7 @@ import gaia_validators as gv
 from gaia.hardware import sensor_models
 from gaia.hardware.abc import BaseSensor
 from gaia.subroutines.template import SubroutineTemplate
+from gaia.types import SensorData
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -166,10 +167,10 @@ class Sensors(SubroutineTemplate[BaseSensor]):
                 f"fetch data. Will try to gather data during next routine.")
         self._slow_sensor_futures = pending
         # Gather the data
-        sensors_data: list[list[gv.SensorRecord]] = [future.result() for future in done]
+        sensors_data: list[list[SensorData]] = [future.result() for future in done]
         for sensor_data in sensors_data:
             cache["records"].extend(
-                sensor_record
+                cast(gv.SensorRecord, sensor_data)
                 for sensor_record in sensor_data
                 if sensor_record.value is not None
             )
