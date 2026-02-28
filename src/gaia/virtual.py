@@ -261,6 +261,8 @@ class VirtualEcosystem:
 
     @property
     def uptime(self) -> float:
+        if self._start_time is None:
+            return -1.0
         return monotonic() - self._start_time
 
     @property
