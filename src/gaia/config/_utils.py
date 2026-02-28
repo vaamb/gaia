@@ -5,7 +5,7 @@ import logging.config
 import os
 from pathlib import Path
 import sys
-from typing import Type
+from typing import Any, Type
 
 from gaia import __version__ as version
 from gaia.config.base import BaseConfig
@@ -36,7 +36,8 @@ class GaiaConfigHelper:
 
         sys.path.insert(0, str(lookup_dir))
         try:
-            from config import Config
+            # Valid ignore: `config` is found at runtime
+            from config import Config  # ty: ignore[unresolved-import]
         except ImportError:
             return BaseConfig
         else:
@@ -48,7 +49,7 @@ class GaiaConfigHelper:
             return Config
 
     @classmethod
-    def config_is_set(cls) -> None:
+    def config_is_set(cls) -> bool:
         return cls._config is not None
 
     @classmethod
@@ -56,6 +57,8 @@ class GaiaConfigHelper:
         if not cls.config_is_set():
             config: Type[BaseConfig] = cls._find_app_config_cls()
             cls.set_config(config)
+        # Type narrowing as `ty` doesn't see through `set_config()`
+        assert cls._config is not None
         return cls._config
 
     @classmethod
@@ -76,7 +79,7 @@ class GaiaConfigHelper:
 
     @classmethod
     def reset_config(cls) -> None:
-        if not cls.config_is_set():
+        if cls._config is None:
             raise ValueError("Cannot reset a non-set config.")
         if not cls._config.TESTING:
             raise ValueError("Only testing config can be reset.")
@@ -88,7 +91,7 @@ handlers: list[str] = []
 base_fmt = "%(asctime)s %(levelname)-7.7s: %(name)-35.35s: %(message)s"
 
 
-logging_config = {
+logging_config: dict[str, Any] = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
