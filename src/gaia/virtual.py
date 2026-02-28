@@ -189,22 +189,22 @@ class VirtualEcosystem:
         self._ecosystem: Ecosystem = ecosystem
         self.logger: logging.Logger = logging.getLogger(f"virtual.ecosystem.{ecosystem.uid}")
         self._virtual_world: VirtualWorld = virtual_world
-        self._volume = dimension[0] * dimension[1] * dimension[2]
+        self._volume: float = dimension[0] * dimension[1] * dimension[2]
         # Assumes only loss through walls
-        self._exchange_surface: float = (
-                2 * dimension[2] * (dimension[0] + dimension[1])
-        )  # in W/K
+        self._exchange_surface: float = (2 * dimension[2] * (dimension[0] + dimension[1]))
         self._water_volume: float = water_volume
 
-        self._light: float | None = None
+        # A mix between air and water heat capacity * volume, in j/K
+        self._hybrid_capacity: float = self._compute_initial_hybrid_capacity()
+        # Total heat in the enclosure, in joules
+        self._heat_quantity: float = self._compute_initial_heat_quantity()
+        # Total humidity (water vapour) in the enclosure, in grams
+        self._humidity_quantity: float = self._compute_initial_humidity_quantity()
+        self._light: float = self._compute_initial_light()
 
         self._max_heater_output: float = max_heater_output
         self._max_humidifier_output: float = max_humidifier_output
         self._max_light_output: float = max_light_output
-
-        self._heat_quantity: float | None = None       # Total heat in the enclosure, in joules
-        self._hybrid_capacity: float | None = None     # A mix between air and water heat capacity * volume, in j/K
-        self._humidity_quantity: float | None = None   # Total humidity in the enclosure, in grams
 
         self._start_time: float | None = None
         self._last_update: float | None = None
@@ -229,40 +229,32 @@ class VirtualEcosystem:
         return self._exchange_surface
 
     @property
-    def heat_loss_coef(self) -> float:
+    def heat_loss_coef(self) -> float:  # in W/K
         return self.exchange_surface * self.INSULATION_U_VAL
 
     @property
     def temperature(self) -> float:
-        if self.status is None:
-            raise RuntimeError(
-                "VirtualWorld must be started to get environmental values"
-            )
+        if not self.status:
+            self.logger.debug("Getting environmental values from a non-started environment")
         k_temperature = self._heat_quantity / self._hybrid_capacity
         return temperature_converter(k_temperature, "k", "c")
 
     @property
     def absolute_humidity(self) -> float:
-        if self.status is None:
-            raise RuntimeError(
-                "VirtualWorld must be started to get environmental values"
-            )
+        if not self.status:
+            self.logger.debug("Getting environmental values from a non-started environment")
         return self._humidity_quantity / self.volume
 
     @property
     def humidity(self) -> float:
-        if self.status is None:
-            raise RuntimeError(
-                "VirtualWorld must be started to get environmental values"
-            )
+        if not self.status:
+            self.logger.debug("Getting environmental values from a non-started environment")
         return get_relative_humidity(self.temperature, self.absolute_humidity)
 
     @property
     def light(self) -> float:
-        if self.get_actuator_status(gv.HardwareType.light) is None:
-            raise RuntimeError(
-                "VirtualWorld must be started to get environmental values"
-            )
+        if not self.status:
+            self.logger.debug("Getting environmental values from a non-started environment")
         return self._light
 
     lux = light
@@ -290,7 +282,7 @@ class VirtualEcosystem:
             raise RuntimeError(
                 "The virtualEcosystem needs to be started " "before computing measures"
             )
-        now = monotonic() or now
+        now = now or monotonic()
         if (
             self._last_update is None
             or (now - self._last_update) > self.time_between_measures
@@ -368,27 +360,39 @@ class VirtualEcosystem:
             f"light: {self.light:.1f}"
         )
 
-    def reset(self) -> None:
+    def _compute_initial_hybrid_capacity(self) -> float:
         air_mass = self.volume * self.AIR_DENSITY
         air_heat_capacity = air_mass * self.AIR_HEAT_CAPACITY * 1000  # in j/K
 
         water_mass = self._water_volume
         water_heat_capacity = water_mass * self.WATER_HEAT_CAPACITY * 1000  # in j/K
 
-        self._hybrid_capacity = air_heat_capacity + water_heat_capacity
+        return air_heat_capacity + water_heat_capacity
 
-        out_temp, out_hum, out_light = self.virtual_world.get_measures()
+    def _compute_initial_heat_quantity(self) -> float:
+        out_temp, _, _ = self.virtual_world.get_measures()
         k_temperature = temperature_converter(out_temp, "c", "k")
 
-        self._heat_quantity = self._hybrid_capacity * k_temperature
-        out_abs_hum = get_absolute_humidity(out_temp, out_hum)
-        self._humidity_quantity = out_abs_hum * self.volume
+        return self._hybrid_capacity * k_temperature
 
-        self._light = out_light
+    def _compute_initial_humidity_quantity(self) -> float:
+        out_temp, out_hum, _ = self.virtual_world.get_measures()
+        out_abs_hum = get_absolute_humidity(out_temp, out_hum)
+        return out_abs_hum * self.volume
+
+    def _compute_initial_light(self) -> float:
+        _, _, out_light = self.virtual_world.get_measures()
+        return out_light
+
+    def reset(self) -> None:
+        self._hybrid_capacity = self._compute_initial_hybrid_capacity()
+        self._heat_quantity = self._compute_initial_heat_quantity()
+        self._humidity_quantity = self._compute_initial_humidity_quantity()
+        self._light = self._compute_initial_light()
 
         self._start_time = None
         self._last_update = None
 
     def start(self) -> None:
         self.reset()
-        self._start_time = datetime.now()
+        self._start_time = monotonic()
