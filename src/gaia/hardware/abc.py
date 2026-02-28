@@ -8,7 +8,7 @@ import inspect
 from logging import getLogger
 from pathlib import Path
 import textwrap
-from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
+from typing import Any, ClassVar, Self, Type, TYPE_CHECKING
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -24,6 +24,7 @@ from gaia.exceptions import HardwareNotFound
 from gaia.hardware._websocket import WebSocketHardwareManager
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
+from gaia.types import SensorData
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
@@ -1014,7 +1015,7 @@ class BaseSensor(Hardware):
             for measure in formatted_measures
         }
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorData]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
@@ -1024,7 +1025,7 @@ class LightSensor(BaseSensor):
     async def get_lux(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorData]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
@@ -1050,12 +1051,12 @@ class PlantLevelHardware(Hardware):
 class gpioSensor(BaseSensor, gpioHardware):
     __slots__ = ("_device", "_pin")
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorData]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class i2cSensor(BaseSensor, i2cHardware):
     __slots__ = ()
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorData]:
         raise NotImplementedError("This method must be implemented in a subclass")

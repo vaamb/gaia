@@ -19,6 +19,7 @@ from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
 from gaia.hardware.camera import PiCamera
 from gaia.hardware.sensors.virtual import virtualDHT22
+from gaia.types import SensorData
 from gaia.utils import create_uid
 
 from .data import (
@@ -317,7 +318,7 @@ class TestWebsocketHardware:
         response = WebSocketMessage.model_validate_json(raw_response)
         assert response.data == {"action": "send_data"}
 
-        data = [gv.SensorRecord("not_an_uid", "def_a_measure", 42, None)]
+        data = [SensorData("not_an_uid", "def_a_measure", 42)]
         payload = WebSocketMessage(
             uuid=response.uuid,
             data={

@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from anyio.to_thread import run_sync
 
-import gaia_validators as gv
-
 from gaia.hardware.abc import BaseSensor, Measure, Unit
+from gaia.types import SensorData
 from gaia.utils import (
     get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 
@@ -19,12 +18,12 @@ class TemperatureSensor(BaseSensor):
     def _get_raw_data(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorData]:
         raw_temperature = await run_sync(self._get_raw_data)
         data = []
         if Measure.temperature in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorData(
                     sensor_uid=self.uid,
                     measure=Measure.temperature.value,
                     value=raw_temperature,
@@ -46,12 +45,12 @@ class TempHumSensor(BaseSensor):
     def _get_raw_data(self) -> tuple[float | None, float | None]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorData]:
         raw_humidity, raw_temperature = await run_sync(self._get_raw_data)
         data = []
         if Measure.humidity in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorData(
                     sensor_uid=self.uid,
                     measure=Measure.humidity.value,
                     value=raw_humidity,
@@ -62,7 +61,7 @@ class TempHumSensor(BaseSensor):
             temperature = temperature_converter(
                 raw_temperature, "celsius", get_unit("temperature", "celsius"))
             data.append(
-                gv.SensorRecord(
+                SensorData(
                     sensor_uid=self.uid,
                     measure=Measure.temperature.value,
                     value=temperature,
@@ -74,7 +73,7 @@ class TempHumSensor(BaseSensor):
             dew_point = temperature_converter(
                 raw_dew_point, "celsius", get_unit("temperature", "celsius"))
             data.append(
-                gv.SensorRecord(
+                SensorData(
                     sensor_uid=self.uid,
                     measure=Measure.dew_point.value,
                     value=dew_point,
@@ -83,7 +82,7 @@ class TempHumSensor(BaseSensor):
 
         if Measure.absolute_humidity in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorData(
                     sensor_uid=self.uid,
                     measure=Measure.absolute_humidity.value,
                     value=get_absolute_humidity(raw_temperature, raw_humidity),
