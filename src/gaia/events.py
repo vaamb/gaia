@@ -29,7 +29,7 @@ from gaia.utils import humanize_list, local_ip_address
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia_validators.image import SerializableImage
-    from sqlalchemy_wrapper import SQLAlchemyWrapper
+    from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
 
 PT = TypeVar("PT", dict, list[dict])
@@ -178,7 +178,7 @@ class Events(AsyncEventHandler):
         return self.engine.use_db
 
     @property
-    def db(self) -> SQLAlchemyWrapper:
+    def db(self) -> AsyncSQLAlchemyWrapper:
         return self.engine.db
 
     def is_connected(self) -> bool:
