@@ -6,7 +6,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem
-from gaia.hardware.abc import BaseSensor
+from gaia.hardware.abc import BaseSensor, SensorRead
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
 from tests.data import IO_dict, sensor_uid
@@ -79,7 +79,7 @@ class TestVirtualEcosystem:
         assert virtual_DHT22.model.startswith("virtual")
 
         # Get sensor data for the humidity
-        sensor_data: list[gv.SensorRecord] = await virtual_DHT22.get_data()
+        sensor_data: list[SensorRead] = await virtual_DHT22.get_data()
         humidity_record = [
             record
             for record in sensor_data
