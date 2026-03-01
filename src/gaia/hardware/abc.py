@@ -8,7 +8,7 @@ import inspect
 from logging import getLogger
 from pathlib import Path
 import textwrap
-from typing import Any, ClassVar, Literal, Self, Type, TYPE_CHECKING
+from typing import Any, ClassVar, NamedTuple, Self, Type, TYPE_CHECKING
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -74,6 +74,12 @@ class Unit(Enum):
     ppm = "ppm"
     rel_humidity = "% humidity"
     RWC = "RWC"
+
+
+class SensorRead(NamedTuple):
+    sensor_uid: str
+    measure: str
+    value: float | None
 
 
 class AddressType(Enum):
@@ -1014,7 +1020,7 @@ class BaseSensor(Hardware):
             for measure in formatted_measures
         }
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
@@ -1024,7 +1030,7 @@ class LightSensor(BaseSensor):
     async def get_lux(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
@@ -1050,12 +1056,12 @@ class PlantLevelHardware(Hardware):
 class gpioSensor(BaseSensor, gpioHardware):
     __slots__ = ("_device", "_pin")
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class i2cSensor(BaseSensor, i2cHardware):
     __slots__ = ()
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")

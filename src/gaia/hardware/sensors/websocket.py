@@ -2,20 +2,18 @@ from typing import Type
 
 from pydantic import RootModel, ValidationError
 
-import gaia_validators as gv
-
-from gaia.hardware.abc import BaseSensor, WebSocketHardware
+from gaia.hardware.abc import BaseSensor, SensorRead, WebSocketHardware
 
 from websockets import ConnectionClosed
 
 
-SensorRecords = RootModel[list[gv.SensorRecord]]
+SensorsReads = RootModel[list[SensorRead]]
 
 
 class WebSocketSensor(BaseSensor, WebSocketHardware):
     measures_available = ...
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         try:
             response = await self._send_msg_and_wait({"action": "send_data"})
         except (ConnectionError, ConnectionClosed, TimeoutError) as e:
@@ -23,7 +21,7 @@ class WebSocketSensor(BaseSensor, WebSocketHardware):
             return []
         try:
             data = response["data"]
-            data: list[gv.SensorRecord] = SensorRecords.model_validate(data).model_dump()
+            data: list[SensorRead] = SensorsReads.model_validate(data).model_dump()
         except (KeyError, ValidationError):
             self._logger.error(f"Received an invalid response: {response}")
             return []
