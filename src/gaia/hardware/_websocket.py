@@ -32,7 +32,7 @@ class WebSocketHardwareManager:
     def is_running(self) -> bool:
         return self._running_task is not None
 
-    async def register_hardware(self, hardware_uid: str, remote_ip: str | None = None) -> None:
+    async def register_hardware(self, hardware_uid: str, remote_ip: str) -> None:
         self._registered_hardware[hardware_uid] = remote_ip
 
     async def unregister_hardware(self, hardware_uid: str) -> None:
@@ -74,6 +74,7 @@ class WebSocketHardwareManager:
     async def stop(self) -> None:
         if not self.is_running:
             raise RuntimeError("WebSocketHardwareManager is not currently running")
+        assert self._running_task is not None
         self._stop_event.set()
         self._started_event.clear()
         self._running_task.cancel()

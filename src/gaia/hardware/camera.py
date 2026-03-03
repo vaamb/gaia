@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from time import sleep
 import typing as t
-from typing import Type
+from typing import Any, Type
 
 from anyio.to_thread import run_sync
 
@@ -26,7 +26,7 @@ class PiCamera(Camera):
     def _get_device(self) -> Picamera2:
         if is_raspi():  # pragma: no cover
             try:
-                from picamera2 import Picamera2
+                from picamera2 import Picamera2  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "picamera package is required. Run `pip install "
@@ -40,7 +40,7 @@ class PiCamera(Camera):
         return await run_sync(self._get_image, size)
 
     def _get_image(self, size: tuple | None) -> SerializableImage:
-        config = {
+        config: dict[str, Any] = {
             "format": "RGB888"
         }
         if size is not None:

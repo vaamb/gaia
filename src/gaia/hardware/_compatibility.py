@@ -87,7 +87,7 @@ class TCA9548A:
     def __init__(self, i2c: busio.I2C, address: int = 0x70):
         self.i2c = i2c
         self.address = address
-        self.channels: list[TCA9548A_Channel | None] = [None] * 8
+        self.channels: list[TCA9548A_Channel | None] = [None] * 8  # ty: ignore[invalid-assignment]
 
     def __len__(self) -> int:
         return 8
@@ -95,9 +95,11 @@ class TCA9548A:
     def __getitem__(self, key: int) -> TCA9548A_Channel:
         if not 0 <= key <= 7:
             raise IndexError("Channel must be an integer in the range: 0-7.")
-        if self.channels[key] is None:
-            self.channels[key] = TCA9548A_Channel(self, key)
-        return self.channels[key]
+        channel = self.channels[key]
+        if channel is None:
+            channel = TCA9548A_Channel(self, key)
+            self.channels[key] = channel
+        return channel
 
 
 # ---------------------------------------------------------------------------
