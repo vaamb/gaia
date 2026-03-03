@@ -141,7 +141,8 @@ def validate_payload(model_cls: Type[gv.BaseModel] | Type[RootModel]):
             try:
                 validated_data = model_cls.model_validate(data).model_dump(by_alias=True)
             except ValidationError as e:
-                event: str = func.__name__[3:]
+                # Valid ignore: func is always a function object in this decorator context
+                event: str = func.__name__[3:]  # ty: ignore[unresolved-attribute]
                 msg_list = [f"{error['loc'][0] if error['loc'] else 'root'}: {error['msg']}" for error in e.errors()]
                 self.logger.error(
                     f"Encountered an error while validating '{event}' data. Error "
@@ -225,7 +226,7 @@ class Events(AsyncEventHandler):
                     ]
                 }
                 self.logger.debug("Sending 'ping'.")
-                await self.emit("ping", data=ping_data, namespace="aggregator-stream")
+                await self.emit("ping", data=ping_data, namespace="aggregator-stream")  # ty: ignore[invalid-argument-type]
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while running the ping routine. "
@@ -309,7 +310,7 @@ class Events(AsyncEventHandler):
         payload = self.get_payload(payload_name, ecosystem_uids)
         if payload:
             try:
-                result = await self.emit(payload_name, data=payload, ttl=ttl)
+                result = await self.emit(payload_name, data=payload, ttl=ttl)  # ty: ignore[invalid-argument-type]
             except Exception as e:
                 self.logger.error(
                     f"Encountered an error while emitting event '{payload_name}'. "
@@ -367,7 +368,7 @@ class Events(AsyncEventHandler):
             engine_uid=self.engine.config.app_config.ENGINE_UID,
             address=local_ip_address(),
         ).model_dump()
-        result = await self.emit("register_engine", data=data, ttl=15)
+        result = await self.emit("register_engine", data=data, ttl=15)  # ty: ignore[invalid-argument-type]
         if result:
             self.logger.debug("Registration request sent.")
         else:
@@ -460,7 +461,7 @@ class Events(AsyncEventHandler):
             f"'s '{data['actuator'].name}' to mode '{data['mode'].name}'.")
         if ecosystem_uid in self.ecosystems:
             await self.ecosystems[ecosystem_uid].turn_actuator(
-                actuator=data.get("group") or data["actuator"],
+                actuator=data.get("group") or data["actuator"],  # ty: ignore[invalid-argument-type]
                 mode=data["mode"],
                 level=data.get("level", 100.0),
                 countdown=data.get("countdown", 0.0),
@@ -471,7 +472,7 @@ class Events(AsyncEventHandler):
         ecosystem_uid: str = data["uid"]
         if ecosystem_uid in self.ecosystems:
             for management, status in data["data"].items():
-                self.ecosystems[ecosystem_uid].config.set_management(management, status)
+                self.ecosystems[ecosystem_uid].config.set_management(management, status)  # ty: ignore[invalid-argument-type]
             await self.engine.config.save(ConfigType.ecosystems)
             await self.send_payload("management", ecosystem_uids=[ecosystem_uid])
 
@@ -538,7 +539,7 @@ class Events(AsyncEventHandler):
         # Treat the CRUD request
         try:
             crud_function = self._get_crud_function(action, target, ecosystem_uid)
-            result = crud_function(**data["data"])
+            result = crud_function(**data["kwargs"])
             if inspect.isawaitable(result):
                 result = await result
             await self.engine.config.save(ConfigType.ecosystems)
@@ -548,7 +549,7 @@ class Events(AsyncEventHandler):
                 f"`{crud_uuid}`. {self._format_error(e)}.")
             await self.emit(
                 event="crud_result",
-                data=gv.RequestResult(
+                data=gv.RequestResult(  # ty: ignore[invalid-argument-type]
                     uuid=crud_uuid,
                     status=gv.Result.failure,
                     message=str(e),
@@ -558,7 +559,7 @@ class Events(AsyncEventHandler):
         else:
             await self.emit(
                 event="crud_result",
-                data=gv.RequestResult(
+                data=gv.RequestResult(  # ty: ignore[invalid-argument-type]
                     uuid=crud_uuid,
                     status=gv.Result.success,
                 ).model_dump(),
@@ -588,7 +589,7 @@ class Events(AsyncEventHandler):
         async with self.db.scoped_session() as session:
             for buffer_cls, event_name in buffers:
                 async for payload in await buffer_cls.get_buffered_data(session):
-                    await self.emit(event=event_name, data=payload.model_dump())
+                    await self.emit(event=event_name, data=payload.model_dump())  # ty: ignore[invalid-argument-type]
 
     @validate_payload(gv.RequestResult)
     async def on_buffered_data_ack(self, data: gv.RequestResultDict) -> None:
@@ -601,7 +602,6 @@ class Events(AsyncEventHandler):
         async with self.db.scoped_session() as session:
             if data["status"] == gv.Result.success:
                 for db_model in (ActuatorBuffer, SensorBuffer):
-                    db_model: DataBufferMixin
                     await db_model.mark_exchange_as_success(session, data["uuid"])
             else:
                 for db_model in (ActuatorBuffer, SensorBuffer):
@@ -652,6 +652,9 @@ class Events(AsyncEventHandler):
         if self._resize_ratio != 1.0:
             image = image.resize(ratio=self._resize_ratio)
         to_send = image.serialize(compression_format=self._compression_format)
+        # `camera_token` should be assigned before any method using `_upload_image()`
+        #  is ever called
+        assert self.camera_token is not None
         headers = {"token": self.camera_token}
         base_url = self.engine.config.app_config.AGGREGATOR_SERVER_URL
         url = f"{base_url}/upload_camera_image"
