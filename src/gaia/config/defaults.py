@@ -9,13 +9,17 @@ EnvironmentParameter: TypeAlias = gv.ClimateParameter | gv.WeatherParameter
 # Default actuator couples for the climate parameters
 climate_actuator_couples: dict[gv.ClimateParameter, gv.ActuatorCouple] = {
     gv.ClimateParameter.temperature: gv.ActuatorCouple(
-        increase=gv.HardwareType.heater, decrease=gv.HardwareType.cooler),
+        increase=str(gv.HardwareType.heater.name),
+        decrease=str(gv.HardwareType.cooler.name)),
     gv.ClimateParameter.humidity: gv.ActuatorCouple(
-        increase=gv.HardwareType.humidifier, decrease=gv.HardwareType.dehumidifier),
+        increase=str(gv.HardwareType.humidifier.name),
+        decrease=str(gv.HardwareType.dehumidifier.name)),
     gv.ClimateParameter.light: gv.ActuatorCouple(
-        increase=gv.HardwareType.light, decrease=None),
+        increase=str(gv.HardwareType.light.name),
+        decrease=None),
     gv.ClimateParameter.wind: gv.ActuatorCouple(
-        increase=gv.HardwareType.fan, decrease=None),
+        increase=str(gv.HardwareType.fan.name),
+        decrease=None),
 }
 
 
@@ -27,7 +31,7 @@ assert all([
 
 def get_actuator_to_parameter(
         actuator_couples: dict[EnvironmentParameter, gv.ActuatorCouple],
-) -> dict[str, gv.ClimateParameter]:
+) -> dict[str, EnvironmentParameter]:
     return {
         actuator: climate_parameter
         for climate_parameter, actuator_couple in actuator_couples.items()
@@ -36,7 +40,7 @@ def get_actuator_to_parameter(
     }
 
 
-actuator_to_parameter = get_actuator_to_parameter(climate_actuator_couples)
+actuator_to_parameter = get_actuator_to_parameter(climate_actuator_couples)  # ty: ignore[invalid-argument-type]
 
 
 def get_actuator_to_direction(
