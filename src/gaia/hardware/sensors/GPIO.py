@@ -10,10 +10,7 @@ from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if is_raspi():
-        from adafruit_dht import DHT11 as _DHT11, DHT22 as _DHT22
-    else:
-        from gaia.hardware._compatibility import DHT11 as _DHT11, DHT22 as _DHT22
+    from gaia.hardware._compatibility import DHT11 as _DHT11, DHT22 as _DHT22
 
 
 # ---------------------------------------------------------------------------

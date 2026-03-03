@@ -5,16 +5,12 @@ import typing as t
 
 from anyio.to_thread import run_sync
 
-from gaia.hardware.abc import AddressType, Dimmer, gpioHardware, Switch
+from gaia.hardware.abc import Dimmer, gpioHardware, Switch
 from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if is_raspi():
-        import pwmio
-        from adafruit_blinka.microcontroller.bcm283x.pin import Pin
-    else:
-        from gaia.hardware._compatibility import Pin, pwmio
+    from gaia.hardware._compatibility import Pin, pwmio
 
 
 class gpioSwitch(gpioHardware, Switch):
