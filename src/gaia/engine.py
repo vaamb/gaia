@@ -300,10 +300,9 @@ class Engine(metaclass=SingletonMeta):
             cron_minute: str = self.config.app_config.SENSORS_LOGGING_PERIOD
             loop_period = self.config.app_config.SENSORS_LOOP_PERIOD
             seconds_offset = ceil(loop_period * 1.5)
-            job_kwargs = {"scoped_session_": self.db.scoped_session, "engine": self}
             self.scheduler.add_job(
                 func=routines.log_sensors_data,
-                kwargs=job_kwargs,
+                kwargs={"engine": self},
                 id="log_sensors_data",
                 trigger=CronTrigger(
                     minute=cron_minute,

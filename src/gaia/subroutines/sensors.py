@@ -14,7 +14,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import gaia_validators as gv
 
 from gaia.hardware import sensor_models
-from gaia.hardware.abc import BaseSensor
+from gaia.hardware.abc import BaseSensor, SensorRead
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -166,12 +166,16 @@ class Sensors(SubroutineTemplate[BaseSensor]):
                 f"fetch data. Will try to gather data during next routine.")
         self._slow_sensor_futures = pending
         # Gather the data
-        sensors_data: list[list[gv.SensorRecord]] = [future.result() for future in done]
-        for sensor_data in sensors_data:
+        sensors_reads: list[list[SensorRead]] = [future.result() for future in done]
+        for sensor_reads in sensors_reads:
             cache["records"].extend(
-                sensor_record
-                for sensor_record in sensor_data
-                if sensor_record.value is not None
+                gv.SensorRecord(
+                    sensor_read.sensor_uid,
+                    sensor_read.measure,
+                    sensor_read.value
+                )
+                for sensor_read in sensor_reads
+                if sensor_read.value is not None
             )
         return cache
 

@@ -1,8 +1,8 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 import typing as t
-from typing import Callable
 
-from sqlalchemy.orm import scoped_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import gaia_validators as gv
@@ -16,11 +16,12 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 async def log_sensors_data(
-        scoped_session_: Callable[..., scoped_session],
-        engine: "Engine",
+        engine: Engine,
 ) -> None:
     logged_ecosystem: set[str] = set()
-    async with scoped_session_() as session:
+    # This function should never be called when the DB is not enabled
+    assert engine._db is not None
+    async with engine.db.scoped_session() as session:
         session: AsyncSession
         for ecosystem_uid, ecosystem in engine.ecosystems.items():
             sensors_data = ecosystem.sensors_data

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -29,7 +30,7 @@ def generate_sensor_data(timestamp: datetime | None = None) -> dict:
 
 
 @pytest_asyncio.fixture(scope="session")
-async def db(engine_config_master: EngineConfig) -> AsyncSQLAlchemyWrapper:
+async def db(engine_config_master: EngineConfig) -> AsyncGenerator[AsyncSQLAlchemyWrapper]:
     dict_cfg = {
         key: getattr(engine_config_master.app_config, key)
         for key in dir(engine_config_master.app_config)
@@ -39,6 +40,15 @@ async def db(engine_config_master: EngineConfig) -> AsyncSQLAlchemyWrapper:
     await gaia_db.create_all()
 
     yield gaia_db
+
+
+@pytest_asyncio.fixture(scope="function")
+async def engine_with_db(engine: Engine, db: AsyncSQLAlchemyWrapper) -> AsyncGenerator[Engine]:
+    engine._db = db
+
+    yield engine
+
+    engine._db = None
 
 
 @pytest.mark.asyncio
@@ -89,7 +99,7 @@ async def test_buffer(db: AsyncSQLAlchemyWrapper):
 @pytest.mark.asyncio
 async def test_log_sensors_data(
         db: AsyncSQLAlchemyWrapper,
-        engine: Engine,
+        engine_with_db: Engine,
         ecosystem: Ecosystem,
         sensors_subroutine: Sensors,
 ):
@@ -107,7 +117,7 @@ async def test_log_sensors_data(
     await sensors_subroutine.routine()
 
     # Test the DB routine
-    await log_sensors_data(db.scoped_session, engine)
+    await log_sensors_data(engine_with_db)
 
     # Make sure we logged something
     async with db.scoped_session() as session:

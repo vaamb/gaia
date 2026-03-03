@@ -6,11 +6,9 @@ from typing import Type
 
 from anyio.to_thread import run_sync
 
-import gaia_validators as gv
-
 from gaia.hardware.abc import (
     BaseSensor, hardware_logger, i2cSensor, LightSensor, Measure,
-    PlantLevelHardware, Unit)
+    PlantLevelHardware, SensorRead, Unit)
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
@@ -105,13 +103,13 @@ class ENS160(i2cSensor):
         self.device.temperature_compensation = temperature
         self.device.humidity_compensation = humidity
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         # TODO: access temperature and humidity data to compensate
         data = []
         AQI, eCO2, TVOC = await run_sync(self._get_raw_data)
         if Measure.aqi in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorRead(
                     sensor_uid=self.uid,
                     measure=Measure.aqi.value,
                     value=AQI,
@@ -120,7 +118,7 @@ class ENS160(i2cSensor):
 
         if Measure.eco2 in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorRead(
                     sensor_uid=self.uid,
                     measure=Measure.eco2.value,
                     value=eCO2,
@@ -129,7 +127,7 @@ class ENS160(i2cSensor):
 
         if Measure.tvoc in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorRead(
                     sensor_uid=self.uid,
                     measure=Measure.tvoc.value,
                     value=TVOC,
@@ -172,11 +170,11 @@ class VEML7700(i2cSensor, LightSensor):
             )
             return None
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         data = []
         if Measure.light in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorRead(
                     sensor_uid=self.uid,
                     measure=Measure.light.value,
                     value=await self.get_lux(),
@@ -219,11 +217,11 @@ class VCNL4040(i2cSensor, LightSensor):
             )
             return None
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         data = []
         if Measure.light in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorRead(
                     sensor_uid=self.uid,
                     measure=Measure.light.value,
                     value=await self.get_lux(),
@@ -251,7 +249,7 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self.address.main)
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
@@ -283,7 +281,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                 break
         return moisture, temperature
 
-    async def get_data(self) -> list[gv.SensorRecord]:
+    async def get_data(self) -> list[SensorRead]:
         try:
             moisture, raw_temperature = await run_sync(self._get_raw_data)
         except RuntimeError:
@@ -291,7 +289,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
         data = []
         if Measure.moisture in self.measures:
             data.append(
-                gv.SensorRecord(
+                SensorRead(
                     sensor_uid=self.uid,
                     measure=Measure.moisture.value,
                     value=moisture,
@@ -303,7 +301,7 @@ class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):
                 raw_temperature, "celsius", get_unit("temperature", "celsius")
             )
             data.append(
-                gv.SensorRecord(
+                SensorRead(
                     sensor_uid=self.uid,
                     measure=Measure.temperature.value,
                     value=temperature,
