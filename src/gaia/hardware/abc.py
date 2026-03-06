@@ -912,7 +912,7 @@ class WebSocketHardware(Hardware):
     async def register(self) -> None:
         if not self.websocket_manager.is_running:
             await self.websocket_manager.start()
-        assert isinstance(self.address.main, str)
+        assert not isinstance(self.address.main, int)
         await self.websocket_manager.register_hardware(self.uid, self.address.main)
         self._task = create_task(self._connection_loop())
         await sleep(0)  # Allow the task to start

@@ -22,7 +22,7 @@ class WebSocketHardwareManager:
         if password == "gaia" and engine_config.app_config.PRODUCTION:
             raise ValueError("Production build should not use `gaia` as a password")
         self._password: str = password
-        self._registered_hardware: dict[str, str] = {}
+        self._registered_hardware: dict[str, str | None] = {}
         self.device_connections: dict[str, ServerConnection] = {}
         self._running_task: Task | None = None
         self._started_event: Event = Event()
@@ -32,7 +32,7 @@ class WebSocketHardwareManager:
     def is_running(self) -> bool:
         return self._running_task is not None
 
-    async def register_hardware(self, hardware_uid: str, remote_ip: str) -> None:
+    async def register_hardware(self, hardware_uid: str, remote_ip: str | None) -> None:
         self._registered_hardware[hardware_uid] = remote_ip
 
     async def unregister_hardware(self, hardware_uid: str) -> None:
