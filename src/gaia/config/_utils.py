@@ -71,7 +71,7 @@ class GaiaConfigHelper:
                 "'gaia.config.BaseConfig'."
             )
 
-        class Config(AppInfo, config_cls):
+        class Config(AppInfo, config_cls):  # ty: ignore[unsupported-base]
             pass
 
         cls._config = Config()

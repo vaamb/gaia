@@ -94,7 +94,7 @@ async def _generate_default_configs(ecosystem: bool = True, private: bool = True
         engine_config.logger.info(f"Private configuration file path set to: {private_cfg_path}")
         if not private_cfg_path.exists():
             engine_config.logger.info("Private configuration file not found. Creating it.")
-            async with engine_config.config_files_lock():
+            async with engine_config.config_files_lock:
                 await engine_config._create_private_config_file()
         else:
             engine_config.logger.info("Private configuration file already exists.")
@@ -103,7 +103,7 @@ async def _generate_default_configs(ecosystem: bool = True, private: bool = True
         engine_config.logger.info(f"Ecosystems configuration file path set to: {ecosystems_cfg_path}")
         if not ecosystems_cfg_path.exists():
             engine_config.logger.info("Ecosystems configuration file not found. Creating it.")
-            async with engine_config.config_files_lock():
+            async with engine_config.config_files_lock:
                 await engine_config._create_ecosystems_config_file()
         else:
             engine_config.logger.info("Ecosystems configuration file already exists.")
