@@ -1,17 +1,8 @@
 from pathlib import Path
 import re
-import tomllib
 from unittest import TestCase
 
 from gaia import __version__
-
-
-def _get_var_value(var_name: str, script_path: Path) -> str:
-    with open(script_path, "r") as f:
-        for line in f:
-            if f"{var_name}=" in line:
-                return line.split("=")[1].strip().strip('"')
-    raise ValueError(f"Variable {var_name} not found in {script_path}")
 
 
 def _get_pattern(script_path: Path, pattern: re.Pattern) -> str:
@@ -28,28 +19,30 @@ class TestInstallScript(TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root_dir = Path(__file__).parents[1]
+        cls.pyproject = cls.root_dir / "pyproject.toml"
         cls.scripts_dir = cls.root_dir / "scripts"
         cls.install_script_path = cls.scripts_dir / "install.sh"
         cls.logging_script_path = cls.scripts_dir / "logging.sh"
 
     def test_gaia_version(self):
-        gaia_version = _get_var_value("GAIA_VERSION", self.install_script_path)
-
+        # Sync the version between gaia and install.sh
+        pattern = re.compile(r"(?<=GAIA_VERSION=\")(.+?)(?=\"\n)", re.DOTALL)
+        gaia_version = _get_pattern(self.install_script_path, pattern)
         assert gaia_version == __version__
 
     def test_python_version(self):
-        install_version = _get_var_value("MIN_PYTHON_VERSION", self.install_script_path)
+        pattern = re.compile(r"(?<=MIN_PYTHON_VERSION=\")(.+?)(?=\"\n)", re.DOTALL)
+        install_version = _get_pattern(self.install_script_path, pattern)
 
-        with open(self.root_dir / "pyproject.toml", "rb") as f:
-            data = tomllib.load(f)
-        toml_version = data["project"]["requires-python"]
+        pattern = re.compile(r"(?<=requires-python = \")(.+?)(?=\"\n)", re.DOTALL)
+        toml_version = _get_pattern(self.pyproject, pattern)
         assert toml_version[:2] == ">="
         toml_version = toml_version[2:]
 
         assert install_version == toml_version
 
     def test_logging_sync(self):
-        pattern = re.compile(r"#>>>Logging>>>.*#<<<Logging<<<", re.DOTALL)
+        pattern = re.compile(r"(?<=#>>>Logging>>>)(.*)(?=#<<<Logging<<<)", re.DOTALL)
 
         install_code = _get_pattern(self.install_script_path, pattern)
         logging_code = _get_pattern(self.logging_script_path, pattern)
