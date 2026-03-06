@@ -1170,7 +1170,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 self.logger.warning(
                     f"{management_name.upper()} management has unmet dependencies: "
                     f"{dep}. This might lead to issues if it is not enabled.")
-        self._config_dict["management"][management_name] = value
+        self._config_dict["management"][management_name] = value     # ty: ignore[invalid-key]
 
     def get_subroutines_enabled(self) -> list[str]:
         """Return the list of subroutine names that are enabled for this ecosystem."""
@@ -1852,7 +1852,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """Get all actuator couples (climate and weather combined)."""
         return self.get_climate_actuators() | self.get_weather_actuators()
 
-    def get_actuator_to_parameter(self) -> dict[str, gv.ClimateParameter]:
+    def get_actuator_to_parameter(self) -> dict[str, EnvironmentParameter]:
         """Get a mapping from actuator group names to their parameters."""
         return defaults.get_actuator_to_parameter(self.get_actuator_couples())
 

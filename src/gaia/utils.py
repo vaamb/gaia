@@ -14,7 +14,7 @@ from weakref import WeakValueDictionary
 
 import orjson
 import ruamel.yaml
-from ruamel.yaml import SafeRepresenter, ScalarNode, SequenceNode
+from ruamel.yaml import SafeConstructor, SafeRepresenter, ScalarNode, SequenceNode
 
 import gaia_validators as gv
 
@@ -40,7 +40,7 @@ def _get_yaml() -> ruamel.yaml.YAML:
     ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
     ruamel.yaml.add_representer(gv.Coordinates, _repr_coordinates, yaml.representer)
     ruamel.yaml.add_multi_representer(Enum, _repr_enum, yaml.representer)
-    yaml.Constructor = ruamel.yaml.constructor.SafeConstructor
+    yaml.Constructor = SafeConstructor
 
     return yaml
 
