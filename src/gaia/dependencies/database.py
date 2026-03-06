@@ -5,13 +5,13 @@ _uninstalled_dependencies = False
 try:
     import sqlalchemy
 except ImportError:  # pragma: no cover
-    sqlalchemy = None
+    sqlalchemy = None  # ty: ignore[invalid-assignment]
     _uninstalled_dependencies = True
 
 try:
     import sqlalchemy_wrapper
 except ImportError:  # pragma: no cover
-    sqlalchemy_wrapper = None
+    sqlalchemy_wrapper = None  # ty: ignore[invalid-assignment]
     _uninstalled_dependencies = True
 
 
