@@ -17,7 +17,7 @@ def dump_picture_array(array: np.ndarray, path: Path) -> None:
         np.save(handler, array)
 
 
-def resize(array: np.ndarray, size: tuple[int, int]) -> np.array:
+def resize(array: np.ndarray, size: tuple[int, int]) -> np.ndarray:
     check_dependencies(check_cv2=True)
     return cv2.resize(array, size)
 

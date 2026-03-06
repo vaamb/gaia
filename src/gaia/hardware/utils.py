@@ -11,10 +11,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 _is_raspi: bool | None = None
-_i2c: "I2C" | None = None
+_i2c: I2C | None = None
 
 
-_store: dict[str, "I2C"] = {}
+_store: dict[str, I2C] = {}
 
 
 hardware_logger = logging.getLogger("gaia.hardware.store")
@@ -27,7 +27,7 @@ def is_raspi() -> bool:
     return _is_raspi
 
 
-def get_i2c() -> "I2C":
+def get_i2c() -> I2C:
     global _i2c
     if _i2c is None:
         if is_raspi():  # pragma: no cover
@@ -35,5 +35,6 @@ def get_i2c() -> "I2C":
             import busio
         else:
             from gaia.hardware._compatibility import board, busio
-        _i2c = busio.I2C(board.SCL, board.SDA)
+        _i2c = busio.I2C(board.SCL, board.SDA)  # ty: ignore[invalid-assignment, possibly-missing-attribute]
+    assert _i2c is not None
     return _i2c

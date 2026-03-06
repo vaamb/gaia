@@ -22,7 +22,7 @@ if typing.TYPE_CHECKING:
     from gaia.actuator_handler import ActuatorHandler
 
 
-DEFAULT_CLIMATE_CFG = gv.ClimateConfig(**{
+DEFAULT_CLIMATE_CFG = gv.ClimateConfig(**{  # ty: ignore[invalid-argument-type]
     "parameter": gv.ClimateParameter.light,
     "day": 250_000,
     "night": -30_000,
@@ -94,6 +94,7 @@ class Light(SubroutineTemplate[Actuator]):
     async def _stop(self) -> None:
         self.logger.info("Stopping light loop.")
         # Stop light routine
+        assert self._task is not None
         self._task.cancel()
         self._task = None
         # Reset light sensors
@@ -227,6 +228,10 @@ class Light(SubroutineTemplate[Actuator]):
         now = _now or datetime.now().time()
         hours = self.config.lighting_hours
         if self.config.lighting_method == gv.LightMethod.elongate:
+            # If `lighting_method` is `elongate`, `morning_end` and `evening_start`
+            #  should have been computed
+            assert hours.morning_end is not None
+            assert hours.evening_start is not None
             # Is time between lightning hours
             if (
                 hours.morning_start <= now <= hours.morning_end

@@ -1,6 +1,6 @@
 from typing import Type
 
-from gaia.hardware.abc import Dimmer, Hardware, Switch, WebSocketHardware
+from gaia.hardware.abc import Actuator, Dimmer, Switch, WebSocketHardware
 
 
 class WebSocketSwitch(Switch, WebSocketHardware):
@@ -25,7 +25,7 @@ class WebSocketDimmer(Dimmer, WebSocketHardware):
         )
 
 
-websocket_actuator_models: dict[str, Type[Hardware]] = {
+websocket_actuator_models: dict[str, Type[Actuator]] = {
     hardware.__name__: hardware
     for hardware in [
         WebSocketDimmer,

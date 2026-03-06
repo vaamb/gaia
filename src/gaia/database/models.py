@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy import delete, select, UniqueConstraint, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import DateTime, TypeDecorator
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeMeta, Mapped, mapped_column
 
 import gaia_validators as gv
 from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
@@ -28,7 +28,7 @@ db = AsyncSQLAlchemyWrapper(
         "json_deserializer": json.loads,
     },
 )
-Base = db.Model
+Base: DeclarativeMeta = db.Model  # ty: ignore[invalid-assignment]
 
 
 class UtcDateTime(TypeDecorator):
@@ -46,7 +46,7 @@ class UtcDateTime(TypeDecorator):
         return value
 
 
-class DataBufferMixin(Base):
+class DataBufferMixin(Base):  # ty: ignore[unsupported-base]
     __abstract__ = True
 
     exchange_uuid: Mapped[UUID | None] = mapped_column()
@@ -156,7 +156,7 @@ class DataBufferMixin(Base):
         await session.execute(stmt)
 
 
-class BaseSensorRecord(Base):
+class BaseSensorRecord(Base):  # ty: ignore[unsupported-base]
     __abstract__ = True
     __table_args__ = (
         UniqueConstraint(
@@ -219,7 +219,7 @@ def _get_actuator_group(context) -> str:
     return str(params["type"])
 
 
-class BaseActuatorRecord(Base):
+class BaseActuatorRecord(Base):  # ty: ignore[unsupported-base]
     __abstract__ = True
     __table_args__ = (
         UniqueConstraint(

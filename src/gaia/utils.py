@@ -9,12 +9,12 @@ import platform
 import random
 import socket
 import string
-from typing import Any
+from typing import Any, overload
 from weakref import WeakValueDictionary
 
 import orjson
 import ruamel.yaml
-from ruamel.yaml import SafeRepresenter, ScalarNode, SequenceNode
+from ruamel.yaml import SafeConstructor, SafeRepresenter, ScalarNode, SequenceNode
 
 import gaia_validators as gv
 
@@ -40,7 +40,7 @@ def _get_yaml() -> ruamel.yaml.YAML:
     ruamel.yaml.add_representer(time, _repr_time, yaml.representer)
     ruamel.yaml.add_representer(gv.Coordinates, _repr_coordinates, yaml.representer)
     ruamel.yaml.add_multi_representer(Enum, _repr_enum, yaml.representer)
-    yaml.Constructor = ruamel.yaml.constructor.SafeConstructor
+    yaml.Constructor = SafeConstructor
 
     return yaml
 
@@ -168,6 +168,14 @@ def pin_translation(pin: int, direction: str) -> int:
         return pin_bcm_to_board[pin]
 
 
+@overload
+def get_dew_point(temp: None, hum: None, precision_digit: int = 2) -> None: ...
+@overload
+def get_dew_point(temp: None, hum: float, precision_digit: int = 2) -> None: ...
+@overload
+def get_dew_point(temp: float, hum: None, precision_digit: int = 2) -> None: ...
+@overload
+def get_dew_point(temp: float, hum: float, precision_digit: int = 2) -> float: ...
 def get_dew_point(
         temp: float | None,
         hum: float | None,
@@ -195,6 +203,14 @@ def get_dew_point(
     return float(round(Tdp, precision_digit))
 
 
+@overload
+def get_absolute_humidity(temp: None, rel_hum: None, precision_digit: int = 2) -> None: ...
+@overload
+def get_absolute_humidity(temp: None, rel_hum: float, precision_digit: int = 2) -> None: ...
+@overload
+def get_absolute_humidity(temp: float, rel_hum: None, precision_digit: int = 2) -> None: ...
+@overload
+def get_absolute_humidity(temp: float, rel_hum: float, precision_digit: int = 2) -> float: ...
 def get_absolute_humidity(
         temp: float | None,
         rel_hum: float | None,
@@ -228,6 +244,14 @@ def get_absolute_humidity(
     return float(round(x, precision_digit))
 
 
+@overload
+def get_relative_humidity(temp: None, abs_hum: None, precision_digit: int = 2) -> None: ...
+@overload
+def get_relative_humidity(temp: None, abs_hum: float, precision_digit: int = 2) -> None: ...
+@overload
+def get_relative_humidity(temp: float, abs_hum: None, precision_digit: int = 2) -> None: ...
+@overload
+def get_relative_humidity(temp: float, abs_hum: float, precision_digit: int = 2) -> float: ...
 def get_relative_humidity(
         temp: float | None,
         abs_hum: float | None,
@@ -250,6 +274,10 @@ def get_relative_humidity(
     return float(round(x, precision_digit))
 
 
+@overload
+def temperature_converter(temp: None, unit_in: str, unit_out: str, precision_digit: int = 2) -> None: ...
+@overload
+def temperature_converter(temp: float, unit_in: str, unit_out: str, precision_digit: int = 2) -> float: ...
 def temperature_converter(
     temp: float | None,
         unit_in: str,

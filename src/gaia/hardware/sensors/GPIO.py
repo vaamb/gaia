@@ -10,10 +10,7 @@ from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if is_raspi():
-        from adafruit_dht import DHT11 as _DHT11, DHT22 as _DHT22
-    else:
-        from gaia.hardware._compatibility import DHT11 as _DHT11, DHT22 as _DHT22
+    from gaia.hardware._compatibility import DHT11 as _DHT11, DHT22 as _DHT22
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +51,7 @@ class DHT11(DHTSensor):
     def _get_device(self) -> "_DHT11":
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_dht import DHT11 as _DHT11
+                from adafruit_dht import DHT11 as _DHT11  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit dht package and libgpiod2 are required. Run "
@@ -72,7 +69,7 @@ class DHT22(DHTSensor):
     def _get_device(self) -> "_DHT22":
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_dht import DHT22 as _DHT22
+                from adafruit_dht import DHT22 as _DHT22  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit dht package and libgpiod2 are required. Run "

@@ -15,19 +15,13 @@ from gaia.utils import get_unit, temperature_converter
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if is_raspi():
-        from adafruit_ahtx0 import AHTx0
-        from adafruit_seesaw.seesaw import Seesaw
-        from adafruit_veml7700 import VEML7700 as _VEML7700
-        from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
-        from adafruit_ens160 import ENS160 as _ENS160
-    else:
-        from gaia.hardware._compatibility import (
-            AHTx0,
-            Seesaw,
-            VEML7700 as _VEML7700,
-            VCNL4040 as _VCNL4040,
-        )
+    from gaia.hardware._compatibility import (
+        AHTx0,
+        Seesaw,
+        VEML7700 as _VEML7700,
+        VCNL4040 as _VCNL4040,
+        ENS160 as _ENS160,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +33,7 @@ class AHT20(TempHumSensor, i2cSensor):
     def _get_device(self) -> "AHTx0":
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_ahtx0 import AHTx0
+                from adafruit_ahtx0 import AHTx0  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit aht0 package is required. Run `pip install "
@@ -71,7 +65,7 @@ class ENS160(i2cSensor):
     def _get_device(self) -> "_ENS160":
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_ens160 import ENS160 as _ENS160
+                from adafruit_ens160 import ENS160 as _ENS160  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit ens160 package is required. Run `pip install "
@@ -151,7 +145,7 @@ class VEML7700(i2cSensor, LightSensor):
     def _get_device(self) -> "_VEML7700":
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_veml7700 import VEML7700 as _VEML7700
+                from adafruit_veml7700 import VEML7700 as _VEML7700  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit veml7700 package is required. Run `pip install "
@@ -198,7 +192,7 @@ class VCNL4040(i2cSensor, LightSensor):
     def _get_device(self) -> "_VCNL4040":
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_vcnl4040 import VCNL4040 as _VCNL4040
+                from adafruit_vcnl4040 import VCNL4040 as _VCNL4040  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit vcnl4040 package is required. Run `pip install "
@@ -245,7 +239,7 @@ class CapacitiveSensor(i2cSensor):
     def _get_device(self) -> "Seesaw":
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_seesaw.seesaw import Seesaw
+                from adafruit_seesaw.seesaw import Seesaw  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit seesaw package is required. Run `pip install "

@@ -1,11 +1,11 @@
-from asyncio import create_task, sleep, wait_for
+from asyncio import create_task, wait_for
 from datetime import date
 from unittest.mock import patch
 
 import pytest
 
 from dispatcher import EventHandler, AsyncDispatcher
-from sqlalchemy_wrapper import SQLAlchemyWrapper
+from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
 from gaia import EcosystemConfig, Engine, EngineConfig
 
@@ -105,7 +105,7 @@ async def test_engine_database(engine: Engine, logs_content):
         await engine.init_database()
     assert engine.use_db is False
     with pytest.raises(AttributeError):
-        assert isinstance(engine.db, SQLAlchemyWrapper)
+        assert isinstance(engine.db, AsyncSQLAlchemyWrapper)
 
     # Test DB initialization
     engine.config.app_config.USE_DATABASE = True
@@ -114,7 +114,7 @@ async def test_engine_database(engine: Engine, logs_content):
     await engine.init_database()
     with logs_content() as logs:
         assert "Initialising the database" in logs
-    assert isinstance(engine.db, SQLAlchemyWrapper)
+    assert isinstance(engine.db, AsyncSQLAlchemyWrapper)
 
     # Test DB start and stop
     await engine.start_database()

@@ -215,7 +215,7 @@ class Timer:
         "_task",
     )
 
-    def __init__(self, callback: Awaitable | Callable, countdown: float) -> None:
+    def __init__(self, callback: Callable, countdown: float) -> None:
         self._start_time: float = time.monotonic()
         self._countdown: float = 0.0
         self._future: Future = Future()

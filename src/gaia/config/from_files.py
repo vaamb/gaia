@@ -12,7 +12,8 @@ import logging
 from math import pi, sin
 from pathlib import Path
 import random
-from typing import Any, cast, Literal, Type, TypedDict, TypeVar
+import sys
+from typing import Any, cast, Literal, Type, TypeAlias, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -31,6 +32,11 @@ from gaia.hardware import hardware_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
     create_uid, get_yaml, humanize_list, is_time_between, json, SingletonMeta)
+
+if sys.version_info < (3, 12):
+    from typing_extensions import Unpack
+else:
+    from typing import Unpack
 
 
 class ConfigValidationError(ValueError):
@@ -95,10 +101,7 @@ async def _dump_yaml(data: dict, path: Path) -> None:
     await run_sync(dump_yaml_sync)
 
 
-H = TypeVar("H", int, bytes, str)
-
-
-def _file_checksum(file_path: Path, _buffer_size: int = 4096) -> H:
+def _file_checksum(file_path: Path, _buffer_size: int = 4096) -> bytes:
     try:
         with open(file_path, "rb") as file_obj:
             digest_obj = hashlib.md5(usedforsecurity=False)
@@ -255,10 +258,35 @@ class RootPlantsValidator(RootModel):
     root: dict[str, gv.AnonymousPlantConfig]
 
 
+class AnonymousHardwareConfigDictInput(TypedDict):
+    name: str
+    active: bool
+    address: str
+    type: str | gv.HardwareType
+    level: str | gv.HardwareLevel
+    groups: list[str] | set[str] | None
+    model: str
+    measures: list[str | gv.MeasureDict] | None
+    plants: list[str] | None
+    multiplexer_model: str | None
+
+
+class HardwareConfigDictInput(AnonymousHardwareConfigDictInput):
+    uid: str
+
+
+EnvironmentParameter: TypeAlias = gv.ClimateParameter | gv.WeatherParameter
+
+
 # ---------------------------------------------------------------------------
 #   Ecosystem chaos models
 # ---------------------------------------------------------------------------
-class ChaosMemoryValidator(gv.BaseModel):
+class ChaosMemory(TypedDict):
+    last_update: date
+    time_window: gv.TimeWindowDict
+
+
+class ChaosMemoryValidator(gv.BaseModel[ChaosMemory]):
     last_update: date = Field(default_factory=date.today)
     time_window: gv.TimeWindow = gv.TimeWindow()
 
@@ -267,11 +295,6 @@ class ChaosMemoryValidator(gv.BaseModel):
         if isinstance(value, str):
             return date.fromisoformat(value)
         return value
-
-
-class ChaosMemory(TypedDict):
-    last_update: date
-    time_window: gv.TimeWindow
 
 
 class ChaosMemoryRootValidator(RootModel):
@@ -509,13 +532,12 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"Checking hardware config for ecosystem {ecosystem_name}.")
             addresses_used: list[str] = []
             for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
-                hardware_dict: gv.HardwareConfigDict
                 hardware_name: str = hardware_dict["name"]
                 self.logger.debug(
                     f"Checking hardware {hardware_name} for ecosystem {ecosystem_name}.")
                 try:
                     EcosystemConfig.validate_hardware_dict(
-                        hardware_dict={"uid": hardware_uid, **hardware_dict},
+                        gv.to_identified(hardware_dict, {"uid": hardware_uid}),
                         addresses_used=addresses_used,
                     )
                 except ValueError as e:
@@ -552,7 +574,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.ecosystems)
-        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
+        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)  # ty: ignore[invalid-assignment]
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
@@ -578,7 +600,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.private)
-        unvalidated: PrivateConfigDict = await _load_yaml(config_path)
+        unvalidated: PrivateConfigDict  = await _load_yaml(config_path)  # ty: ignore[invalid-assignment]
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
@@ -660,7 +682,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Dump the data
         config_path = self.get_file_path(ConfigType.private)
-        await _dump_yaml(self._private_config, config_path)
+        await _dump_yaml(self._private_config, config_path)  # ty: ignore[invalid-argument-type]
         # Update the checksum
         await self._checksum_tracker.update(config_path)
 
@@ -771,10 +793,10 @@ class EngineConfig(metaclass=SingletonMeta):
     def update_ecosystem_base_info(
             self,
             ecosystem_id: str,
-            **updating_values: Any,  # EcosystemBaseUpdateDict
+            **updating_values: Unpack[EcosystemBaseUpdateDict],
     ) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
-        ecosystem = self.ecosystems_config_dict.get(ecosystem_ids.uid)
+        ecosystem = self.ecosystems_config_dict[ecosystem_ids.uid]
         # Make extra sure no "complex" field is overridden
         updating_values.pop("management", None)
         updating_values.pop("environment", None)
@@ -815,7 +837,7 @@ class EngineConfig(metaclass=SingletonMeta):
         return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
 
     @property
-    def ecosystems_config(self) -> dict[str, EcosystemConfig]:
+    def ecosystems_config(self) -> WeakValueDictionary[str, EcosystemConfig]:
         return _MetaEcosystemConfig.instances
 
     # ---------------------------------------------------------------------------
@@ -992,9 +1014,9 @@ class EngineConfig(metaclass=SingletonMeta):
 #   EcosystemConfig class
 # ---------------------------------------------------------------------------
 class _MetaEcosystemConfig(type):
-    instances: dict[str, "EcosystemConfig"] = WeakValueDictionary()
+    instances: WeakValueDictionary[str, EcosystemConfig] = WeakValueDictionary()
 
-    def __call__(cls, *args, **kwargs) -> "EcosystemConfig":
+    def __call__(cls, *args, **kwargs) -> EcosystemConfig:
         try:
             ecosystem_id = kwargs["ecosystem_id"]
         except KeyError:
@@ -1015,8 +1037,8 @@ class _MetaEcosystemConfig(type):
         try:
             return cls.instances[ecosystem_uid]
         except KeyError:
-            ecosystem_config: EcosystemConfig = \
-                cls.__new__(cls, ecosystem_uid, *args, **kwargs)
+            ecosystem_config: EcosystemConfig = cast(
+                EcosystemConfig, cls.__new__(cls, ecosystem_uid, *args, **kwargs))
             ecosystem_config.__init__(*args, **kwargs)
             cls.instances[ecosystem_uid] = ecosystem_config
             return ecosystem_config
@@ -1148,7 +1170,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 self.logger.warning(
                     f"{management_name.upper()} management has unmet dependencies: "
                     f"{dep}. This might lead to issues if it is not enabled.")
-        self._config_dict["management"][management_name] = value
+        self._config_dict["management"][management_name] = value  # ty: ignore[invalid-key]
 
     def get_subroutines_enabled(self) -> list[str]:
         """Return the list of subroutine names that are enabled for this ecosystem."""
@@ -1189,7 +1211,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     async def set_nycthemeral_cycle(
             self,
-            **value: gv.NycthemeralCycleConfigDict,
+            **value: Unpack[gv.NycthemeralCycleConfigDict],
     ) -> None:
         """Set all nycthemeral cycle parameters at once.
 
@@ -1198,7 +1220,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :raises ValueError: If the provided parameters are invalid.
         """
         try:
-            validated_value = gv.NycthemeralCycleConfig(**value).model_dump()
+            validated_value: gv.NycthemeralCycleConfigDict = \
+                gv.NycthemeralCycleConfig(**value).model_dump()
         except pydantic.ValidationError as e:
             raise ValueError(
                 f"Invalid time parameters provided. "
@@ -1256,7 +1279,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if method == 0:  # Fixed, no target needed
             return
         # Try to get the target
-        target: str
+        target: str | None
         if (method & gv.LightingMethod.elongate) == gv.LightingMethod.elongate:
             target = DEFAULT_PLACE
         elif (method & gv.NycthemeralSpanMethod.mimic) == gv.NycthemeralSpanMethod.mimic:
@@ -1309,6 +1332,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return gv.NycthemeralSpanMethod.fixed
         # Else, we need to make sure we have suntimes for the nycthemeral target
         target = self.nycthemeral_span_target
+        if target is None:
+            return gv.NycthemeralSpanMethod.fixed
         sun_times = self.general.get_sun_times(target)
         if sun_times is None:
             return gv.NycthemeralSpanMethod.fixed
@@ -1343,6 +1368,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def _compute_nycthemeral_span_hours(self) -> gv.NycthemeralSpanConfig:
         if self.nycthemeral_span_method == gv.NycthemeralSpanMethod.mimic:
             target = self.nycthemeral_span_target
+            # With mimic as a span method, target should not be None
+            assert target is not None
             sun_times = self.general.get_sun_times(target)
             if sun_times is not None:
                 assert sun_times["sunrise"] is not None
@@ -1453,6 +1480,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Computation for 'elongate' lighting method
         elif lighting_method == gv.LightingMethod.elongate:
             home_sun_times = self.general.home_sun_times
+            # `lighting_method` should not be allowed to be set to `elongate` if
+            #  `home_sun_times` is not computable.
+            assert home_sun_times is not None
+            # `_compute_sun_times` should have computed virtual `sunrise` and
+            #  `sunset` times for polar days and nights
+            assert home_sun_times["sunrise"] is not None
+            assert home_sun_times["sunset"] is not None
             sunrise: datetime = _to_dt(home_sun_times["sunrise"])
             sunset: datetime = _to_dt(home_sun_times["sunset"])
             # Civil dawn can be None for high latitude at dates close to solstices.
@@ -1522,7 +1556,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.environment["chaos"] = validated_values
 
     @property
-    def chaos_time_window(self) -> gv.TimeWindow:
+    def chaos_time_window(self) -> gv.TimeWindowDict:
         #chaos_memory = self.general.get_chaos_memory(self.uid)
         #if chaos_memory["last_update"] < date.today():
         #    await self._update_chaos_time_window()
@@ -1541,9 +1575,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.logger.debug("Chaos time window is already up to date.")
 
     async def _update_chaos_time_window(self) -> None:
-        chaos_memory = self.general.get_chaos_memory(self.uid)
-        beginning = chaos_memory["time_window"]["beginning"]
-        end = chaos_memory["time_window"]["end"]
+        beginning = self.chaos_time_window["beginning"]
+        end = self.chaos_time_window["end"]
         if beginning and end:
             if not (beginning <= datetime.now(timezone.utc) <= end):  # End of chaos period
                 beginning = None
@@ -1558,9 +1591,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     hour=14, minute=0, second=0, microsecond=0)
                 beginning = today
                 end = today + timedelta(days=self.chaos_config.duration)
-        chaos_memory["time_window"]["beginning"] = beginning
-        chaos_memory["time_window"]["end"] = end
-        chaos_memory["last_update"] = date.today()
+        self._engine_config.chaos_memory[self.uid] = {
+            "time_window": {
+                "beginning": beginning,
+                "end": end,
+            },
+            "last_update": date.today()
+        }
         await self.general.save(CacheType.chaos)
 
     def get_chaos_factor(self, now: datetime | None = None) -> float:
@@ -1584,7 +1621,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def chaos_parameters(self) -> gv.ChaosParameters:
-        return gv.ChaosParameters(**{
+        # Valid ignore: implicit conversion from dict to model by pydantic
+        return gv.ChaosParameters(**{  # ty: ignore[invalid-argument-type]
             **self.environment["chaos"],
             "time_window": self.chaos_time_window,
         })
@@ -1627,12 +1665,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"'{self.name}' in ecosystems configuration file."
             )
         else:
-            return gv.ClimateConfig(parameter=parameter, **data)
+            # Valid ignore: implicit conversion from dict to model by pydantic
+            return gv.ClimateConfig(parameter=parameter, **data)  # ty: ignore[invalid-argument-type]
 
     def set_climate_parameter(
             self,
             parameter: str | gv.ClimateParameter,
-            **value: gv.AnonymousClimateConfigDict,
+            **value: Unpack[gv.AnonymousClimateConfigDict],
     ) -> None:
         """Set or create a climate parameter configuration.
 
@@ -1653,7 +1692,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_climate_parameter(
             self,
             parameter: str | gv.ClimateParameter,
-            **value: gv.AnonymousClimateConfigDict,
+            **value: Unpack[gv.AnonymousClimateConfigDict],
     ) -> None:
         """Update an existing climate parameter configuration.
 
@@ -1722,7 +1761,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def set_weather_parameter(
             self,
             parameter: str | gv.WeatherParameter,
-            **value: gv.AnonymousWeatherConfigDict,
+            **value: Unpack[gv.AnonymousWeatherConfigDict],
     ) -> None:
         """Set or create a weather parameter configuration.
 
@@ -1743,7 +1782,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_weather_parameter(
             self,
             parameter: str | gv.WeatherParameter,
-            **value: gv.AnonymousWeatherConfigDict,
+            **value: Unpack[gv.AnonymousWeatherConfigDict],
     ) -> None:
         """Update an existing weather parameter configuration.
 
@@ -1786,7 +1825,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Merges default actuator couples with those defined in climate config.
         """
         return {
-            **defaults.actuator_couples,
+            **defaults.climate_actuator_couples,
             **{
                 climate_parameter: gv.ActuatorCouple(
                     increase=climate_cfg["linked_actuators"]["increase"],
@@ -1809,11 +1848,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             for weather_parameter, weather_cfg in self.weather.items()
         }
 
-    def get_actuator_couples(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+    def get_actuator_couples(self) -> dict[EnvironmentParameter, gv.ActuatorCouple]:
         """Get all actuator couples (climate and weather combined)."""
         return self.get_climate_actuators() | self.get_weather_actuators()
 
-    def get_actuator_to_parameter(self) -> dict[str, gv.ClimateParameter]:
+    def get_actuator_to_parameter(self) -> dict[str, EnvironmentParameter]:
         """Get a mapping from actuator group names to their parameters."""
         return defaults.get_actuator_to_parameter(self.get_actuator_couples())
 
@@ -1859,8 +1898,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return [
             uid
             for uid in self.hardware_dict
-            if self.hardware_dict[uid]["type"] in hardware_type
-               and self.hardware_dict[uid]["level"] in level
+            if (
+                self.hardware_dict[uid]["type"] in hardware_type
+                and self.hardware_dict[uid]["level"] in level
+            )
         ]
 
     def _create_new_short_uid(self) -> str:
@@ -1878,7 +1919,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @staticmethod
     def validate_hardware_dict(
-            hardware_dict: gv.HardwareConfigDict,
+            hardware_dict: gv.HardwareConfigDict | HardwareConfigDictInput,
             addresses_used: list,
     ) -> gv.HardwareConfigDict:
         """Validate a hardware configuration dictionary.
@@ -1907,10 +1948,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Class initialization will later correct default address if needed
         hardware = hardware_cls._unsafe_from_config(hardware_config, None)
         # Replace default address with the actual address
-        hardware_dict["address"] = hardware.address_repr
-        if hardware_dict["address"] in addresses_used:
-            raise ValueError(f"Address {hardware_config.address} already used.")
-        return hardware_dict
+        validated_config = hardware_config.model_dump()
+        validated_config["address"] = hardware.address_repr
+        if validated_config["address"] in addresses_used:
+            raise ValueError(f"Address {validated_config['address']} already used.")
+        return validated_config
 
     def create_new_hardware(
             self,
@@ -1939,27 +1981,27 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param multiplexer_model: str: the model of the multiplexer used if there is one
         """
         uid = self._create_new_short_uid()
-        hardware_dict = gv.HardwareConfigDict(**{
-            "uid": uid,
-            "name": name,
-            "active": active,
-            "address": address,
-            "type": type,
-            "level": level,
-            "groups": groups,
-            "model": model,
-            "measures": measures,
-            "plants": plants,
-            "multiplexer_model": multiplexer_model,
-        })
+        hardware_dict = HardwareConfigDictInput(
+            uid=uid,
+            name=name,
+            active=active,
+            address=address,
+            type=type,
+            level=level,
+            groups=groups,
+            model=model,
+            measures=measures,
+            plants=plants,
+            multiplexer_model=multiplexer_model,
+        )
         hardware_dict = self.validate_hardware_dict(hardware_dict, self._used_addresses())
-        uid = hardware_dict.pop("uid")
-        self.hardware_dict.update({uid: hardware_dict})
+        uid = hardware_dict["uid"]
+        self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
 
     def update_hardware(
             self,
             uid: str,
-            **updating_values: Any,  # gv.AnonymousHardwareConfigDict
+            **updating_values: Unpack[AnonymousHardwareConfigDictInput],
     ) -> None:
         """Update an existing hardware configuration.
 
@@ -1972,9 +2014,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
             )
-        hardware_dict = self.hardware_dict[uid].copy()
-        hardware_dict: gv.HardwareConfigDict = \
-            cast(gv.HardwareConfigDict, hardware_dict)
+        anonymous_hardware_dict = self.hardware_dict[uid].copy()
+        hardware_dict = gv.to_identified(anonymous_hardware_dict, {"uid": uid})
         # Replace uid with a special uid for validation so it doesn't conflict
         # with existing hardware
         hardware_dict["uid"] = "__validation__"
@@ -1989,9 +2030,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
         hardware_dict = self.validate_hardware_dict(hardware_dict, used_addresses)
-        # Remove the validation uid from the dict
-        hardware_dict.pop("uid")
-        self.hardware_dict[uid] = hardware_dict
+        self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
 
     def delete_hardware(self, uid: str) -> None:
         """
@@ -2028,7 +2067,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             hardware_config = self.hardware_dict[uid]
-            return gv.HardwareConfig(uid=uid, **hardware_config)
+            # Valid ignore: implicit conversion from dict to model by pydantic
+            return gv.HardwareConfig(uid=uid, **hardware_config)  # ty: ignore[invalid-argument-type]
         except KeyError:
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
@@ -2069,13 +2109,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param hardware: list: the name of the hardware linked to the plant
         """
         uid = self._create_new_short_uid()
-        plant_dict = gv.PlantConfigDict(**{
-            "uid": uid,
-            "name": name,
-            "species": species,
-            "sowing_date": sowing_date,
-            "hardware": hardware,
-        })
+        plant_dict = gv.PlantConfigDict(
+            uid=uid,
+            name=name,
+            species=species,
+            sowing_date=sowing_date,
+            hardware=hardware or [],
+        )
         try:
             plant_dict = gv.PlantConfig(**plant_dict).model_dump()
         except pydantic.ValidationError as e:
@@ -2083,8 +2123,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid plant information provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
-        uid = plant_dict.pop("uid")
-        self.plants_dict.update({uid: plant_dict})
+        self.plants_dict[uid] = gv.to_anonymous(plant_dict, "uid")
 
     def update_plant(
             self,
@@ -2102,9 +2141,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise PlantNotFound(
                 f"No plant with uid '{uid}' found in the plant config."
             )
-        plant_dict = self.plants_dict[uid].copy()
-        plant_dict: gv.PlantConfigDict = cast(gv.PlantConfigDict, plant_dict)
-        plant_dict["uid"] = uid
+        anonymous_plant_dict = self.plants_dict[uid].copy()
+        plant_dict = gv.to_identified(anonymous_plant_dict, {"uid": uid})
         plant_dict.update(
             {
                 key: value
@@ -2119,8 +2157,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid plant information provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`"
             )
-        uid = plant_dict.pop("uid")
-        self.plants_dict[uid] = plant_dict
+        self.plants_dict[uid] = gv.to_anonymous(plant_dict, "uid")
 
     def delete_plant(self, uid: str) -> None:
         """Delete a plant from the configuration.

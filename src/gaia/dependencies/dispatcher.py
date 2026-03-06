@@ -7,7 +7,7 @@ _uninstalled_dependencies = False
 try:
     import dispatcher
 except ImportError:  # pragma: no cover
-    dispatcher = None
+    dispatcher = None  # ty: ignore[invalid-assignment]
     _uninstalled_dependencies = True
 
 

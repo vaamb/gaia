@@ -5,16 +5,12 @@ import typing as t
 
 from anyio.to_thread import run_sync
 
-from gaia.hardware.abc import AddressType, Dimmer, gpioHardware, Switch
+from gaia.hardware.abc import Actuator, Dimmer, gpioHardware, Switch
 from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if is_raspi():
-        import pwmio
-        from adafruit_blinka.microcontroller.bcm283x.pin import Pin
-    else:
-        from gaia.hardware._compatibility import Pin, pwmio
+    from gaia.hardware._compatibility import Pin, pwmio
 
 
 class gpioSwitch(gpioHardware, Switch):
@@ -66,7 +62,8 @@ class gpioDimmer(gpioHardware, Dimmer):
                 )
         else:
             from gaia.hardware._compatibility import pwmio
-        return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)
+        # Valid ignore: pwmio is either the real module or compatibility class, both have a callable PWMOut at runtime
+        return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)  # ty: ignore
 
     async def set_pwm_level(self, level: float | int) -> bool:
         return await run_sync(self._set_pwm_level, level)
@@ -82,7 +79,7 @@ class gpioDimmable(gpioSwitch, gpioDimmer):
     __slots__ = ()
 
 
-gpio_actuator_models = {
+gpio_actuator_models: dict[str, type[Actuator]] = {
     hardware.__name__: hardware
     for hardware in [
         gpioDimmable,

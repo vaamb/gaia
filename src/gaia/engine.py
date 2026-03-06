@@ -288,7 +288,6 @@ class Engine(metaclass=SingletonMeta):
 
         async with self.db.scoped_session() as session:
             for db_model in (ActuatorBuffer, SensorBuffer):
-                db_model: DataBufferMixin
                 await db_model.reset_ongoing_exchanges(session)
 
     async def start_database(self) -> None:

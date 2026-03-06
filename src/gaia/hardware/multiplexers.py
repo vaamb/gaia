@@ -10,22 +10,19 @@ from gaia.hardware.utils import get_i2c, is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    if is_raspi():
-        from adafruit_tca9548a import TCA9548A as _TCA9548A
-    else:
-        from gaia.hardware._compatibility import TCA9548A as _TCA9548A
+    from gaia.hardware._compatibility import TCA9548A as _TCA9548A
 
 
 class _MetaMultiplexer(type):
-    instances: WeakValueDictionary[str, "Multiplexer"] = WeakValueDictionary()
+    instances: WeakValueDictionary[str, Multiplexer] = WeakValueDictionary()
 
-    def __call__(cls, *args, **kwargs) -> "Multiplexer":
+    def __call__(cls, *args, **kwargs) -> Multiplexer:
         address: int = kwargs["i2c_address"]
         str_address = str(address)
         try:
             return cls.instances[str_address]
         except KeyError:
-            multiplexer: "Multiplexer" = cls.__new__(cls, *args, **kwargs)
+            multiplexer: Multiplexer = cls.__new__(cls, *args, **kwargs)  # ty: ignore[invalid-assignment]
             multiplexer.__init__(*args, **kwargs)
             cls.instances[str_address] = multiplexer
             return multiplexer
@@ -62,7 +59,7 @@ class TCA9548A(Multiplexer):
     def _get_device(self) -> _TCA9548A:
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_tca9548a import TCA9548A as _TCA9548A
+                from adafruit_tca9548a import TCA9548A as _TCA9548A  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit tca9548a and busdevice packages are required. "
@@ -72,7 +69,8 @@ class TCA9548A(Multiplexer):
                 )
         else:
             from gaia.hardware._compatibility import TCA9548A as _TCA9548A
-        return _TCA9548A(get_i2c(), self._address)
+        # Valid ignore: get_i2c() returns either the real or compatibility I2C, both work at runtime
+        return _TCA9548A(get_i2c(), self._address)  # ty: ignore[invalid-argument-type]
 
     def get_channel(self, number: int) -> Any:
         return self.device[number]

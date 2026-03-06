@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import inspect
-from logging import getLogger
+from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
+from types import EllipsisType
 from typing import Any, ClassVar, NamedTuple, Self, Type, TYPE_CHECKING
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
@@ -176,6 +177,8 @@ class Address:
 
         # The hardware is using a standard GPIO pin
         if address_type in {"board", "bcm", "gpio"}:
+            # These hardware need to have an address specified
+            assert address_number is not None
             # Get the pin number in the proper format and validate it
             try:
                 pin_number = int(address_number)
@@ -194,6 +197,8 @@ class Address:
 
         # The hardware is using the I2C protocol
         elif address_type == "i2c":
+            # These hardware need to have a str address specified
+            assert isinstance(address_number, str)
             i2c_components = address_number.split("@")
             if len(i2c_components) == 1:
                 # Format: "I2C_0x10", no multiplexer used
@@ -253,10 +258,13 @@ class Address:
             return f"{self.type.value}_{self.main if self.main is not None else 'default'}"
         elif self.type == AddressType.WEBSOCKET:
             return f"{self.type.value}_{self.main}" if self.main else f"{self.type.value}"
+        assert isinstance(self.main, int)
 
         rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
 
         if self.is_multiplexed:
+            # For type narrowing, it is tested in `is_multiplexed`
+            assert self.multiplexer_address is not None
             return (
                 f"{self.type.value}_{rep_f(self.multiplexer_address)}#"
                 f"{self.multiplexer_channel}@{rep_f(self.main)}"
@@ -326,9 +334,11 @@ class _MetaHardware(type):
         try:
             return cls.instances[uid]
         except KeyError:
-            hardware = cls.__new__(cls, *args, **kwargs)
+            # Valid ignore: cls.__new__ in metaclass __call__ always returns an
+            #  instance of the concrete subclass
+            hardware: Hardware = cls.__new__(cls, *args, **kwargs)  # ty: ignore[invalid-assignment]
             hardware.__init__(*args, **kwargs)
-            if hardware.ecosystem is not None:
+            if kwargs.get("ecosystem"):
                 cls.instances[uid] = hardware
             return hardware
 
@@ -351,6 +361,7 @@ class Hardware(metaclass=_MetaHardware):
         "_ecosystem",
         "_groups",
         "_level",
+        "_logger",
         "_measures",
         "_model",
         "_multiplexer",
@@ -380,6 +391,7 @@ class Hardware(metaclass=_MetaHardware):
             # ecosystem can be `None` ONLY when `Hardware` is called through `validate_hardware_dict`
             if not called_through("validate_hardware_dict"):
                 raise RuntimeError("ecosystem can be set to `None` only during hardware validation")
+        self._logger: Logger = getLogger(f"gaia.hardware.{uid}")
         self._ecosystem: Ecosystem | None = ecosystem
         self._uid: str = uid
         self._name: str = name
@@ -394,6 +406,8 @@ class Hardware(metaclass=_MetaHardware):
         if multiplexer_model is not None and not self._address.is_multiplexed:
             raise ValueError("Multiplexer can only be used with a multiplexed address.")
         if multiplexer_model:
+            # For type narrowing, if `multiplexer_model` is set, so is `address.multiplexer_address`
+            assert self._address.multiplexer_address is not None
             multiplexer_cls = multiplexer_models[multiplexer_model]
             self._multiplexer = multiplexer_cls(
                 i2c_address=self._address.multiplexer_address)
@@ -456,7 +470,9 @@ class Hardware(metaclass=_MetaHardware):
         hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
         # Perform subclass-specific initialization routine
         await hardware._on_initialize()
-        return hardware
+        # Valid ignore: hardware_cls is a subclass of cls, so `_unsafe_from_config`
+        #  returns a compatible Self
+        return hardware  # ty: ignore[invalid-return-type]
 
     async def _on_terminate(self) -> None:
         """Override in subclasses for termination logic."""
@@ -485,26 +501,34 @@ class Hardware(metaclass=_MetaHardware):
         return rv
 
     @classmethod
-    def get_mounted(cls) -> dict[str, Self]:
-        return _MetaHardware.instances
+    def get_mounted(cls) -> WeakValueDictionary[str, Self]:
+        # Valid ignore: instances stores all Hardware subclasses; Self narrowing is caller's responsibility
+        return _MetaHardware.instances  # ty: ignore[invalid-return-type]
 
     @classmethod
     def get_mounted_by_uid(cls, uid: str) -> Self | None:
-        return _MetaHardware.instances.get(uid)
+        # Valid ignore: instances stores all Hardware subclasses; Self narrowing is caller's responsibility
+        return _MetaHardware.instances.get(uid)  # ty: ignore[invalid-return-type]
 
     @classmethod
     def detach_instance(cls, uid: str) -> None:
         _MetaHardware.instances.pop(uid)
 
     @property
-    def ecosystem(self) -> Ecosystem | None:
+    def is_linked(self) -> bool:
+        return self._ecosystem is not None
+
+    @property
+    def ecosystem(self) -> Ecosystem:
+        if self._ecosystem is None:
+            raise RuntimeError(
+                "Unlinked hardware should only be used for validation purposes."
+            )
         return self._ecosystem
 
     @property
     def ecosystem_uid(self) -> str | None:
-        if self._ecosystem is None:
-            return None
-        return self._ecosystem.uid
+        return self.ecosystem.uid
 
     @property
     def uid(self) -> str:
@@ -580,15 +604,16 @@ class Hardware(metaclass=_MetaHardware):
             raise HardwareNotFound(f"{model} is not implemented.")
 
     def dict_repr(self, shorten: bool = False) -> gv.HardwareConfigDict:
+        # Valid ignores: implicit conversion done by pydantic
         return gv.HardwareConfig(
             uid=self._uid,
             name=self._name,
             address=self.address_repr,
             type=self._type,
             level=self._level,
-            groups=self._groups,
+            groups=self._groups,  # ty: ignore[invalid-argument-type]
             model=self._model,
-            measures=self._measures,
+            measures=self._measures,  # ty: ignore[invalid-argument-type]
             plants=self._plants,
             multiplexer_model=self.multiplexer_model,
         ).model_dump(exclude_defaults=shorten)
@@ -630,6 +655,8 @@ class gpioHardware(Hardware):
         else:
             from gaia.hardware._compatibility import Pin
         address = self.address.main
+        # GPIO hardware should have str addresses
+        assert isinstance(address, int)
         return Pin(address)
 
 
@@ -651,9 +678,13 @@ class i2cHardware(Hardware):
             # Using default address if address is 0
             main = address.main
             multiplexer_address = address.multiplexer_address
+            # I2C hardware should have non-null address
+            assert main is not None
             if address.main == 0x0:
                 main = self.default_address
             if address.is_multiplexed:
+                # For type narrowing, it is tested in `is_multiplexed`
+                assert self.multiplexer is not None
                 if address.multiplexer_address == 0x0:
                     multiplexer_address = self.multiplexer.address
             return Address(address.type, main, multiplexer_address, address.multiplexer_channel)
@@ -663,6 +694,8 @@ class i2cHardware(Hardware):
     def _get_i2c(self) -> busio.I2C:
         if self.multiplexer is not None:
             multiplexer_channel = self.address.multiplexer_channel
+            # For type narrowing, it is set at the same time as `multiplexer`
+            assert multiplexer_channel is not None
             return self.multiplexer.get_channel(multiplexer_channel)
         else:
             return get_i2c()
@@ -698,6 +731,7 @@ class OneWireHardware(Hardware):
 
     @property
     def device_address(self) -> str | None:
+        assert not isinstance(self.address.main, int)
         return self.address.main
 
 
@@ -734,7 +768,7 @@ class Camera(Hardware):
     @property
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
-            if self.ecosystem is None:
+            if not self.is_linked:
                 from gaia.config import GaiaConfigHelper
 
                 config_cls = GaiaConfigHelper.get_config()
@@ -760,8 +794,8 @@ class Camera(Hardware):
             timestamp: datetime | None = image.metadata.get("timestamp", None)
             if timestamp is None:
                 timestamp = datetime.now(tz=timezone.utc)
-            image_path = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
-            image_path = self.camera_dir / image_path
+            file_name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
+            image_path = self.camera_dir / file_name
         await run_sync(image.write, image_path)
         return image_path
 
@@ -777,11 +811,10 @@ class WebSocketHardware(Hardware):
                 "'WEBSOCKET_<remote_ip_addr>'"
             )
         # During data validation, ecosystem is not available
-        if self.ecosystem and WebSocketHardware._websocket_manager is None:
+        if self.is_linked and WebSocketHardware._websocket_manager is None:
             manager = WebSocketHardwareManager(self.ecosystem.engine.config)
             WebSocketHardware._websocket_manager = manager
         self._websocket_manager = WebSocketHardware._websocket_manager
-        self._logger = getLogger(f"gaia.hardware.websocket.{self.uid}")
         self._requests: dict[UUID, Future] = {}
         self._task: Task | None = None
         self._stop_event: Event = Event()
@@ -796,12 +829,18 @@ class WebSocketHardware(Hardware):
 
     @property
     def connected(self) -> bool:
-        return self._websocket_manager.get_connection(self.uid) is not None
+        return self.websocket_manager.get_connection(self.uid) is not None
+
+    @property
+    def websocket_manager(self) -> WebSocketHardwareManager:
+        if self._websocket_manager is None:
+            raise RuntimeError("WebsocketManager not initialized")
+        return self._websocket_manager
 
     async def _connection_loop(self) -> None:
         wait_time: int = 1
         while not self._stop_event.is_set():
-            connection = self._websocket_manager.get_connection(self.uid)
+            connection = self.websocket_manager.get_connection(self.uid)
             if connection is not None:
                 wait_time = 1
                 try:
@@ -819,27 +858,31 @@ class WebSocketHardware(Hardware):
         async for msg in connection:
             try:
                 parsed_msg = WebSocketMessage.model_validate_json(msg)
+                # `WebSocketHardware` work on the master-slave model and should
+                #  never receive an unsolicited message (with no request UUID)
+                #  once the device has registered
+                assert parsed_msg.uuid is not None
                 uuid: UUID = parsed_msg.uuid
                 data: Any = parsed_msg.data
                 if uuid not in self._requests:
-                    self.ecosystem.logger.error(
+                    self._logger.error(
                         f"Received a message with an unknown uuid {uuid}: {data}")
                     continue
                 self._requests[uuid].set_result(data)
             except ValidationError:
-                self.ecosystem.logger.error(
+                self._logger.error(
                     f"Encountered an error while parsing the message {msg}")
                 continue
 
     async def _send_msg_and_forget(self, msg: Any) -> None:
-        connection = self._websocket_manager.get_connection(self.uid)
+        connection = self.websocket_manager.get_connection(self.uid)
         if connection is None:
             raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
         payload = WebSocketMessage(uuid=None, data=msg).model_dump_json()
         await connection.send(payload)
 
     async def _send_msg_and_wait(self, msg: Any, timeout: int | float = 60) -> Any:
-        connection = self._websocket_manager.get_connection(self.uid)
+        connection = self.websocket_manager.get_connection(self.uid)
         if connection is None:
             raise ConnectionError(f"Hardware '{self.uid}' is not registered.")
         uuid: UUID = uuid4()
@@ -867,9 +910,10 @@ class WebSocketHardware(Hardware):
         return True
 
     async def register(self) -> None:
-        if not self._websocket_manager.is_running:
-            await self._websocket_manager.start()
-        await self._websocket_manager.register_hardware(self.uid, self.address.main)
+        if not self.websocket_manager.is_running:
+            await self.websocket_manager.start()
+        assert not isinstance(self.address.main, int)
+        await self.websocket_manager.register_hardware(self.uid, self.address.main)
         self._task = create_task(self._connection_loop())
         await sleep(0)  # Allow the task to start
 
@@ -879,7 +923,7 @@ class WebSocketHardware(Hardware):
         except (ConnectionError, ConnectionClosedOK):
             # The device is not connected
             pass
-        await self._websocket_manager.unregister_hardware(self.uid)
+        await self.websocket_manager.unregister_hardware(self.uid)
         self._stop_event.set()
         if self._task is not None:
             self._task.cancel()
@@ -888,10 +932,10 @@ class WebSocketHardware(Hardware):
         # If not more hardware are registered, there is no need to keep the manager
         #  running
         if (
-                self._websocket_manager.is_running
-                and self._websocket_manager.registered_hardware == 0
+                self.websocket_manager.is_running
+                and self.websocket_manager.registered_hardware == 0
         ):
-            await self._websocket_manager.stop()
+            await self.websocket_manager.stop()
 
 
 # ---------------------------------------------------------------------------
@@ -960,7 +1004,7 @@ class Dimmer(Actuator):
 class BaseSensor(Hardware):
     __slots__ = ("_device",)
 
-    measures_available: ClassVar[dict[Measure, Unit | None] | Ellipsis | None] = None
+    measures_available: ClassVar[dict[Measure, Unit | None] | EllipsisType | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
         if self.measures_available is None:
@@ -998,6 +1042,7 @@ class BaseSensor(Hardware):
                     f"Measures must be specified for sensor model '{self.model}'."
                 )
             # ... and return them
+            assert isinstance(self.measures_available, dict)
             return self.measures_available
 
         # If we don't have any default measures available don't perform any check
@@ -1005,6 +1050,7 @@ class BaseSensor(Hardware):
             return formatted_measures
 
         # Otherwise, validate the measures
+        assert isinstance(self.measures_available, dict)
         err = ""
         for measure in formatted_measures:
             if measure not in self.measures_available:

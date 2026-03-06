@@ -5,21 +5,21 @@ _uninstalled_dependencies = False
 try:
     import numpy as np
 except ImportError:  # pragma: no cover
-    np = None
+    np = None  # ty: ignore[invalid-assignment]
     _uninstalled_dependencies = True
 
 try:
     import cv2
 except ImportError:  # pragma: no cover
-    cv2 = None
+    cv2 = None  # ty: ignore[invalid-assignment]
     _uninstalled_dependencies = True
 
 
 try:
     from gaia_validators.image import SerializableImage, SerializableImagePayload
 except ImportError:  # pragma: no cover
-    SerializableImage = None
-    SerializableImagePayload = None
+    SerializableImage = None  # ty: ignore[invalid-assignment]
+    SerializableImagePayload = None  # ty: ignore[invalid-assignment]
     _uninstalled_dependencies = True
 
 

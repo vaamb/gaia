@@ -262,7 +262,7 @@ class Sensors(SubroutineTemplate[BaseSensor]):
         if (self.config.management_flag & alarms_flag) == alarms_flag:
             cache = self._add_sensor_warnings(cache)
         if len(cache["records"]) > 0:
-            self.sensors_data = gv.SensorsData(**cache)
+            self.sensors_data = gv.SensorsData(**cache)  # ty: ignore[invalid-argument-type]
         else:
             self.sensors_data = gv.Empty()
 
