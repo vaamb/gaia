@@ -574,7 +574,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.ecosystems)
-        unvalidated: dict = await _load_yaml(config_path)
+        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)  # ty: ignore[invalid-assignment]
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
@@ -600,7 +600,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.private)
-        unvalidated: dict = await _load_yaml(config_path)
+        unvalidated: PrivateConfigDict  = await _load_yaml(config_path)  # ty: ignore[invalid-assignment]
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
@@ -1170,7 +1170,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 self.logger.warning(
                     f"{management_name.upper()} management has unmet dependencies: "
                     f"{dep}. This might lead to issues if it is not enabled.")
-        self._config_dict["management"][management_name] = value     # ty: ignore[invalid-key]
+        self._config_dict["management"][management_name] = value  # ty: ignore[invalid-key]
 
     def get_subroutines_enabled(self) -> list[str]:
         """Return the list of subroutine names that are enabled for this ecosystem."""
