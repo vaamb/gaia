@@ -36,7 +36,7 @@ async def test_wrong_engine_uid(events_handler: Events, logs_content):
         routing={"engine_uid": "wrong_uid", "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
         target="hardware",
-        data={},
+        kwargs={},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -51,7 +51,7 @@ async def test_missing_ecosystem_uid(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.create,
         target="hardware",
-        data={},
+        kwargs={},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -70,7 +70,7 @@ async def test_success(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
         target="ecosystem",
-        data={"ecosystem_name": "TestCrud"},
+        kwargs={"ecosystem_name": "TestCrud"},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -84,7 +84,7 @@ async def test_create_ecosystem(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
         target="ecosystem",
-        data={"ecosystem_name": "TestCrud"},
+        kwargs={"ecosystem_name": "TestCrud"},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -107,7 +107,7 @@ async def test_update_ecosystem_failure(events_handler: Events):
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.update,
         target="ecosystem",
-        data={"ecosystem_id": "does_not_exists", "name": "NewName"},
+        kwargs={"ecosystem_id": "does_not_exists", "name": "NewName"},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -124,7 +124,7 @@ async def test_update_ecosystem(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.update,
         target="ecosystem",
-        data={"ecosystem_id": ecosystem_uid, "name": new_name},
+        kwargs={"ecosystem_id": ecosystem_uid, "name": new_name},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -142,7 +142,7 @@ async def test_delete_ecosystem_failure(events_handler: Events):
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.delete,
         target="ecosystem",
-        data={"ecosystem_id": "does_not_exists"},
+        kwargs={"ecosystem_id": "does_not_exists"},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -158,7 +158,7 @@ async def test_delete_ecosystem(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="ecosystem",
-        data={"ecosystem_id": ecosystem_uid},
+        kwargs={"ecosystem_id": ecosystem_uid},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -176,7 +176,7 @@ async def test_create_place(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
         target="place",
-        data={"place": "home", "coordinates": (0, 0)},
+        kwargs={"place": "home", "coordinates": (0, 0)},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -197,7 +197,7 @@ async def test_update_place_failure(events_handler: Events):
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.update,
         target="place",
-        data={"place": "home", "coordinates": (4, 2)},
+        kwargs={"place": "home", "coordinates": (4, 2)},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -215,7 +215,7 @@ async def test_update_place(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.update,
         target="place",
-        data={"place": "home", "coordinates": (4, 2)},
+        kwargs={"place": "home", "coordinates": (4, 2)},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -236,7 +236,7 @@ async def test_delete_place_failure(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="place",
-        data={"place": "home"},
+        kwargs={"place": "home"},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -254,7 +254,7 @@ async def test_delete_place(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="place",
-        data={"place": "home"},
+        kwargs={"place": "home"},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -277,7 +277,7 @@ async def test_update_chaos(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="chaos_config",
-        data={"frequency": frequency, "duration": duration, "intensity": intensity},
+        kwargs={"frequency": frequency, "duration": duration, "intensity": intensity},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -304,7 +304,7 @@ async def test_update_nycthemeral_config(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="nycthemeral_config",
-        data={
+        kwargs={
             "span": span,
             "lighting": lighting,
             "target": target,
@@ -333,7 +333,7 @@ async def test_update_management(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="management",
-        data={"light": True},
+        kwargs={"light": True},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -355,7 +355,7 @@ async def test_create_climate_parameter(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
         target="climate_parameter",
-        data={
+        kwargs={
             "parameter": parameter,
             "day": day,
             "night": night,
@@ -391,7 +391,7 @@ async def test_update_climate_parameter_failure(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="climate_parameter",
-        data={
+        kwargs={
             "parameter": parameter,
             "day": day,
             "night": night,
@@ -423,7 +423,7 @@ async def test_update_climate_parameter(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="climate_parameter",
-        data={
+        kwargs={
             "parameter": parameter,
             "day": day,
             "night": night,
@@ -459,7 +459,7 @@ async def test_delete_climate_parameter_failure(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="climate_parameter",
-        data={"parameter": parameter},
+        kwargs={"parameter": parameter},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -483,7 +483,7 @@ async def test_delete_climate_parameter(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="climate_parameter",
-        data={"parameter": parameter},
+        kwargs={"parameter": parameter},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -506,7 +506,7 @@ async def test_create_weather_event(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
         target="weather_event",
-        data={
+        kwargs={
             "parameter": parameter,
             "pattern": pattern,
             "duration": duration,
@@ -541,7 +541,7 @@ async def test_update_weather_event_failure(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="weather_event",
-        data={
+        kwargs={
             "parameter": parameter,
             "pattern": pattern,
             "duration": duration,
@@ -565,7 +565,7 @@ async def test_update_weather_event(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="weather_event",
-        data={
+        kwargs={
             "parameter": parameter,
             "pattern": pattern,
             "duration": duration,
@@ -597,7 +597,7 @@ async def test_delete_weather_event_failure(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="weather_event",
-        data={"parameter": parameter},
+        kwargs={"parameter": parameter},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -620,7 +620,7 @@ async def test_delete_weather_event(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="weather_event",
-        data={"parameter": parameter},
+        kwargs={"parameter": parameter},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -645,7 +645,7 @@ async def test_create_hardware(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
         target="hardware",
-        data=valid_hardware_info,
+        kwargs=valid_hardware_info,
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -673,7 +673,7 @@ async def test_update_hardware_failure(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="hardware",
-        data=invalid_hardware_info,
+        kwargs=invalid_hardware_info,
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -694,7 +694,7 @@ async def test_update_hardware(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
         target="hardware",
-        data=valid_hardware_info,
+        kwargs=valid_hardware_info,
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -717,7 +717,7 @@ async def test_delete_hardware_failure(events_handler: Events):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="hardware",
-        data={"uid": "invalid_uid"},
+        kwargs={"uid": "invalid_uid"},
     ).model_dump()
 
     await events_handler.on_crud(message)
@@ -733,7 +733,7 @@ async def test_delete_hardware(events_handler: Events, logs_content):
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
         target="hardware",
-        data={"uid": hardware_uid},
+        kwargs={"uid": hardware_uid},
     ).model_dump()
 
     await events_handler.on_crud(message)
