@@ -22,13 +22,20 @@ class TestInstallScript(TestCase):
         cls.pyproject = cls.root_dir / "pyproject.toml"
         cls.scripts_dir = cls.root_dir / "scripts"
         cls.install_script_path = cls.scripts_dir / "install.sh"
+        cls.update_script_path = cls.scripts_dir / "update.sh"
         cls.logging_script_path = cls.scripts_dir / "logging.sh"
+        cls.master_pyproject_path = cls.scripts_dir / "gen_pyproject.sh"
 
     def test_gaia_version(self):
         # Sync the version between gaia and install.sh
         pattern = re.compile(r"(?<=GAIA_VERSION=\")(.+?)(?=\"\n)", re.DOTALL)
         gaia_version = _get_pattern(self.install_script_path, pattern)
         assert gaia_version == __version__
+
+        # Sync the version between gaia and gen_pyproject.sh
+        pattern = re.compile(r"(?<=version = \")(.+?)(?=\"\n)", re.DOTALL)
+        master_version = _get_pattern(self.master_pyproject_path, pattern)
+        assert master_version == __version__
 
     def test_python_version(self):
         pattern = re.compile(r"(?<=MIN_PYTHON_VERSION=\")(.+?)(?=\"\n)", re.DOTALL)
@@ -48,3 +55,11 @@ class TestInstallScript(TestCase):
         logging_code = _get_pattern(self.logging_script_path, pattern)
 
         assert install_code == logging_code
+
+    def test_copy_sync(self):
+        pattern = re.compile(r"(?<=#>>>Copy>>>)(.*)(?=#<<<Copy<<<)", re.DOTALL)
+
+        install_code = _get_pattern(self.install_script_path, pattern)
+        update_code = _get_pattern(self.update_script_path, pattern)
+
+        assert install_code == update_code
