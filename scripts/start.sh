@@ -61,13 +61,13 @@ fi
 cd "$GAIA_DIR" || die "Failed to change to Gaia directory: $GAIA_DIR"
 
 # Check if virtual environment exists
-if [[ ! -d "python_venv" ]]; then
+if [[ ! -d ".venv" ]]; then
     die "Python virtual environment not found. Please run the install script first."
 fi
 
 # Activate virtual environment
 # shellcheck source=/dev/null
-if ! source "python_venv/bin/activate"; then
+if ! source ".venv/bin/activate"; then
     die "Failed to activate Python virtual environment"
 fi
 

@@ -5,7 +5,7 @@ set -euo pipefail
 
 # Load logging functions
 readonly DATETIME=$(date +%Y%m%d_%H%M%S)
-readonly LOG_FILE="/tmp/ouranos_install_${DATETIME}.log"
+readonly LOG_FILE="/tmp/gaia_install_${DATETIME}.log"
 #>>>Logging>>>
 # Colors for output
 if [[ -t 1 ]]; then
@@ -68,7 +68,31 @@ readonly GAIA_REPO="https://github.com/vaamb/gaia.git"
 # Default values
 readonly GAIA_DIR="${PWD}/gaia"
 
-UPDATED=false
+# Default: install pinned release. Pass -u/--unsafe to use default branch.
+SAFE=true
+
+show_help() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -u, --unsafe     Install the latest development version"
+    echo "  -h, --help       Show this help message and exit"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--unsafe)
+            unset SAFE
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            die "Unknown option: $1"
+            ;;
+    esac
+done
 
 check_root() {
     # Check if running as root
@@ -102,6 +126,7 @@ check_requirements() {
         [git]=git
         [python3]=python3
         [systemctl]=systemd
+        [uv]=uv
     )
 
     # Check for required commands
@@ -112,11 +137,7 @@ check_requirements() {
     done
 
     if [[ ${#missing_deps[@]} -gt 0 ]]; then
-        log WARN "Missing required packages: ${missing_deps[*]}"
-        log INFO "Attempting to install missing packages..."
-        sudo apt update && sudo apt install -y "${missing_deps[@]}" ||
-            die "Failed to install required packages"
-        UPDATED=true
+        die "Missing required commands: ${missing_deps[*]}"
     fi
 
     # Check Python version
@@ -185,10 +206,8 @@ configure_hardware() {
 
 install_requirements() {
     # Install system dependencies
-    if [[ "${UPDATED}" = "false" ]]; then
-        sudo apt update
-    fi
-    if ! sudo apt install -y libffi-dev libssl-dev python3-venv python3-pip; then
+    sudo apt update
+    if ! sudo apt install -y libffi-dev libssl-dev; then
         die "Failed to install system dependencies."
     fi
 }
@@ -201,60 +220,50 @@ create_directories() {
         die "Failed to change to directory: ${GAIA_DIR}"
 
     # Create required subdirectories
-    for dir in logs scripts lib; do
+    for dir in logs scripts lib migrations; do
         mkdir -p "${GAIA_DIR}/${dir}" ||
             die "Failed to create directory: ${GAIA_DIR}/${dir}"
     done
 }
 
-setup_python_venv() {
-    # Setup Python virtual environment
-    if [[ ! -d "python_venv" ]]; then
-        python3 -m venv "${GAIA_DIR}/python_venv" ||
-            die "Failed to create Python virtual environment"
-    else
-        log WARN "Virtual environment already exists at ${GAIA_DIR}/python_venv"
-    fi
-}
-
-install_gaia() {
-    # Activate virtual environment
-    # shellcheck source=/dev/null
-    source "${GAIA_DIR}/python_venv/bin/activate" ||
-        die "Failed to activate Python virtual environment"
-
+get_gaia() {
     # Get Gaia repository
     log INFO "Cloning Gaia repository..."
-    if [[ ! -d "${GAIA_DIR}/lib/gaia" ]]; then
-        if ! git clone --branch "${GAIA_VERSION}" "${GAIA_REPO}" \
-                "${GAIA_DIR}/lib/gaia" > /dev/null; then
-            die "Failed to clone Gaia repository"
-        fi
-
-        cd "${GAIA_DIR}/lib/gaia" ||
-            die "Failed to enter Gaia directory"
-    else
-        die "Gaia installation detected at ${GAIA_DIR}/lib/gaia. Please update using the update script."
+    if ! git clone ${SAFE:+--branch "${GAIA_VERSION}"} "${GAIA_REPO}" \
+            "${GAIA_DIR}/lib/gaia" > /dev/null; then
+        die "Failed to clone Gaia repository"
     fi
-
-    log INFO "Updating Python packaging tools..."
-    pip install --upgrade pip setuptools wheel ||
-        die "Failed to update Python packaging tools"
-
-    # Install Gaia
-    log INFO "Installing Gaia and its dependencies..."
-    pip install -e . ||
-        die "Failed to install Gaia and its dependencies"
-    deactivate ||
-        log WARN "Failed to deactivate virtual environment"
-    cd "${GAIA_DIR}"
 }
 
+#>>>Copy>>>
 copy_scripts() {
     # Copy scripts
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
         die "Failed to copy scripts"
+    # Convert scripts to unix format
+    dos2unix "${GAIA_DIR}/scripts/"*.sh
+    # Make scripts executable
     chmod +x "${GAIA_DIR}/scripts/"*.sh
+    # Copy migrations and alembic.ini
+    cp -r "${GAIA_DIR}/lib/gaia/migrations/"* "${GAIA_DIR}/migrations/" ||
+        die "Failed to copy migration scripts"
+    cp -r "${GAIA_DIR}/lib/gaia/alembic.ini" "${GAIA_DIR}/" ||
+        die "Failed to copy alembic.ini"
+}
+#<<<Copy<<<
+
+setup_uv_and_sync() {
+    cd "${GAIA_DIR}" ||
+        die "Failed to change to Gaia directory"
+
+    # Generate the master pyproject.toml
+    log INFO "Creating the master pyproject.toml..."
+    "${GAIA_DIR}/scripts/gen_pyproject.sh" "${GAIA_DIR}" ||
+        die "Failed to generate Gaia pyproject.toml"
+
+    # Sync virtual environment
+    uv sync --all-packages ||
+        die "Failed to create Python virtual environment and sync it"
 }
 
 update_profile() {
@@ -325,16 +334,16 @@ main() {
     create_directories
     log SUCCESS "Directories created successfully."
 
-    log INFO "Creating Python virtual environment..."
-    setup_python_venv
-    log SUCCESS "Python virtual environment created successfully."
-
-    log INFO "Installing Gaia ..."
-    install_gaia
-    log SUCCESS "Gaia installed successfully"
+    log INFO "Getting Gaia repository..."
+    get_gaia
+    log SUCCESS "Gaia repository cloned successfully."
 
     log INFO "Making scripts more easily accessible..."
     copy_scripts
+
+    log INFO "Setting up virtual environment and syncing packages..."
+    setup_uv_and_sync
+    log SUCCESS "Virtual environment set up and packages synced successfully."
 
     log INFO "Updating shell profile..."
     update_profile

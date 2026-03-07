@@ -3,17 +3,25 @@
 # Exit on error, unset variable, and pipefail
 set -euo pipefail
 
+# Check if GAIA_DIR is set and the directory exists
+if [[ ! -d "${GAIA_DIR}" ]]; then
+    echo "GAIA_DIR environment variable is not set or the directory does not exist. Please source your profile or run the installation script first."
+    exit 1
+fi
+
+cd "${GAIA_DIR}" || { echo "Failed to change to Gaia directory: ${GAIA_DIR}"; exit 1; }
+
 # Load logging functions
 readonly DATETIME=$(date +%Y%m%d_%H%M%S)
 readonly LOG_FILE="/tmp/gaia_update_${DATETIME}.log"
-readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-. "${SCRIPT_DIR}/logging.sh"
+. "${GAIA_DIR}/scripts/logging.sh"
 
 readonly BACKUP_DIR="/tmp/gaia_backup_${DATETIME}"
 
 # Default values
 DRY_RUN=false
 FORCE_UPDATE=false
+SAFE=true
 
 # Function to display help
 show_help() {
@@ -21,6 +29,7 @@ show_help() {
     echo "Options:"
     echo "  -d, --dry-run    Show what would be updated without making changes"
     echo "  -f, --force      Force update even if already at the latest version"
+    echo "  -u, --unsafe     Install the latest development version"
     echo "  -h, --help       Show this help message and exit"
 }
 
@@ -35,6 +44,10 @@ while [[ $# -gt 0 ]]; do
             FORCE_UPDATE=true
             shift
             ;;
+        -u|--unsafe)
+            unset SAFE
+            shift
+            ;;
         -h|--help)
             show_help
             exit 0
@@ -46,36 +59,29 @@ while [[ $# -gt 0 ]]; do
 done
 
 check_requirements() {
-    # Check if GAIA_DIR is set
-    if [[ -z "${GAIA_DIR:-}" ]]; then
-        die "GAIA_DIR environment variable is not set. Please source your profile or run the install script first."
+    # Check if uv is installed
+    if ! command -v uv &> /dev/null; then
+        die "uv is not installed. Please install it first."
     fi
-
-    # Check if the directory exists
-    if [[ ! -d "${GAIA_DIR}" ]]; then
-        die "Gaia directory not found at ${GAIA_DIR}. Please check your installation."
-    fi
-
-    cd "${GAIA_DIR}" || die "Failed to change to Gaia directory: ${GAIA_DIR}"
 
     # Check if virtual environment exists
-    if [[ ! -d "python_venv" ]]; then
-        die "Python virtual environment not found. Please run the install script first."
+    if [[ ! -d ".venv" && "${DRY_RUN}" == false ]]; then
+        log INFO "uv virtual environment not found. Creating it..."
+        uv venv
     fi
 }
 
 create_backup() {
-    # Create backup directory, excluding python_venv (large and not relocatable)
-    rsync -a --exclude='python_venv' "${GAIA_DIR}/" "${BACKUP_DIR}/" ||
+    # Create backup directory, excluding .venv (workspace-level venv; large and not relocatable)
+    rsync -a --exclude='.venv' "${GAIA_DIR}/" "${BACKUP_DIR}/" ||
         die "Failed to create backup directory: ${BACKUP_DIR}"
 }
 
 # Function to update a single repository
 update_repo() {
     local repo_dir="$1"
-    local repo_name=$(basename "$repo_dir")
-
-    log INFO "\nChecking $repo_name..."
+    local repo_name
+    repo_name=$(basename "$repo_dir")
 
     if [[ ! -d "${repo_dir}/.git" ]]; then
         log WARN "${repo_dir} is not a git repository. Skipping."
@@ -84,6 +90,20 @@ update_repo() {
 
     cd "${repo_dir}" || return 1
 
+    # Get current and latest tags
+    local current_tag
+    current_tag=$(git describe --tags 2>/dev/null || echo "No tags found")
+    local latest_tag
+    latest_tag=$(git describe --tags "$(git rev-list --tags --max-count=1 2>/dev/null)" 2>/dev/null || echo "No tags found")
+
+    log INFO "Current version: ${current_tag}"
+    log INFO "Latest version:  ${latest_tag}"
+
+    if [[ "$current_tag" == "$latest_tag" && "$FORCE_UPDATE" == false && -n "${SAFE:-}" ]]; then
+        log INFO "$repo_name is already at the latest version. Use -f to force update or -u to install the latest development version."
+        return 0
+    fi
+
     # Get current branch and status
     local current_branch
     current_branch=$(git rev-parse --abbrev-ref HEAD)
@@ -91,6 +111,7 @@ update_repo() {
     has_changes=$(git status --porcelain)
 
     local stash_created=false
+
     if [[ -n "$has_changes" ]]; then
         log WARN "${repo_name} has uncommitted changes. Stashing them..."
         if [[ "${DRY_RUN}" == false ]]; then
@@ -114,49 +135,34 @@ update_repo() {
         git fetch --all --tags --prune
     fi
 
-    # Get current and latest tags
-    local current_tag
-    current_tag=$(git describe --tags 2>/dev/null || echo "No tags found")
-    local latest_tag
-    latest_tag=$(git describe --tags "$(git rev-list --tags --max-count=1 2>/dev/null)" 2>/dev/null || echo "No tags found")
-
-    log INFO "Current version: ${current_tag}"
-    log INFO "Latest version:  ${latest_tag}"
-
-    if [[ "${current_tag}" == "${latest_tag}" && "${FORCE_UPDATE}" == false ]]; then
-        log WARN "${repo_name} is already at the latest version. Use -f to force update."
-        return 0
-    fi
-
     if [[ "${DRY_RUN}" == true ]]; then
         log INFO "[DRY RUN] Would update ${repo_name} from ${current_tag} to ${latest_tag}"
         return 0
     fi
 
-    # Checkout the latest tag
-    log INFO "Updating ${repo_name} to ${latest_tag}..."
-    git checkout "${latest_tag}"
+    if [[ -n "${SAFE:-}" ]]; then
+        # Safe mode: pin to the latest release tag
+        log INFO "Updating ${repo_name} to ${latest_tag}..."
+        git checkout "${latest_tag}"
 
-    # Install the package in development mode
-    local install_failed=false
-    if [[ -f "pyproject.toml" ]]; then
-        log INFO "Installing ${repo_name}..."
-        if ! pip install -e .; then
-            install_failed=true
-            log WARN "Failed to install ${repo_name}."
+        # Return to the original branch
+        if [[ "${current_branch}" != "HEAD" ]]; then
+            log INFO "Returning to branch ${current_branch}..."
+            git checkout "${current_branch}"
+        else
+            log WARN "Was on detached HEAD before update. Remaining on ${latest_tag}."
         fi
-    fi
-
-    # Return to the original branch
-    if [[ "${current_branch}" != "HEAD" ]]; then
-        log INFO "Returning to branch ${current_branch}..."
-        git checkout "${current_branch}"
     else
-        log WARN "Was on detached HEAD before update. Remaining on ${latest_tag}."
+        # Unsafe mode: pull the latest from the remote default branch
+        local remote_default
+        remote_default=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "master")
+        log INFO "Updating ${repo_name} to the latest development version (${remote_default})..."
+        git checkout "${remote_default}"
+        git pull
     fi
 
-    # Apply stashed changes only if we actually created a stash
-    if [[ "${stash_created}" == true ]]; then
+    # Apply stashed changes (runs for both safe and unsafe paths)
+    if [[ "$stash_created" == true ]]; then
         log INFO "Restoring stashed changes..."
         if ! git stash pop; then
             log WARN "Failed to restore stashed changes (possible merge conflict)."
@@ -164,41 +170,47 @@ update_repo() {
         fi
     fi
 
-    if [[ "${install_failed}" == true ]]; then
-        return 1
-    fi
-
-    log SUCCESS "${repo_name} updated to ${latest_tag}"
+    log SUCCESS "${repo_name} updated successfully"
     return 0
 }
 
 update_packages() {
-    # In dry-run, don't activate venv or install; just show intended repo changes
+    update_repo "${GAIA_DIR}/lib/gaia"
+
+    # Dry runs don't go further
     if [[ "${DRY_RUN}" == true ]]; then
-        update_repo "${GAIA_DIR}/lib/gaia"
         return 0
     fi
 
-    # Activate virtual environment
-    # shellcheck source=/dev/null
-    if ! source "python_venv/bin/activate"; then
-        die "Failed to activate Python virtual environment"
-    fi
+    # Update pyproject.toml
+    "${GAIA_DIR}/lib/gaia/scripts/gen_pyproject.sh" "${GAIA_DIR}" ||
+        die "Failed to update pyproject.toml"
 
-    # Update package
-    update_repo "${GAIA_DIR}/lib/gaia"
-
-    # Deactivate virtual environment
-    deactivate 2>/dev/null || true
+    # Update uv lock and sync packages
+    cd "${GAIA_DIR}"
+    uv lock --upgrade ||
+        die "Failed to update uv lock"
+    # use --inexact to keep packages not defined in pyproject.toml
+    uv sync --all-packages --inexact ||
+        die "Failed to update Python virtual environment"
 }
 
-# Update scripts
-update_scripts() {
-    # Update scripts
+#>>>Copy>>>
+copy_scripts() {
+    # Copy scripts
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
         die "Failed to copy scripts"
+    # Convert scripts to unix format
+    dos2unix "${GAIA_DIR}/scripts/"*.sh
+    # Make scripts executable
     chmod +x "${GAIA_DIR}/scripts/"*.sh
+    # Copy migrations and alembic.ini
+    cp -r "${GAIA_DIR}/lib/gaia/migrations/"* "${GAIA_DIR}/migrations/" ||
+        die "Failed to copy migration scripts"
+    cp -r "${GAIA_DIR}/lib/gaia/alembic.ini" "${GAIA_DIR}/" ||
+        die "Failed to copy alembic.ini"
 }
+#<<<Copy<<<
 
 update_profile() {
     ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
@@ -269,7 +281,7 @@ main () {
 
     if [[ "${DRY_RUN}" == false ]]; then
         log INFO "Making scripts more easily accessible..."
-        update_scripts
+        copy_scripts
     else
         log INFO "Dry run: skipping scripts update"
     fi
@@ -293,8 +305,9 @@ main () {
     # Display completion message
 
     if [[ "$DRY_RUN" == false ]]; then
+        echo -e "\n${GREEN}✔ Update completed successfully!${NC}"
         echo -e "\nTo apply the updates, please restart the Gaia service with one of these commands:"
-        echo -e "  ${YELLOW}gaia restart${NC}    # If using the gaia command"
+        echo -e "  ${YELLOW}gaia restart${NC}                         # If using the gaia command"
         echo -e "  ${YELLOW}sudo systemctl restart gaia.service${NC}  # If using systemd"
     else
         echo -e "\nThis was a dry run. No changes were made. Use ${YELLOW}$0${NC} without --dry-run to perform the updates."
