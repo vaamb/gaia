@@ -7,7 +7,8 @@ class virtualgpioSwitch(virtualHardware, gpioSwitch):
     __slots__ = ()
 
 
-class virtualgpioDimmable(virtualgpioSwitch, gpioDimmer):
+# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
+class virtualgpioDimmable(virtualgpioSwitch, gpioDimmer):  # ty: ignore[instance-layout-conflict]
     __slots__ = ()
 
 

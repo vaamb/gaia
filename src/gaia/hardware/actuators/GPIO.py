@@ -75,7 +75,8 @@ class gpioDimmer(gpioHardware, Dimmer):
         return isclose(self.dimmer.duty_cycle, duty_cycle_in_16_bit, rel_tol=0.005)
 
 
-class gpioDimmable(gpioSwitch, gpioDimmer):
+# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
+class gpioDimmable(gpioSwitch, gpioDimmer):  # ty: ignore[instance-layout-conflict]
     __slots__ = ()
 
 

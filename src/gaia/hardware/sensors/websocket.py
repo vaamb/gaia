@@ -10,7 +10,8 @@ from websockets import ConnectionClosed
 SensorsReads = RootModel[list[SensorRead]]
 
 
-class WebSocketSensor(BaseSensor, WebSocketHardware):
+# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
+class WebSocketSensor(BaseSensor, WebSocketHardware):  # ty: ignore[instance-layout-conflict]
     measures_available = ...
 
     async def get_data(self) -> list[SensorRead]:

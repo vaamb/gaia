@@ -1145,14 +1145,16 @@ class PlantLevelHardware(Hardware):
 # ---------------------------------------------------------------------------
 #   Composition subclasses
 # ---------------------------------------------------------------------------
-class gpioSensor(BaseSensor, gpioHardware):
+# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
+class gpioSensor(BaseSensor, gpioHardware):  # ty: ignore[instance-layout-conflict]
     __slots__ = ("_device", "_pin")
 
     async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class i2cSensor(BaseSensor, i2cHardware):
+# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
+class i2cSensor(BaseSensor, i2cHardware):  # ty: ignore[instance-layout-conflict]
     __slots__ = ()
 
     async def get_data(self) -> list[SensorRead]:

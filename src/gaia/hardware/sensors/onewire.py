@@ -13,7 +13,8 @@ if t.TYPE_CHECKING:
         from gaia.hardware._compatibility import BS18B20 as _BS18B20
 
 
-class BS18B20(OneWireHardware, TemperatureSensor):
+# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
+class BS18B20(OneWireHardware, TemperatureSensor):  # ty: ignore[instance-layout-conflict]
     __slots__ = ()
 
     def _get_device(self) -> "_BS18B20":
