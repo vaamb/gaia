@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from asyncio import create_task, Event, Future, sleep, Task, wait_for
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,7 +10,8 @@ from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
 from types import EllipsisType
-from typing import Any, ClassVar, NamedTuple, Self, Type, TYPE_CHECKING
+from typing import (
+    Any, cast, ClassVar, Generic, NamedTuple, Self, Type, TypeVar, TYPE_CHECKING)
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -83,16 +85,6 @@ class SensorRead(NamedTuple):
     value: float | None
 
 
-class AddressType(Enum):
-    """Enum representing different types of hardware addresses."""
-    GPIO = "GPIO"
-    I2C = "I2C"
-    SPI = "SPI"
-    ONEWIRE = "ONEWIRE"
-    PICAMERA = "PICAMERA"
-    WEBSOCKET = "WEBSOCKET"
-
-
 # ---------------------------------------------------------------------------
 #   Utility functions
 # ---------------------------------------------------------------------------
@@ -129,27 +121,25 @@ class WebSocketMessage(gv.BaseModel):
 #   Hardware address
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
-class Address:
+class Address(ABC):
     """Represents a hardware address with support for different connection types.
 
     This class handles different types of hardware addresses including GPIO, I2C, SPI,
     and supports multiplexed connections.
 
     Attributes:
-        type: The type of address (GPIO, I2C, SPI, PICAMERA).
         main: The main address or pin number.
         multiplexer_address: The address of the multiplexer if used.
         multiplexer_channel: The channel number on the multiplexer if used.
     """
-    __slots__ = ("type", "main", "multiplexer_address", "multiplexer_channel")
+    __slots__ = ("main", "multiplexer_address", "multiplexer_channel")
 
-    type: AddressType
     main: int | str | None
     multiplexer_address: int | None
     multiplexer_channel: int | None
 
-    @classmethod
-    def from_str(cls, address_string: str) -> Self:
+    @staticmethod
+    def from_str(address_string: str) -> Address:
         """Initialize an Address from a string representation.
 
         Args:
@@ -193,7 +183,7 @@ class Address:
             else:
                 if pin_number not in pin_bcm_to_board:
                     raise InvalidAddressError(f"BCM pin {pin_number} is not a valid GPIO pin")
-            return cls(AddressType.GPIO, pin_number, None, None)
+            return GPIOAddress(pin_number, None, None)
 
         # The hardware is using the I2C protocol
         elif address_type == "i2c":
@@ -223,17 +213,17 @@ class Address:
                         "'I2C_<multiplexer_addr>#<channel>@<device_addr>'"
                     ) from e
             else:
-                raise InvalidAddressError(f"Invalid address type: {address_type}. {cls._hint()}")
-            return cls(AddressType.I2C, main, multiplexer_address, multiplexer_channel)
+                raise InvalidAddressError(f"Invalid address type: {address_type}. {Address._hint()}")
+            return I2CAddress(main, multiplexer_address, multiplexer_channel)
 
         # The hardware is using the one wire protocol
         elif address_type == "onewire":
             main = address_number if address_number != "default" else None
-            return cls(AddressType.ONEWIRE, main, None, None)
+            return OneWireAddress(main, None, None)
 
         # The hardware is a Pi Camera
         elif address_type.lower() == "picamera":
-            return cls(AddressType.PICAMERA, None, None, None)
+            return PiCameraAddress(None, None, None)
 
         # The hardware is using WebSockets
         elif address_type.lower() == "websocket":
@@ -242,34 +232,18 @@ class Address:
                     "Invalid websocket address format. Expected format: "
                     "'WEBSOCKET' or 'WEBSOCKET_<remote_ip_addr>'"
                 )
-            return cls(AddressType.WEBSOCKET, address_number, None, None)
+            return WebSocketAddress(address_number, None, None)
 
         # The hardware is using the SPI protocol
         elif address_type == "spi":
             raise NotImplementedError("SPI address type is not currently supported.")
         # The address is not valid
         else:
-            raise InvalidAddressError(f"Invalid address type: {address_type}. {cls._hint()}")
+            raise InvalidAddressError(f"Invalid address type: {address_type}. {Address._hint()}")
 
+    @abstractmethod
     def __repr__(self) -> str:
-        if self.type == AddressType.PICAMERA:
-            return f"{self.type.value}"
-        elif self.type == AddressType.ONEWIRE:
-            return f"{self.type.value}_{self.main if self.main is not None else 'default'}"
-        elif self.type == AddressType.WEBSOCKET:
-            return f"{self.type.value}_{self.main}" if self.main else f"{self.type.value}"
-        assert isinstance(self.main, int)
-
-        rep_f = hex if self.type in (AddressType.I2C, AddressType.SPI) else int
-
-        if self.is_multiplexed:
-            # For type narrowing, it is tested in `is_multiplexed`
-            assert self.multiplexer_address is not None
-            return (
-                f"{self.type.value}_{rep_f(self.multiplexer_address)}#"
-                f"{self.multiplexer_channel}@{rep_f(self.main)}"
-            )
-        return f"{self.type.value}_{rep_f(self.main)}"
+        ...
 
     @staticmethod
     def _hint() -> str:
@@ -323,6 +297,73 @@ class Address:
         )
 
 
+@dataclass(frozen=True)
+class GPIOAddress(Address):
+    main: int
+    multiplexer_address: None
+    multiplexer_channel: None
+
+    def __repr__(self) -> str:
+        return f"GPIO_{self.main}"
+
+
+@dataclass(frozen=True)
+class I2CAddress(Address):
+    main: int
+    multiplexer_address: int | None
+    multiplexer_channel: int | None
+
+    def __repr__(self) -> str:
+        if self.is_multiplexed:
+            # For type narrowing, it is tested in `is_multiplexed`
+            assert self.multiplexer_address is not None
+            return (
+                f"I2C_{hex(self.multiplexer_address)}#"
+                f"{self.multiplexer_channel}@{hex(self.main)}"
+            )
+        return f"I2C_{hex(self.main)}"
+
+
+@dataclass(frozen=True)
+class SPIAddress(Address):
+    main: int
+    multiplexer_address: int | None
+    multiplexer_channel: int | None
+
+    def __repr__(self) -> str:
+        return f"SPI_{hex(self.main)}"
+
+
+@dataclass(frozen=True)
+class OneWireAddress(Address):
+    main: str | None
+    multiplexer_address: None
+    multiplexer_channel: None
+
+    def __repr__(self) -> str:
+        return f"ONEWIRE_{self.main if self.main is not None else 'default'}"
+
+
+@dataclass(frozen=True)
+class PiCameraAddress(Address):
+    main: None
+    multiplexer_address: None
+    multiplexer_channel: None
+
+    def __repr__(self) -> str:
+        return "PICAMERA"
+
+
+@dataclass(frozen=True)
+class WebSocketAddress(Address):
+    main: str | None
+    multiplexer_address: None
+    multiplexer_channel: None
+
+    def __repr__(self) -> str:
+        return f"WEBSOCKET_{self.main}" if self.main else "WEBSOCKET"
+
+
 # ---------------------------------------------------------------------------
 #   Base Hardware
 # ---------------------------------------------------------------------------
@@ -343,7 +384,10 @@ class _MetaHardware(type):
             return hardware
 
 
-class Hardware(metaclass=_MetaHardware):
+AddressT = TypeVar("AddressT", bound=Address)
+
+
+class Hardware(Generic[AddressT], metaclass=_MetaHardware):
     """
     Base class for all hardware config creation and when creating hardware
     object from config file.
@@ -400,7 +444,7 @@ class Hardware(metaclass=_MetaHardware):
         self._type: gv.HardwareType = type
         self._groups: set[str] = set(groups) if groups else set()
         self._model: str = model
-        self._address = Address.from_str(address)
+        self._address = cast(AddressT, Address.from_str(address))
         if multiplexer_model is None and self._address.is_multiplexed:
             raise ValueError("Multiplexed address should be used with a multiplexer.")
         if multiplexer_model is not None and not self._address.is_multiplexed:
@@ -622,7 +666,7 @@ class Hardware(metaclass=_MetaHardware):
 # ---------------------------------------------------------------------------
 #   Subclasses based on address type
 # ---------------------------------------------------------------------------
-class gpioHardware(Hardware):
+class gpioHardware(Hardware[GPIOAddress]):
     #__slots__ = ("_pin",)  # Find a way around the multiple inheritance issue
 
     IN = 0
@@ -630,7 +674,7 @@ class gpioHardware(Hardware):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not self._address.type == AddressType.GPIO:  # pragma: no cover
+        if not isinstance(self.address, GPIOAddress):  # pragma: no cover
             raise ValueError(
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
@@ -660,14 +704,14 @@ class gpioHardware(Hardware):
         return Pin(address)
 
 
-class i2cHardware(Hardware):
+class i2cHardware(Hardware[I2CAddress]):
     __slots__ = ()
 
     default_address: ClassVar[int | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not self._address.type == AddressType.I2C:  # pragma: no cover
+        if not isinstance(self.address, I2CAddress):  # pragma: no cover
             raise ValueError(
                 "i2cHardware address must be of type: 'I2C_default' or 'I2C_0' "
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
@@ -678,16 +722,18 @@ class i2cHardware(Hardware):
             # Using default address if address is 0
             main = address.main
             multiplexer_address = address.multiplexer_address
-            # I2C hardware should have non-null address
-            assert main is not None
+            # I2C hardware address should have non-null address
+            assert isinstance(main, int)
             if address.main == 0x0:
+                if self.default_address is None:
+                    raise ValueError("Cannot use a default address with this hardware.")
                 main = self.default_address
             if address.is_multiplexed:
                 # For type narrowing, it is tested in `is_multiplexed`
                 assert self.multiplexer is not None
                 if address.multiplexer_address == 0x0:
                     multiplexer_address = self.multiplexer.address
-            return Address(address.type, main, multiplexer_address, address.multiplexer_channel)
+            return I2CAddress(main, multiplexer_address, address.multiplexer_channel)
 
         self._address = inject_default_address(self._address)
 
@@ -701,12 +747,12 @@ class i2cHardware(Hardware):
             return get_i2c()
 
 
-class OneWireHardware(Hardware):
+class OneWireHardware(Hardware[OneWireAddress]):
     __slots__ = ()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self.address.type == AddressType.ONEWIRE:  # pragma: no cover
+        if not isinstance(self.address, OneWireAddress):  # pragma: no cover
             raise ValueError(
                 "OneWireHardware address must be of type: 'ONEWIRE_hexAddress' "
                 "to use a specific address or 'ONEWIRE_default' to use the default "
@@ -735,13 +781,13 @@ class OneWireHardware(Hardware):
         return self.address.main
 
 
-class Camera(Hardware):
+class Camera(Hardware[PiCameraAddress]):
     __slots__ = ("_device", "_camera_dir")
 
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies()
         super().__init__(*args, **kwargs)
-        if not self.address.type == AddressType.PICAMERA:  # pragma: no cover
+        if not isinstance(self.address, PiCameraAddress):  # pragma: no cover
             raise ValueError("Camera address must be 'PICAMERA'")
         self._device: Any | None = None
         self._camera_dir: Path | None = None
@@ -800,12 +846,12 @@ class Camera(Hardware):
         return image_path
 
 
-class WebSocketHardware(Hardware):
+class WebSocketHardware(Hardware[WebSocketAddress]):
     _websocket_manager: WebSocketHardwareManager | None = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self._address.type == AddressType.WEBSOCKET:  # pragma: no cover
+        if not isinstance(self.address, WebSocketAddress):  # pragma: no cover
             raise ValueError(
                 "WebSocketHardware address must be of type: 'WEBSOCKET' or "
                 "'WEBSOCKET_<remote_ip_addr>'"
