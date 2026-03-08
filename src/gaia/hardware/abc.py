@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from asyncio import create_task, Event, Future, sleep, Task, wait_for
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -367,7 +367,7 @@ class WebSocketAddress(Address):
 # ---------------------------------------------------------------------------
 #   Base Hardware
 # ---------------------------------------------------------------------------
-class _MetaHardware(type):
+class _MetaHardware(ABCMeta):
     instances: WeakValueDictionary[str, Hardware] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> Hardware:
