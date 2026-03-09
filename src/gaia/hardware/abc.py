@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, ABCMeta, abstractmethod
-from asyncio import create_task, Event, Future, sleep, Task, wait_for
+import asyncio
+from asyncio import  Event, Future, sleep, Task
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -11,7 +12,7 @@ from pathlib import Path
 import textwrap
 from types import EllipsisType
 from typing import (
-    Any, cast, ClassVar, Generic, NamedTuple, Self, Type, TypeVar, TYPE_CHECKING)
+    Any, ClassVar, Generic, NamedTuple, Self, Type, TypeVar, TYPE_CHECKING)
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -33,7 +34,7 @@ from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 if TYPE_CHECKING:  # pragma: no cover
     from websockets import ServerConnection
 
-    from gaia import Ecosystem, EngineConfig
+    from gaia import Ecosystem
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -906,7 +907,7 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
                     # The connection closed, try to reconnect
                     pass
             try:
-                await wait_for(self._stop_event.wait(), wait_time)
+                await asyncio.wait_for(self._stop_event.wait(), wait_time)
             except TimeoutError:
                 wait_time *= 2
                 wait_time = min(32, wait_time)
@@ -947,7 +948,7 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
         payload = WebSocketMessage(uuid=uuid, data=msg).model_dump_json()
         await connection.send(payload)
         try:
-            return await wait_for(self._requests[uuid], timeout)
+            return await asyncio.wait_for(self._requests[uuid], timeout)
         except TimeoutError:
             self._logger.error(f"Timeout while waiting for response from device '{self.uid}'")
             raise
@@ -971,7 +972,7 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
             await self.websocket_manager.start()
         assert not isinstance(self.address.main, int)
         await self.websocket_manager.register_hardware(self.uid, self.address.main)
-        self._task = create_task(self._connection_loop())
+        self._task = asyncio.create_task(self._connection_loop())
         await sleep(0)  # Allow the task to start
 
     async def unregister(self) -> None:
