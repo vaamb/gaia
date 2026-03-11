@@ -12,9 +12,10 @@ import gaia_validators as gv
 from gaia import Ecosystem, Engine, EngineConfig
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
-    _MetaHardware, BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
-    Measure, OneWireHardware, PlantLevelHardware, SensorRead, Switch, Unit,
-    WebSocketHardware, WebSocketHardwareManager, WebSocketMessage)
+    _MetaHardware, Address, BaseSensor, Camera, Dimmer, gpioHardware, GPIOAddress,
+    Hardware, I2CAddress, i2cHardware, InvalidAddressError, Measure, OneWireAddress,
+    OneWireHardware, PiCameraAddress, PlantLevelHardware, SensorRead, Switch, Unit,
+    WebSocketAddress, WebSocketHardware, WebSocketHardwareManager, WebSocketMessage)
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
 from gaia.hardware.camera import PiCamera
@@ -89,6 +90,82 @@ def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
     return base_cfg
 
 
+class TestAddress:
+    def test_gpio_address(self):
+        addr = Address.from_str("GPIO_12")
+        assert isinstance(addr, GPIOAddress)
+        assert addr.main == 12
+        assert repr(addr) == "GPIO_12"
+
+    def test_i2c_address_simple(self):
+        addr = Address.from_str("I2C_0x10")
+        assert isinstance(addr, I2CAddress)
+        assert addr.main == 0x10
+        assert not addr.is_multiplexed
+
+    def test_i2c_address_multiplexed(self):
+        addr = Address.from_str("I2C_0x70#1@0x10")
+        assert isinstance(addr, I2CAddress)
+        assert addr.main == 0x10
+        assert addr.multiplexer_address == 0x70
+        assert addr.multiplexer_channel == 1
+        assert addr.is_multiplexed
+
+    def test_i2c_address_default(self):
+        addr = Address.from_str("I2C_default")
+        assert isinstance(addr, I2CAddress)
+        assert addr.main == 0
+
+    def test_onewire_address_default(self):
+        addr = Address.from_str("ONEWIRE_default")
+        assert isinstance(addr, OneWireAddress)
+        assert addr.main is None
+
+    def test_onewire_address_with_id(self):
+        addr = Address.from_str("ONEWIRE_d1b4570a6461")
+        assert isinstance(addr, OneWireAddress)
+        assert addr.main == "d1b4570a6461"
+
+    def test_websocket_address_no_ip(self):
+        addr = Address.from_str("WEBSOCKET")
+        assert isinstance(addr, WebSocketAddress)
+        assert addr.main is None
+        assert repr(addr) == "WEBSOCKET"
+
+    def test_websocket_address_with_ip(self):
+        addr = Address.from_str("WEBSOCKET_127.0.0.1")
+        assert isinstance(addr, WebSocketAddress)
+        assert addr.main == "127.0.0.1"
+
+    def test_picamera_address(self):
+        addr = Address.from_str("PICAMERA")
+        assert isinstance(addr, PiCameraAddress)
+        assert repr(addr) == "PICAMERA"
+
+    def test_invalid_gpio_pin_number(self):
+        with pytest.raises(InvalidAddressError):
+            Address.from_str("GPIO_not_a_number")
+
+    def test_invalid_websocket_ip(self):
+        with pytest.raises(InvalidAddressError):
+            Address.from_str("WEBSOCKET_not_an_ip")
+
+    def test_unknown_address_type(self):
+        with pytest.raises(InvalidAddressError):
+            Address.from_str("UNKNOWN_123")
+
+    def test_address_repr_roundtrip(self):
+        valid_strings = [
+            "GPIO_12",
+            "I2C_0x10",
+            "I2C_0x70#1@0x10",
+            "WEBSOCKET",
+            "WEBSOCKET_127.0.0.1",
+        ]
+        for s in valid_strings:
+            assert repr(Address.from_str(s)) == s
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "hardware_cls",
@@ -128,19 +205,21 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
 @pytest.mark.asyncio
 async def test_virtual_sensor(ecosystem: Ecosystem):
     sensor: virtualDHT22 = ecosystem.hardware[sensor_uid]
-    measures, sensor._measures = sensor.measures, {Measure.temperature: Unit.celsius_degree}
+    measures = sensor.measures
+    sensor._measures = {Measure.temperature: Unit.celsius_degree}
 
     # Virtual ecosystem measure is cached for 5 seconds and virtualized sensors
     # will use this value. However, non-virtualized sensors will output random
     # values that will eventually be out of range of the virtual ecosystem.
-    for _ in range(5):
-        record = await sensor.get_data()
-        temperature_sensor = record[0].value
-        ecosystem.virtual_self.measure()
-        temperature_virtual = ecosystem.virtual_self.temperature
-        assert math.isclose(temperature_sensor, temperature_virtual, rel_tol=0.05)
-
-    sensor._measures = measures
+    try:
+        for _ in range(5):
+            record = await sensor.get_data()
+            temperature_sensor = record[0].value
+            ecosystem.virtual_self.measure()
+            temperature_virtual = ecosystem.virtual_self.temperature
+            assert math.isclose(temperature_sensor, temperature_virtual, rel_tol=0.05)
+    finally:
+        sensor._measures = measures
 
 
 def test_i2c_address_injection(ecosystem: Ecosystem):
@@ -152,6 +231,13 @@ def test_i2c_address_injection(ecosystem: Ecosystem):
 
 @pytest.mark.asyncio
 class TestWebsocketHardware:
+    async def _connect_device(self, hardware: WebSocketHardware):
+        """Connect a simulated device to the WebSocket manager."""
+        websocket = await connect(WEBSOCKET_URL)
+        await websocket.send(hardware.uid)
+        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        return websocket
+
     async def test_manager(self, engine_config: EngineConfig, logs_content):
         manager = WebSocketHardwareManager(engine_config)
 
@@ -171,7 +257,7 @@ class TestWebsocketHardware:
         # ... and that it can't be reconnected
         await sleep(0.1)  # Allow for the connection to be closed
         with pytest.raises(ConnectionRefusedError):
-            await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+            await connect(WEBSOCKET_URL)
 
         # Make sure the manager can handle new connections once restarted
         await manager.start()
@@ -180,14 +266,60 @@ class TestWebsocketHardware:
         # And that it can be stopped again
         await manager.stop()
 
+    async def test_manager_errors(self, engine_config: EngineConfig):
+        manager = WebSocketHardwareManager(engine_config)
+
+        # Stop before start
+        with pytest.raises(RuntimeError, match="not currently running"):
+            await manager.stop()
+
+        # Start twice
+        await manager.start()
+        with pytest.raises(RuntimeError, match="already running"):
+            await manager.start()
+
+        await manager.stop()
+
+    async def test_unregistered_device_rejected(self, engine_config: EngineConfig, logs_content):
+        manager = WebSocketHardwareManager(engine_config)
+        await manager.start()
+
+        websocket = await connect(WEBSOCKET_URL)
+        await websocket.send("unknown_uid")
+        await yield_control()
+
+        with logs_content() as logs:
+            assert "is trying to connect but is not registered" in logs
+
+        with pytest.raises(ConnectionClosed):
+            await websocket.recv()
+
+        await manager.stop()
+
+    async def test_wrong_ip_device_rejected(self, engine_config: EngineConfig, logs_content):
+        fake_uid = "fake_uid_wrong_ip"
+        manager = WebSocketHardwareManager(engine_config)
+        await manager.register_hardware(fake_uid, "192.168.1.1")
+        await manager.start()
+
+        websocket = await connect(WEBSOCKET_URL)
+        await websocket.send(fake_uid)
+        await yield_control()
+
+        with logs_content() as logs:
+            assert "is trying to connect from an unexpected" in logs
+
+        with pytest.raises(ConnectionClosed):
+            await websocket.recv()
+
+        await manager.stop()
+
     async def test_hardware(self, ecosystem: Ecosystem, logs_content):
         hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
         # Hardware registration is taken care of by the ecosystem setup
 
         # Test device connection
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
-        await websocket.send(hardware.uid)
-        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        websocket = await self._connect_device(hardware)
         with logs_content() as logs:
             assert f"Device {hardware.uid} connected" in logs
 
@@ -222,14 +354,28 @@ class TestWebsocketHardware:
         await hardware._websocket_manager.stop()
         # Hardware unregistration is taken care of by the ecosystem teardown
 
+    async def test_hardware_connected_property(self, ecosystem: Ecosystem):
+        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
+
+        assert not hardware.connected
+
+        websocket = await self._connect_device(hardware)
+        assert hardware.connected
+
+        await websocket.close()
+        await yield_control()
+        assert not hardware.connected
+
+        # Stop the manager as otherwise the test can hang forever
+        await hardware._websocket_manager.stop()
+        # Hardware unregistration is taken care of by the ecosystem teardown
+
     async def test_switch(self, ecosystem: Ecosystem):
         hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
         # Hardware registration is taken care of by the ecosystem setup
 
         # Connect the device
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
-        await websocket.send(hardware.uid)
-        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        websocket = await self._connect_device(hardware)
 
         # Turn on
         task = create_task(hardware.turn_on())
@@ -271,16 +417,37 @@ class TestWebsocketHardware:
         await hardware._websocket_manager.stop()
         # Hardware unregistration is taken care of by the ecosystem teardown
 
+    async def test_switch_failure(self, ecosystem: Ecosystem):
+        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
+
+        websocket = await self._connect_device(hardware)
+
+        task = create_task(hardware.turn_on())
+        await yield_control()
+        raw_response = await websocket.recv()
+        response = WebSocketMessage.model_validate_json(raw_response)
+
+        payload = WebSocketMessage(
+            uuid=response.uuid,
+            data={"status": gv.Result.failure},
+        ).model_dump_json()
+        await websocket.send(payload)
+        await yield_control()
+        result = await task
+        assert result is False
+
+        # Stop the manager as otherwise the test can hang forever
+        await hardware._websocket_manager.stop()
+        # Hardware unregistration is taken care of by the ecosystem teardown
+
     async def test_dimmer(self, ecosystem: Ecosystem):
         hardware: WebSocketDimmer = ecosystem.hardware[ws_dimmer_uid]
         # Hardware registration is taken care of by the ecosystem setup
 
         # Connect the device
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
-        await websocket.send(hardware.uid)
-        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        websocket = await self._connect_device(hardware)
 
-        # Turn on
+        # Set PWM level
         task = create_task(hardware.set_pwm_level(42))
         await yield_control()
         raw_response = await websocket.recv()
@@ -302,14 +469,33 @@ class TestWebsocketHardware:
         await hardware._websocket_manager.stop()
         # Hardware unregistration is taken care of by the ecosystem teardown
 
+    async def test_dimmer_failure(self, ecosystem: Ecosystem):
+        hardware: WebSocketDimmer = ecosystem.hardware[ws_dimmer_uid]
+
+        websocket = await self._connect_device(hardware)
+
+        task = create_task(hardware.set_pwm_level(42))
+        await yield_control()
+        raw_response = await websocket.recv()
+        response = WebSocketMessage.model_validate_json(raw_response)
+
+        payload = WebSocketMessage(
+            uuid=response.uuid,
+            data={"status": gv.Result.failure},
+        ).model_dump_json()
+        await websocket.send(payload)
+        await yield_control()
+        result = await task
+        assert result is False
+
+        await hardware.websocket_manager.stop()
+
     async def test_sensor(self, ecosystem: Ecosystem):
         hardware: WebSocketSensor = ecosystem.hardware[ws_sensor_uid]
         # Hardware registration is taken care of by the ecosystem setup
 
         # Connect the device
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
-        await websocket.send(hardware.uid)
-        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        websocket = await self._connect_device(hardware)
 
         task = create_task(hardware.get_data())
         await yield_control()
