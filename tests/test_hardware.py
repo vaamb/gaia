@@ -154,6 +154,13 @@ def test_i2c_address_injection(ecosystem: Ecosystem):
 
 @pytest.mark.asyncio
 class TestWebsocketHardware:
+    async def _connect_device(self, hardware: WebSocketHardware):
+        """Connect a simulated device to the WebSocket manager."""
+        websocket = await connect(WEBSOCKET_URL)
+        await websocket.send(hardware.uid)
+        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        return websocket
+
     async def test_manager(self, engine_config: EngineConfig, logs_content):
         manager = WebSocketHardwareManager(engine_config)
 
@@ -173,7 +180,7 @@ class TestWebsocketHardware:
         # ... and that it can't be reconnected
         await sleep(0.1)  # Allow for the connection to be closed
         with pytest.raises(ConnectionRefusedError):
-            await connect("ws://gaia-device:gaia@127.0.0.1:19171")
+            await connect(WEBSOCKET_URL)
 
         # Make sure the manager can handle new connections once restarted
         await manager.start()
@@ -187,9 +194,7 @@ class TestWebsocketHardware:
         # Hardware registration is taken care of by the ecosystem setup
 
         # Test device connection
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
-        await websocket.send(hardware.uid)
-        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        websocket = await self._connect_device(hardware)
         with logs_content() as logs:
             assert f"Device {hardware.uid} connected" in logs
 
@@ -229,9 +234,7 @@ class TestWebsocketHardware:
         # Hardware registration is taken care of by the ecosystem setup
 
         # Connect the device
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
-        await websocket.send(hardware.uid)
-        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        websocket = await self._connect_device(hardware)
 
         # Turn on
         task = create_task(hardware.turn_on())
@@ -278,9 +281,7 @@ class TestWebsocketHardware:
         # Hardware registration is taken care of by the ecosystem setup
 
         # Connect the device
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
-        await websocket.send(hardware.uid)
-        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        websocket = await self._connect_device(hardware)
 
         # Turn on
         task = create_task(hardware.set_pwm_level(42))
@@ -309,9 +310,7 @@ class TestWebsocketHardware:
         # Hardware registration is taken care of by the ecosystem setup
 
         # Connect the device
-        websocket = await connect("ws://gaia-device:gaia@127.0.0.1:19171")
-        await websocket.send(hardware.uid)
-        await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
+        websocket = await self._connect_device(hardware)
 
         task = create_task(hardware.get_data())
         await yield_control()
