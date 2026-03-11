@@ -12,9 +12,10 @@ import gaia_validators as gv
 from gaia import Ecosystem, Engine, EngineConfig
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
-    _MetaHardware, BaseSensor, Camera, Dimmer, gpioHardware, Hardware, i2cHardware,
-    Measure, OneWireHardware, PlantLevelHardware, SensorRead, Switch, Unit,
-    WebSocketHardware, WebSocketHardwareManager, WebSocketMessage)
+    _MetaHardware, Address, BaseSensor, Camera, Dimmer, gpioHardware, GPIOAddress,
+    Hardware, I2CAddress, i2cHardware, InvalidAddressError, Measure, OneWireAddress,
+    OneWireHardware, PiCameraAddress, PlantLevelHardware, SensorRead, Switch, Unit,
+    WebSocketAddress, WebSocketHardware, WebSocketHardwareManager, WebSocketMessage)
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
 from gaia.hardware.camera import PiCamera
@@ -87,6 +88,82 @@ def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
         base_cfg["level"] = gv.HardwareLevel.environment
 
     return base_cfg
+
+
+class TestAddress:
+    def test_gpio_address(self):
+        addr = Address.from_str("GPIO_12")
+        assert isinstance(addr, GPIOAddress)
+        assert addr.main == 12
+        assert repr(addr) == "GPIO_12"
+
+    def test_i2c_address_simple(self):
+        addr = Address.from_str("I2C_0x10")
+        assert isinstance(addr, I2CAddress)
+        assert addr.main == 0x10
+        assert not addr.is_multiplexed
+
+    def test_i2c_address_multiplexed(self):
+        addr = Address.from_str("I2C_0x70#1@0x10")
+        assert isinstance(addr, I2CAddress)
+        assert addr.main == 0x10
+        assert addr.multiplexer_address == 0x70
+        assert addr.multiplexer_channel == 1
+        assert addr.is_multiplexed
+
+    def test_i2c_address_default(self):
+        addr = Address.from_str("I2C_default")
+        assert isinstance(addr, I2CAddress)
+        assert addr.main == 0
+
+    def test_onewire_address_default(self):
+        addr = Address.from_str("ONEWIRE_default")
+        assert isinstance(addr, OneWireAddress)
+        assert addr.main is None
+
+    def test_onewire_address_with_id(self):
+        addr = Address.from_str("ONEWIRE_d1b4570a6461")
+        assert isinstance(addr, OneWireAddress)
+        assert addr.main == "d1b4570a6461"
+
+    def test_websocket_address_no_ip(self):
+        addr = Address.from_str("WEBSOCKET")
+        assert isinstance(addr, WebSocketAddress)
+        assert addr.main is None
+        assert repr(addr) == "WEBSOCKET"
+
+    def test_websocket_address_with_ip(self):
+        addr = Address.from_str("WEBSOCKET_127.0.0.1")
+        assert isinstance(addr, WebSocketAddress)
+        assert addr.main == "127.0.0.1"
+
+    def test_picamera_address(self):
+        addr = Address.from_str("PICAMERA")
+        assert isinstance(addr, PiCameraAddress)
+        assert repr(addr) == "PICAMERA"
+
+    def test_invalid_gpio_pin_number(self):
+        with pytest.raises(InvalidAddressError):
+            Address.from_str("GPIO_not_a_number")
+
+    def test_invalid_websocket_ip(self):
+        with pytest.raises(InvalidAddressError):
+            Address.from_str("WEBSOCKET_not_an_ip")
+
+    def test_unknown_address_type(self):
+        with pytest.raises(InvalidAddressError):
+            Address.from_str("UNKNOWN_123")
+
+    def test_address_repr_roundtrip(self):
+        valid_strings = [
+            "GPIO_12",
+            "I2C_0x10",
+            "I2C_0x70#1@0x10",
+            "WEBSOCKET",
+            "WEBSOCKET_127.0.0.1",
+        ]
+        for s in valid_strings:
+            assert repr(Address.from_str(s)) == s
 
 
 @pytest.mark.asyncio
