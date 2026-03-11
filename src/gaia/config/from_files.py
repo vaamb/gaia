@@ -1945,13 +1945,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 "'EcosystemConfig.supported_hardware()' to see supported hardware."
             )
         hardware_cls = hardware_models[hardware_config.model]
-        # Class initialization will later correct default address if needed
-        hardware = hardware_cls._unsafe_from_config(hardware_config, None)
+        # Check address
+        address = hardware_cls.validate_address(hardware_config.address)
         # Replace default address with the actual address
         validated_config = hardware_config.model_dump()
-        validated_config["address"] = hardware.address_repr
-        if validated_config["address"] in addresses_used:
-            raise ValueError(f"Address {validated_config['address']} already used.")
+        validated_config["address"] = str(address)
+        if str(address) in addresses_used:
+            raise ValueError(f"Address '{address}' already used.")
         return validated_config
 
     def create_new_hardware(

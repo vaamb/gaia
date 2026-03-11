@@ -100,7 +100,7 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
     hardware_cfg = _get_hardware_config(hardware_cls)
 
     # Make sure the hardware can be initialized
-    hardware = hardware_cls._unsafe_from_config(
+    hardware = hardware_cls.from_config(
         gv.HardwareConfig(**hardware_cfg), ecosystem=ecosystem)
     # Make sure the hardware has the required attributes and methods
     if isinstance(hardware, gpioHardware):

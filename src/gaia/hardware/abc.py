@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from asyncio import create_task, Event, Future, sleep, Task, wait_for
+from abc import ABC, ABCMeta, abstractmethod
+import asyncio
+from asyncio import  Event, Future, sleep, Task
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-import inspect
 from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
 from types import EllipsisType
 from typing import (
-    Any, cast, ClassVar, Generic, NamedTuple, Self, Type, TypeVar, TYPE_CHECKING)
+    Any, ClassVar, Generic, NamedTuple, Self, Type, TypeVar, TYPE_CHECKING)
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -33,7 +33,7 @@ from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 if TYPE_CHECKING:  # pragma: no cover
     from websockets import ServerConnection
 
-    from gaia import Ecosystem, EngineConfig
+    from gaia import Ecosystem
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -99,14 +99,6 @@ def str_to_hex(address: str) -> int:
     if address.lower() in ("def", "default"):
         return 0
     return int(address, base=16)
-
-
-def called_through(function: str) -> bool:
-    stack = inspect.stack()
-    for frame in stack:
-        if frame.function == function:
-            return True
-    return False
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +359,7 @@ class WebSocketAddress(Address):
 # ---------------------------------------------------------------------------
 #   Base Hardware
 # ---------------------------------------------------------------------------
-class _MetaHardware(type):
+class _MetaHardware(ABCMeta):
     instances: WeakValueDictionary[str, Hardware] = WeakValueDictionary()
 
     def __call__(cls, *args, **kwargs) -> Hardware:
@@ -417,6 +409,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
 
     def __init__(
             self,
+            ecosystem: Ecosystem,
             uid: str,
             name: str,
             address: str,
@@ -429,14 +422,9 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
             plants: list[str] | None = None,
             active: bool = True,
             multiplexer_model: str | None = None,
-            ecosystem: Ecosystem | None = None,
     ) -> None:
-        if ecosystem is None:
-            # ecosystem can be `None` ONLY when `Hardware` is called through `validate_hardware_dict`
-            if not called_through("validate_hardware_dict"):
-                raise RuntimeError("ecosystem can be set to `None` only during hardware validation")
         self._logger: Logger = getLogger(f"gaia.hardware.{uid}")
-        self._ecosystem: Ecosystem | None = ecosystem
+        self._ecosystem: Ecosystem = ecosystem
         self._uid: str = uid
         self._name: str = name
         self._active: bool = active
@@ -444,7 +432,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
         self._type: gv.HardwareType = type
         self._groups: set[str] = set(groups) if groups else set()
         self._model: str = model
-        self._address = cast(AddressT, Address.from_str(address))
+        self._address = self.validate_address(address)
         if multiplexer_model is None and self._address.is_multiplexed:
             raise ValueError("Multiplexed address should be used with a multiplexer.")
         if multiplexer_model is not None and not self._address.is_multiplexed:
@@ -468,10 +456,10 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
         )
 
     @classmethod
-    def _unsafe_from_config(
+    def from_config(
             cls,
             hardware_config: gv.HardwareConfig,
-            ecosystem: Ecosystem | None,
+            ecosystem: Ecosystem,
     ) -> Self:
         # Should only be used directly for validation
         return cls(
@@ -488,6 +476,11 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
             plants=hardware_config.plants,
             multiplexer_model=hardware_config.multiplexer_model,
         )
+
+    @classmethod
+    @abstractmethod
+    def validate_address(cls, address_str: str) -> AddressT:
+        ...
 
     async def _on_initialize(self) -> None:
         """Override in subclasses for initialization logic."""
@@ -511,7 +504,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
-        hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
+        hardware = hardware_cls.from_config(hardware_cfg, ecosystem)
         # Perform subclass-specific initialization routine
         await hardware._on_initialize()
         # Valid ignore: hardware_cls is a subclass of cls, so `_unsafe_from_config`
@@ -559,15 +552,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
         _MetaHardware.instances.pop(uid)
 
     @property
-    def is_linked(self) -> bool:
-        return self._ecosystem is not None
-
-    @property
     def ecosystem(self) -> Ecosystem:
-        if self._ecosystem is None:
-            raise RuntimeError(
-                "Unlinked hardware should only be used for validation purposes."
-            )
         return self._ecosystem
 
     @property
@@ -674,12 +659,17 @@ class gpioHardware(Hardware[GPIOAddress]):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if not isinstance(self.address, GPIOAddress):  # pragma: no cover
+        self._pin: Pin | None = None
+
+    @classmethod
+    def validate_address(cls, address_str: str) -> GPIOAddress:
+        address = Address.from_str(address_str)
+        if not isinstance(address, GPIOAddress):  # pragma: no cover
             raise ValueError(
                 "gpioHardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
-        self._pin: Pin | None = None
+        return address
 
     @property
     def pin(self) -> Pin:
@@ -699,7 +689,7 @@ class gpioHardware(Hardware[GPIOAddress]):
         else:
             from gaia.hardware._compatibility import Pin
         address = self.address.main
-        # GPIO hardware should have str addresses
+        # GPIO hardware should have int addresses
         assert isinstance(address, int)
         return Pin(address)
 
@@ -709,33 +699,22 @@ class i2cHardware(Hardware[I2CAddress]):
 
     default_address: ClassVar[int | None] = None
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        if not isinstance(self.address, I2CAddress):  # pragma: no cover
+    @classmethod
+    def validate_address(cls, address_str: str) -> I2CAddress:
+        address = Address.from_str(address_str)
+        if not isinstance(address, I2CAddress):  # pragma: no cover
             raise ValueError(
                 "i2cHardware address must be of type: 'I2C_default' or 'I2C_0' "
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
                 "to use a specific address"
             )
-
-        def inject_default_address(address: Address) -> Address:
-            # Using default address if address is 0
-            main = address.main
-            multiplexer_address = address.multiplexer_address
-            # I2C hardware address should have non-null address
-            assert isinstance(main, int)
-            if address.main == 0x0:
-                if self.default_address is None:
-                    raise ValueError("Cannot use a default address with this hardware.")
-                main = self.default_address
-            if address.is_multiplexed:
-                # For type narrowing, it is tested in `is_multiplexed`
-                assert self.multiplexer is not None
-                if address.multiplexer_address == 0x0:
-                    multiplexer_address = self.multiplexer.address
-            return I2CAddress(main, multiplexer_address, address.multiplexer_channel)
-
-        self._address = inject_default_address(self._address)
+        # Use the hardware ´default_address´ if the address provided in the config is 0x0 (== "default")
+        if address.main != 0x0:
+            return address
+        if cls.default_address is None:
+            raise ValueError("Cannot use a default address with this hardware.")
+        return I2CAddress(
+            cls.default_address, address.multiplexer_address, address.multiplexer_channel)
 
     def _get_i2c(self) -> busio.I2C:
         if self.multiplexer is not None:
@@ -750,14 +729,16 @@ class i2cHardware(Hardware[I2CAddress]):
 class OneWireHardware(Hardware[OneWireAddress]):
     __slots__ = ()
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if not isinstance(self.address, OneWireAddress):  # pragma: no cover
+    @classmethod
+    def validate_address(cls, address_str: str) -> OneWireAddress:
+        address = Address.from_str(address_str)
+        if not isinstance(address, OneWireAddress):  # pragma: no cover
             raise ValueError(
                 "OneWireHardware address must be of type: 'ONEWIRE_hexAddress' "
                 "to use a specific address or 'ONEWIRE_default' to use the default "
                 "address"
             )
+        return address
 
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
@@ -787,10 +768,15 @@ class Camera(Hardware[PiCameraAddress]):
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies()
         super().__init__(*args, **kwargs)
-        if not isinstance(self.address, PiCameraAddress):  # pragma: no cover
-            raise ValueError("Camera address must be 'PICAMERA'")
         self._device: Any | None = None
         self._camera_dir: Path | None = None
+
+    @classmethod
+    def validate_address(cls, address_str: str) -> PiCameraAddress:
+        address = Address.from_str(address_str)
+        if not isinstance(address, PiCameraAddress):  # pragma: no cover
+            raise ValueError("Camera address must be 'PICAMERA'")
+        return address
 
     @property
     def device(self) -> Any:
@@ -814,15 +800,8 @@ class Camera(Hardware[PiCameraAddress]):
     @property
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
-            if not self.is_linked:
-                from gaia.config import GaiaConfigHelper
-
-                config_cls = GaiaConfigHelper.get_config()
-                base_dir = Path(config_cls.DIR)
-                self._camera_dir = base_dir / "camera/orphan_camera"
-            else:
-                base_dir = self.ecosystem.engine.config.gaia_dir
-                self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
+            base_dir = self.ecosystem.engine.config.gaia_dir
+            self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
             if not self._camera_dir.exists():
                 self._camera_dir.mkdir(parents=True)
         return self._camera_dir
@@ -851,19 +830,23 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not isinstance(self.address, WebSocketAddress):  # pragma: no cover
-            raise ValueError(
-                "WebSocketHardware address must be of type: 'WEBSOCKET' or "
-                "'WEBSOCKET_<remote_ip_addr>'"
-            )
-        # During data validation, ecosystem is not available
-        if self.is_linked and WebSocketHardware._websocket_manager is None:
+        if WebSocketHardware._websocket_manager is None:
             manager = WebSocketHardwareManager(self.ecosystem.engine.config)
             WebSocketHardware._websocket_manager = manager
         self._websocket_manager = WebSocketHardware._websocket_manager
         self._requests: dict[UUID, Future] = {}
         self._task: Task | None = None
         self._stop_event: Event = Event()
+
+    @classmethod
+    def validate_address(cls, address_str: str) -> WebSocketAddress:
+        address = Address.from_str(address_str)
+        if not isinstance(address, WebSocketAddress):  # pragma: no cover
+            raise ValueError(
+                "WebSocketHardware address must be of type: 'WEBSOCKET' or "
+                "'WEBSOCKET_<remote_ip_addr>'"
+            )
+        return address
 
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
@@ -895,7 +878,7 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
                     # The connection closed, try to reconnect
                     pass
             try:
-                await wait_for(self._stop_event.wait(), wait_time)
+                await asyncio.wait_for(self._stop_event.wait(), wait_time)
             except TimeoutError:
                 wait_time *= 2
                 wait_time = min(32, wait_time)
@@ -936,7 +919,7 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
         payload = WebSocketMessage(uuid=uuid, data=msg).model_dump_json()
         await connection.send(payload)
         try:
-            return await wait_for(self._requests[uuid], timeout)
+            return await asyncio.wait_for(self._requests[uuid], timeout)
         except TimeoutError:
             self._logger.error(f"Timeout while waiting for response from device '{self.uid}'")
             raise
@@ -960,7 +943,7 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
             await self.websocket_manager.start()
         assert not isinstance(self.address.main, int)
         await self.websocket_manager.register_hardware(self.uid, self.address.main)
-        self._task = create_task(self._connection_loop())
+        self._task = asyncio.create_task(self._connection_loop())
         await sleep(0)  # Allow the task to start
 
     async def unregister(self) -> None:
