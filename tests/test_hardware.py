@@ -283,7 +283,7 @@ class TestWebsocketHardware:
         # Connect the device
         websocket = await self._connect_device(hardware)
 
-        # Turn on
+        # Set PWM level
         task = create_task(hardware.set_pwm_level(42))
         await yield_control()
         raw_response = await websocket.recv()
