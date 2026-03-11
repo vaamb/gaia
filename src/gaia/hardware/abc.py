@@ -6,7 +6,6 @@ from asyncio import  Event, Future, sleep, Task
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-import inspect
 from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
@@ -100,14 +99,6 @@ def str_to_hex(address: str) -> int:
     if address.lower() in ("def", "default"):
         return 0
     return int(address, base=16)
-
-
-def called_through(function: str) -> bool:
-    stack = inspect.stack()
-    for frame in stack:
-        if frame.function == function:
-            return True
-    return False
 
 
 # ---------------------------------------------------------------------------
@@ -418,6 +409,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
 
     def __init__(
             self,
+            ecosystem: Ecosystem,
             uid: str,
             name: str,
             address: str,
@@ -430,14 +422,9 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
             plants: list[str] | None = None,
             active: bool = True,
             multiplexer_model: str | None = None,
-            ecosystem: Ecosystem | None = None,
     ) -> None:
-        if ecosystem is None:
-            # ecosystem can be `None` ONLY when `Hardware` is called through `validate_hardware_dict`
-            if not called_through("validate_hardware_dict"):
-                raise RuntimeError("ecosystem can be set to `None` only during hardware validation")
         self._logger: Logger = getLogger(f"gaia.hardware.{uid}")
-        self._ecosystem: Ecosystem | None = ecosystem
+        self._ecosystem: Ecosystem = ecosystem
         self._uid: str = uid
         self._name: str = name
         self._active: bool = active
@@ -469,10 +456,10 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
         )
 
     @classmethod
-    def _unsafe_from_config(
+    def from_config(
             cls,
             hardware_config: gv.HardwareConfig,
-            ecosystem: Ecosystem | None,
+            ecosystem: Ecosystem,
     ) -> Self:
         # Should only be used directly for validation
         return cls(
@@ -517,7 +504,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
-        hardware = hardware_cls._unsafe_from_config(hardware_cfg, ecosystem)
+        hardware = hardware_cls.from_config(hardware_cfg, ecosystem)
         # Perform subclass-specific initialization routine
         await hardware._on_initialize()
         # Valid ignore: hardware_cls is a subclass of cls, so `_unsafe_from_config`
@@ -565,15 +552,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
         _MetaHardware.instances.pop(uid)
 
     @property
-    def is_linked(self) -> bool:
-        return self._ecosystem is not None
-
-    @property
     def ecosystem(self) -> Ecosystem:
-        if self._ecosystem is None:
-            raise RuntimeError(
-                "Unlinked hardware should only be used for validation purposes."
-            )
         return self._ecosystem
 
     @property
@@ -821,15 +800,8 @@ class Camera(Hardware[PiCameraAddress]):
     @property
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
-            if not self.is_linked:
-                from gaia.config import GaiaConfigHelper
-
-                config_cls = GaiaConfigHelper.get_config()
-                base_dir = Path(config_cls.DIR)
-                self._camera_dir = base_dir / "camera/orphan_camera"
-            else:
-                base_dir = self.ecosystem.engine.config.gaia_dir
-                self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
+            base_dir = self.ecosystem.engine.config.gaia_dir
+            self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
             if not self._camera_dir.exists():
                 self._camera_dir.mkdir(parents=True)
         return self._camera_dir
@@ -858,8 +830,7 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # During data validation, ecosystem is not available
-        if self.is_linked and WebSocketHardware._websocket_manager is None:
+        if WebSocketHardware._websocket_manager is None:
             manager = WebSocketHardwareManager(self.ecosystem.engine.config)
             WebSocketHardware._websocket_manager = manager
         self._websocket_manager = WebSocketHardware._websocket_manager
