@@ -128,19 +128,21 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
 @pytest.mark.asyncio
 async def test_virtual_sensor(ecosystem: Ecosystem):
     sensor: virtualDHT22 = ecosystem.hardware[sensor_uid]
-    measures, sensor._measures = sensor.measures, {Measure.temperature: Unit.celsius_degree}
+    measures = sensor.measures
+    sensor._measures = {Measure.temperature: Unit.celsius_degree}
 
     # Virtual ecosystem measure is cached for 5 seconds and virtualized sensors
     # will use this value. However, non-virtualized sensors will output random
     # values that will eventually be out of range of the virtual ecosystem.
-    for _ in range(5):
-        record = await sensor.get_data()
-        temperature_sensor = record[0].value
-        ecosystem.virtual_self.measure()
-        temperature_virtual = ecosystem.virtual_self.temperature
-        assert math.isclose(temperature_sensor, temperature_virtual, rel_tol=0.05)
-
-    sensor._measures = measures
+    try:
+        for _ in range(5):
+            record = await sensor.get_data()
+            temperature_sensor = record[0].value
+            ecosystem.virtual_self.measure()
+            temperature_virtual = ecosystem.virtual_self.temperature
+            assert math.isclose(temperature_sensor, temperature_virtual, rel_tol=0.05)
+    finally:
+        sensor._measures = measures
 
 
 def test_i2c_address_injection(ecosystem: Ecosystem):
