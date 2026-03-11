@@ -266,6 +266,54 @@ class TestWebsocketHardware:
         # And that it can be stopped again
         await manager.stop()
 
+    async def test_manager_errors(self, engine_config: EngineConfig):
+        manager = WebSocketHardwareManager(engine_config)
+
+        # Stop before start
+        with pytest.raises(RuntimeError, match="not currently running"):
+            await manager.stop()
+
+        # Start twice
+        await manager.start()
+        with pytest.raises(RuntimeError, match="already running"):
+            await manager.start()
+
+        await manager.stop()
+
+    async def test_unregistered_device_rejected(self, engine_config: EngineConfig, logs_content):
+        manager = WebSocketHardwareManager(engine_config)
+        await manager.start()
+
+        websocket = await connect(WEBSOCKET_URL)
+        await websocket.send("unknown_uid")
+        await yield_control()
+
+        with logs_content() as logs:
+            assert "is trying to connect but is not registered" in logs
+
+        with pytest.raises(ConnectionClosed):
+            await websocket.recv()
+
+        await manager.stop()
+
+    async def test_wrong_ip_device_rejected(self, engine_config: EngineConfig, logs_content):
+        fake_uid = "fake_uid_wrong_ip"
+        manager = WebSocketHardwareManager(engine_config)
+        await manager.register_hardware(fake_uid, "192.168.1.1")
+        await manager.start()
+
+        websocket = await connect(WEBSOCKET_URL)
+        await websocket.send(fake_uid)
+        await yield_control()
+
+        with logs_content() as logs:
+            assert "is trying to connect from an unexpected" in logs
+
+        with pytest.raises(ConnectionClosed):
+            await websocket.recv()
+
+        await manager.stop()
+
     async def test_hardware(self, ecosystem: Ecosystem, logs_content):
         hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
         # Hardware registration is taken care of by the ecosystem setup
@@ -301,6 +349,22 @@ class TestWebsocketHardware:
         # Test ´_send_msg_and_wait()´ timeout
         with pytest.raises(TimeoutError):
             await hardware._send_msg_and_wait(msg, timeout=0.1)
+
+        # Stop the manager as otherwise the test can hang forever
+        await hardware._websocket_manager.stop()
+        # Hardware unregistration is taken care of by the ecosystem teardown
+
+    async def test_hardware_connected_property(self, ecosystem: Ecosystem):
+        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
+
+        assert not hardware.connected
+
+        websocket = await self._connect_device(hardware)
+        assert hardware.connected
+
+        await websocket.close()
+        await yield_control()
+        assert not hardware.connected
 
         # Stop the manager as otherwise the test can hang forever
         await hardware._websocket_manager.stop()
@@ -353,6 +417,29 @@ class TestWebsocketHardware:
         await hardware._websocket_manager.stop()
         # Hardware unregistration is taken care of by the ecosystem teardown
 
+    async def test_switch_failure(self, ecosystem: Ecosystem):
+        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
+
+        websocket = await self._connect_device(hardware)
+
+        task = create_task(hardware.turn_on())
+        await yield_control()
+        raw_response = await websocket.recv()
+        response = WebSocketMessage.model_validate_json(raw_response)
+
+        payload = WebSocketMessage(
+            uuid=response.uuid,
+            data={"status": gv.Result.failure},
+        ).model_dump_json()
+        await websocket.send(payload)
+        await yield_control()
+        result = await task
+        assert result is False
+
+        # Stop the manager as otherwise the test can hang forever
+        await hardware._websocket_manager.stop()
+        # Hardware unregistration is taken care of by the ecosystem teardown
+
     async def test_dimmer(self, ecosystem: Ecosystem):
         hardware: WebSocketDimmer = ecosystem.hardware[ws_dimmer_uid]
         # Hardware registration is taken care of by the ecosystem setup
@@ -381,6 +468,27 @@ class TestWebsocketHardware:
         # Stop the manager as otherwise the test can hang forever
         await hardware._websocket_manager.stop()
         # Hardware unregistration is taken care of by the ecosystem teardown
+
+    async def test_dimmer_failure(self, ecosystem: Ecosystem):
+        hardware: WebSocketDimmer = ecosystem.hardware[ws_dimmer_uid]
+
+        websocket = await self._connect_device(hardware)
+
+        task = create_task(hardware.set_pwm_level(42))
+        await yield_control()
+        raw_response = await websocket.recv()
+        response = WebSocketMessage.model_validate_json(raw_response)
+
+        payload = WebSocketMessage(
+            uuid=response.uuid,
+            data={"status": gv.Result.failure},
+        ).model_dump_json()
+        await websocket.send(payload)
+        await yield_control()
+        result = await task
+        assert result is False
+
+        await hardware.websocket_manager.stop()
 
     async def test_sensor(self, ecosystem: Ecosystem):
         hardware: WebSocketSensor = ecosystem.hardware[ws_sensor_uid]
