@@ -582,7 +582,7 @@ class EngineConfig(metaclass=SingletonMeta):
         self._check_files_lock_acquired()
         # Load raw data
         config_path = self.get_file_path(ConfigType.ecosystems)
-        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)  # ty: ignore[invalid-assignment]
+        unvalidated: dict[str, EcosystemConfigDict] = await _load_yaml(config_path)
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:

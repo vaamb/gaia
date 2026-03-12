@@ -87,7 +87,7 @@ class TCA9548A:
     def __init__(self, i2c: busio.I2C, address: int = 0x70):
         self.i2c = i2c
         self.address = address
-        self.channels: list[TCA9548A_Channel | None] = [None] * 8  # ty: ignore[invalid-assignment]
+        self.channels: list[TCA9548A_Channel | None] = [None] * 8
 
     def __len__(self) -> int:
         return 8
