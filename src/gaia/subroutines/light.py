@@ -196,7 +196,8 @@ class Light(SubroutineTemplate[Actuator]):
         done, pending = await asyncio.wait(futures, timeout=self._loop_period / 2)
         for future in pending:
             future.cancel()
-        light_level: list[float] = [future.result() for future in done]
+        results: list[float | None] = [future.result() for future in done]
+        light_level: list[float] = [result for result in results if result is not None]
         return mean(light_level)
 
     async def _update_pid(self) -> None:
