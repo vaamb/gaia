@@ -124,6 +124,14 @@ def _to_dt(_time: time) -> datetime:
     return datetime.combine(_date, _time)
 
 
+def remove_missing(to_clean: dict) -> dict:
+    return {
+        key: value
+        for key, value in to_clean.items()
+        if not gv.is_missing(value)
+    }
+
+
 async def event_wait(event: Event, timeout: float | int):
     # suppress TimeoutError because wait_for returns False in case of timeout
     with suppress(asyncio.TimeoutError):
@@ -796,12 +804,12 @@ class EngineConfig(metaclass=SingletonMeta):
             **updating_values: Unpack[EcosystemBaseUpdateDict],
     ) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
-        ecosystem = self.ecosystems_config_dict[ecosystem_ids.uid]
-        # Make extra sure no "complex" field is overridden
-        updating_values.pop("management", None)
-        updating_values.pop("environment", None)
-        updating_values.pop("hardware", None)
-        ecosystem.update(updating_values)
+        name = updating_values.get("name")
+        if name and not gv.is_missing(name):
+            self.ecosystems_config_dict[ecosystem_ids.uid]["name"] = name
+        status = updating_values.get("status")
+        if status and not gv.is_missing(status):
+            self.ecosystems_config_dict[ecosystem_ids.uid]["status"] = status
 
     def delete_ecosystem(self, ecosystem_id: str) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
@@ -1706,7 +1714,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
             )
-        self.set_climate_parameter(parameter, **value)
+        current_value = self.climate[parameter].copy()
+        current_value.update(**remove_missing(value))
+        self.set_climate_parameter(parameter, **current_value)
 
     def delete_climate_parameter(
             self,
@@ -1796,7 +1806,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No weather parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
             )
-        self.set_weather_parameter(parameter, **value)
+        current_value = self.weather[parameter].copy()
+        current_value.update(**remove_missing(value))
+        self.set_weather_parameter(parameter, **current_value)
 
     def delete_weather_parameter(
             self,
@@ -2019,13 +2031,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Replace uid with a special uid for validation so it doesn't conflict
         # with existing hardware
         hardware_dict["uid"] = "__validation__"
-        hardware_dict.update(
-            {
-                key: value
-                for key, value in updating_values.items()
-                if value is not None
-            }
-        )
+        hardware_dict.update(**remove_missing(updating_values))
         # Don't check address if not trying to update it. To do so, do not pass any address
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
@@ -2128,7 +2134,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def update_plant(
             self,
             uid: str,
-            **updating_values: Any,  # gv.AnonymousPlantConfigDict
+            **updating_values: Unpack[gv.AnonymousPlantConfigDict],
     ) -> None:
         """Update an existing plant configuration.
 
@@ -2143,13 +2149,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         anonymous_plant_dict = self.plants_dict[uid].copy()
         plant_dict = gv.to_identified(anonymous_plant_dict, {"uid": uid})
-        plant_dict.update(
-            {
-                key: value
-                for key, value in updating_values.items()
-                if value is not gv.missing
-            }
-        )
+        plant_dict.update(**remove_missing(updating_values))
         try:
             plant_dict = gv.PlantConfig(**plant_dict).model_dump()
         except pydantic.ValidationError as e:
