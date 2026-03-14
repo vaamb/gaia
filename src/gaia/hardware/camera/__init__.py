@@ -13,7 +13,7 @@ from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware._compatibility import Picamera2
+    from gaia.hardware.camera._devices._compatibility import Picamera2
 
 
 class PiCamera(Camera):
@@ -33,7 +33,7 @@ class PiCamera(Camera):
                     "picamera` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import Picamera2
+            from gaia.hardware.camera._devices._compatibility import Picamera2
         return Picamera2()
 
     async def get_image(self, size: tuple | None = None) -> SerializableImage:
