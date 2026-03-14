@@ -4,7 +4,7 @@ import typing as t
 from typing import Any
 from weakref import WeakValueDictionary
 
-import busio
+import busio  # TODO: maybe use the compatibility module ?
 
 from gaia.hardware.utils import get_i2c, is_raspi
 
