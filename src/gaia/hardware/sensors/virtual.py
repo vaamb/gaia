@@ -1,9 +1,7 @@
 import typing as t
 from typing import Type
 
-import gaia_validators as gv
-
-from gaia.hardware.abc import BaseSensor, Measure
+from gaia.hardware.abc import BaseSensor
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, ENS160, VCNL4040, VEML7700)
