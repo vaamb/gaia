@@ -10,7 +10,7 @@ if t.TYPE_CHECKING:
     if is_raspi():
         from gaia.hardware.sensors._devices.gaia_bs18b20 import BS18B20 as _BS18B20
     else:
-        from gaia.hardware._compatibility import BS18B20 as _BS18B20
+        from gaia.hardware.sensors._devices._compatibility import BS18B20 as _BS18B20
 
 
 # Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
@@ -21,7 +21,7 @@ class BS18B20(OneWireHardware, TemperatureSensor):  # ty: ignore[instance-layout
         if is_raspi():
             from gaia.hardware.sensors._devices.gaia_bs18b20 import BS18B20 as _BS18B20
         else:
-            from gaia.hardware._compatibility import BS18B20 as _BS18B20
+            from gaia.hardware.sensors._devices._compatibility import BS18B20 as _BS18B20
         return _BS18B20(self.device_address)
 
     def _get_raw_data(self) -> float | None:

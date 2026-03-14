@@ -10,7 +10,7 @@ from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware._compatibility import DHT11 as _DHT11, DHT22 as _DHT22
+    from gaia.hardware.sensors._devices._compatibility import DHT11 as _DHT11, DHT22 as _DHT22
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +59,7 @@ class DHT11(DHTSensor):
                     "virtual env and `sudo apt install libgpiod2`."
                 )
         else:
-            from gaia.hardware._compatibility import DHT11 as _DHT11
+            from gaia.hardware.sensors._devices._compatibility import DHT11 as _DHT11
         return _DHT11(self.pin, use_pulseio=False)
 
 
@@ -77,7 +77,7 @@ class DHT22(DHTSensor):
                     "virtual env and `sudo apt install libgpiod2`."
                 )
         else:
-            from gaia.hardware._compatibility import DHT22 as _DHT22
+            from gaia.hardware.sensors._devices._compatibility import DHT22 as _DHT22
         return _DHT22(self.pin, use_pulseio=False)
 
 

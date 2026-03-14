@@ -11,7 +11,7 @@ from gaia.hardware.virtual import virtualHardware
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware._compatibility import (
+    from gaia.hardware.sensors._devices._compatibility import (
         AHTx0,
         DHT11 as _DHT11,
         DHT22 as _DHT22,
@@ -35,7 +35,7 @@ class virtualDHT11(virtualDHT):
     __slots__ = ()
 
     def _get_device(self) -> "_DHT11":
-        from gaia.hardware._compatibility import DHT11 as _DHT11
+        from gaia.hardware.sensors._devices._compatibility import DHT11 as _DHT11
 
         if not self.ecosystem:
             hardware_logger.warning(
@@ -47,7 +47,7 @@ class virtualDHT22(virtualDHT):
     __slots__ = ()
 
     def _get_device(self) -> "_DHT22":
-        from gaia.hardware._compatibility import DHT22 as _DHT22
+        from gaia.hardware.sensors._devices._compatibility import DHT22 as _DHT22
 
         if not self.ecosystem:
             hardware_logger.warning(
@@ -59,7 +59,7 @@ class virtualAHT20(AHT20, virtualSensor):
     __slots__ = ()
 
     def _get_device(self) -> "AHTx0":
-        from gaia.hardware._compatibility import AHTx0
+        from gaia.hardware.sensors._devices._compatibility import AHTx0
 
         if not self.ecosystem:
             hardware_logger.warning(
@@ -71,7 +71,7 @@ class virtualVCNL4040(VCNL4040, virtualSensor):
     __slots__ = ()
 
     def _get_device(self) -> "_VCNL4040":
-        from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
+        from gaia.hardware.sensors._devices._compatibility import VCNL4040 as _VCNL4040
 
         if not self.ecosystem:
             hardware_logger.warning(
@@ -83,7 +83,7 @@ class virtualVEML7700(VEML7700, virtualSensor):
     __slots__ = ()
 
     def _get_device(self) -> "_VEML7700":
-        from gaia.hardware._compatibility import VEML7700 as _VEML7700
+        from gaia.hardware.sensors._devices._compatibility import VEML7700 as _VEML7700
 
         if not self.ecosystem:
             hardware_logger.warning(
@@ -95,7 +95,7 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
     __slots__ = ()
 
     def _get_device(self) -> "Seesaw":
-        from gaia.hardware._compatibility import Seesaw as _Seesaw
+        from gaia.hardware.sensors._devices._compatibility import Seesaw as _Seesaw
 
         if not self.ecosystem:
             hardware_logger.warning(
@@ -107,7 +107,7 @@ class virtualENS160(ENS160, virtualSensor):
     __slots__ = ()
 
     def _get_device(self) -> "_ENS160":
-        from gaia.hardware._compatibility import ENS160 as _ENS160
+        from gaia.hardware.sensors._devices._compatibility import ENS160 as _ENS160
 
         if not self.ecosystem:
             hardware_logger.warning(

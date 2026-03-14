@@ -15,7 +15,7 @@ from gaia.utils import get_unit, temperature_converter
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware._compatibility import (
+    from gaia.hardware.sensors._devices._compatibility import (
         AHTx0,
         Seesaw,
         VEML7700 as _VEML7700,
@@ -40,7 +40,7 @@ class AHT20(TempHumSensor, i2cSensor):
                     "adafruit-circuitpython-ahtx0` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import AHTx0
+            from gaia.hardware.sensors._devices._compatibility import AHTx0
         return AHTx0(self._get_i2c(), self.address.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
@@ -72,7 +72,7 @@ class ENS160(i2cSensor):
                     "adafruit-circuitpython-ens160` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import ENS160 as _ENS160
+            from gaia.hardware.sensors._devices._compatibility import ENS160 as _ENS160
         return _ENS160(self._get_i2c(), self.address.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None, float | None]:
@@ -152,7 +152,7 @@ class VEML7700(i2cSensor, LightSensor):
                     "adafruit-circuitpython-veml7700` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import VEML7700 as _VEML7700
+            from gaia.hardware.sensors._devices._compatibility import VEML7700 as _VEML7700
         return _VEML7700(self._get_i2c(), self.address.main)
 
     # To catch data fast from light routine
@@ -199,7 +199,7 @@ class VCNL4040(i2cSensor, LightSensor):
                     "adafruit-circuitpython-vcnl4040` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import VCNL4040 as _VCNL4040
+            from gaia.hardware.sensors._devices._compatibility import VCNL4040 as _VCNL4040
         return _VCNL4040(self._get_i2c(), self.address.main)
 
     # To catch data fast from light routine
@@ -246,7 +246,7 @@ class CapacitiveSensor(i2cSensor):
                     "adafruit-circuitpython-seesaw` in your virtual env."
                 )
         else:
-            from gaia.hardware._compatibility import Seesaw
+            from gaia.hardware.sensors._devices._compatibility import Seesaw
         return Seesaw(self._get_i2c(), self.address.main)
 
     async def get_data(self) -> list[SensorRead]:
