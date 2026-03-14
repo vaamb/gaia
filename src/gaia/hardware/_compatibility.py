@@ -4,7 +4,9 @@ import random
 import time
 
 from gaia.config import GaiaConfigHelper
+from gaia.ecosystem import Ecosystem
 from gaia.hardware.utils import hardware_logger
+from gaia.virtual import VirtualEcosystem
 
 
 hardware_logger.warning(
