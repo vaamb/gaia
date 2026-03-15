@@ -10,7 +10,7 @@ from gaia.hardware.utils import get_i2c, is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware.multiplexers._devices._compatibility import TCA9548A as _TCA9548A
+    from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice as _TCA9548A
 
 
 class _MetaMultiplexer(type):
@@ -68,7 +68,7 @@ class TCA9548A(Multiplexer):
                     "in your virtual env."
                 )
         else:
-            from gaia.hardware.multiplexers._devices._compatibility import TCA9548A as _TCA9548A
+            from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice as _TCA9548A
         # Valid ignore: get_i2c() returns either the real or compatibility I2C, both work at runtime
         return _TCA9548A(get_i2c(), self._address)  # ty: ignore[invalid-argument-type]
 

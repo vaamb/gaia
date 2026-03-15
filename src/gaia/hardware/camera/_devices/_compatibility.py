@@ -1,7 +1,7 @@
 from typing import Any
 
 
-class Picamera2:
+class Picamera2Device:
     def __init__(self):
         self._cfg: dict = {"size": (800, 600)}
 
