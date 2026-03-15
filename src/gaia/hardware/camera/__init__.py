@@ -13,7 +13,7 @@ from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware.camera._devices._compatibility import Picamera2
+    from gaia.hardware.camera._devices._compatibility import Picamera2Device
 
 
 class PiCamera(Camera):
@@ -23,7 +23,7 @@ class PiCamera(Camera):
         if hasattr(self, "_device") and self._device is not None:
             self._device.close()
 
-    def _get_device(self) -> Picamera2:
+    def _get_device(self) -> Picamera2Device:
         if is_raspi():  # pragma: no cover
             try:
                 from picamera2 import Picamera2  # ty: ignore[unresolved-import]
@@ -33,8 +33,8 @@ class PiCamera(Camera):
                     "picamera` in your virtual env."
                 )
         else:
-            from gaia.hardware.camera._devices._compatibility import Picamera2
-        return Picamera2()
+            from gaia.hardware.camera._devices._compatibility import Picamera2Device
+        return Picamera2Device()
 
     async def get_image(self, size: tuple | None = None) -> SerializableImage:
         return await run_sync(self._get_image, size)

@@ -7,7 +7,7 @@ from typing import TypeAlias
 RawData: TypeAlias = tuple[list[tuple[str, float]], list[str]]
 
 
-class BS18B20:
+class BS18B20Device:
     def __init__(self, addr: str | None = None) -> None:
         # Get one wire devices
         device_dirs: list[str]

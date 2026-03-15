@@ -10,7 +10,7 @@ from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware.sensors._devices._compatibility import DHT11 as _DHT11, DHT22 as _DHT22
+    from gaia.hardware.sensors._devices._compatibility import DHT11Device, DHT22Device
 
 
 # ---------------------------------------------------------------------------
@@ -48,10 +48,10 @@ class DHTSensor(TempHumSensor, gpioSensor):
 class DHT11(DHTSensor):
     __slots__ = ()
 
-    def _get_device(self) -> "_DHT11":
+    def _get_device(self) -> DHT11Device:
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_dht import DHT11 as _DHT11  # ty: ignore[unresolved-import]
+                from adafruit_dht import DHT11 as DHT11Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit dht package and libgpiod2 are required. Run "
@@ -59,17 +59,17 @@ class DHT11(DHTSensor):
                     "virtual env and `sudo apt install libgpiod2`."
                 )
         else:
-            from gaia.hardware.sensors._devices._compatibility import DHT11 as _DHT11
-        return _DHT11(self.pin, use_pulseio=False)
+            from gaia.hardware.sensors._devices._compatibility import DHT11Device 
+        return DHT11Device(self.pin, use_pulseio=False)
 
 
 class DHT22(DHTSensor):
     __slots__ = ()
 
-    def _get_device(self) -> "_DHT22":
+    def _get_device(self) -> DHT22Device:
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_dht import DHT22 as _DHT22  # ty: ignore[unresolved-import]
+                from adafruit_dht import DHT22 as DHT22Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit dht package and libgpiod2 are required. Run "
@@ -77,8 +77,8 @@ class DHT22(DHTSensor):
                     "virtual env and `sudo apt install libgpiod2`."
                 )
         else:
-            from gaia.hardware.sensors._devices._compatibility import DHT22 as _DHT22
-        return _DHT22(self.pin, use_pulseio=False)
+            from gaia.hardware.sensors._devices._compatibility import DHT22Device
+        return DHT22Device(self.pin, use_pulseio=False)
 
 
 gpio_sensor_models: dict[str, Type[BaseSensor]] = {
