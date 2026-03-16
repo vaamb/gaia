@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import typing
+import warnings
 
 from gaia.hardware.abc import Hardware
+from gaia.virtual import VirtualEcosystem
 
 
 if typing.TYPE_CHECKING:
@@ -25,5 +27,14 @@ class virtualHardware(Hardware):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.ecosystem.engine.config.app_config.VIRTUALIZATION:
-            assert self.ecosystem.virtualized
+
+        from gaia import GaiaConfigHelper
+
+        if not GaiaConfigHelper.config_is_set():
+            warnings.warn(
+                "Using `WebSocketHardware.check_requirements()` will materialize "
+                "Gaia's whole app configuration."
+            )
+        if GaiaConfigHelper.get_config().VIRTUALIZATION:
+            # Will raise if no corresponding VirtualEcosystem instance exists
+            VirtualEcosystem.get(self.ecosystem.uid)
