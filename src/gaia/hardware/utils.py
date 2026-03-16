@@ -35,6 +35,6 @@ def get_i2c() -> I2C:
             import busio
         else:
             from gaia.hardware._compatibility import board, busio
-        _i2c = busio.I2C(board.SCL, board.SDA)  # ty: ignore[invalid-assignment, possibly-missing-attribute]
+        _i2c = busio.I2C(board.SCL, board.SDA)  # ty: ignore[invalid-assignment]
     assert _i2c is not None
     return _i2c
