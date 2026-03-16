@@ -1,25 +1,23 @@
 from __future__ import annotations
 
-import typing
 import warnings
 
 from gaia.hardware.abc import Hardware
 from gaia.virtual import VirtualEcosystem
 
 
-if typing.TYPE_CHECKING:
-    from gaia.ecosystem import Ecosystem
-
-
 class VirtualDevice:
     def __init__(
             self,
             *args,
-            ecosystem: Ecosystem,
+            ecosystem_uid: str,
             **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.virtual_ecosystem = ecosystem.virtual_self
+
+        from gaia.virtual import VirtualEcosystem
+
+        self.virtual_ecosystem = VirtualEcosystem.get(ecosystem_uid)
 
 
 class virtualHardware(Hardware):

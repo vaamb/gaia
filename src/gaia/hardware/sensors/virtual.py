@@ -41,7 +41,7 @@ class virtualDHT11(virtualDHT):
     def _get_device(self) -> VirtualDHT11Device:
         from gaia.hardware.sensors._devices.virtual import VirtualDHT11Device
 
-        return VirtualDHT11Device(ecosystem=self.ecosystem)
+        return VirtualDHT11Device(ecosystem_uid=self.ecosystem.uid)
 
 
 class virtualDHT22(virtualDHT):
@@ -50,7 +50,7 @@ class virtualDHT22(virtualDHT):
     def _get_device(self) -> VirtualDHT22Device:
         from gaia.hardware.sensors._devices.virtual import VirtualDHT22Device
 
-        return VirtualDHT22Device(ecosystem=self.ecosystem)
+        return VirtualDHT22Device(ecosystem_uid=self.ecosystem.uid)
 
 
 class virtualAHT20(AHT20, virtualSensor):
@@ -59,7 +59,7 @@ class virtualAHT20(AHT20, virtualSensor):
     def _get_device(self) -> VirtualAHTx0Device:
         from gaia.hardware.sensors._devices.virtual import VirtualAHTx0Device
 
-        return VirtualAHTx0Device(ecosystem=self.ecosystem)
+        return VirtualAHTx0Device(ecosystem_uid=self.ecosystem.uid)
 
 
 class virtualVCNL4040(VCNL4040, virtualSensor):
@@ -68,7 +68,7 @@ class virtualVCNL4040(VCNL4040, virtualSensor):
     def _get_device(self) -> VirtualVCNL4040Device:
         from gaia.hardware.sensors._devices.virtual import VirtualVCNL4040Device
 
-        return VirtualVCNL4040Device(ecosystem=self.ecosystem)
+        return VirtualVCNL4040Device(ecosystem_uid=self.ecosystem.uid)
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
@@ -77,7 +77,7 @@ class virtualVEML7700(VEML7700, virtualSensor):
     def _get_device(self) -> VirtualVEML7700Device:
         from gaia.hardware.sensors._devices.virtual import VirtualVEML7700Device
 
-        return VirtualVEML7700Device(ecosystem=self.ecosystem)
+        return VirtualVEML7700Device(ecosystem_uid=self.ecosystem.uid)
 
 
 class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
@@ -86,7 +86,7 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
     def _get_device(self) -> VirtualSeesawDevice:
         from gaia.hardware.sensors._devices.virtual import VirtualSeesawDevice
 
-        return VirtualSeesawDevice(ecosystem=self.ecosystem)
+        return VirtualSeesawDevice(ecosystem_uid=self.ecosystem.uid)
 
 
 class virtualENS160(ENS160, virtualSensor):

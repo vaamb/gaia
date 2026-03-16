@@ -168,7 +168,7 @@ class VirtualWorld(metaclass=SingletonMeta):
 
 
 class VirtualEcosystem:
-    _instances: WeakValueDictionary[str, VirtualEcosystem] = WeakValueDictionary()
+    _instances: WeakValueDictionary[str, Self] = WeakValueDictionary()
 
     time_between_measures = 5
 
