@@ -13,14 +13,16 @@ from gaia.hardware.virtual import virtualHardware
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia.hardware.sensors._devices.virtual import (
+        VirtualAHTx0Device,
+        VirtualDHT11Device,
+        VirtualDHT22Device,
+        VirtualSeesawDevice,
+        VirtualVCNL4040Device,
+        VirtualVEML7700Device,
+    )
     from gaia.hardware.sensors._devices._compatibility import (
-        AHTx0Device,
-        DHT11Device,
-        DHT22Device,
-        ENS160Device,
-        SeesawDevice,
-        VCNL4040Device,
-        VEML7700Device,
+        ENS160Device
     )
 
 
@@ -36,85 +38,65 @@ class virtualDHT(DHTSensor, virtualSensor):
 class virtualDHT11(virtualDHT):
     __slots__ = ()
 
-    def _get_device(self) -> DHT11Device:
-        from gaia.hardware.sensors._devices._compatibility import DHT11Device
+    def _get_device(self) -> VirtualDHT11Device:
+        from gaia.hardware.sensors._devices.virtual import VirtualDHT11Device
 
-        if not self.ecosystem:
-            hardware_logger.warning(
-                f"'{self}' did not receive any ecosystem, Virtualization disabled.")
-        return DHT11Device(ecosystem=self.ecosystem)
+        return VirtualDHT11Device(ecosystem=self.ecosystem)
 
 
 class virtualDHT22(virtualDHT):
     __slots__ = ()
 
-    def _get_device(self) -> DHT22Device:
-        from gaia.hardware.sensors._devices._compatibility import DHT22Device
+    def _get_device(self) -> VirtualDHT22Device:
+        from gaia.hardware.sensors._devices.virtual import VirtualDHT22Device
 
-        if not self.ecosystem:
-            hardware_logger.warning(
-                f"'{self}' did not receive any ecosystem, Virtualization disabled.")
-        return DHT22Device(ecosystem=self.ecosystem)
+        return VirtualDHT22Device(ecosystem=self.ecosystem)
 
 
 class virtualAHT20(AHT20, virtualSensor):
     __slots__ = ()
 
-    def _get_device(self) -> AHTx0Device:
-        from gaia.hardware.sensors._devices._compatibility import AHTx0Device
+    def _get_device(self) -> VirtualAHTx0Device:
+        from gaia.hardware.sensors._devices.virtual import VirtualAHTx0Device
 
-        if not self.ecosystem:
-            hardware_logger.warning(
-                f"'{self}' did not receive any ecosystem, Virtualization disabled.")
-        return AHTx0Device(ecosystem=self.ecosystem)
+        return VirtualAHTx0Device(ecosystem=self.ecosystem)
 
 
 class virtualVCNL4040(VCNL4040, virtualSensor):
     __slots__ = ()
 
-    def _get_device(self) -> VCNL4040Device:
-        from gaia.hardware.sensors._devices._compatibility import VCNL4040Device
+    def _get_device(self) -> VirtualVCNL4040Device:
+        from gaia.hardware.sensors._devices.virtual import VirtualVCNL4040Device
 
-        if not self.ecosystem:
-            hardware_logger.warning(
-                f"'{self}' did not receive any ecosystem, Virtualization disabled.")
-        return VCNL4040Device(ecosystem=self.ecosystem)
+        return VirtualVCNL4040Device(ecosystem=self.ecosystem)
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
     __slots__ = ()
 
-    def _get_device(self) -> VEML7700Device:
-        from gaia.hardware.sensors._devices._compatibility import VEML7700Device
+    def _get_device(self) -> VirtualVEML7700Device:
+        from gaia.hardware.sensors._devices.virtual import VirtualVEML7700Device
 
-        if not self.ecosystem:
-            hardware_logger.warning(
-                f"'{self}' did not receive any ecosystem, Virtualization disabled.")
-        return VEML7700Device(ecosystem=self.ecosystem)
+        return VirtualVEML7700Device(ecosystem=self.ecosystem)
 
 
 class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
     __slots__ = ()
 
-    def _get_device(self) -> SeesawDevice:
-        from gaia.hardware.sensors._devices._compatibility import SeesawDevice
+    def _get_device(self) -> VirtualSeesawDevice:
+        from gaia.hardware.sensors._devices.virtual import VirtualSeesawDevice
 
-        if not self.ecosystem:
-            hardware_logger.warning(
-                f"'{self}' did not receive any ecosystem, Virtualization disabled.")
-        return SeesawDevice(ecosystem=self.ecosystem)
+        return VirtualSeesawDevice(ecosystem=self.ecosystem)
 
 
 class virtualENS160(ENS160, virtualSensor):
     __slots__ = ()
 
     def _get_device(self) -> ENS160Device:
+        # TODO: design and use a virtual ENS160Device
         from gaia.hardware.sensors._devices._compatibility import ENS160Device
 
-        if not self.ecosystem:
-            hardware_logger.warning(
-                f"'{self}' did not receive any ecosystem, Virtualization disabled.")
-        return ENS160Device(ecosystem=self.ecosystem)
+        return ENS160Device()
 
 
 class virtualWebSocketSensor(WebSocketSensor, virtualSensor):

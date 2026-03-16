@@ -26,7 +26,7 @@ class PiCamera(Camera):
     def _get_device(self) -> Picamera2Device:
         if is_raspi():  # pragma: no cover
             try:
-                from picamera2 import Picamera2  # ty: ignore[unresolved-import]
+                from picamera2 import Picamera2 as Picamera2Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "picamera package is required. Run `pip install "

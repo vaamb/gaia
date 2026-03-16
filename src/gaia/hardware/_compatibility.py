@@ -69,14 +69,5 @@ class Pin:
 
 
 class CompatibilityDevice:
-    def __init__(
-            self,
-            *args,
-            ecosystem: Ecosystem | None = None,
-            **kwargs,
-    ) -> None:
-        self.virtual_ecosystem: VirtualEcosystem | None
-        if ecosystem is not None:
-            self.virtual_ecosystem = ecosystem.virtual_self
-        else:
-            self.virtual_ecosystem = None
+    def __init__(self, *args, **kwargs) -> None:
+        pass

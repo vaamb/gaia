@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import random
-from typing import Any
 
 from gaia.hardware._compatibility import add_noise, CompatibilityDevice, random_sleep
 
@@ -10,34 +9,31 @@ _BASE_TEMPERATURE = 25
 _BASE_HUMIDITY = 60
 
 
-class LightCompatibilityDevice(CompatibilityDevice):
+class LightMixin:
     @property
     def lux(self) -> float:
-        if self.virtual_ecosystem is not None:
-            self.virtual_ecosystem.measure()
-            return round(add_noise(self.virtual_ecosystem.light))
         return random.randrange(start=1000, stop=100000, step=10)
 
 
-class TemperatureCompatibilityDevice(CompatibilityDevice):
+class TemperatureMixin:
     @property
     def temperature(self) -> float:
-        if self.virtual_ecosystem is not None:
-            self.virtual_ecosystem.measure()
-            return round(add_noise(self.virtual_ecosystem.temperature), 2)
         return random.gauss(_BASE_TEMPERATURE, 2.5)
 
 
-class HumidityCompatibilityDevice(CompatibilityDevice):
+class HumidityMixin:
     @property
     def humidity(self) -> float:
-        if self.virtual_ecosystem is not None:
-            self.virtual_ecosystem.measure()
-            return round(add_noise(self.virtual_ecosystem.humidity), 2)
         return random.gauss(_BASE_HUMIDITY, 5)
 
 
-class MoistureCompatibilityDevice(TemperatureCompatibilityDevice, HumidityCompatibilityDevice):
+class MoistureMixin:
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # Moisture mixin should be declared after HumidityMixin and TemperatureMixin
+        assert getattr(self, "humidity", None) is not None
+        assert getattr(self, "temperature", None) is not None
+
     @property
     def moisture(self) -> float:
         moisture_at_42_deg = (self.humidity * 0.2) + 6
@@ -50,9 +46,13 @@ class MoistureCompatibilityDevice(TemperatureCompatibilityDevice, HumidityCompat
         return moisture
 
 
-class DHTBaseDevice(TemperatureCompatibilityDevice, HumidityCompatibilityDevice):
+class MeasureMixin:
     def measure(self) -> None:
         random_sleep(avg_duration=0.55)
+
+
+class DHTBaseDevice(CompatibilityDevice, TemperatureMixin, HumidityMixin, MeasureMixin):
+    pass
 
 
 class DHT11Device(DHTBaseDevice):
@@ -63,7 +63,7 @@ class DHT22Device(DHTBaseDevice):
     pass
 
 
-class AHTx0Device(TemperatureCompatibilityDevice, HumidityCompatibilityDevice):
+class AHTx0Device(CompatibilityDevice, TemperatureMixin, HumidityMixin):
     def _readdata(self) -> None:
         pass
 
@@ -76,15 +76,15 @@ class AHTx0Device(TemperatureCompatibilityDevice, HumidityCompatibilityDevice):
         return self.humidity
 
 
-class VEML7700Device(LightCompatibilityDevice):
+class VEML7700Device(CompatibilityDevice, LightMixin):
     pass
 
 
-class VCNL4040Device(LightCompatibilityDevice):
+class VCNL4040Device(CompatibilityDevice, LightMixin):
     pass
 
 
-class SeesawDevice(MoistureCompatibilityDevice):
+class SeesawDevice(CompatibilityDevice, TemperatureMixin, HumidityMixin, MoistureMixin):
     def moisture_read(self) -> float:
         random_sleep(0.02, 0.005)
         return self.moisture
@@ -106,6 +106,6 @@ class ENS160Device(CompatibilityDevice):
         }
 
 
-class BS18B20Device(TemperatureCompatibilityDevice):
+class BS18B20Device(CompatibilityDevice, TemperatureMixin):
     def get_data(self) -> float | None:
         return self.temperature
