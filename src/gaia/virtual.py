@@ -5,6 +5,8 @@ import logging
 import math
 from time import monotonic
 import typing
+from typing import Self
+from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
@@ -166,6 +168,8 @@ class VirtualWorld(metaclass=SingletonMeta):
 
 
 class VirtualEcosystem:
+    _instances: WeakValueDictionary[str, VirtualEcosystem] = WeakValueDictionary()
+
     time_between_measures = 5
 
     AIR_HEAT_CAPACITY = 1  # kj/kg/K
@@ -209,8 +213,20 @@ class VirtualEcosystem:
         self._start_time: float | None = None
         self._last_update: float | None = None
 
+        # Add the virtual ecosystem to the registry
+        VirtualEcosystem._instances[ecosystem.uid] = self
+
         if start:
             self.start()
+
+    @classmethod
+    def get(cls, uid: str) -> Self:
+        try:
+            return cls._instances[uid]
+        except KeyError:
+            raise RuntimeError(
+                f"No VirtualEcosystem registered for ecosystem '{uid}'."
+            )
 
     @property
     def virtual_world(self) -> VirtualWorld:
