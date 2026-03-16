@@ -1,3 +1,5 @@
+import typing as t
+
 from gaia.hardware.virtual import VirtualDevice
 from gaia.hardware.sensors._devices._compatibility import (
     AHTx0Device,
@@ -9,8 +11,13 @@ from gaia.hardware.sensors._devices._compatibility import (
 )
 from gaia.hardware._compatibility import add_noise
 
+if t.TYPE_CHECKING:
+    from gaia.virtual import VirtualEcosystem
+
 
 class VirtualLightMixin:
+    virtual_ecosystem: VirtualEcosystem
+
     @property
     def lux(self) -> float:
         self.virtual_ecosystem.measure()
@@ -18,6 +25,8 @@ class VirtualLightMixin:
 
 
 class VirtualTemperatureMixin:
+    virtual_ecosystem: VirtualEcosystem
+
     @property
     def temperature(self) -> float:
         self.virtual_ecosystem.measure()
@@ -25,6 +34,8 @@ class VirtualTemperatureMixin:
 
 
 class VirtualHumidityMixin:
+    virtual_ecosystem: VirtualEcosystem
+
     @property
     def humidity(self) -> float:
         self.virtual_ecosystem.measure()

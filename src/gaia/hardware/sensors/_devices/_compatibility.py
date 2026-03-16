@@ -28,6 +28,9 @@ class HumidityMixin:
 
 
 class MoistureMixin:
+    humidity: float
+    temperature: float
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Moisture mixin should be declared after HumidityMixin and TemperatureMixin
