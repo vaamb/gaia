@@ -24,8 +24,6 @@ class virtualHardware(Hardware):
     __slots__ = ()
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
         from gaia import GaiaConfigHelper
 
         if not GaiaConfigHelper.config_is_set():
@@ -33,6 +31,13 @@ class virtualHardware(Hardware):
                 "Using `WebSocketHardware.check_requirements()` will materialize "
                 "Gaia's whole app configuration."
             )
-        if GaiaConfigHelper.get_config().VIRTUALIZATION:
-            # Will raise if no corresponding VirtualEcosystem instance exists
-            VirtualEcosystem.get(self.ecosystem.uid)
+
+        if not GaiaConfigHelper.get_config().VIRTUALIZATION:
+            raise RuntimeError(
+                "virtualHardware can only be used when virtualization is enabled"
+            )
+
+        super().__init__(*args, **kwargs)
+
+        # Will raise if no corresponding VirtualEcosystem instance exists
+        VirtualEcosystem.get(self.ecosystem.uid)
