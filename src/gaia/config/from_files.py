@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import sys
-from typing import Any, cast, Literal, Type, TypeAlias, TypedDict, TypeVar
+from typing import cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -25,7 +25,8 @@ from gaia_validators import safe_enum_from_name
 from gaia_validators.utils import get_sun_times
 
 from gaia.config import (
-    BaseConfig, configure_logging, defaults, GaiaConfig, GaiaConfigHelper)
+    BaseConfig, configure_logging, default_actuators, GaiaConfig, GaiaConfigHelper)
+from gaia.config.default_actuators import Direction, EnvironmentDirection, EnvironmentParameter
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, PlantNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
@@ -281,9 +282,6 @@ class AnonymousHardwareConfigDictInput(TypedDict):
 
 class HardwareConfigDictInput(AnonymousHardwareConfigDictInput):
     uid: str
-
-
-EnvironmentParameter: TypeAlias = gv.ClimateParameter | gv.WeatherParameter
 
 
 # ---------------------------------------------------------------------------
@@ -1831,53 +1829,59 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     # ---------------------------------------------------------------------------
     #   Actuator couples
     # ---------------------------------------------------------------------------
-    def get_climate_actuators(self) -> dict[gv.ClimateParameter, gv.ActuatorCouple]:
+    def get_climate_direction_to_group(self) -> dict[tuple[gv.ClimateParameter, Direction], str]:
         """Get actuator couples for all climate parameters.
 
         Merges default actuator couples with those defined in climate config.
         """
-        return {
-            **defaults.climate_actuator_couples,
-            **{
-                climate_parameter: gv.ActuatorCouple(
-                    increase=climate_cfg["linked_actuators"]["increase"],
-                    decrease=climate_cfg["linked_actuators"]["decrease"],
-                )
-                for climate_parameter, climate_cfg in self.climate.items()
-                if climate_cfg["linked_actuators"] is not None
-            }
-        }
-
-    def get_weather_actuators(self) -> dict[gv.WeatherParameter, gv.ActuatorCouple]:
-        """Get actuator couples for all weather parameters."""
-        return {
-            weather_parameter: gv.ActuatorCouple(
-                increase=weather_cfg["linked_actuator"] \
-                    if weather_cfg["linked_actuator"] \
-                    else weather_parameter,
-                decrease=None,
+        directions: tuple[Direction, Direction] = ("increase", "decrease")
+        default = default_actuators.climate_to_group_mapping
+        update = {
+            (climate_parameter, direction): climate_cfg["linked_actuators"][direction]
+            for direction in directions
+            for climate_parameter, climate_cfg in self.climate.items()
+            if (
+                climate_cfg["linked_actuators"] is not None
+                and climate_cfg["linked_actuators"][direction] is not None
             )
-            for weather_parameter, weather_cfg in self.weather.items()
         }
 
-    def get_actuator_couples(self) -> dict[EnvironmentParameter, gv.ActuatorCouple]:
+        # Valid ignore: ty can't narrow str | None through the comprehension if filter
+        return {**default, **update}  # ty: ignore[invalid-return-type]
+
+    def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
+        """Get actuator couples for all weather parameters."""
+        default = default_actuators.weather_to_group_mapping
+        update = {
+            (weather_parameter, cast(Direction, "increase")): weather_cfg["linked_actuator"]
+            for weather_parameter, weather_cfg in self.weather.items()
+            if weather_cfg["linked_actuator"] is not None
+        }
+
+        return {**default, **update}
+
+    def get_environment_direction_to_group(self) -> dict[EnvironmentDirection, str]:
         """Get all actuator couples (climate and weather combined)."""
-        return self.get_climate_actuators() | self.get_weather_actuators()
+        # Valid ignore: tuple[A, C] | tuple[B, C] is an valid tuple[A | B, C]
+        return self.get_climate_direction_to_group() | self.get_weather_direction_to_group()  # ty: ignore[invalid-return-type]
 
-    def get_actuator_to_parameter(self) -> dict[str, EnvironmentParameter]:
+    def get_group_to_parameter(self) -> dict[str, EnvironmentParameter]:
         """Get a mapping from actuator group names to their parameters."""
-        return defaults.get_actuator_to_parameter(self.get_actuator_couples())
+        return {
+            actuator_group: environment_direction[0]
+            for environment_direction, actuator_group in self.get_environment_direction_to_group().items()
+        }
 
-    def get_actuator_to_direction(self) -> dict[str, Literal["increase", "decrease"]]:
+    def get_group_to_direction(self) -> dict[str, Literal["increase", "decrease"]]:
         """Get a mapping from actuator group names to their direction."""
-        return defaults.get_actuator_to_direction(self.get_actuator_couples())
+        return {
+            actuator_group: environment_direction[1]
+            for environment_direction, actuator_group in self.get_environment_direction_to_group().items()
+        }
 
     def get_valid_actuator_groups(self) -> set[str]:
         """Get the set of valid actuator group names for this ecosystem."""
-        return {
-            actuator_group
-            for actuator_group in self.get_actuator_to_parameter().keys()
-        }
+        return set(self.get_environment_direction_to_group().values())
 
     # ---------------------------------------------------------------------------
     #   Hardware parameters

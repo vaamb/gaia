@@ -302,17 +302,15 @@ class TestEcosystemConfigGeneralEnvironment:
 
 class TestEcosystemConfigActuators:
     def test_actuator_couples(self, ecosystem_config: EcosystemConfig):
-        actuator_couples = ecosystem_config.get_actuator_couples()
+        actuators_mapping = ecosystem_config.get_environment_direction_to_group()
 
         # Test with a parameter that has an actuator override
-        actuator_couple = actuator_couples[gv.ClimateParameter.humidity]
-        assert actuator_couple.increase == "fogger"
-        assert actuator_couple.decrease == "dehumidifier"
+        assert actuators_mapping[(gv.ClimateParameter.humidity, "increase")] == "fogger"
+        assert actuators_mapping[(gv.ClimateParameter.humidity, "decrease")] == "dehumidifier"
 
         # Test with a parameter that uses default actuators
-        actuator_couple = actuator_couples[gv.ClimateParameter.wind]
-        assert actuator_couple.increase == "fan"
-        assert actuator_couple.decrease is None
+        assert actuators_mapping[(gv.ClimateParameter.wind, "increase")] == "fan"
+        assert actuators_mapping.get((gv.ClimateParameter.wind, "decrease")) is None
 
     def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
         valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()
@@ -414,10 +412,9 @@ class TestEcosystemConfigWeather:
             ecosystem_config.delete_weather_parameter("rain")
 
     def test_get_weather_actuators(self, ecosystem_config: EcosystemConfig):
-        actuators = ecosystem_config.get_weather_actuators()
-        assert gv.WeatherParameter.rain in actuators
-        assert actuators[gv.WeatherParameter.rain].increase == "rainer"
-        assert actuators[gv.WeatherParameter.rain].decrease is None
+        weather_to_group = ecosystem_config.get_weather_direction_to_group()
+        assert weather_to_group.get((gv.WeatherParameter.rain, "increase")) == "rainer"
+        assert weather_to_group.get((gv.WeatherParameter.rain, "decrease")) is None
 
 
 class TestEcosystemConfigHardware:
