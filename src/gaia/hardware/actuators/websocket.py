@@ -43,6 +43,16 @@ class WebSocketDimmer(Dimmer, WebSocketHardware):
         except (ConnectionError, DeviceError):
             return False
 
+    async def get_pwm_level(self) -> float:
+        try:
+            return await self._execute_action(
+                {"action": "get_pwm_level"},
+                "Failed to get PWM level"
+            )
+        except (ConnectionError, DeviceError):
+            # TODO: find a better way to handle error
+            return 100.0
+
 
 websocket_actuator_models: dict[str, Type[Actuator]] = {
     hardware.__name__: hardware

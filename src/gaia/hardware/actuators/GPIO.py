@@ -80,6 +80,13 @@ class gpioDimmer(gpioHardware, Dimmer):
         # Allow a 0.5% tolerance
         return isclose(self.dimmer.duty_cycle, duty_cycle_in_16_bit, rel_tol=0.005)
 
+    async def get_pwm_level(self) -> float | int:
+        return await run_sync(self._get_pwm_level)
+
+    def _get_pwm_level(self) -> float | int:
+        duty_cycle_in_16_bit = self.dimmer.duty_cycle
+        return duty_cycle_in_16_bit / (2**16 - 1) * 100
+
 
 # Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
 class gpioDimmable(gpioSwitch, gpioDimmer):  # ty: ignore[instance-layout-conflict]
