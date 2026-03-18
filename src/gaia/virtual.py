@@ -326,21 +326,20 @@ class VirtualEcosystem:
                 level = 100.0
             return level
 
-        actuator_couples = self.ecosystem.config.get_actuator_couples()
+        actuators_mapping = self.ecosystem.config.get_environment_direction_to_group()
 
         # New heat quantity
         d_temp = self.temperature - out_temp
         heat_quantity = self._heat_quantity
         heat_loss = self.heat_loss_coef * d_sec * d_temp
         heat_quantity -= heat_loss
-        temperature_couple: gv.ActuatorCouple = actuator_couples[gv.ClimateParameter.temperature]
-        temp_inc = temperature_couple.increase
-        if temp_inc and self.get_actuator_status(temp_inc):
+        temp_inc = actuators_mapping[(gv.ClimateParameter.temperature, "increase")]
+        if self.get_actuator_status(temp_inc):
             level = get_corrected_level(temp_inc)
             heater_output = self._max_heater_output * d_sec * level / 100
             heat_quantity += heater_output
-        temp_dec = temperature_couple.decrease
-        if temp_dec and self.get_actuator_status(temp_dec):
+        temp_dec = actuators_mapping[(gv.ClimateParameter.temperature, "decrease")]
+        if self.get_actuator_status(temp_dec):
             level = get_corrected_level(temp_dec)
             cooler_output = self._max_heater_output * 0.60 * d_sec * level / 100
             heat_quantity -= cooler_output
@@ -351,14 +350,13 @@ class VirtualEcosystem:
         humidity_quantity = self._humidity_quantity
         humidity_loss = d_hum * d_sec / 10000  # Pretty much a random factor
         humidity_quantity -= humidity_loss
-        humidity_couple: gv.ActuatorCouple = actuator_couples[gv.ClimateParameter.humidity]
-        hum_inc = humidity_couple.increase
-        if hum_inc and self.get_actuator_status(hum_inc):
+        hum_inc = actuators_mapping[(gv.ClimateParameter.humidity, "increase")]
+        if self.get_actuator_status(hum_inc):
             level = get_corrected_level(hum_inc)
             humidifier_output = self._max_humidifier_output * d_sec * level / 100
             humidity_quantity += humidifier_output
-        hum_dec = humidity_couple.decrease
-        if hum_dec and self.get_actuator_status(hum_dec):
+        hum_dec = actuators_mapping[(gv.ClimateParameter.humidity, "decrease")]
+        if self.get_actuator_status(hum_dec):
             level = get_corrected_level(hum_dec)
             dehumidifier_output = \
                 self._max_humidifier_output * 0.50 * d_sec * level / 100
@@ -367,9 +365,8 @@ class VirtualEcosystem:
 
         # Light calculation
         self._light = out_light
-        light_couple: gv.ActuatorCouple = actuator_couples[gv.ClimateParameter.light]
-        light_inc = light_couple.increase
-        if light_inc and self.get_actuator_status(light_inc):
+        light_inc = actuators_mapping[(gv.ClimateParameter.light, "increase")]
+        if self.get_actuator_status(light_inc):
             level = get_corrected_level(light_inc)
             self._light += self._max_light_output * level / 100
         self._last_update = now

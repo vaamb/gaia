@@ -99,12 +99,13 @@ class HystericalPID:
         if self._direction is not None:
             return self._direction
         direction: Direction = Direction.none
-        actuator_couples = self.actuator_hub.ecosystem.config.get_actuator_couples()
-        actuator_couple: gv.ActuatorCouple = actuator_couples[self.climate_parameter]
-        for direction_name, actuator_type in actuator_couple.items():
-            if actuator_type is None:
+        climate_to_group = self.actuator_hub.ecosystem.config.get_climate_direction_to_group()
+        for direction_name in ("increase", "decrease"):
+            try:
+                actuator_group = climate_to_group[(self.climate_parameter, direction_name)]
+            except KeyError:
                 continue
-            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(actuator_type)
+            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(actuator_group)
             if actuator_handler.get_linked_actuators():
                 direction = direction | Direction[direction_name]
         self._direction = direction
@@ -751,13 +752,13 @@ class ActuatorHub:
             return gv.HardwareType.actuator
 
     def _get_actuator_direction(self, actuator_group: str) -> Direction:
-        actuator_to_direction = self.ecosystem.config.get_actuator_to_direction()
-        direction_name = actuator_to_direction[actuator_group]
+        group_to_direction = self.ecosystem.config.get_group_to_direction()
+        direction_name = group_to_direction[actuator_group]
         return Direction[direction_name]
 
     def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
-        actuator_to_parameter = self.ecosystem.config.get_actuator_to_parameter()
-        parameter = actuator_to_parameter[actuator_group]
+        group_to_parameter = self.ecosystem.config.get_group_to_parameter()
+        parameter = group_to_parameter[actuator_group]
         if parameter in gv.WeatherParameter:
             return None
         elif parameter in gv.ClimateParameter:
@@ -780,7 +781,7 @@ class ActuatorHub:
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
             actuator_group = cast(str, actuator_group.name)
-        if actuator_group not in self.ecosystem.config.get_actuator_to_parameter():
+        if actuator_group not in self.ecosystem.config.get_group_to_parameter():
             raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
         try:
             return self._actuator_handlers[actuator_group]
@@ -804,11 +805,11 @@ class ActuatorHub:
         }
 
         rv = {}
-        for actuator_type in defaults.actuator_to_parameter.keys():
-            if actuator_type in self._actuator_handlers:
-                rv[actuator_type] = self._actuator_handlers[actuator_type].as_dict()
+        for actuator_group in defaults.climate_to_group_mapping.values():
+            if actuator_group in self._actuator_handlers:
+                rv[actuator_group] = self._actuator_handlers[actuator_group].as_dict()
             else:
-                rv[actuator_type] = default_state_dict
+                rv[actuator_group] = default_state_dict
         return rv
 
     def as_records(self) -> list[gv.ActuatorStateRecord]:
@@ -820,7 +821,7 @@ class ActuatorHub:
         ) -> gv.ActuatorStateRecord:
             return gv.ActuatorStateRecord(
                 type=hardware_type,
-                group=hardware_type.name,
+                group=str(hardware_type.name),
                 active=False,
                 mode=gv.ActuatorMode.automatic,
                 status=False,
@@ -829,10 +830,10 @@ class ActuatorHub:
             )
 
         rv = []
-        for actuator_str in defaults.actuator_to_parameter.keys():
-            if actuator_str in self._actuator_handlers:
-                rv.append(self._actuator_handlers[actuator_str].as_record(now))
+        for climate_direction, actuator_group in defaults.climate_to_group_mapping.items():
+            if actuator_group in self._actuator_handlers:
+                rv.append(self._actuator_handlers[actuator_group].as_record(now))
             else:
-                actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_str)
+                actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_group)
                 rv.append(get_default_record(actuator_type, now))
         return rv

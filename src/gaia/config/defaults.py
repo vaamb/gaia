@@ -3,52 +3,43 @@ from typing import Literal, TypeAlias
 import gaia_validators as gv
 
 
+Direction = Literal["increase", "decrease"]
 EnvironmentParameter: TypeAlias = gv.ClimateParameter | gv.WeatherParameter
+EnvironmentDirection: TypeAlias = tuple[gv.ClimateParameter | gv.WeatherParameter, Direction]
 
 
-# Default actuator couples for the climate parameters
-climate_actuator_couples: dict[gv.ClimateParameter, gv.ActuatorCouple] = {
-    gv.ClimateParameter.temperature: gv.ActuatorCouple(
-        increase=str(gv.HardwareType.heater.name),
-        decrease=str(gv.HardwareType.cooler.name)),
-    gv.ClimateParameter.humidity: gv.ActuatorCouple(
-        increase=str(gv.HardwareType.humidifier.name),
-        decrease=str(gv.HardwareType.dehumidifier.name)),
-    gv.ClimateParameter.light: gv.ActuatorCouple(
-        increase=str(gv.HardwareType.light.name),
-        decrease=None),
-    gv.ClimateParameter.wind: gv.ActuatorCouple(
-        increase=str(gv.HardwareType.fan.name),
-        decrease=None),
+# Default actuator groups name for the climate parameters
+climate_to_group_mapping: dict[tuple[gv.ClimateParameter, Direction], str] = {
+    (gv.ClimateParameter.temperature, "increase"): str(gv.HardwareType.heater.name),
+    (gv.ClimateParameter.temperature, "decrease"): str(gv.HardwareType.cooler.name),
+    (gv.ClimateParameter.humidity, "increase"): str(gv.HardwareType.humidifier.name),
+    (gv.ClimateParameter.humidity, "decrease"): str(gv.HardwareType.dehumidifier.name),
+    (gv.ClimateParameter.light, "increase"): str(gv.HardwareType.light.name),
+    (gv.ClimateParameter.wind, "increase"): str(gv.HardwareType.fan.name),
 }
 
 
-assert all([
-    climate_parameter in climate_actuator_couples
-    for climate_parameter in gv.ClimateParameter
-])
+# Default actuator groups name for the weather parameters
+weather_to_group_mapping: dict[tuple[gv.WeatherParameter, Direction], str] = {
+    (gv.WeatherParameter.rain, "increase"): "rainer",
+    (gv.WeatherParameter.fog, "increase"): "fogger",
+    (gv.WeatherParameter.wind_gust, "increase"): "fan",
+}
 
 
-def get_actuator_to_parameter(
-        actuator_couples: dict[EnvironmentParameter, gv.ActuatorCouple],
-) -> dict[str, EnvironmentParameter]:
-    return {
-        actuator: climate_parameter
-        for climate_parameter, actuator_couple in actuator_couples.items()
-        for actuator in actuator_couple
-        if actuator is not None
-    }
+actuators_mapping: dict[tuple[EnvironmentParameter, Direction], str] = {
+    **climate_to_group_mapping,
+    **weather_to_group_mapping,
+}
 
 
-actuator_to_parameter = get_actuator_to_parameter(climate_actuator_couples)  # ty: ignore[invalid-argument-type]
+actuator_to_parameter: dict[str, EnvironmentParameter] = {
+    actuator_group: environment_direction[0]
+    for environment_direction, actuator_group in actuators_mapping.items()
+}
 
 
-def get_actuator_to_direction(
-        actuator_couples: dict[EnvironmentParameter, gv.ActuatorCouple],
-) -> dict[str, Literal["increase", "decrease"]]:
-    return {
-        actuator: direction
-        for climate_parameter, actuator_couple in actuator_couples.items()
-        for actuator, direction in zip((actuator_couple), ("increase", "decrease"))
-        if actuator is not None
-    }
+actuator_to_direction: dict[str, Direction] = {
+    actuator_group: environment_direction[1]
+    for environment_direction, actuator_group in actuators_mapping.items()
+}

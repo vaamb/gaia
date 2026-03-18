@@ -142,16 +142,7 @@ class Climate(SubroutineTemplate[Actuator]):
         return self._actuator_handlers
 
     def get_actuator_group_for_parameter(self, climate_direction: ClimateDirection) -> str:
-        climate_cfg = self.ecosystem.config.get_climate_parameter(climate_direction[0])
-        # Try to get the actuator group from the config file
-        if climate_cfg.linked_actuators is not None:
-            potential_actuator: str | None = getattr(
-                climate_cfg.linked_actuators, climate_direction[1])
-            if potential_actuator is not None:
-                return potential_actuator
-        # If not found in the config file, use the default actuator group
-        couple = config.defaults.climate_actuator_couples[climate_direction[0]]
-        return getattr(couple, climate_direction[1])
+        return self.ecosystem.config.get_environment_direction_to_group()[climate_direction]
 
     async def _mount_actuator_handler(self, climate_direction: ClimateDirection) -> None:
         if climate_direction in self.actuator_handlers:
@@ -230,16 +221,15 @@ class Climate(SubroutineTemplate[Actuator]):
 
         # Check if there are actuator groups available and map them with climate parameters
         rv: dict[ClimateDirection, str] = {}
-        actuator_couples = self.config.get_climate_actuators()
+        climate_to_group = self.config.get_climate_direction_to_group()
         for climate_param in regulated_parameters:
-            actuator_couple: gv.ActuatorCouple = actuator_couples[climate_param]
             for direction in ("increase", "decrease"):
                 direction: Direction
-                actuator_group: str | None = getattr(actuator_couple, direction, None)
-                if actuator_group is None:
+                try:
+                    actuator_group = climate_to_group[(climate_param, direction)]
+                except KeyError:
                     continue
-                any_hardware = self.ecosystem.get_hardware_group_uids(actuator_group)
-                if actuator_group and any_hardware:
+                if self.ecosystem.get_hardware_group_uids(actuator_group):
                     rv[(climate_param, direction)] = actuator_group
         if not rv:
             self.logger.debug("No climatic actuator detected.")
