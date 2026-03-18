@@ -1834,7 +1834,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         Merges default actuator couples with those defined in climate config.
         """
-        directions: tuple[Direction] = ("increase", "decrease")
+        directions: tuple[Direction, Direction] = ("increase", "decrease")
         default = default_actuators.climate_to_group_mapping
         update = {
             (climate_parameter, direction): climate_cfg["linked_actuators"][direction]
@@ -1846,13 +1846,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         }
 
-        return {**default, **update}
+        # Valid ignore: ty can't narrow str | None through the comprehension if filter
+        return {**default, **update}  # ty: ignore[invalid-return-type]
 
     def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
         """Get actuator couples for all weather parameters."""
         default = default_actuators.weather_to_group_mapping
+        increase: Direction = "increase"
         update = {
-            (weather_parameter, "increase"): weather_cfg["linked_actuator"]
+            (weather_parameter, increase): weather_cfg["linked_actuator"]
             for weather_parameter, weather_cfg in self.weather.items()
             if weather_cfg["linked_actuator"] is not None
         }
@@ -1861,7 +1863,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_environment_direction_to_group(self) -> dict[EnvironmentDirection, str]:
         """Get all actuator couples (climate and weather combined)."""
-        return self.get_climate_direction_to_group() | self.get_weather_direction_to_group()
+        # Valid ignore: tuple[A, C] | tuple[B, C] is an valid tuple[A | B, C]
+        return self.get_climate_direction_to_group() | self.get_weather_direction_to_group()  # ty: ignore[invalid-return-type]
 
     def get_group_to_parameter(self) -> dict[str, EnvironmentParameter]:
         """Get a mapping from actuator group names to their parameters."""
