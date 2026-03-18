@@ -352,7 +352,6 @@ class TestWebsocketHardware:
 
         # Stop the manager as otherwise the test can hang forever
         await hardware._websocket_manager.stop()
-        x = 1
         # Hardware unregistration is taken care of by the ecosystem teardown
 
     async def test_hardware_connected_property(self, ecosystem: Ecosystem):
