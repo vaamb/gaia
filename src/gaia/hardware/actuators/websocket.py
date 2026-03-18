@@ -23,6 +23,15 @@ class WebSocketSwitch(Switch, WebSocketHardware):
         except (ConnectionError, DeviceError):
             return False
 
+    async def get_status(self) -> bool:
+        try:
+            return await self._execute_action(
+                {"action": "get_status"},
+                "Failed to get status"
+            )
+        except (ConnectionError, DeviceError):
+            # TODO: find a better way to handle error
+            return False
 
 class WebSocketDimmer(Dimmer, WebSocketHardware):
     async def set_pwm_level(self, level) -> bool:

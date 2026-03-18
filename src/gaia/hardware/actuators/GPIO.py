@@ -37,6 +37,12 @@ class gpioSwitch(gpioHardware, Switch):
     async def turn_off(self) -> bool:
         return await run_sync(self._turn_off)
 
+    async def get_status(self) -> bool:
+        return await run_sync(self._get_status)
+
+    def _get_status(self) -> bool:
+        return self.pin.value() == 1
+
 
 class gpioDimmer(gpioHardware, Dimmer):
     __slots__ = ("_dimmer",)
