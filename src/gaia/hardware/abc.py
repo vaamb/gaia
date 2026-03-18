@@ -23,7 +23,7 @@ import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
-from gaia.exceptions import HardwareNotFound
+from gaia.exceptions import DeviceError, HardwareNotFound
 from gaia.hardware._websocket import WebSocketHardwareManager
 from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
@@ -926,17 +926,17 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
         finally:
             self._requests.pop(uuid, None)
 
-    async def _execute_action(self, action: dict, error_msg: str) -> bool:
+    async def _execute_action(self, action: dict, error_msg: str) -> Any:
         try:
             response = await self._send_msg_and_wait(action)
         except (ConnectionError, ConnectionClosedOK, TimeoutError) as e:
             self._logger.error(f"Could not connect: {e}")
-            return False
+            raise ConnectionError() from e
         if response.get("status") != "success":
             msg = response.get("message", "")
             self._logger.error(f"{error_msg}. {msg}" if msg else error_msg)
-            return False
-        return True
+            raise DeviceError(msg)
+        return response["data"]
 
     async def register(self) -> None:
         if not self.websocket_manager.is_running:

@@ -26,5 +26,9 @@ class StoppingSubroutine(RuntimeError):
     pass
 
 
+class DeviceError(RuntimeError):
+    pass
+
+
 class UndefinedParameter(ValueError):
     pass

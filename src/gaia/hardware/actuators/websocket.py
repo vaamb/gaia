@@ -1,28 +1,38 @@
 from typing import Type
 
+from gaia.exceptions import DeviceError
 from gaia.hardware.abc import Actuator, Dimmer, Switch, WebSocketHardware
 
 
 class WebSocketSwitch(Switch, WebSocketHardware):
     async def turn_on(self) -> bool:
-        return await self._execute_action(
-            {"action": "turn_actuator", "data": "on"},
-            "Failed to turn on the switch"
-        )
+        try:
+            return await self._execute_action(
+                {"action": "turn_actuator", "data": "on"},
+                "Failed to turn on the switch"
+            )
+        except (ConnectionError, DeviceError):
+            return False
 
     async def turn_off(self) -> bool:
-        return await self._execute_action(
-            {"action": "turn_actuator", "data": "off"},
-            "Failed to turn off the switch"
-        )
+        try:
+            return await self._execute_action(
+                {"action": "turn_actuator", "data": "off"},
+                "Failed to turn off the switch"
+            )
+        except (ConnectionError, DeviceError):
+            return False
 
 
 class WebSocketDimmer(Dimmer, WebSocketHardware):
     async def set_pwm_level(self, level) -> bool:
-        return await self._execute_action(
-            {"action": "set_level", "data": level},
-            f"Failed to set the level to {level}"
-        )
+        try:
+            return await self._execute_action(
+                {"action": "set_level", "data": level},
+                f"Failed to set the level to {level}"
+            )
+        except (ConnectionError, DeviceError):
+            return False
 
 
 websocket_actuator_models: dict[str, Type[Actuator]] = {
