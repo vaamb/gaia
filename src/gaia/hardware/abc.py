@@ -1006,6 +1006,9 @@ class Switch(Actuator):
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
+    async def get_status(self) -> bool:
+        raise NotImplementedError("This method must be implemented in a subclass")
+
 
 class Dimmer(Actuator):
     __slots__ = ()
