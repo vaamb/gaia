@@ -125,7 +125,7 @@ async def test_refresh(ecosystem: Ecosystem):
 
 def test_actuators_data(ecosystem: "Ecosystem"):
     actuator_states = ecosystem.actuator_hub.as_dict()
-    assert len(actuator_states) == len(default_actuators.actuator_to_parameter)
+    assert len(actuator_states) == len(default_actuators.climate_to_group_mapping)
     for actuator in actuator_states.values():
         assert not actuator["active"]
         assert not actuator["status"]
