@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import sys
-from typing import cast, Literal, Type, TypeAlias, TypedDict, TypeVar
+from typing import cast, Literal, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -25,8 +25,8 @@ from gaia_validators import safe_enum_from_name
 from gaia_validators.utils import get_sun_times
 
 from gaia.config import (
-    BaseConfig, configure_logging, defaults, GaiaConfig, GaiaConfigHelper)
-from gaia.config.defaults import Direction, EnvironmentDirection, EnvironmentParameter
+    BaseConfig, configure_logging, default_actuators, GaiaConfig, GaiaConfigHelper)
+from gaia.config.default_actuators import Direction, EnvironmentDirection, EnvironmentParameter
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, PlantNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models
@@ -1835,7 +1835,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Merges default actuator couples with those defined in climate config.
         """
         directions: tuple[Direction] = ("increase", "decrease")
-        default = defaults.climate_to_group_mapping
+        default = default_actuators.climate_to_group_mapping
         update = {
             (climate_parameter, direction): climate_cfg["linked_actuators"][direction]
             for direction in directions
@@ -1850,7 +1850,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
         """Get actuator couples for all weather parameters."""
-        default = defaults.weather_to_group_mapping
+        default = default_actuators.weather_to_group_mapping
         update = {
             (weather_parameter, "increase"): weather_cfg["linked_actuator"]
             for weather_parameter, weather_cfg in self.weather.items()
@@ -1859,7 +1859,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         return {**default, **update}
 
-    def get_environment_direction_to_group(self) -> dict[tuple[EnvironmentParameter, Direction], str]:
+    def get_environment_direction_to_group(self) -> dict[EnvironmentDirection, str]:
         """Get all actuator couples (climate and weather combined)."""
         return self.get_climate_direction_to_group() | self.get_weather_direction_to_group()
 

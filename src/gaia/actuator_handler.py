@@ -9,12 +9,12 @@ from functools import partial
 import logging
 import time
 import typing
-from typing import Awaitable, cast, Callable, NamedTuple, Type
+from typing import cast, Callable, NamedTuple, Type
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
-from gaia.config import defaults
+from gaia.config import default_actuators
 from gaia.hardware.abc import Actuator, Dimmer, Switch
 
 
@@ -805,7 +805,7 @@ class ActuatorHub:
         }
 
         rv = {}
-        for actuator_group in defaults.climate_to_group_mapping.values():
+        for actuator_group in default_actuators.climate_to_group_mapping.values():
             if actuator_group in self._actuator_handlers:
                 rv[actuator_group] = self._actuator_handlers[actuator_group].as_dict()
             else:
@@ -830,7 +830,7 @@ class ActuatorHub:
             )
 
         rv = []
-        for climate_direction, actuator_group in defaults.climate_to_group_mapping.items():
+        for climate_direction, actuator_group in default_actuators.climate_to_group_mapping.items():
             if actuator_group in self._actuator_handlers:
                 rv.append(self._actuator_handlers[actuator_group].as_record(now))
             else:
