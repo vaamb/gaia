@@ -352,6 +352,7 @@ class TestWebsocketHardware:
 
         # Stop the manager as otherwise the test can hang forever
         await hardware._websocket_manager.stop()
+        x = 1
         # Hardware unregistration is taken care of by the ecosystem teardown
 
     async def test_hardware_connected_property(self, ecosystem: Ecosystem):
@@ -388,6 +389,7 @@ class TestWebsocketHardware:
             uuid=response.uuid,
             data={
                 "status": gv.Result.success,
+                "data": True,
             }
         ).model_dump_json()
         await websocket.send(payload)
@@ -406,6 +408,7 @@ class TestWebsocketHardware:
             uuid=response.uuid,
             data={
                 "status": gv.Result.success,
+                "data": True
             }
         ).model_dump_json()
         await websocket.send(payload)
@@ -429,7 +432,10 @@ class TestWebsocketHardware:
 
         payload = WebSocketMessage(
             uuid=response.uuid,
-            data={"status": gv.Result.failure},
+            data={
+                "status": gv.Result.failure,
+                "message": "An error occurred",
+            },
         ).model_dump_json()
         await websocket.send(payload)
         await yield_control()
@@ -458,6 +464,7 @@ class TestWebsocketHardware:
             uuid=response.uuid,
             data={
                 "status": gv.Result.success,
+                "data": True,
             }
         ).model_dump_json()
         await websocket.send(payload)
@@ -481,7 +488,10 @@ class TestWebsocketHardware:
 
         payload = WebSocketMessage(
             uuid=response.uuid,
-            data={"status": gv.Result.failure},
+            data={
+                "status": gv.Result.failure,
+                "message": "An error occurred",
+            },
         ).model_dump_json()
         await websocket.send(payload)
         await yield_control()
