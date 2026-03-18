@@ -27,7 +27,7 @@ weather_to_group_mapping: dict[tuple[gv.WeatherParameter, Direction], str] = {
 }
 
 
-actuators_mapping: dict[tuple[EnvironmentParameter, Direction], str] = {
+environment_to_group_mapping: dict[tuple[EnvironmentParameter, Direction], str] = {
     **climate_to_group_mapping,
     **weather_to_group_mapping,
 }
@@ -35,11 +35,11 @@ actuators_mapping: dict[tuple[EnvironmentParameter, Direction], str] = {
 
 actuator_to_parameter: dict[str, EnvironmentParameter] = {
     actuator_group: environment_direction[0]
-    for environment_direction, actuator_group in actuators_mapping.items()
+    for environment_direction, actuator_group in environment_to_group_mapping.items()
 }
 
 
 actuator_to_direction: dict[str, Direction] = {
     actuator_group: environment_direction[1]
-    for environment_direction, actuator_group in actuators_mapping.items()
+    for environment_direction, actuator_group in environment_to_group_mapping.items()
 }
