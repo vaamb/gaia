@@ -310,7 +310,7 @@ class TestEcosystemConfigActuators:
 
         # Test with a parameter that uses default actuators
         assert actuators_mapping[(gv.ClimateParameter.wind, "increase")] == "fan"
-        assert not (gv.ClimateParameter.wind, "decrease") in actuators_mapping
+        assert actuators_mapping.get((gv.ClimateParameter.wind, "decrease")) is None
 
     def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
         valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()
