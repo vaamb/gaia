@@ -1852,9 +1852,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
         """Get actuator couples for all weather parameters."""
         default = default_actuators.weather_to_group_mapping
-        increase: Direction = "increase"
         update = {
-            (weather_parameter, increase): weather_cfg["linked_actuator"]
+            (weather_parameter, cast(Direction, "increase")): weather_cfg["linked_actuator"]
             for weather_parameter, weather_cfg in self.weather.items()
             if weather_cfg["linked_actuator"] is not None
         }
