@@ -67,7 +67,7 @@ class Pictures(SubroutineTemplate[Camera]):
             image = await run_sync(SerializableImage.load_array, array_path)
             self._background_arrays[camera_uid] = image
 
-    async def _get_scored_image(self, camera: PiCameraAddressMixin) -> ScoredImage:
+    async def _get_scored_image(self, camera: Camera) -> ScoredImage:
         image = await camera.get_image(size=self._picture_size)
         image.metadata["camera_uid"] = camera.uid
         background_array: SerializableImage = self._background_arrays[camera.uid]

@@ -7,8 +7,7 @@ class virtualgpioSwitch(virtualHardware, gpioSwitch):
     __slots__ = ()
 
 
-# Valid ignore: same gpioDimmer.__slots__ conflict applies through the virtual chain
-class virtualgpioDimmable(virtualgpioSwitch, gpioDimmer):  # ty: ignore[instance-layout-conflict]
+class virtualgpioDimmable(virtualgpioSwitch, gpioDimmer):
     __slots__ = ()
 
 

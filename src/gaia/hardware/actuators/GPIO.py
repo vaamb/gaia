@@ -88,9 +88,7 @@ class gpioDimmer(gpioAddressMixin, Dimmer):
         return duty_cycle_in_16_bit / (2**16 - 1) * 100
 
 
-# Valid ignore: gpioDimmer.__slots__ = ("_dimmer",) combined with gpioSwitch's Hardware layout
-# triggers ty's conservative slot-conflict check; works at runtime
-class gpioDimmable(gpioSwitch, gpioDimmer):  # ty: ignore[instance-layout-conflict]
+class gpioDimmable(gpioSwitch, gpioDimmer):
     __slots__ = ()
 
 
