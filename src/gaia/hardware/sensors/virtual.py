@@ -26,8 +26,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     )
 
 
-# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
-class virtualSensor(virtualHardware, BaseSensor):  # ty: ignore[instance-layout-conflict]
+class virtualSensor(virtualHardware, BaseSensor):
     __slots__ = ()
 
 

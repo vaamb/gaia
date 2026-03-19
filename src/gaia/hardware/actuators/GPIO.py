@@ -5,7 +5,7 @@ import typing as t
 
 from anyio.to_thread import run_sync
 
-from gaia.hardware.abc import Actuator, Dimmer, gpioHardware, Switch
+from gaia.hardware.abc import Actuator, Dimmer, gpioAddressMixin, Switch
 from gaia.hardware.utils import is_raspi
 
 
@@ -13,7 +13,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.hardware._compatibility import Pin, pwmio
 
 
-class gpioSwitch(gpioHardware, Switch):
+class gpioSwitch(gpioAddressMixin, Switch):
     __slots__ = ()
 
     def _init_pin(self) -> None:
@@ -44,7 +44,7 @@ class gpioSwitch(gpioHardware, Switch):
         return self.pin.value() == 1
 
 
-class gpioDimmer(gpioHardware, Dimmer):
+class gpioDimmer(gpioAddressMixin, Dimmer):
     __slots__ = ("_dimmer",)
 
     def __init__(self, *args, **kwargs) -> None:
@@ -88,8 +88,7 @@ class gpioDimmer(gpioHardware, Dimmer):
         return duty_cycle_in_16_bit / (2**16 - 1) * 100
 
 
-# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
-class gpioDimmable(gpioSwitch, gpioDimmer):  # ty: ignore[instance-layout-conflict]
+class gpioDimmable(gpioSwitch, gpioDimmer):
     __slots__ = ()
 
 

@@ -53,8 +53,9 @@ class _EcosystemPayloads:
 
     @property
     def climate(self) -> list[gv.ClimateConfig]:
+        # Valid ignore: implicit conversion from dict to model by pydantic
         return [
-            gv.ClimateConfig(parameter=key, **value)
+            gv.ClimateConfig(parameter=key, **value)  # ty: ignore[invalid-argument-type]
             for key, value in self.config.climate.items()
         ]
 
@@ -68,8 +69,9 @@ class _EcosystemPayloads:
     @property
     def hardware(self) -> list[gv.HardwareConfig]:
         hardware_dict = self.config.hardware_dict
+        # Valid ignore: implicit conversion from dict to model by pydantic
         return [
-            gv.HardwareConfig(uid=key, **value)
+            gv.HardwareConfig(uid=key, **value)  # ty: ignore[invalid-argument-type]
             for key, value in hardware_dict.items()
         ]
 

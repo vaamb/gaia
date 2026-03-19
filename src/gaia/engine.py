@@ -17,7 +17,7 @@ import gaia_validators as gv
 
 from gaia.config.from_files import CacheType, EngineConfig
 from gaia.ecosystem import Ecosystem
-from gaia.hardware.abc import WebSocketHardware
+from gaia.hardware.abc import WebSocketAddressMixin
 from gaia.utils import humanize_list, SingletonMeta
 from gaia.virtual import VirtualWorld
 
@@ -118,7 +118,7 @@ class Engine(metaclass=SingletonMeta):
         if self.scheduler.running:
             self.stop_background_tasks()
         # Reset references
-        WebSocketHardware._websocket_manager = None
+        WebSocketAddressMixin._websocket_manager = None
         self._db = None
         self._message_broker = None
         self._state = EngineState.TERMINATED

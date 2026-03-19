@@ -8,7 +8,7 @@ from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import (
     BaseSensor, hardware_logger, i2cSensor, LightSensor, Measure,
-    PlantLevelHardware, SensorRead, Unit)
+    PlantLevelMixin, SensorRead, Unit)
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
@@ -253,8 +253,7 @@ class CapacitiveSensor(i2cSensor):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
-class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):  # ty: ignore[instance-layout-conflict]
+class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensor):
     measures_available = {
         Measure.moisture: Unit.RWC,
         Measure.temperature: Unit.celsius_degree,

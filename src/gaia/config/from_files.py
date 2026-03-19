@@ -1949,7 +1949,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :raises ValueError: If validation fails or address is already used.
         """
         try:
-            hardware_config = gv.HardwareConfig(**hardware_dict)
+            # Valid ignore: implicit conversion from dict to model by pydantic
+            hardware_config = gv.HardwareConfig(**hardware_dict)  # ty: ignore[invalid-argument-type]
         except pydantic.ValidationError as e:
             raise ValueError(
                 f"Invalid hardware information provided. "

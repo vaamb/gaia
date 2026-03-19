@@ -6,12 +6,13 @@ from asyncio import  Event, Future, sleep, Task
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+import inspect
 from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
 from types import EllipsisType
-from typing import (
-    Any, ClassVar, Generic, NamedTuple, Self, Type, TypeVar, TYPE_CHECKING)
+import typing as t
+from typing import Any, ClassVar, NamedTuple, Self, Type
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -30,7 +31,7 @@ from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
-if TYPE_CHECKING:  # pragma: no cover
+if t.TYPE_CHECKING:  # pragma: no cover
     from websockets import ServerConnection
 
     from gaia import Ecosystem
@@ -376,10 +377,7 @@ class _MetaHardware(ABCMeta):
             return hardware
 
 
-AddressT = TypeVar("AddressT", bound=Address)
-
-
-class Hardware(Generic[AddressT], metaclass=_MetaHardware):
+class Hardware(metaclass=_MetaHardware):
     """
     Base class for all hardware config creation and when creating hardware
     object from config file.
@@ -406,6 +404,22 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
         "_type",
         "_uid",
     )
+
+    @classmethod
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        if inspect.isabstract(cls):
+            return  # abstract classes don't need a hardware mixin yet
+        address_mixins = {
+            base for base in cls.__mro__
+            if HardwareAddressMixin in getattr(base, "__bases__", ())
+        }
+        if len(address_mixins) != 1:
+            raise TypeError(
+                f"{cls.__name__} must include exactly one HardwareAddressMixin "
+                f"subclass in its MRO, found {len(address_mixins)}: "
+                f"{[b.__name__ for b in address_mixins]}"
+            )
 
     def __init__(
             self,
@@ -479,7 +493,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
 
     @classmethod
     @abstractmethod
-    def validate_address(cls, address_str: str) -> AddressT:
+    def validate_address(cls, address_str: str) -> Address:
         ...
 
     async def _on_initialize(self) -> None:
@@ -649,13 +663,22 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
 
 
 # ---------------------------------------------------------------------------
-#   Subclasses based on address type
+#   Mixins for each address type
 # ---------------------------------------------------------------------------
-class gpioHardware(Hardware[GPIOAddress]):
-    #__slots__ = ("_pin",)  # Find a way around the multiple inheritance issue
+class HardwareAddressMixin:
+    """Marker base for hardware address-protocol mixins.
+    """
+    __slots__ = ()
+
+
+class gpioAddressMixin(HardwareAddressMixin):
+    """Protocol mixin for GPIO-addressed hardware. Expects `self.address: GPIOAddress`."""
 
     IN = 0
     OUT = 1
+
+    if t.TYPE_CHECKING:
+        address: GPIOAddress
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -666,7 +689,7 @@ class gpioHardware(Hardware[GPIOAddress]):
         address = Address.from_str(address_str)
         if not isinstance(address, GPIOAddress):  # pragma: no cover
             raise ValueError(
-                "gpioHardware address must be of type: 'GPIO_pinNumber', "
+                "GPIO hardware address must be of type: 'GPIO_pinNumber', "
                 "'BCM_pinNumber' or 'BOARD_pinNumber'"
             )
         return address
@@ -694,17 +717,22 @@ class gpioHardware(Hardware[GPIOAddress]):
         return Pin(address)
 
 
-class i2cHardware(Hardware[I2CAddress]):
+class i2cAddressMixin(HardwareAddressMixin):
+    """Protocol mixin for I2C-addressed hardware. Expects `self.address: I2CAddress`."""
     __slots__ = ()
 
     default_address: ClassVar[int | None] = None
+
+    if t.TYPE_CHECKING:
+        address: I2CAddress
+        multiplexer: Multiplexer | None
 
     @classmethod
     def validate_address(cls, address_str: str) -> I2CAddress:
         address = Address.from_str(address_str)
         if not isinstance(address, I2CAddress):  # pragma: no cover
             raise ValueError(
-                "i2cHardware address must be of type: 'I2C_default' or 'I2C_0' "
+                "I2C hardware address must be of type: 'I2C_default' or 'I2C_0' "
                 "to use default sensor I2C address, or of type 'I2C_hexAddress' "
                 "to use a specific address"
             )
@@ -726,22 +754,26 @@ class i2cHardware(Hardware[I2CAddress]):
             return get_i2c()
 
 
-class OneWireHardware(Hardware[OneWireAddress]):
+class OneWireAddressMixin(HardwareAddressMixin):
+    """Protocol mixin for 1-Wire-addressed hardware. Expects `self.address: OneWireAddress`."""
     __slots__ = ()
+
+    if t.TYPE_CHECKING:
+        address: OneWireAddress
 
     @classmethod
     def validate_address(cls, address_str: str) -> OneWireAddress:
         address = Address.from_str(address_str)
         if not isinstance(address, OneWireAddress):  # pragma: no cover
             raise ValueError(
-                "OneWireHardware address must be of type: 'ONEWIRE_hexAddress' "
+                "OneWire hardware address must be of type: 'ONEWIRE_hexAddress' "
                 "to use a specific address or 'ONEWIRE_default' to use the default "
                 "address"
             )
         return address
 
     async def _on_initialize(self) -> None:
-        await super()._on_initialize()
+        await super()._on_initialize()  # ty: ignore[unresolved-attribute]
 
         def check_1w_enabled() -> None:
             import subprocess
@@ -762,78 +794,37 @@ class OneWireHardware(Hardware[OneWireAddress]):
         return self.address.main
 
 
-class Camera(Hardware[PiCameraAddress]):
-    __slots__ = ("_device", "_camera_dir")
+class PiCameraAddressMixin(HardwareAddressMixin):
+    """Protocol mixin for PiCamera hardware."""
+    __slots__ = ()
 
-    def __init__(self, *args, **kwargs) -> None:
-        check_dependencies()
-        super().__init__(*args, **kwargs)
-        self._device: Any | None = None
-        self._camera_dir: Path | None = None
+    if t.TYPE_CHECKING:
+        address: PiCameraAddress
 
     @classmethod
     def validate_address(cls, address_str: str) -> PiCameraAddress:
         address = Address.from_str(address_str)
         if not isinstance(address, PiCameraAddress):  # pragma: no cover
-            raise ValueError("Camera address must be 'PICAMERA'")
+            raise ValueError("PiCamera address must be 'PICAMERA'")
         return address
 
-    @property
-    def device(self) -> Any:
-        if self._device is None:
-            self._device = self._get_device()
-        return self._device
 
-    def _get_device(self) -> Any:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
-
-    async def get_image(self, size: tuple | None = None) -> SerializableImage:
-        raise NotImplementedError("This method must be implemented in a subclass")
-
-    #async def get_video(self) -> io.BytesIO:
-    #    raise NotImplementedError(
-    #        "This method must be implemented in a subclass"
-    #    )
-
-    @property
-    def camera_dir(self) -> Path:
-        if self._camera_dir is None:
-            base_dir = self.ecosystem.engine.config.gaia_dir
-            self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
-            if not self._camera_dir.exists():
-                self._camera_dir.mkdir(parents=True)
-        return self._camera_dir
-
-    async def load_image(self, image_path: Path) -> SerializableImage:
-        image = await run_sync(SerializableImage.read, str(image_path))
-        return image
-
-    async def save_image(
-            self,
-            image: SerializableImage,
-            image_path: Path | None = None,
-    ) -> Path:
-        if image_path is None:
-            timestamp: datetime | None = image.metadata.get("timestamp", None)
-            if timestamp is None:
-                timestamp = datetime.now(tz=timezone.utc)
-            file_name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
-            image_path = self.camera_dir / file_name
-        await run_sync(image.write, image_path)
-        return image_path
-
-
-class WebSocketHardware(Hardware[WebSocketAddress]):
+class WebSocketAddressMixin(HardwareAddressMixin):
+    """Protocol mixin for WebSocket-addressed hardware. Expects Hardware attributes."""
     _websocket_manager: WebSocketHardwareManager | None = None
+
+    if t.TYPE_CHECKING:
+        uid: str
+        address: WebSocketAddress
+        ecosystem: Ecosystem
+        _logger: Logger
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if WebSocketHardware._websocket_manager is None:
+        if WebSocketAddressMixin._websocket_manager is None:
             manager = WebSocketHardwareManager(self.ecosystem.engine.config)
-            WebSocketHardware._websocket_manager = manager
-        self._websocket_manager = WebSocketHardware._websocket_manager
+            WebSocketAddressMixin._websocket_manager = manager
+        self._websocket_manager = WebSocketAddressMixin._websocket_manager
         self._requests: dict[UUID, Future] = {}
         self._task: Task | None = None
         self._stop_event: Event = Event()
@@ -843,17 +834,17 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
         address = Address.from_str(address_str)
         if not isinstance(address, WebSocketAddress):  # pragma: no cover
             raise ValueError(
-                "WebSocketHardware address must be of type: 'WEBSOCKET' or "
+                "WebSocket hardware address must be of type: 'WEBSOCKET' or "
                 "'WEBSOCKET_<remote_ip_addr>'"
             )
         return address
 
     async def _on_initialize(self) -> None:
-        await super()._on_initialize()
+        await super()._on_initialize()  # ty: ignore[unresolved-attribute]
         await self.register()
 
     async def _on_terminate(self) -> None:
-        await super()._on_terminate()
+        await super()._on_terminate()  # ty: ignore[unresolved-attribute]
         await self.unregister()
 
     @property
@@ -887,7 +878,7 @@ class WebSocketHardware(Hardware[WebSocketAddress]):
         async for msg in connection:
             try:
                 parsed_msg = WebSocketMessage.model_validate_json(msg)
-                # `WebSocketHardware` work on the master-slave model and should
+                # `WebSocketAddressMixin` work on the master-slave model and should
                 #  never receive an unsolicited message (with no request UUID)
                 #  once the device has registered
                 assert parsed_msg.uuid is not None
@@ -1115,11 +1106,72 @@ class LightSensor(BaseSensor):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
+class Camera(Hardware):
+    __slots__ = ("_device", "_camera_dir")
+
+    def __init__(self, *args, **kwargs) -> None:
+        check_dependencies()
+        super().__init__(*args, **kwargs)
+        self._device: Any | None = None
+        self._camera_dir: Path | None = None
+
+
+
+    @property
+    def device(self) -> Any:
+        if self._device is None:
+            self._device = self._get_device()
+        return self._device
+
+    def _get_device(self) -> Any:
+        raise NotImplementedError(
+            "This method must be implemented in a subclass"
+        )  # pragma: no cover
+
+    async def get_image(self, size: tuple | None = None) -> SerializableImage:
+        raise NotImplementedError("This method must be implemented in a subclass")
+
+    #async def get_video(self) -> io.BytesIO:
+    #    raise NotImplementedError(
+    #        "This method must be implemented in a subclass"
+    #    )
+
+    @property
+    def camera_dir(self) -> Path:
+        if self._camera_dir is None:
+            base_dir = self.ecosystem.engine.config.gaia_dir
+            self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
+            if not self._camera_dir.exists():
+                self._camera_dir.mkdir(parents=True)
+        return self._camera_dir
+
+    async def load_image(self, image_path: Path) -> SerializableImage:
+        image = await run_sync(SerializableImage.read, str(image_path))
+        return image
+
+    async def save_image(
+            self,
+            image: SerializableImage,
+            image_path: Path | None = None,
+    ) -> Path:
+        if image_path is None:
+            timestamp: datetime | None = image.metadata.get("timestamp", None)
+            if timestamp is None:
+                timestamp = datetime.now(tz=timezone.utc)
+            file_name = f"{self.uid}-{timestamp.isoformat(timespec='seconds')}"
+            image_path = self.camera_dir / file_name
+        await run_sync(image.write, image_path)
+        return image_path
+
+
 # ---------------------------------------------------------------------------
 #   Other simple subclasses
 # ---------------------------------------------------------------------------
-class PlantLevelHardware(Hardware):
+class PlantLevelMixin:
     __slots__ = ()
+
+    if t.TYPE_CHECKING:
+        plants: list[str]
 
     def __init__(self, *args, **kwargs) -> None:
         kwargs["level"] = gv.HardwareLevel.plants
@@ -1134,16 +1186,14 @@ class PlantLevelHardware(Hardware):
 # ---------------------------------------------------------------------------
 #   Composition subclasses
 # ---------------------------------------------------------------------------
-# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
-class gpioSensor(BaseSensor, gpioHardware):  # ty: ignore[instance-layout-conflict]
-    __slots__ = ("_device", "_pin")
+class gpioSensor(gpioAddressMixin, BaseSensor):
+    __slots__ = ()
 
     async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
-class i2cSensor(BaseSensor, i2cHardware):  # ty: ignore[instance-layout-conflict]
+class i2cSensor(i2cAddressMixin, BaseSensor):
     __slots__ = ()
 
     async def get_data(self) -> list[SensorRead]:
