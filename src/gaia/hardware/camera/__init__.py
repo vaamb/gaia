@@ -70,7 +70,7 @@ class PiCamera(PiCameraAddressMixin, Camera):
         raise RuntimeError("There was an error while taking the picture.")
 
 
-camera_models: dict[str, Type[PiCamera]] = {
+camera_models: dict[str, Type[Camera]] = {
     hardware.__name__: hardware
     for hardware in [
         PiCamera

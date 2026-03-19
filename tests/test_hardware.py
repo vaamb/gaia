@@ -12,13 +12,14 @@ import gaia_validators as gv
 from gaia import Ecosystem, Engine, EngineConfig
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
-    _MetaHardware, Address, BaseSensor, PiCameraAddressMixin, Dimmer, gpioAddressMixin, GPIOAddress,
+    _MetaHardware, Address, BaseSensor, Camera, Dimmer, gpioAddressMixin, GPIOAddress,
     Hardware, I2CAddress, i2cAddressMixin, InvalidAddressError, Measure, OneWireAddress,
-    OneWireAddressMixin, PiCameraAddress, PlantLevelMixin, SensorRead, Switch, Unit,
-    WebSocketAddress, WebSocketAddressMixin, WebSocketHardwareManager, WebSocketMessage)
+    OneWireAddressMixin, PiCameraAddress, PiCameraAddressMixin, PlantLevelMixin,
+    SensorRead, Switch, Unit, WebSocketAddress, WebSocketAddressMixin,
+    WebSocketHardwareManager, WebSocketMessage)
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
-from gaia.hardware.camera import PiCameraAddressMixin
+from gaia.hardware.camera import PiCamera
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
 
@@ -64,7 +65,7 @@ def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
     # Setup type
     if issubclass(hardware_cls, BaseSensor):
         base_cfg["type"] = gv.HardwareType.sensor
-    elif issubclass(hardware_cls, PiCameraAddressMixin):
+    elif issubclass(hardware_cls, Camera):
         base_cfg["type"] = gv.HardwareType.camera
     elif issubclass(hardware_cls, (Dimmer, Switch)):
         base_cfg["type"] = gv.HardwareType.light
@@ -190,7 +191,7 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
         assert len(hardware.plants) > 0
     if isinstance(hardware, BaseSensor):
         assert isinstance(await hardware.get_data(), list)
-    if isinstance(hardware, PiCameraAddressMixin):
+    if isinstance(hardware, Camera):
         assert hardware.camera_dir
         assert await hardware.get_image((42, 21))
     if isinstance(hardware, Dimmer):

@@ -6,6 +6,7 @@ from asyncio import  Event, Future, sleep, Task
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+import inspect
 from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
@@ -404,6 +405,22 @@ class Hardware(metaclass=_MetaHardware):
         "_uid",
     )
 
+    @classmethod
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        if inspect.isabstract(cls):
+            return  # abstract classes don't need a hardware mixin yet
+        address_mixins = {
+            base for base in cls.__mro__
+            if HardwareAddressMixin in getattr(base, "__bases__", ())
+        }
+        if len(address_mixins) != 1:
+            raise TypeError(
+                f"{cls.__name__} must include exactly one HardwareAddressMixin "
+                f"subclass in its MRO, found {len(address_mixins)}: "
+                f"{[b.__name__ for b in address_mixins]}"
+            )
+
     def __init__(
             self,
             ecosystem: Ecosystem,
@@ -778,7 +795,7 @@ class OneWireAddressMixin(HardwareAddressMixin):
 
 
 class PiCameraAddressMixin(HardwareAddressMixin):
-    """Protocol mixin for 1-Wire-addressed hardware. Expects `self.address: OneWireAddress`."""
+    """Protocol mixin for PiCamera hardware."""
     __slots__ = ()
 
     if t.TYPE_CHECKING:
@@ -861,7 +878,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
         async for msg in connection:
             try:
                 parsed_msg = WebSocketMessage.model_validate_json(msg)
-                # `WebSocketHardware` work on the master-slave model and should
+                # `WebSocketAddressMixin` work on the master-slave model and should
                 #  never receive an unsolicited message (with no request UUID)
                 #  once the device has registered
                 assert parsed_msg.uuid is not None
@@ -1152,6 +1169,9 @@ class Camera(Hardware):
 # ---------------------------------------------------------------------------
 class PlantLevelMixin:
     __slots__ = ()
+
+    if t.TYPE_CHECKING:
+        plants: list[str]
 
     def __init__(self, *args, **kwargs) -> None:
         kwargs["level"] = gv.HardwareLevel.plants
