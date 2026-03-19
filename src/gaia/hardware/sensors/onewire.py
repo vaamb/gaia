@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import BaseSensor, OneWireHardware
+from gaia.hardware.abc import BaseSensor, OneWireAddressMixin
 from gaia.hardware.sensors.abc import TemperatureSensor
 from gaia.hardware.utils import is_raspi
 
@@ -15,8 +15,7 @@ if t.TYPE_CHECKING:
         from gaia.hardware.sensors._devices._compatibility import BS18B20Device
 
 
-# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
-class BS18B20(OneWireHardware, TemperatureSensor):  # ty: ignore[instance-layout-conflict]
+class BS18B20(OneWireAddressMixin, TemperatureSensor):
     __slots__ = ()
 
     def _get_device(self) -> BS18B20Device:

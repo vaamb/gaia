@@ -14,7 +14,7 @@ import gaia_validators as gv
 
 from gaia.dependencies.camera import SerializableImage
 from gaia.hardware import camera_models
-from gaia.hardware.abc import Camera
+from gaia.hardware.abc import PiCameraAddressMixin
 from gaia.array_utils import (
     compute_mse, dump_picture_array, load_picture_array, rgb_to_gray)
 from gaia.subroutines.template import SubroutineTemplate
@@ -31,8 +31,8 @@ _null_scored_image: ScoredImage = {
 }
 
 
-class Pictures(SubroutineTemplate[Camera]):
-    _hardware_choices: dict[str, Type[Camera]] = camera_models
+class Pictures(SubroutineTemplate[PiCameraAddressMixin]):
+    _hardware_choices: dict[str, Type[PiCameraAddressMixin]] = camera_models
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -67,7 +67,7 @@ class Pictures(SubroutineTemplate[Camera]):
             image = await run_sync(SerializableImage.load_array, array_path)
             self._background_arrays[camera_uid] = image
 
-    async def _get_scored_image(self, camera: Camera) -> ScoredImage:
+    async def _get_scored_image(self, camera: PiCameraAddressMixin) -> ScoredImage:
         image = await camera.get_image(size=self._picture_size)
         image.metadata["camera_uid"] = camera.uid
         background_array: SerializableImage = self._background_arrays[camera.uid]

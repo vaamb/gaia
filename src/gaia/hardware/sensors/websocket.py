@@ -2,7 +2,7 @@ from typing import Type
 
 from pydantic import RootModel, ValidationError
 
-from gaia.hardware.abc import BaseSensor, SensorRead, WebSocketHardware
+from gaia.hardware.abc import BaseSensor, SensorRead, WebSocketAddressMixin
 
 from websockets import ConnectionClosed
 
@@ -10,8 +10,7 @@ from websockets import ConnectionClosed
 SensorsReads = RootModel[list[SensorRead]]
 
 
-# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
-class WebSocketSensor(BaseSensor, WebSocketHardware):  # ty: ignore[instance-layout-conflict]
+class WebSocketSensor(WebSocketAddressMixin, BaseSensor):
     measures_available = ...
 
     async def get_data(self) -> list[SensorRead]:

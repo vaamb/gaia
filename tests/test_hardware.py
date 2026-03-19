@@ -12,13 +12,13 @@ import gaia_validators as gv
 from gaia import Ecosystem, Engine, EngineConfig
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
-    _MetaHardware, Address, BaseSensor, Camera, Dimmer, gpioHardware, GPIOAddress,
-    Hardware, I2CAddress, i2cHardware, InvalidAddressError, Measure, OneWireAddress,
-    OneWireHardware, PiCameraAddress, PlantLevelHardware, SensorRead, Switch, Unit,
-    WebSocketAddress, WebSocketHardware, WebSocketHardwareManager, WebSocketMessage)
+    _MetaHardware, Address, BaseSensor, PiCameraAddressMixin, Dimmer, gpioAddressMixin, GPIOAddress,
+    Hardware, I2CAddress, i2cAddressMixin, InvalidAddressError, Measure, OneWireAddress,
+    OneWireAddressMixin, PiCameraAddress, PlantLevelHardware, SensorRead, Switch, Unit,
+    WebSocketAddress, WebSocketAddressMixin, WebSocketHardwareManager, WebSocketMessage)
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
-from gaia.hardware.camera import PiCamera
+from gaia.hardware.camera import PiCameraAddressMixin
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
 
@@ -45,15 +45,15 @@ def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
     }
 
     # Setup address
-    if issubclass(hardware_cls, gpioHardware):
+    if issubclass(hardware_cls, gpioAddressMixin):
         base_cfg["address"] = "GPIO_12"
-    elif issubclass(hardware_cls, i2cHardware):
+    elif issubclass(hardware_cls, i2cAddressMixin):
         base_cfg["address"] = "I2C_default"
-    elif issubclass(hardware_cls, OneWireHardware):
+    elif issubclass(hardware_cls, OneWireAddressMixin):
         base_cfg["address"] = "onewire_default"
-    elif issubclass(hardware_cls, PiCamera):
+    elif issubclass(hardware_cls, PiCameraAddressMixin):
         base_cfg["address"] = "picamera"
-    elif issubclass(hardware_cls, WebSocketHardware):
+    elif issubclass(hardware_cls, WebSocketAddressMixin):
         base_cfg["address"] = "websocket_127.0.0.1"
     else:
         raise ValueError("Unknown hardware address")
@@ -64,7 +64,7 @@ def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
     # Setup type
     if issubclass(hardware_cls, BaseSensor):
         base_cfg["type"] = gv.HardwareType.sensor
-    elif issubclass(hardware_cls, Camera):
+    elif issubclass(hardware_cls, PiCameraAddressMixin):
         base_cfg["type"] = gv.HardwareType.camera
     elif issubclass(hardware_cls, (Dimmer, Switch)):
         base_cfg["type"] = gv.HardwareType.light
@@ -180,17 +180,17 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
     hardware = hardware_cls.from_config(
         gv.HardwareConfig(**hardware_cfg), ecosystem=ecosystem)
     # Make sure the hardware has the required attributes and methods
-    if isinstance(hardware, gpioHardware):
+    if isinstance(hardware, gpioAddressMixin):
         assert hardware.pin
-    if isinstance(hardware, i2cHardware):
+    if isinstance(hardware, i2cAddressMixin):
         assert hardware._get_i2c() is not None
-    if isinstance(hardware, WebSocketHardware):
+    if isinstance(hardware, WebSocketAddressMixin):
         await hardware.register()
     if isinstance(hardware, PlantLevelHardware):
         assert len(hardware.plants) > 0
     if isinstance(hardware, BaseSensor):
         assert isinstance(await hardware.get_data(), list)
-    if isinstance(hardware, Camera):
+    if isinstance(hardware, PiCameraAddressMixin):
         assert hardware.camera_dir
         assert await hardware.get_image((42, 21))
     if isinstance(hardware, Dimmer):
@@ -198,7 +198,7 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
     if isinstance(hardware, Switch):
         assert isinstance(await hardware.turn_on(), bool)
         assert isinstance(await hardware.turn_off(), bool)
-    if isinstance(hardware, WebSocketHardware):
+    if isinstance(hardware, WebSocketAddressMixin):
         await hardware.unregister()
 
 
@@ -231,7 +231,7 @@ def test_i2c_address_injection(ecosystem: Ecosystem):
 
 @pytest.mark.asyncio
 class TestWebsocketHardware:
-    async def _connect_device(self, hardware: WebSocketHardware):
+    async def _connect_device(self, hardware: WebSocketAddressMixin):
         """Connect a simulated device to the WebSocket manager."""
         websocket = await connect(WEBSOCKET_URL)
         await websocket.send(hardware.uid)

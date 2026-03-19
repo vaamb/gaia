@@ -8,7 +8,7 @@ from typing import Any, Type
 from anyio.to_thread import run_sync
 
 from gaia.dependencies.camera import SerializableImage
-from gaia.hardware.abc import Camera, hardware_logger
+from gaia.hardware.abc import Camera, PiCameraAddressMixin, hardware_logger
 from gaia.hardware.utils import is_raspi
 
 
@@ -16,7 +16,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.hardware.camera._devices._compatibility import Picamera2Device
 
 
-class PiCamera(Camera):
+class PiCamera(PiCameraAddressMixin, Camera):
     __slots__ = ()
 
     def __del__(self) -> None:
@@ -70,7 +70,7 @@ class PiCamera(Camera):
         raise RuntimeError("There was an error while taking the picture.")
 
 
-camera_models: dict[str, Type[Camera]] = {
+camera_models: dict[str, Type[PiCamera]] = {
     hardware.__name__: hardware
     for hardware in [
         PiCamera

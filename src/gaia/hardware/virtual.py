@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import typing as t
 import warnings
 
-from gaia.hardware.abc import Hardware
 from gaia.virtual import VirtualEcosystem
+
+
+if t.TYPE_CHECKING:
+    from gaia import Ecosystem
 
 
 class VirtualDevice:
@@ -20,8 +24,12 @@ class VirtualDevice:
         self.virtual_ecosystem = VirtualEcosystem.get(ecosystem_uid)
 
 
-class virtualHardware(Hardware):
+class virtualHardware:
+    """Protocol mixin for virtual hardware. Expects `self.ecosystem: Ecosystem`."""
     __slots__ = ()
+
+    if t.TYPE_CHECKING:
+        ecosystem: Ecosystem
 
     def __init__(self, *args, **kwargs):
         from gaia import GaiaConfigHelper

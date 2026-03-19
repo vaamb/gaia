@@ -253,8 +253,7 @@ class CapacitiveSensor(i2cSensor):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-# Valid ignore: __slots__ layout conflict is a known CPython limitation with multiple inheritance; works at runtime
-class CapacitiveMoisture(CapacitiveSensor, PlantLevelHardware):  # ty: ignore[instance-layout-conflict]
+class CapacitiveMoisture(PlantLevelHardware, CapacitiveSensor):
     measures_available = {
         Measure.moisture: Unit.RWC,
         Measure.temperature: Unit.celsius_degree,
