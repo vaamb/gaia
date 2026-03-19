@@ -1150,7 +1150,7 @@ class Camera(Hardware):
 # ---------------------------------------------------------------------------
 #   Other simple subclasses
 # ---------------------------------------------------------------------------
-class PlantLevelHardware(Hardware):
+class PlantLevelMixin:
     __slots__ = ()
 
     def __init__(self, *args, **kwargs) -> None:

@@ -14,7 +14,7 @@ from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
     _MetaHardware, Address, BaseSensor, PiCameraAddressMixin, Dimmer, gpioAddressMixin, GPIOAddress,
     Hardware, I2CAddress, i2cAddressMixin, InvalidAddressError, Measure, OneWireAddress,
-    OneWireAddressMixin, PiCameraAddress, PlantLevelHardware, SensorRead, Switch, Unit,
+    OneWireAddressMixin, PiCameraAddress, PlantLevelMixin, SensorRead, Switch, Unit,
     WebSocketAddress, WebSocketAddressMixin, WebSocketHardwareManager, WebSocketMessage)
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
@@ -81,7 +81,7 @@ def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
         else:
             base_cfg["measures"] = ["temperature|°C", "humidity|%"]
     # Setup plants
-    if issubclass(hardware_cls, PlantLevelHardware):
+    if issubclass(hardware_cls, PlantLevelMixin):
         base_cfg["level"] = gv.HardwareLevel.plants
         base_cfg["plants"] = ["VirtualTestPlant"]
     else:
@@ -186,7 +186,7 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
         assert hardware._get_i2c() is not None
     if isinstance(hardware, WebSocketAddressMixin):
         await hardware.register()
-    if isinstance(hardware, PlantLevelHardware):
+    if isinstance(hardware, PlantLevelMixin):
         assert len(hardware.plants) > 0
     if isinstance(hardware, BaseSensor):
         assert isinstance(await hardware.get_data(), list)
