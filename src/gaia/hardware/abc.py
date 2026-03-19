@@ -11,7 +11,7 @@ from pathlib import Path
 import textwrap
 from types import EllipsisType
 from typing import (
-    Any, ClassVar, Generic, NamedTuple, Self, Type, TypeVar, TYPE_CHECKING)
+    Any, ClassVar, NamedTuple, Self, Type, TYPE_CHECKING)
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -376,10 +376,7 @@ class _MetaHardware(ABCMeta):
             return hardware
 
 
-AddressT = TypeVar("AddressT", bound=Address)
-
-
-class Hardware(Generic[AddressT], metaclass=_MetaHardware):
+class Hardware(metaclass=_MetaHardware):
     """
     Base class for all hardware config creation and when creating hardware
     object from config file.
@@ -479,7 +476,7 @@ class Hardware(Generic[AddressT], metaclass=_MetaHardware):
 
     @classmethod
     @abstractmethod
-    def validate_address(cls, address_str: str) -> AddressT:
+    def validate_address(cls, address_str: str) -> Address:
         ...
 
     async def _on_initialize(self) -> None:
