@@ -10,8 +10,8 @@ from logging import getLogger, Logger
 from pathlib import Path
 import textwrap
 from types import EllipsisType
-from typing import (
-    Any, ClassVar, NamedTuple, Self, Type, TYPE_CHECKING)
+import typing as t
+from typing import Any, ClassVar, NamedTuple, Self, Type
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -30,7 +30,7 @@ from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
-if TYPE_CHECKING:  # pragma: no cover
+if t.TYPE_CHECKING:  # pragma: no cover
     from websockets import ServerConnection
 
     from gaia import Ecosystem
@@ -660,7 +660,7 @@ class gpioAddressMixin(HardwareAddressMixin):
     IN = 0
     OUT = 1
 
-    if TYPE_CHECKING:
+    if t.TYPE_CHECKING:
         address: GPIOAddress
 
     def __init__(self, *args, **kwargs) -> None:
@@ -706,7 +706,7 @@ class i2cAddressMixin(HardwareAddressMixin):
 
     default_address: ClassVar[int | None] = None
 
-    if TYPE_CHECKING:
+    if t.TYPE_CHECKING:
         address: I2CAddress
         multiplexer: Multiplexer | None
 
@@ -741,7 +741,7 @@ class OneWireAddressMixin(HardwareAddressMixin):
     """Protocol mixin for 1-Wire-addressed hardware. Expects `self.address: OneWireAddress`."""
     __slots__ = ()
 
-    if TYPE_CHECKING:
+    if t.TYPE_CHECKING:
         address: OneWireAddress
 
     @classmethod
@@ -781,7 +781,7 @@ class PiCameraAddressMixin(HardwareAddressMixin):
     """Protocol mixin for 1-Wire-addressed hardware. Expects `self.address: OneWireAddress`."""
     __slots__ = ()
 
-    if TYPE_CHECKING:
+    if t.TYPE_CHECKING:
         address: PiCameraAddress
 
     @classmethod
@@ -796,7 +796,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
     """Protocol mixin for WebSocket-addressed hardware. Expects Hardware attributes."""
     _websocket_manager: WebSocketHardwareManager | None = None
 
-    if TYPE_CHECKING:
+    if t.TYPE_CHECKING:
         uid: str
         address: WebSocketAddress
         ecosystem: Ecosystem
