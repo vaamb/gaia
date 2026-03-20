@@ -10,13 +10,13 @@ import gaia_validators as gv
 from gaia import Ecosystem
 from gaia.actuator_handler import ActuatorHandler, Timer
 from gaia.events import Events
-from gaia.hardware import gpioDimmable, gpioSwitch
+from gaia.hardware.abc import DimmableSwitch
 
 from .data import ecosystem_uid
 from .utils import yield_control
 
 
-def get_lights(ecosystem: Ecosystem) -> list[gpioDimmable | gpioSwitch]:
+def get_lights(ecosystem: Ecosystem) -> list[DimmableSwitch]:
     return [  # type: ignore
         hardware
         for hardware in ecosystem.hardware.values()
@@ -45,8 +45,7 @@ async def test_status(light_handler: ActuatorHandler):
     # Test default status
     assert not light_handler.status
     for light in get_lights(light_handler.ecosystem):
-        light: gpioSwitch
-        assert light.pin.value() == 0
+        assert (await light.get_status()) is False
 
     # Test set status True
     async with light_handler.update_status_transaction():
@@ -54,8 +53,7 @@ async def test_status(light_handler: ActuatorHandler):
     assert success
     assert light_handler.status
     for light in get_lights(light_handler.ecosystem):
-        light: gpioSwitch
-        assert light.pin.value() == 1
+        assert (await light.get_status()) is True
 
     # Test set status False
     async with light_handler.update_status_transaction():
@@ -63,8 +61,7 @@ async def test_status(light_handler: ActuatorHandler):
     assert success
     assert not light_handler.status
     for light in get_lights(light_handler.ecosystem):
-        light: gpioSwitch
-        assert light.pin.value() == 0
+        assert (await light.get_status()) is False
 
 
 @pytest.mark.asyncio
