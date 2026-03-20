@@ -425,7 +425,6 @@ class EngineConfig(metaclass=SingletonMeta):
             GaiaConfigHelper.set_config(gaia_config)
         self._app_config = GaiaConfigHelper.get_config()
         configure_logging(self.app_config)
-        self._dirs: dict[str, Path] = {}
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         self._sun_times: dict[str, SunTimesCacheData] = {}
