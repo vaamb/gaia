@@ -508,13 +508,6 @@ class Hardware(metaclass=_MetaHardware):
     ) -> Self:
         if hardware_cfg.uid in _MetaHardware.instances:
             raise RuntimeError(f"Hardware {hardware_cfg.uid} already exists.")
-        # Ensure a virtual hardware will be return if virtualization is enabled
-        if (
-                ecosystem.engine.config.app_config.VIRTUALIZATION
-                and hardware_cfg.type & gv.HardwareType.sensor
-        ):
-            if not hardware_cfg.model.startswith("virtual"):
-                hardware_cfg.model = f"virtual{hardware_cfg.model}"
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware

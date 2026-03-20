@@ -444,6 +444,13 @@ class Ecosystem:
             self.logger.error(error_msg)
             raise ValueError(error_msg)
         hardware_config = self.config.get_hardware_config(hardware_uid)
+        # Ensure a virtual hardware will be return if virtualization is enabled
+        if (
+                self.engine.config.app_config.VIRTUALIZATION
+                and hardware_config.type & gv.HardwareType.sensor
+        ):
+            if not hardware_config.model.startswith("virtual"):
+                hardware_config.model = f"virtual{hardware_config.model}"
         try:
             hardware: Hardware = await Hardware.initialize(hardware_config, self)
             self.logger.debug(f"Hardware {hardware.name} has been set up.")
