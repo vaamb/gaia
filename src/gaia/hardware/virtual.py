@@ -14,14 +14,12 @@ class VirtualDevice:
     def __init__(
             self,
             *args,
-            ecosystem_uid: str,
+            virtual_ecosystem: VirtualEcosystem,
             **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
 
-        from gaia.virtual import VirtualEcosystem
-
-        self.virtual_ecosystem = VirtualEcosystem.get(ecosystem_uid)
+        self.virtual_ecosystem = virtual_ecosystem
 
 
 class virtualHardware:
@@ -48,4 +46,4 @@ class virtualHardware:
         super().__init__(*args, **kwargs)
 
         # Will raise if no corresponding VirtualEcosystem instance exists
-        VirtualEcosystem.get(self.ecosystem.uid)
+        self.virtual_ecosystem = VirtualEcosystem.get(self.ecosystem.uid)

@@ -1012,7 +1012,7 @@ class Dimmer(Actuator):
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
-    async def get_pwm_level(self) -> float:
+    async def get_pwm_level(self) -> int | float:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 

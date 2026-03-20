@@ -8,7 +8,6 @@ from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, ENS160, VCNL4040, VEML7700)
 from gaia.hardware.sensors.websocket import WebSocketSensor
-from gaia.hardware.utils import hardware_logger
 from gaia.hardware.virtual import virtualHardware
 
 
@@ -40,7 +39,7 @@ class virtualDHT11(virtualDHT):
     def _get_device(self) -> VirtualDHT11Device:
         from gaia.hardware.sensors._devices.virtual import VirtualDHT11Device
 
-        return VirtualDHT11Device(ecosystem_uid=self.ecosystem.uid)
+        return VirtualDHT11Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
 class virtualDHT22(virtualDHT):
@@ -49,7 +48,7 @@ class virtualDHT22(virtualDHT):
     def _get_device(self) -> VirtualDHT22Device:
         from gaia.hardware.sensors._devices.virtual import VirtualDHT22Device
 
-        return VirtualDHT22Device(ecosystem_uid=self.ecosystem.uid)
+        return VirtualDHT22Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
 class virtualAHT20(AHT20, virtualSensor):
@@ -58,7 +57,7 @@ class virtualAHT20(AHT20, virtualSensor):
     def _get_device(self) -> VirtualAHTx0Device:
         from gaia.hardware.sensors._devices.virtual import VirtualAHTx0Device
 
-        return VirtualAHTx0Device(ecosystem_uid=self.ecosystem.uid)
+        return VirtualAHTx0Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
 class virtualVCNL4040(VCNL4040, virtualSensor):
@@ -67,7 +66,7 @@ class virtualVCNL4040(VCNL4040, virtualSensor):
     def _get_device(self) -> VirtualVCNL4040Device:
         from gaia.hardware.sensors._devices.virtual import VirtualVCNL4040Device
 
-        return VirtualVCNL4040Device(ecosystem_uid=self.ecosystem.uid)
+        return VirtualVCNL4040Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
@@ -76,7 +75,7 @@ class virtualVEML7700(VEML7700, virtualSensor):
     def _get_device(self) -> VirtualVEML7700Device:
         from gaia.hardware.sensors._devices.virtual import VirtualVEML7700Device
 
-        return VirtualVEML7700Device(ecosystem_uid=self.ecosystem.uid)
+        return VirtualVEML7700Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
 class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
@@ -85,7 +84,7 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
     def _get_device(self) -> VirtualSeesawDevice:
         from gaia.hardware.sensors._devices.virtual import VirtualSeesawDevice
 
-        return VirtualSeesawDevice(ecosystem_uid=self.ecosystem.uid)
+        return VirtualSeesawDevice(virtual_ecosystem=self.virtual_ecosystem)
 
 
 class virtualENS160(ENS160, virtualSensor):
