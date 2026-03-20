@@ -1016,6 +1016,10 @@ class Dimmer(Actuator):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
+class DimmableSwitch(Dimmer, Switch):
+    __slots__ = ()
+
+
 class BaseSensor(Hardware):
     __slots__ = ("_device",)
 
