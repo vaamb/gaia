@@ -178,9 +178,7 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
     hardware_cfg = _get_hardware_config(hardware_cls)
 
     # Make sure the hardware can be initialized
-    hardware = hardware_cls.from_config(
-        gv.HardwareConfig(**hardware_cfg), ecosystem=ecosystem)
-    await hardware._on_initialize()
+    hardware = await Hardware.initialize(gv.HardwareConfig(**hardware_cfg), ecosystem)
     # Make sure the hardware has the required attributes and methods
     if isinstance(hardware, gpioAddressMixin):
         assert hardware.pin
@@ -203,7 +201,7 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
     if isinstance(hardware, WebSocketAddressMixin):
         await hardware.unregister()
     # Perform clean-up
-    await hardware._on_terminate()
+    await hardware.terminate()
 
 
 @pytest.mark.asyncio
