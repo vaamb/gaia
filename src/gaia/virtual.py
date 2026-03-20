@@ -377,6 +377,7 @@ class VirtualEcosystem:
         heat_quantity += get_output(temp_inc_group, self._max_heater_output, 1.00)
         temp_dec_group = actuators_mapping[(gv.ClimateParameter.temperature, "decrease")]
         heat_quantity -= get_output(temp_dec_group, self._max_heater_output, 0.60)
+        self._heat_quantity = heat_quantity
 
         # Humidity calculation
         d_hum = self.absolute_humidity - get_absolute_humidity(out_temp, out_hum)
@@ -387,11 +388,12 @@ class VirtualEcosystem:
         humidity_quantity += get_output(hum_inc_group, self._max_humidifier_output, 1.00)
         hum_dec_group = actuators_mapping[(gv.ClimateParameter.humidity, "decrease")]
         humidity_quantity -= get_output(hum_dec_group, self._max_humidifier_output, 0.50)
+        self._humidity_quantity = humidity_quantity
 
         # Light calculation
         self._light = out_light
         light_inc_group = actuators_mapping[(gv.ClimateParameter.light, "increase")]
-        self._light += get_output(light_inc_group, self._max_light_output, 1.00)
+        self._light += get_output(light_inc_group, self._max_light_output, 1/d_sec)
 
         # Update
         self._last_update = now
