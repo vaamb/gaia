@@ -525,10 +525,6 @@ class Hardware(metaclass=_MetaHardware):
     async def terminate(self) -> None:
         # Perform subclass-specific termination routine
         await self._on_terminate()
-        # Reset actuator handlers using this hardware
-        for actuator_handler in self.ecosystem.actuator_hub.actuator_handlers.values():
-            if self in actuator_handler.get_linked_actuators():
-                actuator_handler.reset_cached_actuators()
 
     def _format_measures(
             self,
