@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
 import logging
 import math
 from time import monotonic
 import typing
-from typing import Self
+from typing import Literal, Self, TypeAlias
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
@@ -21,6 +22,16 @@ if typing.TYPE_CHECKING:
 
 SUNRISE = time(7, 0)
 SUNSET = time(19, 0)
+
+Direction = Literal["increase", "decrease"]
+ClimateDirection: TypeAlias = tuple[gv.ClimateParameter, Direction]
+HardwareUid: TypeAlias = str
+
+@dataclass
+class ActuatorState:
+    status: bool = False
+    level: float = 100.0
+    groups: set[str] = field(default_factory=set)
 
 
 # 1 watt = 1 joule / sec
@@ -213,6 +224,9 @@ class VirtualEcosystem:
         self._start_time: float | None = None
         self._last_update: float | None = None
 
+        self._get_actuator_mapping = self.ecosystem.config.get_environment_direction_to_group
+        self._actuators: dict[HardwareUid, ActuatorState] = {}
+
         # Add the virtual ecosystem to the registry
         VirtualEcosystem._instances[ecosystem.uid] = self
 
@@ -285,15 +299,29 @@ class VirtualEcosystem:
     def status(self) -> bool:
         return self._start_time is not None
 
-    def get_actuator_status(self, actuator_group: str) -> bool:
-        if actuator_group in self.ecosystem.actuator_hub.actuator_handlers:
-            return self.ecosystem.actuator_hub.get_handler(actuator_group).status
-        return False
+    def register_actuator(self, actuator_uid: HardwareUid, groups: set[str]) -> None:
+        self._actuators[actuator_uid] = ActuatorState(groups=groups)
 
-    def get_actuator_level(self, actuator_group: str) -> float | None:
-        if actuator_group in self.ecosystem.actuator_hub.actuator_handlers:
-            return self.ecosystem.actuator_hub.get_handler(actuator_group).level
-        return None
+    def unregister_actuator(self, actuator_uid: HardwareUid) -> None:
+        self._actuators.pop(actuator_uid)
+
+    def set_actuator_status(self, actuator_uid: HardwareUid, status: bool) -> None:
+        self._actuators[actuator_uid].status = status
+
+    def get_actuator_status(self, actuator_uid: str) -> bool:
+        return self._actuators[actuator_uid].status
+
+    def set_actuator_level(self, actuator_uid: HardwareUid, level: float) -> None:
+        self._actuators[actuator_uid].level = level
+
+    def get_actuator_level(self, actuator_uid: HardwareUid) -> float:
+        return self._actuators[actuator_uid].level
+
+    def get_actuators_uid_for_group(self, actuator_group: str) -> list[HardwareUid]:
+        return [
+            actuator_uid for actuator_uid, actuator_state in self._actuators.items()
+            if actuator_group in actuator_state.groups
+        ]
 
     def measure(self, now: float | None = None) -> None:
         if not self._start_time:
@@ -320,60 +348,56 @@ class VirtualEcosystem:
             d_sec = now - self._last_update
         out_temp, out_hum, out_light = self.virtual_world.get_measures()
 
-        def get_corrected_level(actuator_group: str) -> float:
-            level = self.get_actuator_level(actuator_group)
+        def get_output(
+                actuator_group: str,
+                base_output: float,
+                correction_factor: float = 1.0,
+        ) -> float:
+            output = 0.0
+            for actuator_uid in self.get_actuators_uid_for_group(actuator_group):
+                if self.get_actuator_status(actuator_uid):
+                    level = get_corrected_level(actuator_uid)
+                    output += base_output * correction_factor * d_sec * level / 100
+            return output
+
+        def get_corrected_level(actuator_uid: HardwareUid) -> float:
+            level = self.get_actuator_level(actuator_uid)
             if level is None:
                 level = 100.0
             return level
 
-        actuators_mapping = self.ecosystem.config.get_environment_direction_to_group()
+        actuators_mapping = self._get_actuator_mapping()
 
-        # New heat quantity
+        # Heat quantity calculation
         d_temp = self.temperature - out_temp
         heat_quantity = self._heat_quantity
         heat_loss = self.heat_loss_coef * d_sec * d_temp
         heat_quantity -= heat_loss
-        temp_inc = actuators_mapping[(gv.ClimateParameter.temperature, "increase")]
-        if self.get_actuator_status(temp_inc):
-            level = get_corrected_level(temp_inc)
-            heater_output = self._max_heater_output * d_sec * level / 100
-            heat_quantity += heater_output
-        temp_dec = actuators_mapping[(gv.ClimateParameter.temperature, "decrease")]
-        if self.get_actuator_status(temp_dec):
-            level = get_corrected_level(temp_dec)
-            cooler_output = self._max_heater_output * 0.60 * d_sec * level / 100
-            heat_quantity -= cooler_output
-        self._heat_quantity = heat_quantity
+        temp_inc_group = actuators_mapping[(gv.ClimateParameter.temperature, "increase")]
+        heat_quantity += get_output(temp_inc_group, self._max_heater_output, 1.00)
+        temp_dec_group = actuators_mapping[(gv.ClimateParameter.temperature, "decrease")]
+        heat_quantity -= get_output(temp_dec_group, self._max_heater_output, 0.60)
 
         # Humidity calculation
         d_hum = self.absolute_humidity - get_absolute_humidity(out_temp, out_hum)
         humidity_quantity = self._humidity_quantity
         humidity_loss = d_hum * d_sec / 10000  # Pretty much a random factor
         humidity_quantity -= humidity_loss
-        hum_inc = actuators_mapping[(gv.ClimateParameter.humidity, "increase")]
-        if self.get_actuator_status(hum_inc):
-            level = get_corrected_level(hum_inc)
-            humidifier_output = self._max_humidifier_output * d_sec * level / 100
-            humidity_quantity += humidifier_output
-        hum_dec = actuators_mapping[(gv.ClimateParameter.humidity, "decrease")]
-        if self.get_actuator_status(hum_dec):
-            level = get_corrected_level(hum_dec)
-            dehumidifier_output = \
-                self._max_humidifier_output * 0.50 * d_sec * level / 100
-            humidity_quantity -= dehumidifier_output
-        self._humidity_quantity = humidity_quantity
+        hum_inc_group = actuators_mapping[(gv.ClimateParameter.humidity, "increase")]
+        humidity_quantity += get_output(hum_inc_group, self._max_humidifier_output, 1.00)
+        hum_dec_group = actuators_mapping[(gv.ClimateParameter.humidity, "decrease")]
+        humidity_quantity -= get_output(hum_dec_group, self._max_humidifier_output, 0.50)
 
         # Light calculation
         self._light = out_light
-        light_inc = actuators_mapping[(gv.ClimateParameter.light, "increase")]
-        if self.get_actuator_status(light_inc):
-            level = get_corrected_level(light_inc)
-            self._light += self._max_light_output * level / 100
+        light_inc_group = actuators_mapping[(gv.ClimateParameter.light, "increase")]
+        self._light += get_output(light_inc_group, self._max_light_output, 1.00)
+
+        # Update
         self._last_update = now
         self.logger.debug(
             f"Temperature: {self.temperature:2.2f} - humidity: {self.humidity:3.2f} - "
-            f"light: {self.light:.1f}"
-        )
+            f"light: {self.light:.1f}")
 
     def _compute_initial_hybrid_capacity(self) -> float:
         air_mass = self.volume * self.AIR_DENSITY

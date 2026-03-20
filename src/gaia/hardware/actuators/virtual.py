@@ -1,20 +1,80 @@
-from gaia.hardware.abc import Actuator
-from gaia.hardware.actuators.GPIO import gpioDimmer, gpioSwitch
+from gaia.hardware.abc import Actuator, Dimmer, Switch
+from gaia.hardware.actuators.GPIO import gpioDimmable, gpioDimmer, gpioSwitch
+from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.virtual import virtualHardware
 
 
-class virtualgpioSwitch(virtualHardware, gpioSwitch):
+class virtualActuator(virtualHardware, Actuator):
     __slots__ = ()
 
+    async def _on_initialize(self) -> None:
+        # Registration must be done before other registrations that might
+        #  interact with the virtual ecosystem
+        self.virtual_ecosystem.register_actuator(self.uid, self.groups)
+        await super()._on_initialize()
 
-class virtualgpioDimmable(virtualgpioSwitch, gpioDimmer):
+    async def _on_terminate(self) -> None:
+        await super()._on_terminate()
+        self.virtual_ecosystem.unregister_actuator(self.uid)
+
+
+class virtualSwitch(virtualActuator, Switch):
     __slots__ = ()
+
+    async def turn_on(self) -> bool:
+        self.virtual_ecosystem.set_actuator_status(self.uid, True)
+        return True
+
+    async def turn_off(self) -> bool:
+        self.virtual_ecosystem.set_actuator_status(self.uid, False)
+        return True
+
+    async def get_status(self) -> bool:
+        return self.virtual_ecosystem.get_actuator_status(self.uid)
+
+
+class virtualgpioSwitch(virtualSwitch, gpioSwitch):
+    pass
+
+
+class virtualWebSocketSwitch(virtualSwitch, WebSocketSwitch):
+    pass
+
+
+class virtualDimmer(virtualActuator, Dimmer):
+    __slots__ = ()
+
+    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
+        self.virtual_ecosystem.set_actuator_level(self.uid, duty_cycle_in_percent)
+        return True
+
+    async def get_pwm_level(self) -> int:
+        return self.virtual_ecosystem.get_actuator_level(self.uid)
+
+
+class virtualgpioDimmer(virtualDimmer, gpioDimmer):
+    pass
+
+
+class virtualWebSocketDimmer(virtualDimmer, WebSocketDimmer):
+    pass
+
+
+class virtualDimmable(virtualSwitch, virtualDimmer):
+    pass
+
+
+class virtualgpioDimmable(virtualDimmer, gpioDimmable):
+    pass
 
 
 virtual_actuator_models: dict[str, type[Actuator]] = {
     hardware.__name__: hardware
     for hardware in [
         virtualgpioDimmable,
+        virtualgpioDimmer,
         virtualgpioSwitch,
+        virtualWebSocketDimmer,
+        virtualWebSocketSwitch,
     ]
 }
