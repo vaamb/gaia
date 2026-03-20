@@ -458,34 +458,17 @@ class EngineConfig(metaclass=SingletonMeta):
     def app_config(self) -> GaiaConfig:
         return self._app_config
 
-    def _get_dir(self, dir_name: str) -> Path:
-        try:
-            return self._dirs[dir_name]
-        except KeyError:
-            try:
-                path = Path(getattr(self.app_config, dir_name))
-            except ValueError:
-                raise ValueError(f"Config.{dir_name} is not a valid directory.")
-            else:
-                if not path.exists():
-                    self.logger.warning(
-                        f"'Config.{dir_name}' variable is set to a non-existing "
-                        f"directory, trying to create it.")
-                    path.mkdir(parents=True)
-                self._dirs[dir_name] = path
-                return path
-
     @property
     def gaia_dir(self) -> Path:
-        return self._get_dir("DIR")
+        return self.app_config.get_path("DIR")
 
     @property
     def logs_dir(self) -> Path:
-        return self._get_dir("LOG_DIR")
+        return self.app_config.get_path("LOG_DIR")
 
     @property
     def cache_dir(self) -> Path:
-        return self._get_dir("CACHE_DIR")
+        return self.app_config.get_path("CACHE_DIR")
 
     def get_file_path(self, file_type: ConfigType | CacheType) -> Path:
         if isinstance(file_type, ConfigType):

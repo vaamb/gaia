@@ -152,7 +152,7 @@ async def engine_config(engine_config_master: EngineConfig, logs_content) -> Yie
             engine_config_master.watchdog.stop()
         if engine_config_master.cache_dir.iterdir():
             shutil.rmtree(engine_config_master.cache_dir)
-            engine_config_master._dirs.pop("CACHE_DIR")
+            engine_config_master.app_config._paths.pop("CACHE_DIR")
 
 
 @pytest_asyncio.fixture(scope="function")

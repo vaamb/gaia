@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 from typing import Any, Type
+import warnings
 
 from gaia import __version__ as version
 from gaia.config.base import BaseConfig
@@ -16,7 +17,29 @@ class AppInfo:
     VERSION = version
 
 
-class GaiaConfig(AppInfo, BaseConfig):
+class GetPathMixin:
+    def __init__(self):
+        self._paths: dict[str, Path] = {}
+
+    def get_path(self, dir_name: str) -> Path:
+        try:
+            return self._paths[dir_name]
+        except KeyError:
+            try:
+                path = Path(getattr(self, dir_name))
+            except ValueError:
+                raise ValueError(f"Config.{dir_name} is not a valid directory.")
+            else:
+                if not path.exists():
+                    warnings.warn(
+                        f"'Config.{dir_name}' variable is set to a non-existing "
+                        f"directory, trying to create it.")
+                    path.mkdir(parents=True)
+                self._paths[dir_name] = path
+                return path
+
+
+class GaiaConfig(AppInfo, BaseConfig, GetPathMixin):
     def __init__(self) -> None:
         raise ValueError("'GaiaConfig' should only be used for type hint purposes.")
 
@@ -71,7 +94,7 @@ class GaiaConfigHelper:
                 "'gaia.config.BaseConfig'."
             )
 
-        class Config(AppInfo, config_cls):  # ty: ignore[unsupported-base]
+        class Config(AppInfo, GetPathMixin, config_cls):  # ty: ignore[unsupported-base]
             pass
 
         cls._config = Config()
