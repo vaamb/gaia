@@ -43,7 +43,7 @@ class WebSocketDimmer(WebSocketAddressMixin, Dimmer):
         except (ConnectionError, DeviceError):
             return False
 
-    async def get_pwm_level(self) -> float:
+    async def get_pwm_level(self) -> int | float:
         try:
             return await self._execute_action(
                 {"action": "get_pwm_level"},

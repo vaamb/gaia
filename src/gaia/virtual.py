@@ -311,10 +311,10 @@ class VirtualEcosystem:
     def get_actuator_status(self, actuator_uid: str) -> bool:
         return self._actuators[actuator_uid].status
 
-    def set_actuator_level(self, actuator_uid: HardwareUid, level: float) -> None:
+    def set_actuator_level(self, actuator_uid: HardwareUid, level: int | float) -> None:
         self._actuators[actuator_uid].level = level
 
-    def get_actuator_level(self, actuator_uid: HardwareUid) -> float:
+    def get_actuator_level(self, actuator_uid: HardwareUid) -> int | float:
         return self._actuators[actuator_uid].level
 
     def get_actuators_uid_for_group(self, actuator_group: str) -> list[HardwareUid]:

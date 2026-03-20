@@ -44,11 +44,11 @@ class virtualWebSocketSwitch(virtualSwitch, WebSocketSwitch):
 class virtualDimmer(virtualActuator, Dimmer):
     __slots__ = ()
 
-    async def set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
-        self.virtual_ecosystem.set_actuator_level(self.uid, duty_cycle_in_percent)
+    async def set_pwm_level(self, level: float | int) -> bool:
+        self.virtual_ecosystem.set_actuator_level(self.uid, level)
         return True
 
-    async def get_pwm_level(self) -> int:
+    async def get_pwm_level(self) -> int | float:
         return self.virtual_ecosystem.get_actuator_level(self.uid)
 
 

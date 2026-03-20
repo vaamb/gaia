@@ -80,10 +80,10 @@ class gpioDimmer(gpioAddressMixin, Dimmer):
         # Allow a 0.5% tolerance
         return isclose(self.dimmer.duty_cycle, duty_cycle_in_16_bit, rel_tol=0.005)
 
-    async def get_pwm_level(self) -> float | int:
+    async def get_pwm_level(self) -> int | float:
         return await run_sync(self._get_pwm_level)
 
-    def _get_pwm_level(self) -> float | int:
+    def _get_pwm_level(self) -> int | float:
         duty_cycle_in_16_bit = self.dimmer.duty_cycle
         return duty_cycle_in_16_bit / (2**16 - 1) * 100
 
