@@ -69,8 +69,7 @@ async def test_level(light_handler: ActuatorHandler):
     # Test default level
     assert light_handler.level is None
     for light in get_lights(light_handler.ecosystem):
-        light: gpioDimmable
-        assert light.dimmer.duty_cycle == 0
+        assert (await light.get_pwm_level()) == 0
 
     # Test level > 0
     async with light_handler.update_status_transaction():
@@ -78,8 +77,7 @@ async def test_level(light_handler: ActuatorHandler):
     assert success
     assert light_handler.level == 42
     for light in get_lights(light_handler.ecosystem):
-        light: gpioDimmable
-        assert light.dimmer.duty_cycle > 0.0
+        assert (await light.get_pwm_level()) == 42
 
     # Test level = 0
     async with light_handler.update_status_transaction():
@@ -87,8 +85,7 @@ async def test_level(light_handler: ActuatorHandler):
     assert success
     assert light_handler.level == 0
     for light in get_lights(light_handler.ecosystem):
-        light: gpioDimmable
-        assert light.dimmer.duty_cycle == 0.0
+        assert (await light.get_pwm_level()) == 0.0
 
 
 @pytest.mark.asyncio
