@@ -24,7 +24,6 @@ class VirtualDevice:
 
 class virtualHardware:
     """Protocol mixin for virtual hardware. Expects `self.ecosystem: Ecosystem`."""
-    __slots__ = ()
 
     if t.TYPE_CHECKING:
         ecosystem: Ecosystem

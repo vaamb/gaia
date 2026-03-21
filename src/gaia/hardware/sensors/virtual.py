@@ -26,16 +26,14 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class virtualSensor(virtualHardware, BaseSensor):
-    __slots__ = ()
+    pass
 
 
 class virtualDHT(DHTSensor, virtualSensor):
-    __slots__ = ()
+    pass
 
 
 class virtualDHT11(virtualDHT):
-    __slots__ = ()
-
     def _get_device(self) -> VirtualDHT11Device:
         from gaia.hardware.sensors._devices.virtual import VirtualDHT11Device
 
@@ -43,8 +41,6 @@ class virtualDHT11(virtualDHT):
 
 
 class virtualDHT22(virtualDHT):
-    __slots__ = ()
-
     def _get_device(self) -> VirtualDHT22Device:
         from gaia.hardware.sensors._devices.virtual import VirtualDHT22Device
 
@@ -52,8 +48,6 @@ class virtualDHT22(virtualDHT):
 
 
 class virtualAHT20(AHT20, virtualSensor):
-    __slots__ = ()
-
     def _get_device(self) -> VirtualAHTx0Device:
         from gaia.hardware.sensors._devices.virtual import VirtualAHTx0Device
 
@@ -61,8 +55,6 @@ class virtualAHT20(AHT20, virtualSensor):
 
 
 class virtualVCNL4040(VCNL4040, virtualSensor):
-    __slots__ = ()
-
     def _get_device(self) -> VirtualVCNL4040Device:
         from gaia.hardware.sensors._devices.virtual import VirtualVCNL4040Device
 
@@ -70,8 +62,6 @@ class virtualVCNL4040(VCNL4040, virtualSensor):
 
 
 class virtualVEML7700(VEML7700, virtualSensor):
-    __slots__ = ()
-
     def _get_device(self) -> VirtualVEML7700Device:
         from gaia.hardware.sensors._devices.virtual import VirtualVEML7700Device
 
@@ -79,8 +69,6 @@ class virtualVEML7700(VEML7700, virtualSensor):
 
 
 class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
-    __slots__ = ()
-
     def _get_device(self) -> VirtualSeesawDevice:
         from gaia.hardware.sensors._devices.virtual import VirtualSeesawDevice
 
@@ -88,8 +76,6 @@ class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
 
 
 class virtualENS160(ENS160, virtualSensor):
-    __slots__ = ()
-
     def _get_device(self) -> ENS160Device:
         # TODO: design and use a virtual ENS160Device
         from gaia.hardware.sensors._devices._compatibility import ENS160Device

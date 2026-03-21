@@ -5,8 +5,6 @@ from gaia.hardware.virtual import virtualHardware
 
 
 class virtualActuator(virtualHardware, Actuator):
-    __slots__ = ()
-
     async def _on_initialize(self) -> None:
         # Registration must be done before other registrations that might
         #  interact with the virtual ecosystem
@@ -19,8 +17,6 @@ class virtualActuator(virtualHardware, Actuator):
 
 
 class virtualSwitch(virtualActuator, Switch):
-    __slots__ = ()
-
     async def turn_on(self) -> bool:
         self.virtual_ecosystem.set_actuator_status(self.uid, True)
         return True
@@ -42,8 +38,6 @@ class virtualWebSocketSwitch(virtualSwitch, WebSocketSwitch):
 
 
 class virtualDimmer(virtualActuator, Dimmer):
-    __slots__ = ()
-
     async def set_pwm_level(self, level: float | int) -> bool:
         self.virtual_ecosystem.set_actuator_level(self.uid, level)
         return True
