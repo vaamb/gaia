@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from anyio.to_thread import run_sync
 
-from gaia.hardware.abc import SensorMixin, Measure, SensorRead, Unit
+from gaia.hardware.abc import Measure, SensorMixin, SensorRead, Unit
 from gaia.utils import (
     get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 

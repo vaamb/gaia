@@ -1,10 +1,11 @@
 from typing import Type
 
 from gaia.exceptions import DeviceError
-from gaia.hardware.abc import ActuatorMixin, DimmerMixin, Hardware, SwitchMixin, WebSocketAddressMixin
+from gaia.hardware.abc import (
+    Actuator, DimmerMixin, SwitchMixin, WebSocketAddressMixin)
 
 
-class WebSocketSwitch(WebSocketAddressMixin, SwitchMixin, Hardware):
+class WebSocketSwitch(WebSocketAddressMixin, SwitchMixin, Actuator):
     async def turn_on(self) -> bool:
         try:
             return await self._execute_action(
@@ -33,7 +34,7 @@ class WebSocketSwitch(WebSocketAddressMixin, SwitchMixin, Hardware):
             # TODO: find a better way to handle error
             return False
 
-class WebSocketDimmer(WebSocketAddressMixin, DimmerMixin, Hardware):
+class WebSocketDimmer(WebSocketAddressMixin, DimmerMixin, Actuator):
     async def set_pwm_level(self, level) -> bool:
         try:
             return await self._execute_action(
@@ -54,7 +55,7 @@ class WebSocketDimmer(WebSocketAddressMixin, DimmerMixin, Hardware):
             return 100.0
 
 
-websocket_actuator_models: dict[str, Type[ActuatorMixin]] = {
+websocket_actuator_models: dict[str, Type[Actuator]] = {
     hardware.__name__: hardware
     for hardware in [
         WebSocketDimmer,

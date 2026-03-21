@@ -1,10 +1,17 @@
-from gaia.hardware.abc import ActuatorMixin, DimmerMixin, SwitchMixin
+import typing as t
+
+from gaia.hardware.abc import (
+    Actuator, ActuatorMixin, DimmableSwitchMixin, DimmerMixin, SwitchMixin)
 from gaia.hardware.actuators.GPIO import gpioDimmable, gpioDimmer, gpioSwitch
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
-from gaia.hardware.virtual import virtualHardware
+from gaia.hardware.virtual import virtualHardwareMixin
 
 
-class virtualActuator(virtualHardware, ActuatorMixin):
+class virtualActuator(virtualHardwareMixin, ActuatorMixin):
+    if t.TYPE_CHECKING:
+        uid: str
+        groups: set[str]
+
     async def _on_initialize(self) -> None:
         # Registration must be done before other registrations that might
         #  interact with the virtual ecosystem
@@ -58,11 +65,11 @@ class virtualDimmable(virtualSwitch, virtualDimmer):
     pass
 
 
-class virtualgpioDimmable(virtualDimmer, gpioDimmable):
+class virtualgpioDimmable(virtualDimmer, gpioDimmable, DimmableSwitchMixin):
     pass
 
 
-virtual_actuator_models: dict[str, type[ActuatorMixin]] = {
+virtual_actuator_models: dict[str, type[Actuator]] = {
     hardware.__name__: hardware
     for hardware in [
         virtualgpioDimmable,

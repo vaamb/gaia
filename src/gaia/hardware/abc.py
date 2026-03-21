@@ -1002,7 +1002,7 @@ class DimmerMixin(ActuatorMixin):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class DimmableSwitch(DimmerMixin, SwitchMixin):
+class DimmableSwitchMixin(DimmerMixin, SwitchMixin):
     """Mixin for switch and dimmer actuators."""
 
 
@@ -1157,13 +1157,15 @@ class PlantLevelMixin:
 
 
 # ---------------------------------------------------------------------------
-#   Composition subclasses
+#   "Half-concrete" classes
 # ---------------------------------------------------------------------------
-class gpioSensor(gpioAddressMixin, SensorMixin):
-    async def get_data(self) -> list[SensorRead]:
-        raise NotImplementedError("This method must be implemented in a subclass")
+class Actuator(ActuatorMixin, Hardware):
+    """Base `half-concrete` class for actuator."""
 
 
-class i2cSensor(i2cAddressMixin, SensorMixin):
-    async def get_data(self) -> list[SensorRead]:
-        raise NotImplementedError("This method must be implemented in a subclass")
+class Sensor(SensorMixin, Hardware):
+    """Base `half-concrete` class for sensor."""
+
+
+class Camera(CameraMixin, Hardware):
+    """Base `half-concrete` class for camera."""

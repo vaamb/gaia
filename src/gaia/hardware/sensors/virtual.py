@@ -8,7 +8,7 @@ from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, ENS160, VCNL4040, VEML7700)
 from gaia.hardware.sensors.websocket import WebSocketSensor
-from gaia.hardware.virtual import virtualHardware
+from gaia.hardware.virtual import virtualHardwareMixin
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -25,7 +25,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     )
 
 
-class virtualSensor(virtualHardware, SensorMixin):
+class virtualSensor(virtualHardwareMixin, SensorMixin):
     pass
 
 
