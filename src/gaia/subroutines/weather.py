@@ -7,12 +7,12 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler, Timer
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import ActuatorMixin
+from gaia.hardware.abc import Actuator
 from gaia.subroutines.template import SubroutineTemplate
 
 
-class Weather(SubroutineTemplate[ActuatorMixin]):
-    _hardware_choices: dict[str, Type[ActuatorMixin]] = actuator_models
+class Weather(SubroutineTemplate[Actuator]):
+    _hardware_choices: dict[str, Type[Actuator]] = actuator_models
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

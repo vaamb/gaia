@@ -13,7 +13,7 @@ import gaia_validators as gv
 from gaia.actuator_handler import HystericalPID
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import ActuatorMixin, DimmerMixin, LightSensorMixin
+from gaia.hardware.abc import Actuator, DimmerMixin, LightSensorMixin
 from gaia.subroutines.template import SubroutineTemplate
 from gaia.utils import is_time_between
 
@@ -30,8 +30,8 @@ DEFAULT_CLIMATE_CFG = gv.ClimateConfig(**{  # ty: ignore[invalid-argument-type]
 })
 
 
-class Light(SubroutineTemplate[ActuatorMixin]):
-    _hardware_choices: dict[str, Type[ActuatorMixin]] = actuator_models
+class Light(SubroutineTemplate[Actuator]):
+    _hardware_choices: dict[str, Type[Actuator]] = actuator_models
 
     def __init__(self, *args, **kwargs) -> None:
         # Parent template

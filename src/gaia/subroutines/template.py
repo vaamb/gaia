@@ -6,7 +6,7 @@ import typing as t
 from time import monotonic
 from typing import cast, Any, Generic, Type, TypeVar
 
-from gaia.hardware.abc import HardwareTypeMixin
+from gaia.hardware.abc import Actuator, Camera, Sensor
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -14,7 +14,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.ecosystem import Ecosystem
 
 
-HardwareT = TypeVar("HardwareT", bound=HardwareTypeMixin)
+HardwareT = TypeVar("HardwareT", bound=Actuator | Camera | Sensor)
 
 
 class SubroutineTemplate(ABC, Generic[HardwareT]):

@@ -14,7 +14,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import gaia_validators as gv
 
 from gaia.hardware import sensor_models
-from gaia.hardware.abc import SensorMixin, SensorRead
+from gaia.hardware.abc import Sensor, SensorRead
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -27,8 +27,8 @@ class _SensorFuture(Task):
     hardware_uid: str
 
 
-class Sensors(SubroutineTemplate[SensorMixin]):
-    _hardware_choices: dict[str, Type[SensorMixin]] = sensor_models
+class Sensors(SubroutineTemplate[Sensor]):
+    _hardware_choices: dict[str, Type[Sensor]] = sensor_models
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

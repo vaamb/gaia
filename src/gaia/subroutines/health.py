@@ -15,7 +15,7 @@ import gaia_validators as gv
 
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.hardware import camera_models
-from gaia.hardware.abc import CameraMixin, Measure
+from gaia.hardware.abc import Camera, Measure
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -37,8 +37,8 @@ class _PartialHealthRecord(TypedDict):
     value: float
 
 
-class Health(SubroutineTemplate[CameraMixin]):
-    _hardware_choices: dict[str, Type[CameraMixin]] = camera_models
+class Health(SubroutineTemplate[Camera]):
+    _hardware_choices: dict[str, Type[Camera]] = camera_models
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
