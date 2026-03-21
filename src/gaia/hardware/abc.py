@@ -125,8 +125,6 @@ class Address(ABC):
         multiplexer_address: The address of the multiplexer if used.
         multiplexer_channel: The channel number on the multiplexer if used.
     """
-    __slots__ = ("main", "multiplexer_address", "multiplexer_channel")
-
     main: int | str | None
     multiplexer_address: int | None
     multiplexer_channel: int | None
@@ -388,23 +386,6 @@ class Hardware(metaclass=_MetaHardware):
     automatically generate a unique uid, properly format info and save it in
     ecosystems.cfg
     """
-    __slots__ = (
-        "__weakref__",
-        "_active",
-        "_address",
-        "_ecosystem",
-        "_groups",
-        "_level",
-        "_logger",
-        "_measures",
-        "_model",
-        "_multiplexer",
-        "_name",
-        "_plants",
-        "_type",
-        "_uid",
-    )
-
     @classmethod
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
@@ -657,7 +638,6 @@ class Hardware(metaclass=_MetaHardware):
 class HardwareAddressMixin:
     """Marker base for hardware address-protocol mixins.
     """
-    __slots__ = ()
 
 
 class gpioAddressMixin(HardwareAddressMixin):
@@ -708,7 +688,6 @@ class gpioAddressMixin(HardwareAddressMixin):
 
 class i2cAddressMixin(HardwareAddressMixin):
     """Protocol mixin for I2C-addressed hardware. Expects `self.address: I2CAddress`."""
-    __slots__ = ()
 
     default_address: ClassVar[int | None] = None
 
@@ -745,7 +724,6 @@ class i2cAddressMixin(HardwareAddressMixin):
 
 class OneWireAddressMixin(HardwareAddressMixin):
     """Protocol mixin for 1-Wire-addressed hardware. Expects `self.address: OneWireAddress`."""
-    __slots__ = ()
 
     if t.TYPE_CHECKING:
         address: OneWireAddress
@@ -785,7 +763,6 @@ class OneWireAddressMixin(HardwareAddressMixin):
 
 class PiCameraAddressMixin(HardwareAddressMixin):
     """Protocol mixin for PiCamera hardware."""
-    __slots__ = ()
 
     if t.TYPE_CHECKING:
         address: PiCameraAddress
@@ -951,8 +928,6 @@ class WebSocketAddressMixin(HardwareAddressMixin):
 #   Subclasses based on hardware type/function
 # ---------------------------------------------------------------------------
 class Actuator(Hardware):
-    __slots__ = ()
-
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self.type not in gv.HardwareType.actuator:
@@ -960,8 +935,6 @@ class Actuator(Hardware):
 
 
 class Switch(Actuator):
-    __slots__ = ()
-
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.turn_off()
@@ -991,8 +964,6 @@ class Switch(Actuator):
 
 
 class Dimmer(Actuator):
-    __slots__ = ()
-
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.set_pwm_level(0)
@@ -1017,12 +988,10 @@ class Dimmer(Actuator):
 
 
 class DimmableSwitch(Dimmer, Switch):
-    __slots__ = ()
+    pass
 
 
 class BaseSensor(Hardware):
-    __slots__ = ("_device",)
-
     measures_available: ClassVar[dict[Measure, Unit | None] | EllipsisType | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -1090,8 +1059,6 @@ class BaseSensor(Hardware):
 
 
 class LightSensor(BaseSensor):
-    __slots__ = ()
-
     async def get_lux(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
@@ -1100,8 +1067,6 @@ class LightSensor(BaseSensor):
 
 
 class Camera(Hardware):
-    __slots__ = ("_device", "_camera_dir")
-
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies()
         super().__init__(*args, **kwargs)
@@ -1161,8 +1126,6 @@ class Camera(Hardware):
 #   Other simple subclasses
 # ---------------------------------------------------------------------------
 class PlantLevelMixin:
-    __slots__ = ()
-
     if t.TYPE_CHECKING:
         plants: list[str]
 
@@ -1180,14 +1143,10 @@ class PlantLevelMixin:
 #   Composition subclasses
 # ---------------------------------------------------------------------------
 class gpioSensor(gpioAddressMixin, BaseSensor):
-    __slots__ = ()
-
     async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class i2cSensor(i2cAddressMixin, BaseSensor):
-    __slots__ = ()
-
     async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")

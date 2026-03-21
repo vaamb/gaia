@@ -17,7 +17,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 #   GPIO sensors
 # ---------------------------------------------------------------------------
 class DHTSensor(TempHumSensor, gpioSensor):
-    __slots__ = ()
     # Rem: don't use pulseio as it uses 100% of one core in Pi3
     # In Pi0: behaves correctly
 
@@ -46,8 +45,6 @@ class DHTSensor(TempHumSensor, gpioSensor):
 
 
 class DHT11(DHTSensor):
-    __slots__ = ()
-
     def _get_device(self) -> DHT11Device:
         if is_raspi():  # pragma: no cover
             try:
@@ -64,8 +61,6 @@ class DHT11(DHTSensor):
 
 
 class DHT22(DHTSensor):
-    __slots__ = ()
-
     def _get_device(self) -> DHT22Device:
         if is_raspi():  # pragma: no cover
             try:

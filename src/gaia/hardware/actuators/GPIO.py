@@ -14,8 +14,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class gpioSwitch(gpioAddressMixin, Switch):
-    __slots__ = ()
-
     def _init_pin(self) -> None:
         self.pin.init(mode=self.OUT)
 
@@ -45,8 +43,6 @@ class gpioSwitch(gpioAddressMixin, Switch):
 
 
 class gpioDimmer(gpioAddressMixin, Dimmer):
-    __slots__ = ("_dimmer",)
-
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._dimmer: pwmio.PWMOut | None = None
@@ -89,7 +85,7 @@ class gpioDimmer(gpioAddressMixin, Dimmer):
 
 
 class gpioDimmable(gpioSwitch, gpioDimmer):
-    __slots__ = ()
+    pass
 
 
 gpio_actuator_models: dict[str, type[Actuator]] = {

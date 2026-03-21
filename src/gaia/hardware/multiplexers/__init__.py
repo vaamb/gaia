@@ -29,8 +29,6 @@ class _MetaMultiplexer(type):
 
 
 class Multiplexer(metaclass=_MetaMultiplexer):
-    __slots__ = ("_address", "_i2c", "device")
-
     def __init__(self, i2c_address: int, i2c: None | busio.I2C = None) -> None:
         if i2c is None:
             self._i2c = get_i2c()

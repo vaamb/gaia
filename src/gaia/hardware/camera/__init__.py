@@ -17,8 +17,6 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 
 class PiCamera(PiCameraAddressMixin, Camera):
-    __slots__ = ()
-
     def __del__(self) -> None:
         if hasattr(self, "_device") and self._device is not None:
             self._device.close()
