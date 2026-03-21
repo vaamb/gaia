@@ -401,6 +401,15 @@ class Hardware(metaclass=_MetaHardware):
                 f"subclass in its MRO, found {len(address_mixins)}: "
                 f"{[b.__name__ for b in address_mixins]}"
             )
+        type_mixins = {
+            base for base in cls.__mro__
+            if HardwareTypeMixin in getattr(base, "__bases__", ())
+        }
+        if len(type_mixins) < 1:
+            raise TypeError(
+                f"{cls.__name__} must include at least one HardwareTypeMixin "
+                f"subclass in its MRO, found none."
+            )
 
     def __init__(
             self,
@@ -636,8 +645,7 @@ class Hardware(metaclass=_MetaHardware):
 #   Mixins for each address type
 # ---------------------------------------------------------------------------
 class HardwareAddressMixin:
-    """Marker base for hardware address-protocol mixins.
-    """
+    """Marker base for hardware address-protocol mixins."""
 
 
 class gpioAddressMixin(HardwareAddressMixin):
@@ -925,16 +933,22 @@ class WebSocketAddressMixin(HardwareAddressMixin):
 
 
 # ---------------------------------------------------------------------------
-#   Subclasses based on hardware type/function
+#   Mixin for each hardware type
 # ---------------------------------------------------------------------------
-class Actuator(Hardware):
+class HardwareTypeMixin:
+    """Marker base for hardware type mixins (Actuator, Sensor, Camera)."""
+
+
+class ActuatorMixin(HardwareTypeMixin):
+    """Base mixin for actuator-type hardware."""
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self.type not in gv.HardwareType.actuator:
             raise ValueError("Type should be in `HardwareType.actuator`")
 
 
-class Switch(Actuator):
+class SwitchMixin(ActuatorMixin):
+    """Mixin for switch actuators."""
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.turn_off()
@@ -963,7 +977,8 @@ class Switch(Actuator):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class Dimmer(Actuator):
+class DimmerMixin(ActuatorMixin):
+    """Mixin for dimmer actuators."""
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.set_pwm_level(0)
@@ -987,11 +1002,13 @@ class Dimmer(Actuator):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class DimmableSwitch(Dimmer, Switch):
-    pass
+class DimmableSwitch(DimmerMixin, SwitchMixin):
+    """Mixin for switch and dimmer actuators."""
 
 
-class BaseSensor(Hardware):
+class SensorMixin(HardwareTypeMixin):
+    """Mixin for sensor-type hardware."""
+
     measures_available: ClassVar[dict[Measure, Unit | None] | EllipsisType | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -1058,7 +1075,8 @@ class BaseSensor(Hardware):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class LightSensor(BaseSensor):
+class LightSensorMixin(SensorMixin):
+    """Mixin for light sensor."""
     async def get_lux(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
@@ -1066,7 +1084,8 @@ class LightSensor(BaseSensor):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class Camera(Hardware):
+class CameraMixin(HardwareTypeMixin):
+    """Mixin for camera-type hardware."""
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies()
         super().__init__(*args, **kwargs)
@@ -1121,7 +1140,7 @@ class Camera(Hardware):
 
 
 # ---------------------------------------------------------------------------
-#   Other simple subclasses
+#   Other simple mixins
 # ---------------------------------------------------------------------------
 class PlantLevelMixin:
     if t.TYPE_CHECKING:
@@ -1140,11 +1159,11 @@ class PlantLevelMixin:
 # ---------------------------------------------------------------------------
 #   Composition subclasses
 # ---------------------------------------------------------------------------
-class gpioSensor(gpioAddressMixin, BaseSensor):
+class gpioSensor(gpioAddressMixin, SensorMixin):
     async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class i2cSensor(i2cAddressMixin, BaseSensor):
+class i2cSensor(i2cAddressMixin, SensorMixin):
     async def get_data(self) -> list[SensorRead]:
         raise NotImplementedError("This method must be implemented in a subclass")

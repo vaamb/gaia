@@ -2,7 +2,7 @@ from typing import Type
 
 from pydantic import RootModel, ValidationError
 
-from gaia.hardware.abc import BaseSensor, SensorRead, WebSocketAddressMixin
+from gaia.hardware.abc import Hardware, SensorMixin, SensorRead, WebSocketAddressMixin
 
 from websockets import ConnectionClosed
 
@@ -10,7 +10,7 @@ from websockets import ConnectionClosed
 SensorsReads = RootModel[list[SensorRead]]
 
 
-class WebSocketSensor(WebSocketAddressMixin, BaseSensor):
+class WebSocketSensor(WebSocketAddressMixin, SensorMixin, Hardware):
     measures_available = ...
 
     async def get_data(self) -> list[SensorRead]:
@@ -29,7 +29,7 @@ class WebSocketSensor(WebSocketAddressMixin, BaseSensor):
             return data
 
 
-websocket_sensor_models: dict[str, Type[BaseSensor]] = {
+websocket_sensor_models: dict[str, Type[SensorMixin]] = {
     hardware.__name__: hardware
     for hardware in [
         WebSocketSensor,

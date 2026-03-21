@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import BaseSensor
+from gaia.hardware.abc import SensorMixin
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, ENS160, VCNL4040, VEML7700)
@@ -25,7 +25,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     )
 
 
-class virtualSensor(virtualHardware, BaseSensor):
+class virtualSensor(virtualHardware, SensorMixin):
     pass
 
 

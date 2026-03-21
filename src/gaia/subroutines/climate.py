@@ -10,7 +10,7 @@ import gaia_validators as gv
 from gaia import config
 from gaia.actuator_handler import HystericalPID
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Actuator
+from gaia.hardware.abc import ActuatorMixin
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -31,8 +31,8 @@ REGULABLE_PARAMETERS: list[gv.ClimateParameter] = [
 ]
 
 
-class Climate(SubroutineTemplate[Actuator]):
-    _hardware_choices: dict[str, Type[Actuator]] = actuator_models
+class Climate(SubroutineTemplate[ActuatorMixin]):
+    _hardware_choices: dict[str, Type[ActuatorMixin]] = actuator_models
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

@@ -7,8 +7,8 @@ from typing import Type
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import (
-    BaseSensor, hardware_logger, i2cSensor, LightSensor, Measure,
-    PlantLevelMixin, SensorRead, Unit)
+    hardware_logger, i2cAddressMixin, Hardware, LightSensorMixin, Measure,
+    PlantLevelMixin, SensorMixin, SensorRead, Unit)
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
@@ -27,7 +27,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   I2C sensors
 # ---------------------------------------------------------------------------
-class AHT20(TempHumSensor, i2cSensor):
+class AHT20(i2cAddressMixin, TempHumSensor, Hardware):
     default_address = 0x38
 
     def _get_device(self) -> AHTx0Device:
@@ -54,7 +54,7 @@ class AHT20(TempHumSensor, i2cSensor):
         return humidity, temperature
 
 
-class ENS160(i2cSensor):
+class ENS160(i2cAddressMixin, SensorMixin, Hardware):
     default_address = 0x53
     measures_available = {
         Measure.aqi: None,
@@ -136,7 +136,7 @@ class ENS160(i2cSensor):
         return data
 
 
-class VEML7700(i2cSensor, LightSensor):
+class VEML7700(i2cAddressMixin, LightSensorMixin, Hardware):
     default_address = 0x10
     measures_available = {
         Measure.light: Unit.lux,
@@ -183,7 +183,7 @@ class VEML7700(i2cSensor, LightSensor):
         return data
 
 
-class VCNL4040(i2cSensor, LightSensor):
+class VCNL4040(i2cAddressMixin, LightSensorMixin, Hardware):
     default_address = 0x60
     measures_available = {
         Measure.light: Unit.lux,
@@ -230,7 +230,7 @@ class VCNL4040(i2cSensor, LightSensor):
         return data
 
 
-class CapacitiveSensor(i2cSensor):
+class CapacitiveSensor(i2cAddressMixin, SensorMixin, Hardware):
     default_address = 0x36
     measures_available = {
         Measure.capacitive: None,
@@ -310,7 +310,7 @@ class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensor):
         return data
 
 
-i2c_sensor_models: dict[str, Type[BaseSensor]] = {
+i2c_sensor_models: dict[str, Type[SensorMixin]] = {
     hardware.__name__: hardware
     for hardware in [
         AHT20,

@@ -1,10 +1,10 @@
-from gaia.hardware.abc import Actuator, Dimmer, Switch
+from gaia.hardware.abc import ActuatorMixin, DimmerMixin, SwitchMixin
 from gaia.hardware.actuators.GPIO import gpioDimmable, gpioDimmer, gpioSwitch
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.virtual import virtualHardware
 
 
-class virtualActuator(virtualHardware, Actuator):
+class virtualActuator(virtualHardware, ActuatorMixin):
     async def _on_initialize(self) -> None:
         # Registration must be done before other registrations that might
         #  interact with the virtual ecosystem
@@ -16,7 +16,7 @@ class virtualActuator(virtualHardware, Actuator):
         self.virtual_ecosystem.unregister_actuator(self.uid)
 
 
-class virtualSwitch(virtualActuator, Switch):
+class virtualSwitch(virtualActuator, SwitchMixin):
     async def turn_on(self) -> bool:
         self.virtual_ecosystem.set_actuator_status(self.uid, True)
         return True
@@ -37,7 +37,7 @@ class virtualWebSocketSwitch(virtualSwitch, WebSocketSwitch):
     pass
 
 
-class virtualDimmer(virtualActuator, Dimmer):
+class virtualDimmer(virtualActuator, DimmerMixin):
     async def set_pwm_level(self, level: float | int) -> bool:
         self.virtual_ecosystem.set_actuator_level(self.uid, level)
         return True
@@ -62,7 +62,7 @@ class virtualgpioDimmable(virtualDimmer, gpioDimmable):
     pass
 
 
-virtual_actuator_models: dict[str, type[Actuator]] = {
+virtual_actuator_models: dict[str, type[ActuatorMixin]] = {
     hardware.__name__: hardware
     for hardware in [
         virtualgpioDimmable,
