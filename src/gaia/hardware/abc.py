@@ -1073,8 +1073,6 @@ class Camera(Hardware):
         self._device: Any | None = None
         self._camera_dir: Path | None = None
 
-
-
     @property
     def device(self) -> Any:
         if self._device is None:
