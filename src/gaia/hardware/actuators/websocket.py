@@ -5,7 +5,11 @@ from gaia.hardware.abc import (
     Actuator, DimmerMixin, SwitchMixin, WebSocketAddressMixin)
 
 
-class WebSocketSwitch(WebSocketAddressMixin, SwitchMixin, Actuator):
+class WebSocketActuator(WebSocketAddressMixin, Actuator):
+    ...
+
+
+class WebSocketSwitch(SwitchMixin, WebSocketActuator):
     async def turn_on(self) -> bool:
         try:
             return await self._execute_action(
@@ -34,7 +38,8 @@ class WebSocketSwitch(WebSocketAddressMixin, SwitchMixin, Actuator):
             # TODO: find a better way to handle error
             return False
 
-class WebSocketDimmer(WebSocketAddressMixin, DimmerMixin, Actuator):
+
+class WebSocketDimmer(DimmerMixin, WebSocketActuator):
     async def set_pwm_level(self, level) -> bool:
         try:
             return await self._execute_action(
@@ -55,7 +60,7 @@ class WebSocketDimmer(WebSocketAddressMixin, DimmerMixin, Actuator):
             return 100.0
 
 
-websocket_actuator_models: dict[str, Type[Actuator]] = {
+websocket_actuator_models: dict[str, Type[WebSocketActuator]] = {
     hardware.__name__: hardware
     for hardware in [
         WebSocketDimmer,

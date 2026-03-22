@@ -13,7 +13,11 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.hardware._compatibility import pwmio
 
 
-class gpioSwitch(gpioAddressMixin, SwitchMixin, Actuator):
+class gpioActuator(gpioAddressMixin, Actuator):
+    ...
+
+
+class gpioSwitch(SwitchMixin, gpioActuator):
     def _init_pin(self) -> None:
         self.pin.init(mode=self.OUT)
 
@@ -42,7 +46,7 @@ class gpioSwitch(gpioAddressMixin, SwitchMixin, Actuator):
         return self.pin.value() == 1
 
 
-class gpioDimmer(gpioAddressMixin, DimmerMixin, Actuator):
+class gpioDimmer(DimmerMixin, gpioActuator):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._dimmer: pwmio.PWMOut | None = None
@@ -88,7 +92,7 @@ class gpioDimmable(gpioSwitch, gpioDimmer):
     pass
 
 
-gpio_actuator_models: dict[str, type[Actuator]] = {
+gpio_actuator_models: dict[str, type[gpioActuator]] = {
     hardware.__name__: hardware
     for hardware in [
         gpioDimmable,
