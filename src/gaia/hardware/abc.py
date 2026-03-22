@@ -14,6 +14,7 @@ from types import EllipsisType
 import typing as t
 from typing import Any, Awaitable, Callable, ClassVar, NamedTuple, Self, Type
 from uuid import UUID, uuid4
+import warnings
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -23,6 +24,7 @@ from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
+from gaia.config import GaiaConfigHelper
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.exceptions import DeviceError, HardwareNotFound
 from gaia.hardware._websocket import WebSocketHardwareManager
@@ -33,8 +35,6 @@ from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from websockets import ServerConnection
-
-    from gaia import Ecosystem
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -412,7 +412,7 @@ class Hardware(metaclass=_MetaHardware):
 
     def __init__(
             self,
-            ecosystem: Ecosystem,
+            ecosystem_uid: str,
             uid: str,
             name: str,
             address: str,
@@ -427,7 +427,7 @@ class Hardware(metaclass=_MetaHardware):
             multiplexer_model: str | None = None,
     ) -> None:
         self._logger: Logger = getLogger(f"gaia.hardware.{uid}")
-        self._ecosystem: Ecosystem = ecosystem
+        self._ecosystem_uid: str = ecosystem_uid
         self._uid: str = uid
         self._name: str = name
         self._active: bool = active
@@ -462,11 +462,11 @@ class Hardware(metaclass=_MetaHardware):
     def from_config(
             cls,
             hardware_config: gv.HardwareConfig,
-            ecosystem: Ecosystem,
+            ecosystem_uid: str,
     ) -> Self:
         # Should only be used directly for validation
         return cls(
-            ecosystem=ecosystem,
+            ecosystem_uid=ecosystem_uid,
             uid=hardware_config.uid,
             name=hardware_config.name,
             active=hardware_config.active,
@@ -492,14 +492,14 @@ class Hardware(metaclass=_MetaHardware):
     async def initialize(
             cls,
             hardware_cfg: gv.HardwareConfig,
-            ecosystem: Ecosystem,
+            ecosystem_uid: str,
     ) -> Self:
         if hardware_cfg.uid in _MetaHardware.instances:
             raise RuntimeError(f"Hardware {hardware_cfg.uid} already exists.")
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
-        hardware = hardware_cls.from_config(hardware_cfg, ecosystem)
+        hardware = hardware_cls.from_config(hardware_cfg, ecosystem_uid)
         # Perform subclass-specific initialization routine
         await hardware._on_initialize()
         # Valid ignore: hardware_cls is a subclass of cls, so `_unsafe_from_config`
@@ -543,12 +543,8 @@ class Hardware(metaclass=_MetaHardware):
         _MetaHardware.instances.pop(uid)
 
     @property
-    def ecosystem(self) -> Ecosystem:
-        return self._ecosystem
-
-    @property
     def ecosystem_uid(self) -> str | None:
-        return self.ecosystem.uid
+        return self._ecosystem_uid
 
     @property
     def uid(self) -> str:
@@ -643,17 +639,20 @@ class HardwareTypeHint(ABC):
     """Type-hint only class"""
     if t.TYPE_CHECKING:
         # Attributes
-        ecosystem: Ecosystem
+        ecosystem_uid: str
         uid: str
         name: str
         active: bool
+        address: Address
+        address_repr: str
+        model: str
         level: gv.HardwareLevel
         type: gv.HardwareType
         groups: set[str]
-        model: str
-        address: Address
-        multiplexer: Multiplexer | None
         measures: dict[Measure, Unit | None]
+        plants: set[str]
+        multiplexer: Multiplexer | None
+        multiplexer_model: str | None
 
         _logger: Logger
 
@@ -813,7 +812,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if WebSocketAddressMixin._websocket_manager is None:
-            manager = WebSocketHardwareManager(self.ecosystem.engine.config)
+            manager = WebSocketHardwareManager()
             WebSocketAddressMixin._websocket_manager = manager
         self._websocket_manager = WebSocketAddressMixin._websocket_manager
         self._requests: dict[UUID, Future] = {}
@@ -947,6 +946,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
                 and self.websocket_manager.registered_hardware == 0
         ):
             await self.websocket_manager.stop()
+            WebSocketAddressMixin._websocket_manager = None
 
 
 # ---------------------------------------------------------------------------
@@ -1123,8 +1123,14 @@ class CameraMixin(HardwareTypeMixin):
     @property
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
-            base_dir = self.ecosystem.engine.config.gaia_dir
-            self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
+            if not GaiaConfigHelper.config_is_set():
+                warnings.warn(
+                    "Accessing `CameraMixin.camera_dir` without a config set will "
+                    "materialize Gaia's whole app configuration.")
+
+            app_config = GaiaConfigHelper().get_config()
+            base_dir = app_config.get_path("DIR")
+            self._camera_dir = base_dir / f"camera/{self.ecosystem_uid}"
             if not self._camera_dir.exists():
                 self._camera_dir.mkdir(parents=True)
         return self._camera_dir

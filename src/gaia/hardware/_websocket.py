@@ -1,32 +1,43 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import create_task, Event, sleep, Task
+from asyncio import create_task, Event, Task
 from logging import getLogger, Logger
-import typing as t
+import warnings
 
 from websockets import basic_auth, serve, ServerConnection
 from websockets.exceptions import ConnectionClosed
 
-
-if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia import EngineConfig
+from gaia.config import GaiaConfigHelper
 
 
 class WebSocketHardwareManager:
-    def __init__(self, engine_config: EngineConfig):
+    def __init__(self):
         self.logger: Logger = getLogger("gaia.hardware.websocket")
-        self._engine_config = engine_config
-        self._port = engine_config.app_config.HARDWARE_WEBSOCKET_PORT
-        password = engine_config.app_config.HARDWARE_WEBSOCKET_PASSWORD
-        if password == "gaia" and engine_config.app_config.PRODUCTION:
-            raise ValueError("Production build should not use `gaia` as a password")
+        port, password = self.get_port_and_password()
+        self._port: int = port
         self._password: str = password
         self._registered_hardware: dict[str, str | None] = {}
         self.device_connections: dict[str, ServerConnection] = {}
         self._running_task: Task | None = None
         self._started_event: Event = Event()
         self._stop_event: Event = Event()
+
+    @classmethod
+    def get_port_and_password(cls) -> tuple[int, str]:
+        if not GaiaConfigHelper.config_is_set():
+            warnings.warn(
+                "Instantiating `WebSocketHardwareManager` without a config set "
+                "will materialize Gaia's whole app configuration.")
+
+        app_config = GaiaConfigHelper.get_config()
+
+        port = app_config.HARDWARE_WEBSOCKET_PORT
+        password = app_config.HARDWARE_WEBSOCKET_PASSWORD
+        if password == "gaia" and app_config.PRODUCTION:
+            raise ValueError("Production build should not use `gaia` as a password")
+
+        return port, password
 
     @property
     def is_running(self) -> bool:

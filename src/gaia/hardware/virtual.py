@@ -3,11 +3,8 @@ from __future__ import annotations
 import typing as t
 import warnings
 
+from gaia.hardware.abc import HardwareTypeHint
 from gaia.virtual import VirtualEcosystem
-
-
-if t.TYPE_CHECKING:
-    from gaia import Ecosystem
 
 
 class VirtualDevice:
@@ -22,11 +19,8 @@ class VirtualDevice:
         self.virtual_ecosystem = virtual_ecosystem
 
 
-class virtualHardwareMixin:
+class virtualHardwareMixin(HardwareTypeHint):
     """Protocol mixin for virtual hardware. Expects `self.ecosystem: Ecosystem`."""
-
-    if t.TYPE_CHECKING:
-        ecosystem: Ecosystem
 
     def __init__(self, *args, **kwargs):
         from gaia import GaiaConfigHelper
@@ -45,4 +39,4 @@ class virtualHardwareMixin:
         super().__init__(*args, **kwargs)
 
         # Will raise if no corresponding VirtualEcosystem instance exists
-        self.virtual_ecosystem = VirtualEcosystem.get(self.ecosystem.uid)
+        self.virtual_ecosystem = VirtualEcosystem.get(self.ecosystem_uid)

@@ -51,7 +51,7 @@ class Pictures(SubroutineTemplate[Camera]):
             )
         # Caching
         app_cache_dir = self.ecosystem.engine.config.cache_dir
-        self._cache_dir = app_cache_dir / f"camera/{self.ecosystem.name}"
+        self._cache_dir = app_cache_dir / f"camera/{self.ecosystem.uid}"
         if not self._cache_dir.exists():
             self._cache_dir.mkdir(parents=True)
         # Pictures
