@@ -946,6 +946,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
                 and self.websocket_manager.registered_hardware == 0
         ):
             await self.websocket_manager.stop()
+            WebSocketAddressMixin._websocket_manager = None
 
 
 # ---------------------------------------------------------------------------
