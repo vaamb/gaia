@@ -65,7 +65,7 @@ class virtualDimmable(virtualSwitch, virtualDimmer):
     pass
 
 
-class virtualgpioDimmable(virtualDimmer, gpioDimmable, DimmableSwitchMixin):
+class virtualgpioDimmable(virtualDimmable, gpioDimmable):
     pass
 
 
