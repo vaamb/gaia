@@ -1,7 +1,7 @@
 import typing as t
 
 from gaia.hardware.abc import (
-    Actuator, ActuatorMixin, DimmableSwitchMixin, DimmerMixin, SwitchMixin)
+    Actuator, ActuatorMixin, DimmerMixin, SwitchMixin)
 from gaia.hardware.actuators.GPIO import gpioDimmable, gpioDimmer, gpioSwitch
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.virtual import virtualHardwareMixin
