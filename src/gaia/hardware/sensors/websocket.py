@@ -20,8 +20,7 @@ class WebSocketSensor(WebSocketAddressMixin, Sensor):
             self._logger.error(f"Could not connect: {e}")
             return []
         try:
-            data = response["data"]
-            data: list[SensorRead] = SensorsReads.model_validate(data).model_dump()
+            data: list[SensorRead] = SensorsReads.model_validate(response["data"]).root
         except (KeyError, ValidationError):
             self._logger.error(f"Received an invalid response: {response}")
             return []
