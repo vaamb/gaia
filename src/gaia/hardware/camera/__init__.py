@@ -47,10 +47,7 @@ class PiCamera(PiCameraAddressMixin, Camera):
         self.device.configure(camera_config)
         self.device.start()
         # need at least 2 sec sleep for the camera to adapt to light level
-        if (
-            self.ecosystem
-            and not self.ecosystem.engine.config.app_config.TESTING
-        ):
+        if is_raspi():
             sleep(2)
         try:
             for retry in range(3):
