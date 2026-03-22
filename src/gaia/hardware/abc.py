@@ -147,7 +147,7 @@ class Address(ABC):
             addr = Address("I2C_0x10")
 
             # I2C address with multiplexer
-            addr = Address("I2C_0x70#1_0x10")
+            addr = Address("I2C_0x70#1@0x10")
         """
         address_components = address_string.split("_", maxsplit=1)
         address_type = address_components[0].lower()
