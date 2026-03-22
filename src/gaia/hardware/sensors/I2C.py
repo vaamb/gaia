@@ -234,7 +234,7 @@ class VCNL4040(LightSensorMixin, i2cSensor):
         return data
 
 
-class CapacitiveSensor(i2cSensor):
+class CapacitiveSensorMixin(i2cSensor):
     default_address = 0x36
     measures_available = {
         Measure.capacitive: None,
@@ -254,8 +254,7 @@ class CapacitiveSensor(i2cSensor):
         return SeesawDevice(self._get_i2c(), self.address.main)
 
 
-
-class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensor):
+class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensorMixin):
     measures_available = {
         Measure.moisture: Unit.RWC,
         Measure.temperature: Unit.celsius_degree,
