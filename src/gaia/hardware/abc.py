@@ -644,16 +644,20 @@ class HardwareTypeHint(ABC):
     if t.TYPE_CHECKING:
         # Attributes
         ecosystem: Ecosystem
+        ecosystem_uid: str
         uid: str
         name: str
         active: bool
+        address: Address
+        address_repr: str
+        model: str
         level: gv.HardwareLevel
         type: gv.HardwareType
         groups: set[str]
-        model: str
-        address: Address
-        multiplexer: Multiplexer | None
         measures: dict[Measure, Unit | None]
+        plants: set[str]
+        multiplexer: Multiplexer | None
+        multiplexer_model: str | None
 
         _logger: Logger
 
