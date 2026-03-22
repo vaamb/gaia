@@ -52,19 +52,21 @@ class PiCamera(PiCameraAddressMixin, Camera):
             and not self.ecosystem.engine.config.app_config.TESTING
         ):
             sleep(2)
-        for retry in range(3):
-            try:
-                now = datetime.now(timezone.utc)
-                array = self.device.capture_array("main")
-                self.device.stop()
-            except Exception as e:
-                hardware_logger.error(
-                    f"Camera {self._name} encountered an error. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
-            else:
-                image = SerializableImage(array, metadata={"timestamp": now})
-                return image
+        try:
+            for retry in range(3):
+                try:
+                    now = datetime.now(timezone.utc)
+                    array = self.device.capture_array("main")
+                except Exception as e:
+                    hardware_logger.error(
+                        f"Camera {self._name} encountered an error. "
+                        f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                    )
+                else:
+                    image = SerializableImage(array, metadata={"timestamp": now})
+                    return image
+        finally:
+            self.device.stop()
         raise RuntimeError("There was an error while taking the picture.")
 
 
