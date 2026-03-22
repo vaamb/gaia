@@ -47,7 +47,7 @@ i2c_sensor_veml7700_info: gv.AnonymousHardwareConfigDict = {
 
 
 i2c_sensor_ens160_uid = "EUvJqfXvbZ4uZa5J"
-ir2c_sensor_ens160_info: gv.AnonymousHardwareConfigDict = {
+i2c_sensor_ens160_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualI2CSensor_ENS160",
     "active": True,
     "address": "I2C_0x70#1@default",
@@ -188,7 +188,7 @@ hardware_info = sensor_info
 IO_dict = {
     sensor_uid: sensor_info,
     i2c_sensor_veml7700_uid: i2c_sensor_veml7700_info,
-    i2c_sensor_ens160_uid: ir2c_sensor_ens160_info,
+    i2c_sensor_ens160_uid: i2c_sensor_ens160_info,
     light_uid: light_info,
     heater_uid: heater_info,
     humidifier_uid: humidifier_info,
