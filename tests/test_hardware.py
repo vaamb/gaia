@@ -1,7 +1,7 @@
 from asyncio import create_task, sleep
 
 import math
-from typing import Type
+from typing import cast, Type
 
 import pytest
 from websockets.asyncio.client import connect
@@ -9,7 +9,7 @@ from websockets.exceptions import ConnectionClosed
 
 import gaia_validators as gv
 
-from gaia import Ecosystem, Engine, EngineConfig
+from gaia import Engine
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
     _MetaHardware, Address, CameraMixin, DimmerMixin, gpioAddressMixin, GPIOAddress,
@@ -21,10 +21,11 @@ from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
+from gaia.virtual import VirtualEcosystem
 
 from .data import (
-     ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid,
-     ws_dimmer_uid, ws_sensor_uid, ws_switch_uid)
+    ecosystem_uid, i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, IO_dict,
+    sensor_uid, ws_dimmer_uid, ws_sensor_uid, ws_switch_uid)
 from .utils import yield_control
 
 
@@ -172,12 +173,12 @@ class TestAddress:
     hardware_models.values(),
     ids=hardware_models.keys(),
 )
-async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosystem):
+async def test_hardware_methods(hardware_cls: Type[Hardware], virtual_ecosystem: VirtualEcosystem):
     # Create required config
     hardware_cfg = _get_hardware_config(hardware_cls)
 
     # Make sure the hardware can be initialized
-    hardware = await Hardware.initialize(gv.HardwareConfig(**hardware_cfg), ecosystem.uid)
+    hardware = await Hardware.initialize(gv.HardwareConfig(**hardware_cfg), ecosystem_uid)
     # Make sure the hardware has the required attributes and methods
     if isinstance(hardware, gpioAddressMixin):
         assert hardware.pin
@@ -204,8 +205,10 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
 
 
 @pytest.mark.asyncio
-async def test_virtual_sensor(ecosystem: Ecosystem):
-    sensor: virtualDHT22 = ecosystem.hardware[sensor_uid]
+async def test_virtual_sensor(virtual_ecosystem: VirtualEcosystem):
+    hardware_cfg = gv.HardwareConfig(**{"uid": sensor_uid, **IO_dict[sensor_uid]})
+    hardware_cfg.model = f"virtual{hardware_cfg.model}"
+    sensor = cast(virtualDHT22, await Hardware.initialize(hardware_cfg, ecosystem_uid))
     measures = sensor.measures
     sensor._measures = {Measure.temperature: Unit.celsius_degree}
 
@@ -216,16 +219,18 @@ async def test_virtual_sensor(ecosystem: Ecosystem):
         for _ in range(5):
             record = await sensor.get_data()
             temperature_sensor = record[0].value
-            ecosystem.virtual_self.measure()
-            temperature_virtual = ecosystem.virtual_self.temperature
+            virtual_ecosystem.measure()
+            temperature_virtual = virtual_ecosystem.temperature
             assert math.isclose(temperature_sensor, temperature_virtual, rel_tol=0.05)
     finally:
         sensor._measures = measures
 
 
-def test_i2c_address_injection(ecosystem: Ecosystem):
+@pytest.mark.asyncio
+async def test_i2c_address_injection(virtual_ecosystem: VirtualEcosystem):
     for hardware_uid in (i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid):
-        hardware = ecosystem.hardware[hardware_uid]
+        hardware_cfg = gv.HardwareConfig(**{"uid": hardware_uid, **IO_dict[hardware_uid]})
+        hardware = await Hardware.initialize(hardware_cfg, ecosystem_uid)
         assert hardware.address.main not in ("default", "def", 0x0)
         assert hardware.address.multiplexer_address != 0x0
 
@@ -239,7 +244,7 @@ class TestWebsocketHardware:
         await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
         return websocket
 
-    async def test_manager(self, engine_config: EngineConfig, logs_content):
+    async def test_manager(self, logs_content):
         manager = WebSocketHardwareManager()
 
         # Make sure the manager start and can handle connections
@@ -267,7 +272,7 @@ class TestWebsocketHardware:
         # And that it can be stopped again
         await manager.stop()
 
-    async def test_manager_errors(self, engine_config: EngineConfig):
+    async def test_manager_errors(self):
         manager = WebSocketHardwareManager()
 
         # Stop before start
@@ -281,7 +286,7 @@ class TestWebsocketHardware:
 
         await manager.stop()
 
-    async def test_unregistered_device_rejected(self, engine_config: EngineConfig, logs_content):
+    async def test_unregistered_device_rejected(self, logs_content):
         manager = WebSocketHardwareManager()
         await manager.start()
 
@@ -297,7 +302,7 @@ class TestWebsocketHardware:
 
         await manager.stop()
 
-    async def test_wrong_ip_device_rejected(self, engine_config: EngineConfig, logs_content):
+    async def test_wrong_ip_device_rejected(self, logs_content):
         fake_uid = "fake_uid_wrong_ip"
         manager = WebSocketHardwareManager()
         await manager.register_hardware(fake_uid, "192.168.1.1")
@@ -315,9 +320,9 @@ class TestWebsocketHardware:
 
         await manager.stop()
 
-    async def test_hardware(self, ecosystem: Ecosystem, logs_content):
-        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
-        # Hardware registration is taken care of by the ecosystem setup
+    async def test_hardware(self, logs_content):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})
+        hardware = cast(WebSocketSwitch, await Hardware.initialize(hardware_cfg, ecosystem_uid))
 
         # Test device connection
         websocket = await self._connect_device(hardware)
@@ -351,12 +356,11 @@ class TestWebsocketHardware:
         with pytest.raises(TimeoutError):
             await hardware._send_msg_and_wait(msg, timeout=0.1)
 
-        # Stop the manager as otherwise the test can hang forever
-        await hardware._websocket_manager.stop()
-        # Hardware unregistration is taken care of by the ecosystem teardown
+        await hardware.terminate()
 
-    async def test_hardware_connected_property(self, ecosystem: Ecosystem):
-        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
+    async def test_hardware_connected_property(self):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})
+        hardware = cast(WebSocketSwitch, await Hardware.initialize(hardware_cfg, ecosystem_uid))
 
         assert not hardware.connected
 
@@ -367,13 +371,11 @@ class TestWebsocketHardware:
         await yield_control()
         assert not hardware.connected
 
-        # Stop the manager as otherwise the test can hang forever
-        await hardware._websocket_manager.stop()
-        # Hardware unregistration is taken care of by the ecosystem teardown
+        await hardware.terminate()
 
-    async def test_switch(self, ecosystem: Ecosystem):
-        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
-        # Hardware registration is taken care of by the ecosystem setup
+    async def test_switch(self):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})
+        hardware = cast(WebSocketSwitch, await Hardware.initialize(hardware_cfg, ecosystem_uid))
 
         # Connect the device
         websocket = await self._connect_device(hardware)
@@ -416,12 +418,11 @@ class TestWebsocketHardware:
         response = await task
         assert response
 
-        # Stop the manager as otherwise the test can hang forever
-        await hardware._websocket_manager.stop()
-        # Hardware unregistration is taken care of by the ecosystem teardown
+        await hardware.terminate()
 
-    async def test_switch_failure(self, ecosystem: Ecosystem):
-        hardware: WebSocketSwitch = ecosystem.hardware[ws_switch_uid]
+    async def test_switch_failure(self):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})
+        hardware = cast(WebSocketSwitch, await Hardware.initialize(hardware_cfg, ecosystem_uid))
 
         websocket = await self._connect_device(hardware)
 
@@ -442,13 +443,11 @@ class TestWebsocketHardware:
         result = await task
         assert result is False
 
-        # Stop the manager as otherwise the test can hang forever
-        await hardware._websocket_manager.stop()
-        # Hardware unregistration is taken care of by the ecosystem teardown
+        await hardware.terminate()
 
-    async def test_dimmer(self, ecosystem: Ecosystem):
-        hardware: WebSocketDimmer = ecosystem.hardware[ws_dimmer_uid]
-        # Hardware registration is taken care of by the ecosystem setup
+    async def test_dimmer(self):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_dimmer_uid, **IO_dict[ws_dimmer_uid]})
+        hardware = cast(WebSocketDimmer, await Hardware.initialize(hardware_cfg, ecosystem_uid))
 
         # Connect the device
         websocket = await self._connect_device(hardware)
@@ -472,12 +471,11 @@ class TestWebsocketHardware:
         response = await task
         assert response
 
-        # Stop the manager as otherwise the test can hang forever
-        await hardware._websocket_manager.stop()
-        # Hardware unregistration is taken care of by the ecosystem teardown
+        await hardware.terminate()
 
-    async def test_dimmer_failure(self, ecosystem: Ecosystem):
-        hardware: WebSocketDimmer = ecosystem.hardware[ws_dimmer_uid]
+    async def test_dimmer_failure(self):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_dimmer_uid, **IO_dict[ws_dimmer_uid]})
+        hardware = cast(WebSocketDimmer, await Hardware.initialize(hardware_cfg, ecosystem_uid))
 
         websocket = await self._connect_device(hardware)
 
@@ -498,11 +496,11 @@ class TestWebsocketHardware:
         result = await task
         assert result is False
 
-        await hardware.websocket_manager.stop()
+        await hardware.terminate()
 
-    async def test_sensor(self, ecosystem: Ecosystem):
-        hardware: WebSocketSensor = ecosystem.hardware[ws_sensor_uid]
-        # Hardware registration is taken care of by the ecosystem setup
+    async def test_sensor(self):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_sensor_uid, **IO_dict[ws_sensor_uid]})
+        hardware = cast(WebSocketSensor, await Hardware.initialize(hardware_cfg, ecosystem_uid))
 
         # Connect the device
         websocket = await self._connect_device(hardware)
@@ -526,9 +524,7 @@ class TestWebsocketHardware:
         response = await task
         assert response == data
 
-        # Stop the manager as otherwise the test can hang forever
-        await hardware._websocket_manager.stop()
-        # Hardware unregistration is taken care of by the ecosystem teardown
+        await hardware.terminate()
 
 
 @pytest.mark.asyncio
