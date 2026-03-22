@@ -233,8 +233,7 @@ class Address(ABC):
             raise InvalidAddressError(f"Invalid address type: {address_type}. {Address._hint()}")
 
     @abstractmethod
-    def __repr__(self) -> str:
-        ...
+    def __repr__(self) -> str: ...
 
     @staticmethod
     def _hint() -> str:
@@ -483,8 +482,7 @@ class Hardware(metaclass=_MetaHardware):
 
     @classmethod
     @abstractmethod
-    def validate_address(cls, address_str: str) -> Address:
-        ...
+    def validate_address(cls, address_str: str) -> Address: ...
 
     async def _on_initialize(self) -> None:
         """Override in subclasses for initialization logic."""
@@ -641,7 +639,7 @@ class Hardware(metaclass=_MetaHardware):
         ).model_dump(exclude_defaults=shorten)
 
 
-class HardwareTypeHint:
+class HardwareTypeHint(ABC):
     """Type-hint only class"""
     if t.TYPE_CHECKING:
         # Attributes
@@ -982,18 +980,14 @@ class SwitchMixin(ActuatorMixin):
             hardware_logger.warning(
                 f"Failed to turn {self.name} ({self.uid}) off")
 
-    async def turn_on(self) -> bool:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
+    @abstractmethod
+    async def turn_on(self) -> bool: ...
 
-    async def turn_off(self) -> bool:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
+    @abstractmethod
+    async def turn_off(self) -> bool: ...
 
-    async def get_status(self) -> bool:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    async def get_status(self) -> bool: ...
 
 
 class DimmerMixin(ActuatorMixin):
@@ -1012,13 +1006,11 @@ class DimmerMixin(ActuatorMixin):
             hardware_logger.warning(
                 f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
 
-    async def set_pwm_level(self, level: float | int) -> bool:
-        raise NotImplementedError(
-            "This method must be implemented in a subclass"
-        )  # pragma: no cover
+    @abstractmethod
+    async def set_pwm_level(self, level: float | int) -> bool: ...
 
-    async def get_pwm_level(self) -> int | float:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    async def get_pwm_level(self) -> int | float: ...
 
 
 class DimmableSwitchMixin(DimmerMixin, SwitchMixin):
@@ -1090,17 +1082,14 @@ class SensorMixin(HardwareTypeMixin):
             for measure in formatted_measures
         }
 
-    async def get_data(self) -> list[SensorRead]:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    async def get_data(self) -> list[SensorRead]: ...
 
 
 class LightSensorMixin(SensorMixin):
     """Mixin for light sensor."""
-    async def get_lux(self) -> float | None:
-        raise NotImplementedError("This method must be implemented in a subclass")
-
-    async def get_data(self) -> list[SensorRead]:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    async def get_lux(self) -> float | None: ...
 
 
 class CameraMixin(HardwareTypeMixin):
@@ -1122,8 +1111,8 @@ class CameraMixin(HardwareTypeMixin):
             "This method must be implemented in a subclass"
         )  # pragma: no cover
 
-    async def get_image(self, size: tuple | None = None) -> SerializableImage:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    async def get_image(self, size: tuple | None = None) -> SerializableImage: ...
 
     #async def get_video(self) -> io.BytesIO:
     #    raise NotImplementedError(

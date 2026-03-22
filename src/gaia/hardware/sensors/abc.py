@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from abc import abstractmethod
+
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import Measure, SensorMixin, SensorRead, Unit
@@ -12,8 +14,8 @@ class TemperatureSensor(SensorMixin):
         Measure.temperature: Unit.celsius_degree,
     }
 
-    def _get_raw_data(self) -> float | None:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    def _get_raw_data(self) -> float | None: ...
 
     async def get_data(self) -> list[SensorRead]:
         raw_temperature = await run_sync(self._get_raw_data)
@@ -37,8 +39,8 @@ class TempHumSensor(SensorMixin):
         Measure.temperature: Unit.celsius_degree,
     }
 
-    def _get_raw_data(self) -> tuple[float | None, float | None]:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    def _get_raw_data(self) -> tuple[float | None, float | None]: ...
 
     async def get_data(self) -> list[SensorRead]:
         raw_humidity, raw_temperature = await run_sync(self._get_raw_data)

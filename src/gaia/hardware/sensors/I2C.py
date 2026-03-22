@@ -253,8 +253,6 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware.sensors._devices._compatibility import SeesawDevice
         return SeesawDevice(self._get_i2c(), self.address.main)
 
-    async def get_data(self) -> list[SensorRead]:
-        raise NotImplementedError("This method must be implemented in a subclass")
 
 
 class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensor):
