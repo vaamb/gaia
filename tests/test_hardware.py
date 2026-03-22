@@ -240,7 +240,7 @@ class TestWebsocketHardware:
         return websocket
 
     async def test_manager(self, engine_config: EngineConfig, logs_content):
-        manager = WebSocketHardwareManager(engine_config)
+        manager = WebSocketHardwareManager()
 
         # Make sure the manager start and can handle connections
         await manager.start()
@@ -268,7 +268,7 @@ class TestWebsocketHardware:
         await manager.stop()
 
     async def test_manager_errors(self, engine_config: EngineConfig):
-        manager = WebSocketHardwareManager(engine_config)
+        manager = WebSocketHardwareManager()
 
         # Stop before start
         with pytest.raises(RuntimeError, match="not currently running"):
@@ -282,7 +282,7 @@ class TestWebsocketHardware:
         await manager.stop()
 
     async def test_unregistered_device_rejected(self, engine_config: EngineConfig, logs_content):
-        manager = WebSocketHardwareManager(engine_config)
+        manager = WebSocketHardwareManager()
         await manager.start()
 
         websocket = await connect(WEBSOCKET_URL)
@@ -299,7 +299,7 @@ class TestWebsocketHardware:
 
     async def test_wrong_ip_device_rejected(self, engine_config: EngineConfig, logs_content):
         fake_uid = "fake_uid_wrong_ip"
-        manager = WebSocketHardwareManager(engine_config)
+        manager = WebSocketHardwareManager()
         await manager.register_hardware(fake_uid, "192.168.1.1")
         await manager.start()
 

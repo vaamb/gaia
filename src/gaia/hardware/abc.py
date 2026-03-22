@@ -813,7 +813,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if WebSocketAddressMixin._websocket_manager is None:
-            manager = WebSocketHardwareManager(self.ecosystem.engine.config)
+            manager = WebSocketHardwareManager()
             WebSocketAddressMixin._websocket_manager = manager
         self._websocket_manager = WebSocketAddressMixin._websocket_manager
         self._requests: dict[UUID, Future] = {}
