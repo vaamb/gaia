@@ -12,7 +12,7 @@ from pathlib import Path
 import textwrap
 from types import EllipsisType
 import typing as t
-from typing import Any, ClassVar, NamedTuple, Self, Type
+from typing import Any, Awaitable, Callable, ClassVar, NamedTuple, Self, Type
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -641,10 +641,33 @@ class Hardware(metaclass=_MetaHardware):
         ).model_dump(exclude_defaults=shorten)
 
 
+class HardwareTypeHint:
+    """Type-hint only class"""
+    if t.TYPE_CHECKING:
+        # Attributes
+        ecosystem: Ecosystem
+        uid: str
+        name: str
+        active: bool
+        level: gv.HardwareLevel
+        type: gv.HardwareType
+        groups: set[str]
+        model: str
+        address: Address
+        multiplexer: Multiplexer | None
+        measures: dict[Measure, Unit | None]
+
+        _logger: Logger
+
+        # Callables
+        _format_measures: Callable[[list[gv.Measure]], dict[Measure, Unit | None]]
+        _on_initialize: Callable[[], Awaitable[None]]
+        _on_terminate: Callable[[], Awaitable[None]]
+
 # ---------------------------------------------------------------------------
 #   Mixins for each address type
 # ---------------------------------------------------------------------------
-class HardwareAddressMixin:
+class HardwareAddressMixin(HardwareTypeHint):
     """Marker base for hardware address-protocol mixins."""
 
 
@@ -701,7 +724,6 @@ class i2cAddressMixin(HardwareAddressMixin):
 
     if t.TYPE_CHECKING:
         address: I2CAddress
-        multiplexer: Multiplexer | None
 
     @classmethod
     def validate_address(cls, address_str: str) -> I2CAddress:
@@ -748,7 +770,7 @@ class OneWireAddressMixin(HardwareAddressMixin):
         return address
 
     async def _on_initialize(self) -> None:
-        await super()._on_initialize()  # ty: ignore[unresolved-attribute]
+        await super()._on_initialize()
 
         def check_1w_enabled() -> None:
             import subprocess
@@ -788,10 +810,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
     _websocket_manager: WebSocketHardwareManager | None = None
 
     if t.TYPE_CHECKING:
-        uid: str
         address: WebSocketAddress
-        ecosystem: Ecosystem
-        _logger: Logger
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -814,11 +833,11 @@ class WebSocketAddressMixin(HardwareAddressMixin):
         return address
 
     async def _on_initialize(self) -> None:
-        await super()._on_initialize()  # ty: ignore[unresolved-attribute]
+        await super()._on_initialize()
         await self.register()
 
     async def _on_terminate(self) -> None:
-        await super()._on_terminate()  # ty: ignore[unresolved-attribute]
+        await super()._on_terminate()
         await self.unregister()
 
     @property
@@ -935,7 +954,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
 # ---------------------------------------------------------------------------
 #   Mixin for each hardware type
 # ---------------------------------------------------------------------------
-class HardwareTypeMixin:
+class HardwareTypeMixin(HardwareTypeHint):
     """Marker base for hardware type mixins (Actuator, Sensor, Camera)."""
 
 
