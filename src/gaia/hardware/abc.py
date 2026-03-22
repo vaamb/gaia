@@ -1090,6 +1090,7 @@ class LightSensorMixin(SensorMixin):
     """Mixin for light sensor."""
     @abstractmethod
     async def get_lux(self) -> float | None: ...
+    """A fast path that don't get other measures for the light routine"""
 
 
 class CameraMixin(HardwareTypeMixin):
