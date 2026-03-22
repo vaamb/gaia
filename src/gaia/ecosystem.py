@@ -452,7 +452,7 @@ class Ecosystem:
             if not hardware_config.model.startswith("virtual"):
                 hardware_config.model = f"virtual{hardware_config.model}"
         try:
-            hardware: Hardware = await Hardware.initialize(hardware_config, self)
+            hardware: Hardware = await Hardware.initialize(hardware_config, self.uid)
             self.logger.debug(f"Hardware {hardware.name} has been set up.")
             self.hardware[hardware.uid] = hardware
             return hardware

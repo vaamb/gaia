@@ -36,8 +36,6 @@ from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 if t.TYPE_CHECKING:  # pragma: no cover
     from websockets import ServerConnection
 
-    from gaia import Ecosystem
-
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
         import busio
@@ -414,7 +412,7 @@ class Hardware(metaclass=_MetaHardware):
 
     def __init__(
             self,
-            ecosystem: Ecosystem,
+            ecosystem_uid: str,
             uid: str,
             name: str,
             address: str,
@@ -429,7 +427,7 @@ class Hardware(metaclass=_MetaHardware):
             multiplexer_model: str | None = None,
     ) -> None:
         self._logger: Logger = getLogger(f"gaia.hardware.{uid}")
-        self._ecosystem: Ecosystem = ecosystem
+        self._ecosystem_uid: str = ecosystem_uid
         self._uid: str = uid
         self._name: str = name
         self._active: bool = active
@@ -464,11 +462,11 @@ class Hardware(metaclass=_MetaHardware):
     def from_config(
             cls,
             hardware_config: gv.HardwareConfig,
-            ecosystem: Ecosystem,
+            ecosystem_uid: str,
     ) -> Self:
         # Should only be used directly for validation
         return cls(
-            ecosystem=ecosystem,
+            ecosystem_uid=ecosystem_uid,
             uid=hardware_config.uid,
             name=hardware_config.name,
             active=hardware_config.active,
@@ -494,14 +492,14 @@ class Hardware(metaclass=_MetaHardware):
     async def initialize(
             cls,
             hardware_cfg: gv.HardwareConfig,
-            ecosystem: Ecosystem,
+            ecosystem_uid: str,
     ) -> Self:
         if hardware_cfg.uid in _MetaHardware.instances:
             raise RuntimeError(f"Hardware {hardware_cfg.uid} already exists.")
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Create hardware
-        hardware = hardware_cls.from_config(hardware_cfg, ecosystem)
+        hardware = hardware_cls.from_config(hardware_cfg, ecosystem_uid)
         # Perform subclass-specific initialization routine
         await hardware._on_initialize()
         # Valid ignore: hardware_cls is a subclass of cls, so `_unsafe_from_config`
@@ -545,12 +543,8 @@ class Hardware(metaclass=_MetaHardware):
         _MetaHardware.instances.pop(uid)
 
     @property
-    def ecosystem(self) -> Ecosystem:
-        return self._ecosystem
-
-    @property
     def ecosystem_uid(self) -> str | None:
-        return self.ecosystem.uid
+        return self._ecosystem_uid
 
     @property
     def uid(self) -> str:
@@ -645,7 +639,6 @@ class HardwareTypeHint(ABC):
     """Type-hint only class"""
     if t.TYPE_CHECKING:
         # Attributes
-        ecosystem: Ecosystem
         ecosystem_uid: str
         uid: str
         name: str
