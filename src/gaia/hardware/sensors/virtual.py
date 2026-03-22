@@ -29,7 +29,7 @@ class virtualSensor(virtualHardwareMixin, SensorMixin):
     pass
 
 
-class virtualDHT(DHTSensor, virtualSensor):
+class virtualDHT(virtualSensor, DHTSensor):
     pass
 
 
@@ -47,35 +47,35 @@ class virtualDHT22(virtualDHT):
         return VirtualDHT22Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
-class virtualAHT20(AHT20, virtualSensor):
+class virtualAHT20(virtualSensor, AHT20):
     def _get_device(self) -> VirtualAHTx0Device:
         from gaia.hardware.sensors._devices.virtual import VirtualAHTx0Device
 
         return VirtualAHTx0Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
-class virtualVCNL4040(VCNL4040, virtualSensor):
+class virtualVCNL4040(virtualSensor, VCNL4040):
     def _get_device(self) -> VirtualVCNL4040Device:
         from gaia.hardware.sensors._devices.virtual import VirtualVCNL4040Device
 
         return VirtualVCNL4040Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
-class virtualVEML7700(VEML7700, virtualSensor):
+class virtualVEML7700(virtualSensor, VEML7700):
     def _get_device(self) -> VirtualVEML7700Device:
         from gaia.hardware.sensors._devices.virtual import VirtualVEML7700Device
 
         return VirtualVEML7700Device(virtual_ecosystem=self.virtual_ecosystem)
 
 
-class virtualCapacitiveMoisture(CapacitiveMoisture, virtualSensor):
+class virtualCapacitiveMoisture(virtualSensor, CapacitiveMoisture):
     def _get_device(self) -> VirtualSeesawDevice:
         from gaia.hardware.sensors._devices.virtual import VirtualSeesawDevice
 
         return VirtualSeesawDevice(virtual_ecosystem=self.virtual_ecosystem)
 
 
-class virtualENS160(ENS160, virtualSensor):
+class virtualENS160(virtualSensor, ENS160):
     def _get_device(self) -> ENS160Device:
         # TODO: design and use a virtual ENS160Device
         from gaia.hardware.sensors._devices._compatibility import ENS160Device
