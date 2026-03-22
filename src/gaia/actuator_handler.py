@@ -23,14 +23,6 @@ if typing.TYPE_CHECKING:
     from gaia.database.models import ActuatorBuffer, ActuatorRecord
 
 
-class Dimmer(DimmerMixin, Actuator):
-    """For type hint purpose only"""
-
-
-class Switch(SwitchMixin, Actuator):
-    """For type hint purpose only"""
-
-
 class PIDParameters(NamedTuple):
     Kp: float
     Ki: float
@@ -474,7 +466,7 @@ class ActuatorHandler:
             )
         failed: list[tuple[str, str]] = []
         for actuator in actuators_linked:
-            if isinstance(actuator, Switch):
+            if isinstance(actuator, SwitchMixin):
                 if value:
                     success = await actuator.turn_on()
                 else:
@@ -514,7 +506,7 @@ class ActuatorHandler:
         self._level = pwm_level
         failed: list[tuple[str, str]] = []
         for actuator in self.get_linked_actuators():
-            if isinstance(actuator, Dimmer):
+            if isinstance(actuator, DimmerMixin):
                 success = await actuator.set_pwm_level(pwm_level)
                 if not success:
                     failed.append((actuator.name, actuator.uid))
