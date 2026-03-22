@@ -15,12 +15,20 @@ from weakref import WeakValueDictionary
 import gaia_validators as gv
 
 from gaia.config import default_actuators
-from gaia.hardware.abc import ActuatorMixin, DimmerMixin, SwitchMixin
+from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
 
 if typing.TYPE_CHECKING:
     from gaia import Ecosystem
     from gaia.database.models import ActuatorBuffer, ActuatorRecord
+
+
+class Dimmer(DimmerMixin, Actuator):
+    """For type hint purpose only"""
+
+
+class Switch(SwitchMixin, Actuator):
+    """For type hint purpose only"""
 
 
 class PIDParameters(NamedTuple):
@@ -313,7 +321,7 @@ class ActuatorHandler:
         self._level: float | None = None
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         self._timer: Timer | None = None
-        self._actuators: list[ActuatorMixin] | None = None
+        self._actuators: list[Actuator] | None = None
         self._last_expected_level: float = 0.0
         self._update_lock: Lock = Lock()
         self._updating: bool = False
@@ -324,14 +332,14 @@ class ActuatorHandler:
         uid = self.actuator_hub.ecosystem.uid
         return f"ActuatorHandler({uid}, actuator_group={self.group})"
 
-    def get_linked_actuators(self) -> list[ActuatorMixin]:
+    def get_linked_actuators(self) -> list[Actuator]:
         if self._actuators is None:
             self._actuators = [
                 hardware
                 for hardware in self.ecosystem.hardware.values()
                 if (
                         self.group in hardware.groups
-                        and isinstance(hardware, ActuatorMixin)
+                        and isinstance(hardware, Actuator)
                 )
             ]
         return self._actuators
@@ -466,7 +474,7 @@ class ActuatorHandler:
             )
         failed: list[tuple[str, str]] = []
         for actuator in actuators_linked:
-            if isinstance(actuator, SwitchMixin):
+            if isinstance(actuator, Switch):
                 if value:
                     success = await actuator.turn_on()
                 else:
@@ -506,7 +514,7 @@ class ActuatorHandler:
         self._level = pwm_level
         failed: list[tuple[str, str]] = []
         for actuator in self.get_linked_actuators():
-            if isinstance(actuator, DimmerMixin):
+            if isinstance(actuator, Dimmer):
                 success = await actuator.set_pwm_level(pwm_level)
                 if not success:
                     failed.append((actuator.name, actuator.uid))
