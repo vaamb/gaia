@@ -14,6 +14,7 @@ from types import EllipsisType
 import typing as t
 from typing import Any, Awaitable, Callable, ClassVar, NamedTuple, Self, Type
 from uuid import UUID, uuid4
+import warnings
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -23,6 +24,7 @@ from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
+from gaia.config import GaiaConfigHelper
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.exceptions import DeviceError, HardwareNotFound
 from gaia.hardware._websocket import WebSocketHardwareManager
@@ -1127,8 +1129,14 @@ class CameraMixin(HardwareTypeMixin):
     @property
     def camera_dir(self) -> Path:
         if self._camera_dir is None:
-            base_dir = self.ecosystem.engine.config.gaia_dir
-            self._camera_dir = base_dir / f"camera/{self.ecosystem.name}"
+            if not GaiaConfigHelper.config_is_set():
+                warnings.warn(
+                    "Accessing `CameraMixin.camera_dir` without a config set will "
+                    "materialize Gaia's whole app configuration.")
+
+            app_config = GaiaConfigHelper().get_config()
+            base_dir = app_config.get_path("DIR")
+            self._camera_dir = base_dir / f"camera/{self.ecosystem_uid}"
             if not self._camera_dir.exists():
                 self._camera_dir.mkdir(parents=True)
         return self._camera_dir
