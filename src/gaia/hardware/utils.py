@@ -14,9 +14,6 @@ _is_raspi: bool | None = None
 _i2c: I2C | None = None
 
 
-_store: dict[str, I2C] = {}
-
-
 hardware_logger = logging.getLogger("gaia.hardware.store")
 
 

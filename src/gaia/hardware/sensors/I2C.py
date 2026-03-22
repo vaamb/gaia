@@ -7,9 +7,9 @@ from typing import Type
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import (
-    hardware_logger, i2cAddressMixin, LightSensorMixin, Measure, PlantLevelMixin,
+    hardware_logger, i2cAddressMixin, Measure, PlantLevelMixin,
     Sensor, SensorRead, Unit)
-from gaia.hardware.sensors.abc import TempHumSensor
+from gaia.hardware.sensors.abc import LightSensorBase, TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
 
@@ -140,7 +140,7 @@ class ENS160(i2cSensor):
         return data
 
 
-class VEML7700(LightSensorMixin, i2cSensor):
+class VEML7700(LightSensorBase, i2cSensor):
     default_address = 0x10
     measures_available = {
         Measure.light: Unit.lux,
@@ -159,35 +159,11 @@ class VEML7700(LightSensorMixin, i2cSensor):
             from gaia.hardware.sensors._devices._compatibility import VEML7700Device
         return VEML7700Device(self._get_i2c(), self.address.main)
 
-    # To catch data fast from light routine
     def _get_lux(self) -> float:
         return self.device.lux
 
-    async def get_lux(self) -> float | None:
-        try:
-            lux = await run_sync(self._get_lux)
-            return round(lux, 2)
-        except Exception as e:
-            hardware_logger.error(
-                f"Sensor {self._name} encountered an error. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`."
-            )
-            return None
 
-    async def get_data(self) -> list[SensorRead]:
-        data = []
-        if Measure.light in self.measures:
-            data.append(
-                SensorRead(
-                    sensor_uid=self.uid,
-                    measure=Measure.light.value,
-                    value=await self.get_lux(),
-                )
-            )
-        return data
-
-
-class VCNL4040(LightSensorMixin, i2cSensor):
+class VCNL4040(LightSensorBase, i2cSensor):
     default_address = 0x60
     measures_available = {
         Measure.light: Unit.lux,
@@ -206,35 +182,11 @@ class VCNL4040(LightSensorMixin, i2cSensor):
             from gaia.hardware.sensors._devices._compatibility import VCNL4040Device
         return VCNL4040Device(self._get_i2c(), self.address.main)
 
-    # To catch data fast from light routine
     def _get_lux(self) -> float:
         return self.device.lux
 
-    async def get_lux(self) -> float | None:
-        try:
-            lux = await run_sync(self._get_lux)
-            return round(lux, 2)
-        except Exception as e:
-            hardware_logger.error(
-                f"Sensor {self._name} encountered an error. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`."
-            )
-            return None
 
-    async def get_data(self) -> list[SensorRead]:
-        data = []
-        if Measure.light in self.measures:
-            data.append(
-                SensorRead(
-                    sensor_uid=self.uid,
-                    measure=Measure.light.value,
-                    value=await self.get_lux(),
-                )
-            )
-        return data
-
-
-class CapacitiveSensor(i2cSensor):
+class CapacitiveSensorMixin(i2cSensor):
     default_address = 0x36
     measures_available = {
         Measure.capacitive: None,
@@ -253,11 +205,8 @@ class CapacitiveSensor(i2cSensor):
             from gaia.hardware.sensors._devices._compatibility import SeesawDevice
         return SeesawDevice(self._get_i2c(), self.address.main)
 
-    async def get_data(self) -> list[SensorRead]:
-        raise NotImplementedError("This method must be implemented in a subclass")
 
-
-class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensor):
+class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensorMixin):
     measures_available = {
         Measure.moisture: Unit.RWC,
         Measure.temperature: Unit.celsius_degree,

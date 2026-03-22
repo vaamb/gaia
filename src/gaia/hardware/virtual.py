@@ -33,8 +33,8 @@ class virtualHardwareMixin:
 
         if not GaiaConfigHelper.config_is_set():
             warnings.warn(
-                "Using `WebSocketHardware.check_requirements()` will materialize "
-                "Gaia's whole app configuration."
+                "Instantiating `virtualHardwareMixin` without a config set will "
+                "materialize Gaia's whole app configuration."
             )
 
         if not GaiaConfigHelper.get_config().VIRTUALIZATION:

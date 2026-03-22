@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from abc import abstractmethod
+
 from anyio.to_thread import run_sync
 
-from gaia.hardware.abc import Measure, SensorMixin, SensorRead, Unit
+from gaia.hardware.abc import (
+    LightSensorMixin, Measure, SensorMixin, SensorRead, Unit)
 from gaia.utils import (
     get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 
@@ -12,8 +15,8 @@ class TemperatureSensor(SensorMixin):
         Measure.temperature: Unit.celsius_degree,
     }
 
-    def _get_raw_data(self) -> float | None:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    def _get_raw_data(self) -> float | None: ...
 
     async def get_data(self) -> list[SensorRead]:
         raw_temperature = await run_sync(self._get_raw_data)
@@ -37,8 +40,8 @@ class TempHumSensor(SensorMixin):
         Measure.temperature: Unit.celsius_degree,
     }
 
-    def _get_raw_data(self) -> tuple[float | None, float | None]:
-        raise NotImplementedError("This method must be implemented in a subclass")
+    @abstractmethod
+    def _get_raw_data(self) -> tuple[float | None, float | None]: ...
 
     async def get_data(self) -> list[SensorRead]:
         raw_humidity, raw_temperature = await run_sync(self._get_raw_data)
@@ -81,6 +84,34 @@ class TempHumSensor(SensorMixin):
                     sensor_uid=self.uid,
                     measure=Measure.absolute_humidity.value,
                     value=get_absolute_humidity(raw_temperature, raw_humidity),
+                )
+            )
+        return data
+
+
+class LightSensorBase(LightSensorMixin):
+    @abstractmethod
+    def _get_lux(self) -> float: ...
+
+    async def get_lux(self) -> float | None:
+        try:
+            lux = await run_sync(self._get_lux)
+            return round(lux, 2)
+        except Exception as e:
+            self._logger.error(
+                f"Sensor {self.name} encountered an error. "
+                f"ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
+            return None
+
+    async def get_data(self) -> list[SensorRead]:
+        data = []
+        if Measure.light in self.measures:
+            data.append(
+                SensorRead(
+                    sensor_uid=self.uid,
+                    measure=Measure.light.value,
+                    value=await self.get_lux(),
                 )
             )
         return data
