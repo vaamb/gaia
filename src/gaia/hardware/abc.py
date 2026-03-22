@@ -12,7 +12,7 @@ from pathlib import Path
 import textwrap
 from types import EllipsisType
 import typing as t
-from typing import Any, ClassVar, NamedTuple, Self, Type
+from typing import Any, Awaitable, Callable, ClassVar, NamedTuple, Self, Type
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
@@ -401,6 +401,15 @@ class Hardware(metaclass=_MetaHardware):
                 f"subclass in its MRO, found {len(address_mixins)}: "
                 f"{[b.__name__ for b in address_mixins]}"
             )
+        type_mixins = {
+            base for base in cls.__mro__
+            if HardwareTypeMixin in getattr(base, "__bases__", ())
+        }
+        if len(type_mixins) < 1:
+            raise TypeError(
+                f"{cls.__name__} must include at least one HardwareTypeMixin "
+                f"subclass in its MRO, found none."
+            )
 
     def __init__(
             self,
@@ -632,12 +641,34 @@ class Hardware(metaclass=_MetaHardware):
         ).model_dump(exclude_defaults=shorten)
 
 
+class HardwareTypeHint:
+    """Type-hint only class"""
+    if t.TYPE_CHECKING:
+        # Attributes
+        ecosystem: Ecosystem
+        uid: str
+        name: str
+        active: bool
+        level: gv.HardwareLevel
+        type: gv.HardwareType
+        groups: set[str]
+        model: str
+        address: Address
+        multiplexer: Multiplexer | None
+        measures: dict[Measure, Unit | None]
+
+        _logger: Logger
+
+        # Callables
+        _format_measures: Callable[[list[gv.Measure]], dict[Measure, Unit | None]]
+        _on_initialize: Callable[[], Awaitable[None]]
+        _on_terminate: Callable[[], Awaitable[None]]
+
 # ---------------------------------------------------------------------------
 #   Mixins for each address type
 # ---------------------------------------------------------------------------
-class HardwareAddressMixin:
-    """Marker base for hardware address-protocol mixins.
-    """
+class HardwareAddressMixin(HardwareTypeHint):
+    """Marker base for hardware address-protocol mixins."""
 
 
 class gpioAddressMixin(HardwareAddressMixin):
@@ -693,7 +724,6 @@ class i2cAddressMixin(HardwareAddressMixin):
 
     if t.TYPE_CHECKING:
         address: I2CAddress
-        multiplexer: Multiplexer | None
 
     @classmethod
     def validate_address(cls, address_str: str) -> I2CAddress:
@@ -740,7 +770,7 @@ class OneWireAddressMixin(HardwareAddressMixin):
         return address
 
     async def _on_initialize(self) -> None:
-        await super()._on_initialize()  # ty: ignore[unresolved-attribute]
+        await super()._on_initialize()
 
         def check_1w_enabled() -> None:
             import subprocess
@@ -780,10 +810,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
     _websocket_manager: WebSocketHardwareManager | None = None
 
     if t.TYPE_CHECKING:
-        uid: str
         address: WebSocketAddress
-        ecosystem: Ecosystem
-        _logger: Logger
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -806,11 +833,11 @@ class WebSocketAddressMixin(HardwareAddressMixin):
         return address
 
     async def _on_initialize(self) -> None:
-        await super()._on_initialize()  # ty: ignore[unresolved-attribute]
+        await super()._on_initialize()
         await self.register()
 
     async def _on_terminate(self) -> None:
-        await super()._on_terminate()  # ty: ignore[unresolved-attribute]
+        await super()._on_terminate()
         await self.unregister()
 
     @property
@@ -925,16 +952,22 @@ class WebSocketAddressMixin(HardwareAddressMixin):
 
 
 # ---------------------------------------------------------------------------
-#   Subclasses based on hardware type/function
+#   Mixin for each hardware type
 # ---------------------------------------------------------------------------
-class Actuator(Hardware):
+class HardwareTypeMixin(HardwareTypeHint):
+    """Marker base for hardware type mixins (Actuator, Sensor, Camera)."""
+
+
+class ActuatorMixin(HardwareTypeMixin):
+    """Base mixin for actuator-type hardware."""
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self.type not in gv.HardwareType.actuator:
             raise ValueError("Type should be in `HardwareType.actuator`")
 
 
-class Switch(Actuator):
+class SwitchMixin(ActuatorMixin):
+    """Mixin for switch actuators."""
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.turn_off()
@@ -963,7 +996,8 @@ class Switch(Actuator):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class Dimmer(Actuator):
+class DimmerMixin(ActuatorMixin):
+    """Mixin for dimmer actuators."""
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.set_pwm_level(0)
@@ -987,11 +1021,13 @@ class Dimmer(Actuator):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class DimmableSwitch(Dimmer, Switch):
-    pass
+class DimmableSwitchMixin(DimmerMixin, SwitchMixin):
+    """Mixin for switch and dimmer actuators."""
 
 
-class BaseSensor(Hardware):
+class SensorMixin(HardwareTypeMixin):
+    """Mixin for sensor-type hardware."""
+
     measures_available: ClassVar[dict[Measure, Unit | None] | EllipsisType | None] = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -1058,7 +1094,8 @@ class BaseSensor(Hardware):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class LightSensor(BaseSensor):
+class LightSensorMixin(SensorMixin):
+    """Mixin for light sensor."""
     async def get_lux(self) -> float | None:
         raise NotImplementedError("This method must be implemented in a subclass")
 
@@ -1066,7 +1103,8 @@ class LightSensor(BaseSensor):
         raise NotImplementedError("This method must be implemented in a subclass")
 
 
-class Camera(Hardware):
+class CameraMixin(HardwareTypeMixin):
+    """Mixin for camera-type hardware."""
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies()
         super().__init__(*args, **kwargs)
@@ -1121,7 +1159,7 @@ class Camera(Hardware):
 
 
 # ---------------------------------------------------------------------------
-#   Other simple subclasses
+#   Other simple mixins
 # ---------------------------------------------------------------------------
 class PlantLevelMixin:
     if t.TYPE_CHECKING:
@@ -1138,13 +1176,15 @@ class PlantLevelMixin:
 
 
 # ---------------------------------------------------------------------------
-#   Composition subclasses
+#   "Half-concrete" classes
 # ---------------------------------------------------------------------------
-class gpioSensor(gpioAddressMixin, BaseSensor):
-    async def get_data(self) -> list[SensorRead]:
-        raise NotImplementedError("This method must be implemented in a subclass")
+class Actuator(ActuatorMixin, Hardware):
+    """Base `half-concrete` class for actuator."""
 
 
-class i2cSensor(i2cAddressMixin, BaseSensor):
-    async def get_data(self) -> list[SensorRead]:
-        raise NotImplementedError("This method must be implemented in a subclass")
+class Sensor(SensorMixin, Hardware):
+    """Base `half-concrete` class for sensor."""
+
+
+class Camera(CameraMixin, Hardware):
+    """Base `half-concrete` class for camera."""

@@ -7,8 +7,8 @@ from typing import Type
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import (
-    BaseSensor, hardware_logger, i2cSensor, LightSensor, Measure,
-    PlantLevelMixin, SensorRead, Unit)
+    hardware_logger, i2cAddressMixin, LightSensorMixin, Measure, PlantLevelMixin,
+    Sensor, SensorRead, Unit)
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
@@ -27,6 +27,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   I2C sensors
 # ---------------------------------------------------------------------------
+class i2cSensor(i2cAddressMixin, Sensor):
+    ...
+
+
 class AHT20(TempHumSensor, i2cSensor):
     default_address = 0x38
 
@@ -136,7 +140,7 @@ class ENS160(i2cSensor):
         return data
 
 
-class VEML7700(i2cSensor, LightSensor):
+class VEML7700(LightSensorMixin, i2cSensor):
     default_address = 0x10
     measures_available = {
         Measure.light: Unit.lux,
@@ -183,7 +187,7 @@ class VEML7700(i2cSensor, LightSensor):
         return data
 
 
-class VCNL4040(i2cSensor, LightSensor):
+class VCNL4040(LightSensorMixin, i2cSensor):
     default_address = 0x60
     measures_available = {
         Measure.light: Unit.lux,
@@ -310,7 +314,7 @@ class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensor):
         return data
 
 
-i2c_sensor_models: dict[str, Type[BaseSensor]] = {
+i2c_sensor_models: dict[str, Type[i2cSensor]] = {
     hardware.__name__: hardware
     for hardware in [
         AHT20,

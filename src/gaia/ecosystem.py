@@ -10,7 +10,7 @@ from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
 from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, SubroutineNotFound
-from gaia.hardware.abc import Actuator, Hardware
+from gaia.hardware.abc import ActuatorMixin, Hardware
 from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict,
     subroutine_names, SubroutineNames, SubroutineTemplate, Weather)
@@ -478,7 +478,7 @@ class Ecosystem:
         hardware = self.hardware[hardware_uid]
         await hardware.terminate()
         # If the hardware is an actuator, reset actuator handlers using it
-        if isinstance(hardware, Actuator):
+        if isinstance(hardware, ActuatorMixin):
             for actuator_handler in self.actuator_hub.actuator_handlers.values():
                 if hardware in actuator_handler.get_linked_actuators():
                     actuator_handler.reset_cached_actuators()

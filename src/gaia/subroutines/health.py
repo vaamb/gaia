@@ -5,7 +5,7 @@ from asyncio import Task
 from datetime import datetime, timezone
 from time import monotonic
 import typing as t
-from typing import Any, Type, TypedDict
+from typing import Type, TypedDict
 
 from anyio.to_thread import run_sync
 from apscheduler.triggers.cron import CronTrigger

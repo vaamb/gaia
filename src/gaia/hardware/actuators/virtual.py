@@ -1,10 +1,13 @@
-from gaia.hardware.abc import Actuator, Dimmer, Switch
+import typing as t
+
+from gaia.hardware.abc import (
+    Actuator, ActuatorMixin, DimmerMixin, SwitchMixin)
 from gaia.hardware.actuators.GPIO import gpioDimmable, gpioDimmer, gpioSwitch
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
-from gaia.hardware.virtual import virtualHardware
+from gaia.hardware.virtual import virtualHardwareMixin
 
 
-class virtualActuator(virtualHardware, Actuator):
+class virtualActuatorMixin(virtualHardwareMixin, ActuatorMixin):
     async def _on_initialize(self) -> None:
         # Registration must be done before other registrations that might
         #  interact with the virtual ecosystem
@@ -16,7 +19,7 @@ class virtualActuator(virtualHardware, Actuator):
         self.virtual_ecosystem.unregister_actuator(self.uid)
 
 
-class virtualSwitch(virtualActuator, Switch):
+class virtualSwitchMixin(virtualActuatorMixin, SwitchMixin):
     async def turn_on(self) -> bool:
         self.virtual_ecosystem.set_actuator_status(self.uid, True)
         return True
@@ -29,15 +32,15 @@ class virtualSwitch(virtualActuator, Switch):
         return self.virtual_ecosystem.get_actuator_status(self.uid)
 
 
-class virtualgpioSwitch(virtualSwitch, gpioSwitch):
+class virtualgpioSwitch(virtualSwitchMixin, gpioSwitch):
     pass
 
 
-class virtualWebSocketSwitch(virtualSwitch, WebSocketSwitch):
+class virtualWebSocketSwitch(virtualSwitchMixin, WebSocketSwitch):
     pass
 
 
-class virtualDimmer(virtualActuator, Dimmer):
+class virtualDimmerMixin(virtualActuatorMixin, DimmerMixin):
     async def set_pwm_level(self, level: float | int) -> bool:
         self.virtual_ecosystem.set_actuator_level(self.uid, level)
         return True
@@ -46,19 +49,19 @@ class virtualDimmer(virtualActuator, Dimmer):
         return self.virtual_ecosystem.get_actuator_level(self.uid)
 
 
-class virtualgpioDimmer(virtualDimmer, gpioDimmer):
+class virtualgpioDimmer(virtualDimmerMixin, gpioDimmer):
     pass
 
 
-class virtualWebSocketDimmer(virtualDimmer, WebSocketDimmer):
+class virtualWebSocketDimmer(virtualDimmerMixin, WebSocketDimmer):
     pass
 
 
-class virtualDimmable(virtualSwitch, virtualDimmer):
+class virtualDimmable(virtualSwitchMixin, virtualDimmerMixin):
     pass
 
 
-class virtualgpioDimmable(virtualDimmer, gpioDimmable):
+class virtualgpioDimmable(virtualDimmable, gpioDimmable):
     pass
 
 

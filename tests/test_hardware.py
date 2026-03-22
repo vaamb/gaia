@@ -12,14 +12,13 @@ import gaia_validators as gv
 from gaia import Ecosystem, Engine, EngineConfig
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import (
-    _MetaHardware, Address, BaseSensor, Camera, Dimmer, gpioAddressMixin, GPIOAddress,
+    _MetaHardware, Address, CameraMixin, DimmerMixin, gpioAddressMixin, GPIOAddress,
     Hardware, I2CAddress, i2cAddressMixin, InvalidAddressError, Measure, OneWireAddress,
     OneWireAddressMixin, PiCameraAddress, PiCameraAddressMixin, PlantLevelMixin,
-    SensorRead, Switch, Unit, WebSocketAddress, WebSocketAddressMixin,
+    SensorMixin, SensorRead, SwitchMixin, Unit, WebSocketAddress, WebSocketAddressMixin,
     WebSocketHardwareManager, WebSocketMessage)
 from gaia.hardware.actuators.websocket import WebSocketDimmer, WebSocketSwitch
 from gaia.hardware.sensors.websocket import WebSocketSensor
-from gaia.hardware.camera import PiCamera
 from gaia.hardware.sensors.virtual import virtualDHT22
 from gaia.utils import create_uid
 
@@ -63,17 +62,17 @@ def _get_hardware_config(hardware_cls: Type[Hardware]) -> gv.HardwareConfigDict:
     base_cfg["model"] = hardware_cls.__name__
 
     # Setup type
-    if issubclass(hardware_cls, BaseSensor):
+    if issubclass(hardware_cls, SensorMixin):
         base_cfg["type"] = gv.HardwareType.sensor
-    elif issubclass(hardware_cls, Camera):
+    elif issubclass(hardware_cls, CameraMixin):
         base_cfg["type"] = gv.HardwareType.camera
-    elif issubclass(hardware_cls, (Dimmer, Switch)):
+    elif issubclass(hardware_cls, (DimmerMixin, SwitchMixin)):
         base_cfg["type"] = gv.HardwareType.light
     else:
         raise ValueError("Unknown hardware type")
 
     # Setup measures
-    if issubclass(hardware_cls, BaseSensor):
+    if issubclass(hardware_cls, SensorMixin):
         if hardware_cls.measures_available is not Ellipsis:
             base_cfg["measures"] = [
                 measure.name
@@ -188,14 +187,14 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], ecosystem: Ecosyst
         await hardware.register()
     if isinstance(hardware, PlantLevelMixin):
         assert len(hardware.plants) > 0
-    if isinstance(hardware, BaseSensor):
+    if isinstance(hardware, SensorMixin):
         assert isinstance(await hardware.get_data(), list)
-    if isinstance(hardware, Camera):
+    if isinstance(hardware, CameraMixin):
         assert hardware.camera_dir
         assert await hardware.get_image((42, 21))
-    if isinstance(hardware, Dimmer):
+    if isinstance(hardware, DimmerMixin):
         assert isinstance(await hardware.set_pwm_level(100), bool)
-    if isinstance(hardware, Switch):
+    if isinstance(hardware, SwitchMixin):
         assert isinstance(await hardware.turn_on(), bool)
         assert isinstance(await hardware.turn_off(), bool)
     if isinstance(hardware, WebSocketAddressMixin):

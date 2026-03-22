@@ -22,7 +22,7 @@ class VirtualDevice:
         self.virtual_ecosystem = virtual_ecosystem
 
 
-class virtualHardware:
+class virtualHardwareMixin:
     """Protocol mixin for virtual hardware. Expects `self.ecosystem: Ecosystem`."""
 
     if t.TYPE_CHECKING:

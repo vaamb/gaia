@@ -7,7 +7,6 @@ from typing import Literal, Type, TypeAlias
 
 import gaia_validators as gv
 
-from gaia import config
 from gaia.actuator_handler import HystericalPID
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Actuator

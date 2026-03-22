@@ -13,7 +13,7 @@ import gaia_validators as gv
 from gaia.actuator_handler import HystericalPID
 from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
-from gaia.hardware.abc import Actuator, Dimmer, LightSensor
+from gaia.hardware.abc import Actuator, DimmerMixin, LightSensorMixin
 from gaia.subroutines.template import SubroutineTemplate
 from gaia.utils import is_time_between
 
@@ -37,7 +37,7 @@ class Light(SubroutineTemplate[Actuator]):
         # Parent template
         super().__init__(*args, **kwargs)
         # Subroutine specific
-        self._light_sensors: list[LightSensor] | None = None
+        self._light_sensors: list[LightSensorMixin] | None = None
         self._any_dimmable_light: bool | None = None
         # Actuator handler
         self._actuator_handler: ActuatorHandler | None = None
@@ -152,12 +152,12 @@ class Light(SubroutineTemplate[Actuator]):
         return self._pid
 
     @property
-    def light_sensors(self) -> list[LightSensor]:
+    def light_sensors(self) -> list[LightSensorMixin]:
         if self._light_sensors is None:
             self._light_sensors = [
                 hardware
                 for hardware in self.ecosystem.hardware.values()
-                if isinstance(hardware, LightSensor)
+                if isinstance(hardware, LightSensorMixin)
             ]
         return self._light_sensors
 
@@ -168,7 +168,7 @@ class Light(SubroutineTemplate[Actuator]):
     def any_dimmable_light(self) -> bool:
         if self._any_dimmable_light is None:
             for hardware in self.hardware.values():
-                if isinstance(hardware, Dimmer):
+                if isinstance(hardware, DimmerMixin):
                     self._any_dimmable_light = True
                     break
             if self._any_dimmable_light is None:

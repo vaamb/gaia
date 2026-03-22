@@ -4,7 +4,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import BaseSensor, gpioSensor, hardware_logger
+from gaia.hardware.abc import gpioAddressMixin, hardware_logger, Sensor
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 
@@ -16,6 +16,10 @@ if t.TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 #   GPIO sensors
 # ---------------------------------------------------------------------------
+class gpioSensor(gpioAddressMixin, Sensor):
+    ...
+
+
 class DHTSensor(TempHumSensor, gpioSensor):
     # Rem: don't use pulseio as it uses 100% of one core in Pi3
     # In Pi0: behaves correctly
@@ -76,7 +80,7 @@ class DHT22(DHTSensor):
         return DHT22Device(self.pin, use_pulseio=False)
 
 
-gpio_sensor_models: dict[str, Type[BaseSensor]] = {
+gpio_sensor_models: dict[str, Type[gpioSensor]] = {
     hardware.__name__: hardware
     for hardware in [
         DHT11,

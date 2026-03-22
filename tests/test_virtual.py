@@ -6,7 +6,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem
-from gaia.hardware.abc import BaseSensor, SensorRead
+from gaia.hardware.abc import SensorMixin, SensorRead
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
 from tests.data import IO_dict, sensor_uid
@@ -74,7 +74,7 @@ class TestVirtualEcosystem:
     ):
         # The hardware model should automatically be virtualized
         assert not IO_dict[sensor_uid]["model"].startswith("virtual")
-        virtual_DHT22: BaseSensor = cast(BaseSensor, ecosystem.hardware[sensor_uid])
+        virtual_DHT22: SensorMixin = cast(SensorMixin, ecosystem.hardware[sensor_uid])
         assert virtual_DHT22.model.startswith("virtual")
 
         # Get sensor data for the humidity

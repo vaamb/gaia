@@ -5,15 +5,19 @@ import typing as t
 
 from anyio.to_thread import run_sync
 
-from gaia.hardware.abc import Actuator, Dimmer, gpioAddressMixin, Switch
+from gaia.hardware.abc import Actuator, DimmerMixin, gpioAddressMixin, SwitchMixin
 from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware._compatibility import Pin, pwmio
+    from gaia.hardware._compatibility import pwmio
 
 
-class gpioSwitch(gpioAddressMixin, Switch):
+class gpioActuator(gpioAddressMixin, Actuator):
+    ...
+
+
+class gpioSwitch(SwitchMixin, gpioActuator):
     def _init_pin(self) -> None:
         self.pin.init(mode=self.OUT)
 
@@ -42,7 +46,7 @@ class gpioSwitch(gpioAddressMixin, Switch):
         return self.pin.value() == 1
 
 
-class gpioDimmer(gpioAddressMixin, Dimmer):
+class gpioDimmer(DimmerMixin, gpioActuator):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._dimmer: pwmio.PWMOut | None = None
@@ -88,7 +92,7 @@ class gpioDimmable(gpioSwitch, gpioDimmer):
     pass
 
 
-gpio_actuator_models: dict[str, type[Actuator]] = {
+gpio_actuator_models: dict[str, type[gpioActuator]] = {
     hardware.__name__: hardware
     for hardware in [
         gpioDimmable,

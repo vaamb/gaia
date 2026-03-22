@@ -3,12 +3,12 @@ from __future__ import annotations
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import BaseSensor
+from gaia.hardware.abc import Sensor, SensorMixin
 from gaia.hardware.sensors.GPIO import DHTSensor
 from gaia.hardware.sensors.I2C import (
     AHT20, CapacitiveMoisture, ENS160, VCNL4040, VEML7700)
 from gaia.hardware.sensors.websocket import WebSocketSensor
-from gaia.hardware.virtual import virtualHardware
+from gaia.hardware.virtual import virtualHardwareMixin
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -25,7 +25,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     )
 
 
-class virtualSensor(virtualHardware, BaseSensor):
+class virtualSensor(virtualHardwareMixin, SensorMixin):
     pass
 
 
@@ -87,7 +87,7 @@ class virtualWebSocketSensor(WebSocketSensor, virtualSensor):
     pass
 
 
-virtual_sensor_models: dict[str, Type[virtualSensor]] = {
+virtual_sensor_models: dict[str, Type[Sensor]] = {
     hardware.__name__: hardware
     for hardware in [
         virtualAHT20,

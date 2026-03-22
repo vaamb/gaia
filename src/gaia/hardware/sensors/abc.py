@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from anyio.to_thread import run_sync
 
-from gaia.hardware.abc import BaseSensor, Measure, SensorRead, Unit
+from gaia.hardware.abc import Measure, SensorMixin, SensorRead, Unit
 from gaia.utils import (
     get_absolute_humidity, get_dew_point, get_unit, temperature_converter)
 
 
-class TemperatureSensor(BaseSensor):
+class TemperatureSensor(SensorMixin):
     measures_available = {
         Measure.temperature: Unit.celsius_degree,
     }
@@ -29,7 +29,7 @@ class TemperatureSensor(BaseSensor):
         return data
 
 
-class TempHumSensor(BaseSensor):
+class TempHumSensor(SensorMixin):
     measures_available = {
         Measure.absolute_humidity: Unit.gram_per_cubic_m,
         Measure.dew_point: Unit.celsius_degree,

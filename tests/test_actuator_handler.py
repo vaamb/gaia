@@ -10,13 +10,13 @@ import gaia_validators as gv
 from gaia import Ecosystem
 from gaia.actuator_handler import ActuatorHandler, Timer
 from gaia.events import Events
-from gaia.hardware.abc import DimmableSwitch
+from gaia.hardware.abc import DimmableSwitchMixin
 
 from .data import ecosystem_uid
 from .utils import yield_control
 
 
-def get_lights(ecosystem: Ecosystem) -> list[DimmableSwitch]:
+def get_lights(ecosystem: Ecosystem) -> list[DimmableSwitchMixin]:
     return [  # type: ignore
         hardware
         for hardware in ecosystem.hardware.values()
