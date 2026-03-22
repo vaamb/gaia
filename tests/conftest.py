@@ -26,7 +26,7 @@ from gaia.virtual import VirtualWorld, VirtualEcosystem
 
 from .data import debug_log_file, ecosystem_info, ecosystem_uid, engine_uid
 from .subroutines.dummy_subroutine import Dummy
-from .utils import MockDispatcher
+from .utils import MockDispatcher, yield_control
 
 
 T = TypeVar("T")
@@ -169,6 +169,9 @@ async def engine(engine_config: EngineConfig, logs_content) -> YieldFixture[Engi
         await engine.terminate()
         SingletonMeta.detach_instance("Engine")
         del engine
+        # Since python 3.13, it sometimes takes more time to perform garbage
+        # collection and reclaim the unreferenced hardware
+        await yield_control()
         not_cleared = [_ for _ in _MetaHardware.instances]
         _MetaHardware.instances.clear()
         if not_cleared:
