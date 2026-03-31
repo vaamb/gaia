@@ -10,22 +10,22 @@ from gaia.hardware.utils import is_raspi
 
 if t.TYPE_CHECKING:
     if is_raspi():
-        from gaia.hardware.sensors._devices.gaia_bs18b20 import BS18B20Device
+        from gaia.hardware.sensors._devices.gaia_ds18b20 import DS18B20Device
     else:
-        from gaia.hardware.sensors._devices._compatibility import BS18B20Device
+        from gaia.hardware.sensors._devices._compatibility import DS18B20Device
 
 
 class OneWireSensor(OneWireAddressMixin, Sensor):
     ...
 
 
-class BS18B20(TemperatureSensor, OneWireSensor):
-    def _get_device(self) -> BS18B20Device:
+class DS18B20(TemperatureSensor, OneWireSensor):
+    def _get_device(self) -> DS18B20Device:
         if is_raspi():
-            from gaia.hardware.sensors._devices.gaia_bs18b20 import BS18B20Device
+            from gaia.hardware.sensors._devices.gaia_ds18b20 import DS18B20Device
         else:
-            from gaia.hardware.sensors._devices._compatibility import BS18B20Device
-        return BS18B20Device(self.device_address)
+            from gaia.hardware.sensors._devices._compatibility import DS18B20Device
+        return DS18B20Device(self.device_address)
 
     def _get_raw_data(self) -> float | None:
         return self.device.get_data()
@@ -34,6 +34,6 @@ class BS18B20(TemperatureSensor, OneWireSensor):
 onewire_sensor_models: dict[str, Type[OneWireSensor]] = {
     hardware.__name__: hardware
     for hardware in [
-        BS18B20,
+        DS18B20,
     ]
 }

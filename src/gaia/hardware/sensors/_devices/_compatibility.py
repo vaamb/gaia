@@ -109,6 +109,6 @@ class ENS160Device(CompatibilityDevice):
         }
 
 
-class BS18B20Device(CompatibilityDevice, TemperatureMixin):
+class DS18B20Device(CompatibilityDevice, TemperatureMixin):
     def get_data(self) -> float | None:
         return self.temperature

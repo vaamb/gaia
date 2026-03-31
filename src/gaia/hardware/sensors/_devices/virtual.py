@@ -5,7 +5,7 @@ import typing as t
 from gaia.hardware.virtual import VirtualDevice
 from gaia.hardware.sensors._devices._compatibility import (
     AHTx0Device,
-    BS18B20Device,
+    DS18B20Device,
     DHTBaseDevice,
     SeesawDevice,
     VCNL4040Device,
@@ -81,6 +81,6 @@ class VirtualSeesawDevice(VirtualDevice, VirtualTemperatureMixin, VirtualHumidit
     pass
 
 
-class VirtualBS18B20Device(VirtualDevice, VirtualTemperatureMixin, BS18B20Device):
+class VirtualDS18B20Device(VirtualDevice, VirtualTemperatureMixin, DS18B20Device):
     def get_data(self) -> float | None:
         return self.temperature
