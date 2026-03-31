@@ -32,3 +32,8 @@ Most require the installation of additional packages.
 
 Remote hardware communicating over WebSocket is also supported. Any device
 implementing the Gaia WebSocket protocol can act as a sensor or actuator.
+
+---
+
+Adding new hardware is straightforward — see
+[docs/adding_hardware.md](adding_hardware.md) for a step-by-step guide.
