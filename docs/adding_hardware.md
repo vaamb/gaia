@@ -18,25 +18,25 @@ The existing implementations in `src/gaia/hardware/sensors/` and
 Every hardware class must inherit exactly one address mixin, which determines
 how Gaia connects to the device:
 
-| Mixin | Address format | Use for |
-|---|---|---|
-| `gpioAddressMixin` | `GPIO_<pin>` | GPIO-connected devices |
-| `i2cAddressMixin` | `I2C_default` or `I2C_<bus>` | I2C devices |
-| `OneWireAddressMixin` | `ONEWIRE_<hex>` | 1-Wire devices |
-| `WebSocketAddressMixin` | `WS_<host>:<port>` | Remote WebSocket devices |
+| Mixin                   | Address format               | Use for                  |
+|-------------------------|------------------------------|--------------------------|
+| `gpioAddressMixin`      | `GPIO_<pin>`                 | GPIO-connected devices   |
+| `i2cAddressMixin`       | `I2C_default` or `I2C_<bus>` | I2C devices              |
+| `OneWireAddressMixin`   | `ONEWIRE_<hex>`              | 1-Wire devices           |
+| `WebSocketAddressMixin` | `WS_<host>:<port>`           | Remote WebSocket devices |
 
 ### Type mixins
 
 Every hardware class must also inherit at least one type mixin:
 
-| Mixin | Use for |
-|---|---|
-| `SensorMixin` | Sensors (reads data) |
-| `ActuatorMixin` | Actuators (receives commands) |
-| `SwitchMixin` | On/off actuators |
-| `DimmerMixin` | PWM/level actuators |
-| `DimmableSwitchMixin` | Combined switch + dimmer |
-| `CameraMixin` | Camera devices |
+| Mixin                 | Use for                       |
+|-----------------------|-------------------------------|
+| `SensorMixin`         | Sensors (reads data)          |
+| `ActuatorMixin`       | Actuators (receives commands) |
+| `SwitchMixin`         | On/off actuators              |
+| `DimmerMixin`         | PWM/level actuators           |
+| `DimmableSwitchMixin` | Combined switch + dimmer      |
+| `CameraMixin`         | Camera devices                |
 
 `Hardware.__init_subclass__` enforces these rules at class-definition time and
 will raise a `TypeError` if a concrete class is missing either mixin.
@@ -46,11 +46,11 @@ will raise a `TypeError` if a concrete class is missing either mixin.
 Rather than inheriting `SensorMixin` directly, prefer the typed base classes in
 `src/gaia/hardware/sensors/abc.py`:
 
-| Base class | Measures | `_get_raw_data()` return type |
-|---|---|---|
-| `TemperatureSensor` | temperature | `float \| None` |
-| `TempHumSensor` | temperature, humidity | `tuple[float \| None, float \| None]` |
-| `LightSensorBase` | light | implement `_get_lux() -> float` |
+| Base class          | Measures              | `_get_raw_data()` return type          |
+|---------------------|-----------------------|----------------------------------------|
+| `TemperatureSensor` | temperature           | `float \| None`                        |
+| `TempHumSensor`     | temperature, humidity | `tuple[float \| None, float \| None]`  |
+| `LightSensorBase`   | light                 | implement `_get_lux() -> float`        |
 
 For sensors that don't fit any of these, inherit `SensorMixin` directly and
 define `measures_available` and `get_data()` yourself (see `ENS160` for an
