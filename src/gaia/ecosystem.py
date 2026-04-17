@@ -46,9 +46,10 @@ class _EcosystemPayloads:
 
     @property
     def nycthemeral_info(self) -> gv.NycthemeralCycleInfo:
+        # Valid ignore
         return gv.NycthemeralCycleInfo(
             **self.config.nycthemeral_cycle,
-            **self.config.lighting_hours.model_dump(),
+            **self.config.lighting_hours.model_dump(),  # ty: ignore[invalid-argument-type]
         )
 
     @property

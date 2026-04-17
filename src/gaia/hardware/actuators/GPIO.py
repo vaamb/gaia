@@ -76,7 +76,7 @@ class gpioDimmer(DimmerMixin, gpioActuator):
 
     def _set_pwm_level(self, duty_cycle_in_percent: float | int) -> bool:
         duty_cycle_in_16_bit = duty_cycle_in_percent / 100 * (2**16 - 1)
-        self.dimmer.duty_cycle = duty_cycle_in_16_bit
+        self.dimmer.duty_cycle = int(duty_cycle_in_16_bit)
         # Allow a 0.5% tolerance
         return isclose(self.dimmer.duty_cycle, duty_cycle_in_16_bit, rel_tol=0.005)
 
