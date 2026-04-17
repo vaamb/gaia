@@ -22,8 +22,10 @@ class gpioSwitch(SwitchMixin, gpioActuator):
         self.pin.init(mode=self.OUT)
 
     async def _on_initialize(self) -> None:
-        await super()._on_initialize()
+        # Pin setup must be done before other `_on_initialize()` acting on them
+        #  (such as `turn_off()`) are called
         await run_sync(self._init_pin)
+        await super()._on_initialize()
 
     def _turn_on(self) -> bool:
         self.pin.value(val=1)
