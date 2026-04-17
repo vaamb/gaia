@@ -310,7 +310,7 @@ class ActuatorHandler:
             f"gaia.engine.{eco_name}.actuators.{self.group}")
         self._active: int = 0
         self._status: bool = False
-        self._level: float | None = None
+        self._level: float = 100
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         self._timer: Timer | None = None
         self._actuators: list[Actuator] | None = None
@@ -491,7 +491,7 @@ class ActuatorHandler:
         await self.set_status(False)
 
     @property
-    def level(self) -> float | None:
+    def level(self) -> float:
         return self._level
 
     async def set_level(self, pwm_level: float) -> bool:
