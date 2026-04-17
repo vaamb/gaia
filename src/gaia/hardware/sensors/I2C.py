@@ -37,7 +37,7 @@ class AHT20(TempHumSensor, i2cSensor):
     def _get_device(self) -> AHTx0Device:
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_ahtx0 import AHTx0Device  # ty: ignore[unresolved-import]
+                from adafruit_ahtx0 import AHTx0 as AHTx0Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit aht0 package is required. Run `pip install "
