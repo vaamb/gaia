@@ -67,7 +67,7 @@ async def test_status(light_handler: ActuatorHandler):
 @pytest.mark.asyncio
 async def test_level(light_handler: ActuatorHandler):
     # Test default level
-    assert light_handler.level == 100
+    assert light_handler.level == 0.0
     for light in get_lights(light_handler.ecosystem):
         assert (await light.get_pwm_level()) == 0
 

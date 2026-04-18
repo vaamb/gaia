@@ -117,7 +117,7 @@ class TestWeatherSubroutine:
         # The actuator handler should be back to its former state
         assert actuator_handler.mode is gv.ActuatorMode.automatic
         assert actuator_handler.status is False
-        assert actuator_handler.level == 100
+        assert actuator_handler.level == 0.0
 
         await weather_subroutine._unmount_actuator_handler("rain")
 
