@@ -310,7 +310,7 @@ class ActuatorHandler:
             f"gaia.engine.{eco_name}.actuators.{self.group}")
         self._active: int = 0
         self._status: bool = False
-        self._level: float = 100
+        self._level: float = 0.0
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         self._timer: Timer | None = None
         self._actuators: list[Actuator] | None = None

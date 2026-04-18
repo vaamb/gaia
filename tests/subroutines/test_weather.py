@@ -95,8 +95,8 @@ class TestWeatherSubroutine:
         job = weather_subroutine._create_job_func(
             job_name="test_job",
             actuator_handler=actuator_handler,
-            duration=0.5,
-            level=100.0
+            duration=0.25,
+            level=30.0
         )
         assert callable(job)
 
@@ -107,15 +107,17 @@ class TestWeatherSubroutine:
         assert isinstance(timer, Timer)
         # The actuator handler should be manual and on
         assert actuator_handler.mode is gv.ActuatorMode.manual
-        assert actuator_handler.status
+        assert actuator_handler.status is True
+        assert actuator_handler.level == 30.0
 
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(0.30)
 
         # The timer should be removed
         assert "test_job" not in weather_subroutine._timers
         # The actuator handler should be back to its former state
         assert actuator_handler.mode is gv.ActuatorMode.automatic
-        assert not actuator_handler.status
+        assert actuator_handler.status is False
+        assert actuator_handler.level == 0.0
 
         await weather_subroutine._unmount_actuator_handler("rain")
 
