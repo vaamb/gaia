@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from dispatcher import EventHandler, AsyncDispatcher
+from dispatcher import AsyncEventHandler, AsyncDispatcher
 from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
 from gaia import EcosystemConfig, Engine, EngineConfig
@@ -54,7 +54,7 @@ async def test_engine_message_broker(engine: Engine, logs_content):
     with pytest.raises(AttributeError):
         assert isinstance(engine.message_broker, AsyncDispatcher)
     with pytest.raises(AttributeError):
-        assert isinstance(engine.event_handler, EventHandler)
+        assert isinstance(engine.event_handler, AsyncEventHandler)
 
     # Test when communication is enabled in config
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
@@ -83,7 +83,7 @@ async def test_engine_message_broker(engine: Engine, logs_content):
 
     assert engine._message_broker is not None
     assert isinstance(engine.message_broker, AsyncDispatcher)
-    assert isinstance(engine.event_handler, EventHandler)
+    assert isinstance(engine.event_handler, AsyncEventHandler)
 
     # Test message broker start and stop
     with patch.object(engine.message_broker._connected, "is_set", return_value=True):
