@@ -184,7 +184,7 @@ class Events(AsyncEventHandler):
 
     def is_connected(self) -> bool:
         return (
-            self._dispatcher.connected
+            self.dispatcher.connected
             and monotonic() - self._last_heartbeat < HEARTBEAT_TIMEOUT
         )
 
@@ -212,7 +212,7 @@ class Events(AsyncEventHandler):
             await sleep(sleep_time)
 
     async def ping(self) -> None:
-        if self._dispatcher.connected:
+        if self.dispatcher.connected:
             try:
                 ping_data: gv.EnginePingPayloadDict = {
                     "engine_uid": self.engine.uid,
@@ -409,7 +409,7 @@ class Events(AsyncEventHandler):
             self.logger.warning(
                 "Received a wrongly formatted registration acknowledgment.")
             return
-        if self._dispatcher.host_uid != uuid:
+        if self.dispatcher.host_uid != uuid:
             self.logger.warning(
                 "Received a registration acknowledgment for another dispatcher.")
             return
