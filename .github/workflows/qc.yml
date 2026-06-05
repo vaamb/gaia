@@ -40,4 +40,4 @@ jobs:
       run: uv sync --extra camera --extra database --extra dispatcher --extra test
 
     - name: Type check with ty
-      run: uvx ty check src/
+      run: uv run ty check src/
