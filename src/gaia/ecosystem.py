@@ -585,7 +585,7 @@ class Ecosystem:
             subroutines_to_stop: list[SubroutineNames] = subroutine_names
             for subroutine in reversed(subroutines_to_stop):
                 if self._subroutines[subroutine].started:
-                    await self._subroutines[subroutine].stop()
+                    await self.stop_subroutine(subroutine)
             raise
         else:
             self.logger.debug("Ecosystem successfully started.")
@@ -598,7 +598,7 @@ class Ecosystem:
         self.logger.info("Shutting down the ecosystem.")
         for subroutine in reversed(subroutine_names):
             if self._subroutines[subroutine].started:
-                await self._subroutines[subroutine].stop()
+                await self.stop_subroutine(subroutine)
         if not any(
                 self._subroutines[subroutine].started
                 for subroutine in subroutine_names
