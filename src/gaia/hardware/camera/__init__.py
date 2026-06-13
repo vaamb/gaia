@@ -27,7 +27,7 @@ class PiCamera(PiCameraAddressMixin, Camera):
                 from picamera2 import Picamera2 as Picamera2Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "picamera package is required. Run `pip install "
+                    "picamera package is required. Run `uv pip install "
                     "picamera` in your virtual env."
                 )
         else:

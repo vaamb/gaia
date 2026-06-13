@@ -40,7 +40,7 @@ class AHT20(TempHumSensor, i2cSensor):
                 from adafruit_ahtx0 import AHTx0 as AHTx0Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit aht0 package is required. Run `pip install "
+                    "Adafruit aht0 package is required. Run `uv pip install "
                     "adafruit-circuitpython-ahtx0` in your virtual env."
                 )
         else:
@@ -72,7 +72,7 @@ class ENS160(i2cSensor):
                 from adafruit_ens160 import ENS160 as ENS160Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit ens160 package is required. Run `pip install "
+                    "Adafruit ens160 package is required. Run `uv pip install "
                     "adafruit-circuitpython-ens160` in your virtual env."
                 )
         else:
@@ -152,7 +152,7 @@ class VEML7700(LightSensorBase, i2cSensor):
                 from adafruit_veml7700 import VEML7700 as VEML7700Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit veml7700 package is required. Run `pip install "
+                    "Adafruit veml7700 package is required. Run `uv pip install "
                     "adafruit-circuitpython-veml7700` in your virtual env."
                 )
         else:
@@ -175,7 +175,7 @@ class VCNL4040(LightSensorBase, i2cSensor):
                 from adafruit_vcnl4040 import VCNL4040 as VCNL4040Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit vcnl4040 package is required. Run `pip install "
+                    "Adafruit vcnl4040 package is required. Run `uv pip install "
                     "adafruit-circuitpython-vcnl4040` in your virtual env."
                 )
         else:
@@ -198,7 +198,7 @@ class CapacitiveSensorMixin(i2cSensor):
                 from adafruit_seesaw.seesaw import Seesaw  as SeesawDevice # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit seesaw package is required. Run `pip install "
+                    "Adafruit seesaw package is required. Run `uv pip install "
                     "adafruit-circuitpython-seesaw` in your virtual env."
                 )
         else:

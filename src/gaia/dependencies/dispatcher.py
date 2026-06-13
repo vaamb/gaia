@@ -19,6 +19,6 @@ def check_dependencies() -> None:
     if _uninstalled_dependencies is True:
         raise RuntimeError(  # pragma: no cover
             "All the dependencies required to use the dispatcher have not been "
-            "installed. Run 'pip install . [dispatcher]' in your virtual "
+            "installed. Run 'uv sync --inexact --extra dispatcher' in your virtual "
             "environment to install them."
         )
