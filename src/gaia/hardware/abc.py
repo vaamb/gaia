@@ -369,7 +369,7 @@ class _MetaHardware(ABCMeta):
             #  instance of the concrete subclass
             hardware: Hardware = cls.__new__(cls, *args, **kwargs)  # ty: ignore[invalid-assignment]
             hardware.__init__(*args, **kwargs)
-            if kwargs.get("ecosystem"):
+            if kwargs.get("ecosystem_uid"):
                 cls.instances[uid] = hardware
             return hardware
 
