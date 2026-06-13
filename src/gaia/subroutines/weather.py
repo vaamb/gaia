@@ -63,12 +63,7 @@ class Weather(SubroutineTemplate[Actuator]):
             hardware_needed = hardware_needed | extra
         return hardware_needed
 
-    async def refresh(self) -> None:
-        # Refresh hardware
-        await super().refresh()
-        # Make sure the routine is still running
-        if not self.started:
-            return
+    async def _refresh(self) -> None:
         # Remove all jobs to make sure they will be updated if they changed
         for job in [*self._jobs]:
             await self._remove_job(job)

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 
 from gaia import Ecosystem
@@ -51,6 +53,34 @@ async def test_states(dummy_subroutine: Dummy, logs_content):
     with logs_content() as logs:
         assert "Disabling the subroutine." in logs
     assert not dummy_subroutine.enabled
+
+
+@pytest.mark.asyncio
+async def test_start_and_stop_failures(dummy_subroutine: Dummy, logs_content):
+    dummy_subroutine.enable()
+
+    # A failing `_start()` should be logged, re-raised and leave the
+    # subroutine stopped
+    with patch.object(dummy_subroutine, "_start", side_effect=RuntimeError("Oops")):
+        with pytest.raises(RuntimeError, match=r"Oops"):
+            await dummy_subroutine.start()
+    with logs_content() as logs:
+        assert "Starting failed." in logs
+    assert not dummy_subroutine.started
+
+    await dummy_subroutine.start()
+
+    # A failing `_stop()` should be logged, re-raised and leave the
+    # subroutine started
+    with patch.object(dummy_subroutine, "_stop", side_effect=RuntimeError("Oops")):
+        with pytest.raises(RuntimeError, match=r"Oops"):
+            await dummy_subroutine.stop()
+    with logs_content() as logs:
+        assert "Stopping failed." in logs
+    assert dummy_subroutine.started
+
+    await dummy_subroutine.stop()
+    dummy_subroutine.disable()
 
 
 def test_properties(dummy_subroutine: Dummy, ecosystem: Ecosystem):

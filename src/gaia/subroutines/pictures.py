@@ -192,11 +192,7 @@ class Pictures(SubroutineTemplate[Camera]):
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera))
 
-    async def refresh(self) -> None:
-        await super().refresh()
-        # Make sure the routine is still running
-        if not self.started:
-            return
+    async def _refresh(self) -> None:
         # Load required background arrays
         await self._load_background_arrays()
 
