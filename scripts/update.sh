@@ -99,11 +99,11 @@ update_repo() {
     cd "${repo_dir}" || return 1
 
     # Fetch all updates before computing the tags, otherwise a newly
-    #  released version would not be visible
+    #  released version would not be visible. Also done during dry runs:
+    #  fetching does not touch the working tree and the reported versions
+    #  would otherwise be stale
     log INFO "Fetching updates for ${repo_name}..."
-    if [[ "${DRY_RUN}" == false ]]; then
-        git fetch --all --tags --prune
-    fi
+    git fetch --all --tags --prune
 
     # Get current and latest tags
     local current_tag
