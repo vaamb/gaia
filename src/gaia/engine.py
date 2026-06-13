@@ -717,13 +717,14 @@ class Engine(metaclass=SingletonMeta):
         self._state = EngineState.PAUSED
 
     async def resume(self) -> None:
-        if not self._state == EngineState.PAUSED:
+        if self._state != EngineState.PAUSED:
             raise RuntimeError("Cannot resume a non-paused engine")
         self.logger.info("Resuming Gaia ...")
+        # Set the state to running before unlocking the loop
+        self._state = EngineState.RUNNING
         # Send a config signal so the loop unlocks and refreshes the ecosystems
         await self._notify_loop()
         self.scheduler.resume()
-        self._state = EngineState.RUNNING
 
     def _handle_stop_signal(self) -> None:
         self.logger.info("Received a 'stop' signal")
