@@ -296,6 +296,8 @@ class Ecosystem:
         try:
             await subroutine.start()
         except Exception as e:
+            # Log without re-raising so the ecosystem can run in a degraded
+            # state with its other subroutines if one fails to start
             self.logger.error(
                 f"Encountered an error while starting the subroutine "
                 f"'{subroutine}'. ERROR msg: `{e.__class__.__name__}: {e}`."
