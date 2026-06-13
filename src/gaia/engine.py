@@ -782,7 +782,13 @@ class Engine(metaclass=SingletonMeta):
 
     async def run(self) -> None:
         self.add_signal_handler()
-        await self.start()
-        await self.wait()
-        await self.stop()
-        await self.terminate()
+        try:
+            await self.start()
+            await self.wait()
+        finally:
+            # Clean up even if starting or waiting failed. A partial start
+            # leaves the engine non-started, in which case stop() must be
+            # skipped but terminate() can still release the resources.
+            if self.started:
+                await self.stop()
+            await self.terminate()
