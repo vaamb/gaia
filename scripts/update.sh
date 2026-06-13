@@ -3,6 +3,14 @@
 # Exit on error, unset variable, and pipefail
 set -euo pipefail
 
+# `copy_scripts()` overwrites this script while it is running, which is unsafe
+#  as bash reads scripts incrementally: run from a temporary copy instead
+if [[ "${BASH_SOURCE[0]}" -ef "$0" && -z "${GAIA_UPDATE_SCRIPT_COPY:-}" ]]; then
+    TMP_SCRIPT=$(mktemp "/tmp/gaia_update_script_XXXXXX")
+    cp "${BASH_SOURCE[0]}" "${TMP_SCRIPT}"
+    GAIA_UPDATE_SCRIPT_COPY="${TMP_SCRIPT}" exec bash "${TMP_SCRIPT}" "$@"
+fi
+
 # Check if GAIA_DIR is set and the directory exists
 if [[ ! -d "${GAIA_DIR}" ]]; then
     echo "GAIA_DIR environment variable is not set or the directory does not exist. Please source your profile or run the installation script first."
@@ -14,7 +22,7 @@ cd "${GAIA_DIR}" || { echo "Failed to change to Gaia directory: ${GAIA_DIR}"; ex
 # Load logging functions
 readonly DATETIME=$(date +%Y%m%d_%H%M%S)
 readonly LOG_FILE="/tmp/gaia_update_${DATETIME}.log"
-. "${GAIA_DIR}/scripts/logging.sh"
+. "${GAIA_DIR}/scripts/utils/logging.sh"
 
 readonly BACKUP_DIR="/tmp/gaia_backup_${DATETIME}"
 
@@ -59,10 +67,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 check_requirements() {
-    # Check if uv is installed
-    if ! command -v uv &> /dev/null; then
-        die "uv is not installed. Please install it first."
-    fi
+    # Check that the required commands are available
+    local cmd
+    for cmd in dos2unix git rsync uv; do
+        if ! command -v "${cmd}" &> /dev/null; then
+            die "${cmd} is not installed. Please install it first."
+        fi
+    done
 
     # Check if virtual environment exists
     if [[ ! -d ".venv" && "${DRY_RUN}" == false ]]; then
@@ -90,11 +101,19 @@ update_repo() {
 
     cd "${repo_dir}" || return 1
 
+    # Fetch all updates before computing the tags, otherwise a newly
+    #  released version would not be visible. Also done during dry runs:
+    #  fetching does not touch the working tree and the reported versions
+    #  would otherwise be stale
+    log INFO "Fetching updates for ${repo_name}..."
+    git fetch --all --tags --prune
+
     # Get current and latest tags
     local current_tag
     current_tag=$(git describe --tags 2>/dev/null || echo "No tags found")
     local latest_tag
-    latest_tag=$(git describe --tags "$(git rev-list --tags --max-count=1 2>/dev/null)" 2>/dev/null || echo "No tags found")
+    latest_tag=$(git for-each-ref --sort=-version:refname --count=1 --format='%(refname:short)' refs/tags)
+    latest_tag=${latest_tag:-"No tags found"}
 
     log INFO "Current version: ${current_tag}"
     log INFO "Latest version:  ${latest_tag}"
@@ -104,9 +123,7 @@ update_repo() {
         return 0
     fi
 
-    # Get current branch and status
-    local current_branch
-    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    # Get current status
     local has_changes
     has_changes=$(git status --porcelain)
 
@@ -129,12 +146,6 @@ update_repo() {
         fi
     fi
 
-    # Fetch all updates
-    log INFO "Fetching updates for ${repo_name}..."
-    if [[ "${DRY_RUN}" == false ]]; then
-        git fetch --all --tags --prune
-    fi
-
     if [[ "${DRY_RUN}" == true ]]; then
         log INFO "[DRY RUN] Would update ${repo_name} from ${current_tag} to ${latest_tag}"
         return 0
@@ -144,21 +155,13 @@ update_repo() {
         # Safe mode: pin to the latest release tag
         log INFO "Updating ${repo_name} to ${latest_tag}..."
         git checkout "${latest_tag}"
-
-        # Return to the original branch
-        if [[ "${current_branch}" != "HEAD" ]]; then
-            log INFO "Returning to branch ${current_branch}..."
-            git checkout "${current_branch}"
-        else
-            log WARN "Was on detached HEAD before update. Remaining on ${latest_tag}."
-        fi
     else
         # Unsafe mode: pull the latest from the remote default branch
         local remote_default
         remote_default=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "master")
         log INFO "Updating ${repo_name} to the latest development version (${remote_default})..."
         git checkout "${remote_default}"
-        git pull
+        git pull --ff-only
     fi
 
     # Apply stashed changes (runs for both safe and unsafe paths)
@@ -183,7 +186,7 @@ update_packages() {
     fi
 
     # Update pyproject.toml
-    "${GAIA_DIR}/lib/gaia/scripts/gen_pyproject.sh" "${GAIA_DIR}" ||
+    "${GAIA_DIR}/lib/gaia/scripts/utils/gen_pyproject.sh" "${GAIA_DIR}" ||
         die "Failed to update pyproject.toml"
 
     # Update uv lock and sync packages
@@ -200,10 +203,12 @@ copy_scripts() {
     # Copy scripts
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
         die "Failed to copy scripts"
-    # Convert scripts to unix format
-    dos2unix "${GAIA_DIR}/scripts/"*.sh
     # Make scripts executable
-    chmod +x "${GAIA_DIR}/scripts/"*.sh
+    chmod +x "${OURANOS_DIR}/scripts/"*.sh
+    chmod +x "${OURANOS_DIR}/scripts/utils/"*.sh
+    # Convert scripts to unix format
+    dos2unix "${OURANOS_DIR}/scripts/"*.sh
+    dos2unix "${OURANOS_DIR}/scripts/utils/"*.sh
     # Copy migrations and alembic.ini
     cp -r "${GAIA_DIR}/lib/gaia/migrations/"* "${GAIA_DIR}/migrations/" ||
         die "Failed to copy migration scripts"
@@ -213,14 +218,14 @@ copy_scripts() {
 #<<<Copy<<<
 
 update_profile() {
-    ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
+    "${GAIA_DIR}/scripts/utils/gen_profile.sh" "${GAIA_DIR}" ||
         die "Failed to update shell profile"
 }
 
 update_service() {
     local service_file="${GAIA_DIR}/scripts/gaia.service"
 
-    ${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${service_file}" ||
+    "${GAIA_DIR}/scripts/utils/gen_service.sh" "${GAIA_DIR}" "${service_file}" ||
         die "Failed to generate systemd service"
 
     # Update service
@@ -240,7 +245,9 @@ cleanup() {
         log WARN "Update failed. Check the log file for details: ${LOG_FILE}"
         if [[ -d "${BACKUP_DIR}" && "${DRY_RUN}" == false ]]; then
             log WARN "Attempting rollback from backup..."
-            if ! rsync -a "${BACKUP_DIR}/" "${GAIA_DIR}/"; then
+            # --delete removes the leftovers of the failed update; .venv is
+            #  excluded as it is not part of the backup
+            if ! rsync -a --delete --exclude='.venv' "${BACKUP_DIR}/" "${GAIA_DIR}/"; then
                 log WARN "Rollback failed. Backup is preserved at ${BACKUP_DIR}"
             else
                 rm -rf "${BACKUP_DIR}"
@@ -255,6 +262,11 @@ cleanup() {
 
     # Reset terminal colors
     echo -e "${NC}"
+
+    # Remove the temporary copy of this script, if any
+    if [[ -n "${GAIA_UPDATE_SCRIPT_COPY:-}" ]]; then
+        rm -f "${GAIA_UPDATE_SCRIPT_COPY}"
+    fi
 }
 
 main () {

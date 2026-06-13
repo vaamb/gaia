@@ -23,8 +23,8 @@ class TestInstallScript(TestCase):
         cls.scripts_dir = cls.root_dir / "scripts"
         cls.install_script_path = cls.scripts_dir / "install.sh"
         cls.update_script_path = cls.scripts_dir / "update.sh"
-        cls.logging_script_path = cls.scripts_dir / "logging.sh"
-        cls.master_pyproject_path = cls.scripts_dir / "gen_pyproject.sh"
+        cls.logging_script_path = cls.scripts_dir / "utils" / "logging.sh"
+        cls.master_pyproject_path = cls.scripts_dir / "utils" / "gen_pyproject.sh"
 
     def test_gaia_version(self):
         # Sync the version between gaia and install.sh
