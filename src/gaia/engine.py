@@ -674,6 +674,8 @@ class Engine(metaclass=SingletonMeta):
         on the 'ecosystem.cfg' file and refresh the Ecosystems when changes are
         made in the file.
         """
+        if self.paused:
+            raise RuntimeError("Cannot start a paused engine. Resume it instead.")
         if self.running:
             raise RuntimeError("Engine can only be started once.")
         if self.stopped:
