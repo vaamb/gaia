@@ -168,6 +168,13 @@ class TestAddress:
 
 
 @pytest.mark.asyncio
+async def test_hardware_registry():
+    hardware_cfg = gv.HardwareConfig(**{"uid": sensor_uid, **IO_dict[sensor_uid]})
+    hardware = await Hardware.initialize(hardware_cfg, ecosystem_uid)
+    assert hardware.uid in _MetaHardware.instances
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "hardware_cls",
     hardware_models.values(),
@@ -206,7 +213,7 @@ async def test_hardware_methods(hardware_cls: Type[Hardware], virtual_ecosystem:
 
 @pytest.mark.asyncio
 async def test_virtual_sensor(virtual_ecosystem: VirtualEcosystem):
-    hardware_cfg = gv.HardwareConfig(**{"uid": sensor_uid, **IO_dict[sensor_uid]})
+    hardware_cfg = gv.HardwareConfig(**{"uid": f"extra_{sensor_uid}", **IO_dict[sensor_uid]})
     hardware_cfg.model = f"virtual{hardware_cfg.model}"
     sensor = cast(virtualDHT22, await Hardware.initialize(hardware_cfg, ecosystem_uid))
     measures = sensor.measures
@@ -229,7 +236,7 @@ async def test_virtual_sensor(virtual_ecosystem: VirtualEcosystem):
 @pytest.mark.asyncio
 async def test_i2c_address_injection(virtual_ecosystem: VirtualEcosystem):
     for hardware_uid in (i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid):
-        hardware_cfg = gv.HardwareConfig(**{"uid": hardware_uid, **IO_dict[hardware_uid]})
+        hardware_cfg = gv.HardwareConfig(**{"uid": f"extra_{hardware_uid}", **IO_dict[hardware_uid]})
         hardware = await Hardware.initialize(hardware_cfg, ecosystem_uid)
         assert hardware.address.main not in ("default", "def", 0x0)
         assert hardware.address.multiplexer_address != 0x0
