@@ -90,6 +90,13 @@ update_repo() {
 
     cd "${repo_dir}" || return 1
 
+    # Fetch all updates before computing the tags, otherwise a newly
+    #  released version would not be visible
+    log INFO "Fetching updates for ${repo_name}..."
+    if [[ "${DRY_RUN}" == false ]]; then
+        git fetch --all --tags --prune
+    fi
+
     # Get current and latest tags
     local current_tag
     current_tag=$(git describe --tags 2>/dev/null || echo "No tags found")
@@ -127,12 +134,6 @@ update_repo() {
                 log WARN "Stash command ran but no stash was created."
             fi
         fi
-    fi
-
-    # Fetch all updates
-    log INFO "Fetching updates for ${repo_name}..."
-    if [[ "${DRY_RUN}" == false ]]; then
-        git fetch --all --tags --prune
     fi
 
     if [[ "${DRY_RUN}" == true ]]; then
