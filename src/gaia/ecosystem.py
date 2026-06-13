@@ -511,7 +511,9 @@ class Ecosystem:
         )
         existing: set[str] = set()
         stale: set[str] = set()
-        for hardware_uid in self.hardware:
+        # Use `self._hardware` not to have spurious warnings from
+        #  `self._check_hardware_is_up_to_date()`
+        for hardware_uid in self._hardware:
             existing.add(hardware_uid)
             in_config = self.config.hardware_dict.get(hardware_uid)
             if in_config is None:
