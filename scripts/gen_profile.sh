@@ -37,6 +37,3 @@ gaia() {
 complete -W "start stop restart status logs stdout update" gaia
 #<<<Gaia variables<<<
 EOF
-
-# shellcheck source=/dev/null
-source "${HOME}/.profile"
