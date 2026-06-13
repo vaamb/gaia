@@ -239,7 +239,9 @@ cleanup() {
         log WARN "Update failed. Check the log file for details: ${LOG_FILE}"
         if [[ -d "${BACKUP_DIR}" && "${DRY_RUN}" == false ]]; then
             log WARN "Attempting rollback from backup..."
-            if ! rsync -a "${BACKUP_DIR}/" "${GAIA_DIR}/"; then
+            # --delete removes the leftovers of the failed update; .venv is
+            #  excluded as it is not part of the backup
+            if ! rsync -a --delete --exclude='.venv' "${BACKUP_DIR}/" "${GAIA_DIR}/"; then
                 log WARN "Rollback failed. Backup is preserved at ${BACKUP_DIR}"
             else
                 rm -rf "${BACKUP_DIR}"
