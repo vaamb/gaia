@@ -348,7 +348,7 @@ class Ecosystem:
 
         subroutines_enabled = self._config.get_subroutines_enabled()
         subroutines_needed = set(subroutine_names).intersection(subroutines_enabled)
-        if not subroutines_needed:
+        if not subroutines_needed and not self.subroutines_started:
             self.logger.debug("No subroutine needed.")
             return
 
