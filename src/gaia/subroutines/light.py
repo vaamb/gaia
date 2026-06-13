@@ -60,7 +60,15 @@ class Light(SubroutineTemplate[Actuator]):
     async def routine_task(self) -> None:
         while True:
             start = monotonic()
-            await self.routine()
+            try:
+                await self.routine()
+            except Exception as e:
+                # Log without re-raising so a transient error does not
+                # permanently kill the light routine task
+                self.logger.error(
+                    f"Encountered an error in the light routine task. "
+                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                )
             sleep_time = max(self._loop_period - (monotonic() - start), 0.01)
             await asyncio.sleep(sleep_time)
 
