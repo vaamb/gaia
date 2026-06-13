@@ -412,7 +412,15 @@ class Engine(metaclass=SingletonMeta):
             async with self.config.new_config:
                 await self.config.new_config.wait()
             if self.running:
-                await self.refresh_ecosystems(send_info=True)
+                try:
+                    await self.refresh_ecosystems(send_info=True)
+                except Exception as e:
+                    # Log without re-raising so the loop keeps reacting to
+                    # config changes even if one refresh fails
+                    self.logger.error(
+                        f"Encountered an error while refreshing the ecosystems. "
+                        f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                    )
             if self.started:
                 await sleep(0.1)  # Allow to do other stuff if there are too much config changes
             else:
