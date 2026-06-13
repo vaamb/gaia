@@ -8,7 +8,7 @@ readonly DATETIME=$(date +%Y%m%d_%H%M%S)
 rm -f /tmp/gaia_stop_*.log
 readonly LOG_FILE="/tmp/gaia_stop_${DATETIME}.log"
 readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-. "${SCRIPT_DIR}/logging.sh"
+. "${SCRIPT_DIR}/utils/logging.sh"
 
 # Check if GAIA_DIR is set
 if [[ -z "${GAIA_DIR:-}" ]]; then

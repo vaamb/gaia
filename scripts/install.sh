@@ -241,10 +241,12 @@ copy_scripts() {
     # Copy scripts
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
         die "Failed to copy scripts"
-    # Convert scripts to unix format
-    dos2unix "${GAIA_DIR}/scripts/"*.sh
     # Make scripts executable
-    chmod +x "${GAIA_DIR}/scripts/"*.sh
+    chmod +x "${OURANOS_DIR}/scripts/"*.sh
+    chmod +x "${OURANOS_DIR}/scripts/utils/"*.sh
+    # Convert scripts to unix format
+    dos2unix "${OURANOS_DIR}/scripts/"*.sh
+    dos2unix "${OURANOS_DIR}/scripts/utils/"*.sh
     # Copy migrations and alembic.ini
     cp -r "${GAIA_DIR}/lib/gaia/migrations/"* "${GAIA_DIR}/migrations/" ||
         die "Failed to copy migration scripts"
@@ -259,7 +261,7 @@ setup_uv_and_sync() {
 
     # Generate the master pyproject.toml
     log INFO "Creating the master pyproject.toml..."
-    "${GAIA_DIR}/scripts/gen_pyproject.sh" "${GAIA_DIR}" ||
+    "${GAIA_DIR}/scripts/utils/gen_pyproject.sh" "${GAIA_DIR}" ||
         die "Failed to generate Gaia pyproject.toml"
 
     # Sync virtual environment
@@ -269,14 +271,14 @@ setup_uv_and_sync() {
 
 update_profile() {
     # Update .profile
-    ${GAIA_DIR}/scripts/gen_profile.sh "${GAIA_DIR}" ||
+    "${GAIA_DIR}/scripts/utils/gen_profile.sh" "${GAIA_DIR}" ||
         log WARN "Failed to update shell profile"
 }
 
 install_service() {
     local service_file="${GAIA_DIR}/scripts/gaia.service"
 
-    ${GAIA_DIR}/scripts/gen_service.sh "${GAIA_DIR}" "${service_file}" ||
+    "${GAIA_DIR}/scripts/utils/gen_service.sh" "${GAIA_DIR}" "${service_file}" ||
         log WARN "Failed to generate systemd service"
 
     # Install service

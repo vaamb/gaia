@@ -8,7 +8,7 @@ readonly DATETIME=$(date +%Y%m%d_%H%M%S)
 rm -f /tmp/gaia_start_*.log
 readonly LOG_FILE="/tmp/gaia_start_${DATETIME}.log"
 readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-. "${SCRIPT_DIR}/logging.sh"
+. "${SCRIPT_DIR}/utils/logging.sh"
 
 # Default values
 FOREGROUND=false
