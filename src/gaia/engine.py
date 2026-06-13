@@ -121,6 +121,7 @@ class Engine(metaclass=SingletonMeta):
         WebSocketAddressMixin._websocket_manager = None
         self._db = None
         self._message_broker = None
+        self._event_handler = None
         self._state = EngineState.TERMINATED
         self.logger.info("Gaia terminated.")
 
