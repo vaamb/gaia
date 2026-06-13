@@ -111,11 +111,7 @@ class Sensors(SubroutineTemplate[Sensor]):
     def get_hardware_needed_uid(self) -> set[str]:
         return set(self.ecosystem.get_hardware_group_uids(gv.HardwareType.sensor))
 
-    async def refresh(self) -> None:
-        await super().refresh()
-        # Make sure the routine is still running
-        if not self.started:
-            return
+    async def _refresh(self) -> None:
         # Refresh climate and light subroutines if they are running
         if self.ecosystem.get_subroutine_status("climate"):
             climate_subroutine: Climate = self.ecosystem.get_subroutine("climate")

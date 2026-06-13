@@ -110,11 +110,7 @@ class Light(SubroutineTemplate[Actuator]):
         actuator_group: str = self._get_actuator_group()
         return set(self.ecosystem.get_hardware_group_uids(actuator_group))
 
-    async def refresh(self) -> None:
-        await super().refresh()
-        # Make sure the routine is still running
-        if not self.started:
-            return
+    async def _refresh(self) -> None:
         # Make sure PID is in sync with actuator handler
         assert self._pid is not None
         # Refresh the actuator handler in case the actuator group name has changed

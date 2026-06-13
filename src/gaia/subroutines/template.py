@@ -120,6 +120,11 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
         }
 
     async def refresh(self) -> None:
+        """Refresh the subroutine state based on the current configuration.
+
+        If the subroutine is no longer manageable, it is stopped instead of
+        being refreshed.
+        """
         assert all(
             hardware.model in self.hardware_choices
             for hardware in self.hardware.values()
@@ -129,8 +134,18 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
             self.logger.warning(
                 f"The {self.name.capitalize()} subroutine is not manageable and "
                 f"will stop.")
-            await self.stop()
+            if self.started:
+                await self.stop()
             return
+        if self.started:
+            await self._refresh()
+
+    async def _refresh(self) -> None:
+        """Refresh the subroutine-specific state.
+
+        Subclasses should override this method rather than `refresh()`. It is
+        only called when the subroutine is started and manageable.
+        """
 
     async def start(self) -> None:
         if self.started:
@@ -141,7 +156,6 @@ class SubroutineTemplate(ABC, Generic[HardwareT]):
             raise RuntimeError("The subroutine is not manageable.")
         self.logger.debug("Starting the subroutine.")
         try:
-            await self.refresh()
             await self._start()
             self.logger.debug("Successfully started.")
         except Exception as e:

@@ -101,12 +101,7 @@ class Climate(SubroutineTemplate[Actuator]):
             hardware_needed = hardware_needed | extra
         return hardware_needed
 
-    async def refresh(self) -> None:
-        # Refresh hardware
-        await super().refresh()
-        # Make sure the routine is still running
-        if not self.started:
-            return
+    async def _refresh(self) -> None:
         # Make sure PIDs are in sync with actuator handlers
         assert self._pids is not None
         # Activate, deactivate and reset actuator handlers if required
