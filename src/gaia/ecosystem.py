@@ -519,6 +519,13 @@ class Ecosystem:
                 continue
             # /!\ Do not hold a reference to hardware or its reference count will never reach 0
             current = gv.to_anonymous(self.hardware[hardware_uid].dict_repr(), "uid")
+            # When virtualization is enabled, the mounted hardware's model gets
+            # a "virtual" prefix (cf. `add_hardware`) that the config doesn't have
+            if (
+                    current["model"].startswith("virtual")
+                    and not in_config["model"].startswith("virtual")
+            ):
+                current["model"] = current["model"].removeprefix("virtual")
             if current != in_config:
                 stale.add(hardware_uid)
         # First remove hardware not in config anymore
