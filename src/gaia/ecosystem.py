@@ -362,7 +362,6 @@ class Ecosystem:
         # Finally, start the new subroutines
         to_start = subroutines_needed - self.subroutines_started
         for subroutine in order_subroutines(to_start):
-            self.logger.debug(f"Starting the subroutine '{subroutine}'.")
             await self.start_subroutine(subroutine)
 
     def terminate_subroutines(self) -> None:
