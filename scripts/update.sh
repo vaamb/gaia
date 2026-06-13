@@ -3,6 +3,14 @@
 # Exit on error, unset variable, and pipefail
 set -euo pipefail
 
+# `copy_scripts()` overwrites this script while it is running, which is unsafe
+#  as bash reads scripts incrementally: run from a temporary copy instead
+if [[ "${BASH_SOURCE[0]}" -ef "$0" && -z "${GAIA_UPDATE_SCRIPT_COPY:-}" ]]; then
+    TMP_SCRIPT=$(mktemp "/tmp/gaia_update_script_XXXXXX")
+    cp "${BASH_SOURCE[0]}" "${TMP_SCRIPT}"
+    GAIA_UPDATE_SCRIPT_COPY="${TMP_SCRIPT}" exec bash "${TMP_SCRIPT}" "$@"
+fi
+
 # Check if GAIA_DIR is set and the directory exists
 if [[ ! -d "${GAIA_DIR}" ]]; then
     echo "GAIA_DIR environment variable is not set or the directory does not exist. Please source your profile or run the installation script first."
@@ -246,6 +254,11 @@ cleanup() {
 
     # Reset terminal colors
     echo -e "${NC}"
+
+    # Remove the temporary copy of this script, if any
+    if [[ -n "${GAIA_UPDATE_SCRIPT_COPY:-}" ]]; then
+        rm -f "${GAIA_UPDATE_SCRIPT_COPY}"
+    fi
 }
 
 main () {
