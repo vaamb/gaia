@@ -707,8 +707,7 @@ class Engine(metaclass=SingletonMeta):
         if not self.started:
             raise RuntimeError("Gaia needs to be started in order to wait.")
         self.logger.info("Running ...")
-        while not self._stop_event.is_set():
-            await sleep(0.5)
+        await self._stop_event.wait()
 
     def pause(self) -> None:
         if not self.running:
