@@ -111,9 +111,7 @@ update_repo() {
         return 0
     fi
 
-    # Get current branch and status
-    local current_branch
-    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    # Get current status
     local has_changes
     has_changes=$(git status --porcelain)
 
@@ -145,21 +143,13 @@ update_repo() {
         # Safe mode: pin to the latest release tag
         log INFO "Updating ${repo_name} to ${latest_tag}..."
         git checkout "${latest_tag}"
-
-        # Return to the original branch
-        if [[ "${current_branch}" != "HEAD" ]]; then
-            log INFO "Returning to branch ${current_branch}..."
-            git checkout "${current_branch}"
-        else
-            log WARN "Was on detached HEAD before update. Remaining on ${latest_tag}."
-        fi
     else
         # Unsafe mode: pull the latest from the remote default branch
         local remote_default
         remote_default=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "master")
         log INFO "Updating ${repo_name} to the latest development version (${remote_default})..."
         git checkout "${remote_default}"
-        git pull
+        git pull --ff-only
     fi
 
     # Apply stashed changes (runs for both safe and unsafe paths)
