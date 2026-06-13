@@ -121,6 +121,7 @@ class Engine(metaclass=SingletonMeta):
         WebSocketAddressMixin._websocket_manager = None
         self._db = None
         self._message_broker = None
+        self._event_handler = None
         self._state = EngineState.TERMINATED
         self.logger.info("Gaia terminated.")
 
@@ -674,6 +675,8 @@ class Engine(metaclass=SingletonMeta):
         on the 'ecosystem.cfg' file and refresh the Ecosystems when changes are
         made in the file.
         """
+        if self.paused:
+            raise RuntimeError("Cannot start a paused engine. Resume it instead.")
         if self.running:
             raise RuntimeError("Engine can only be started once.")
         if self.stopped:
@@ -717,13 +720,14 @@ class Engine(metaclass=SingletonMeta):
         self._state = EngineState.PAUSED
 
     async def resume(self) -> None:
-        if not self._state == EngineState.PAUSED:
+        if self._state != EngineState.PAUSED:
             raise RuntimeError("Cannot resume a non-paused engine")
         self.logger.info("Resuming Gaia ...")
+        # Set the state to running before unlocking the loop
+        self._state = EngineState.RUNNING
         # Send a config signal so the loop unlocks and refreshes the ecosystems
         await self._notify_loop()
         self.scheduler.resume()
-        self._state = EngineState.RUNNING
 
     def _handle_stop_signal(self) -> None:
         self.logger.info("Received a 'stop' signal")
@@ -745,6 +749,10 @@ class Engine(metaclass=SingletonMeta):
         # Send a config signal so the loop unlocks and stops
         await self._notify_loop()
         self.task.cancel()
+        try:
+            await self.task
+        except asyncio.CancelledError:
+            pass
         self.task = None
         # Stop ecosystems
         for ecosystem_uid in [*self.ecosystems_started]:
@@ -774,7 +782,13 @@ class Engine(metaclass=SingletonMeta):
 
     async def run(self) -> None:
         self.add_signal_handler()
-        await self.start()
-        await self.wait()
-        await self.stop()
-        await self.terminate()
+        try:
+            await self.start()
+            await self.wait()
+        finally:
+            # Clean up even if starting or waiting failed. A partial start
+            # leaves the engine non-started, in which case stop() must be
+            # skipped but terminate() can still release the resources.
+            if self.started:
+                await self.stop()
+            await self.terminate()
