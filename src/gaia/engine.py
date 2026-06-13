@@ -412,7 +412,15 @@ class Engine(metaclass=SingletonMeta):
             async with self.config.new_config:
                 await self.config.new_config.wait()
             if self.running:
-                await self.refresh_ecosystems(send_info=True)
+                try:
+                    await self.refresh_ecosystems(send_info=True)
+                except Exception as e:
+                    # Log without re-raising so the loop keeps reacting to
+                    # config changes even if one refresh fails
+                    self.logger.error(
+                        f"Encountered an error while refreshing the ecosystems. "
+                        f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                    )
             if self.started:
                 await sleep(0.1)  # Allow to do other stuff if there are too much config changes
             else:
@@ -699,8 +707,7 @@ class Engine(metaclass=SingletonMeta):
         if not self.started:
             raise RuntimeError("Gaia needs to be started in order to wait.")
         self.logger.info("Running ...")
-        while not self._stop_event.is_set():
-            await sleep(0.5)
+        await self._stop_event.wait()
 
     def pause(self) -> None:
         if not self.running:
@@ -756,7 +763,7 @@ class Engine(metaclass=SingletonMeta):
         def signal_handler(signum, frame) -> None:
             self._handle_stop_signal()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         try:
             for sig in SIGNALS:
