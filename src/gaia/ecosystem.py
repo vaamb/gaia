@@ -444,7 +444,7 @@ class Ecosystem:
             self.logger.error(error_msg)
             raise ValueError(error_msg)
         hardware_config = self.config.get_hardware_config(hardware_uid)
-        # Ensure a virtual hardware will be return if virtualization is enabled
+        # Ensure a virtual hardware is returned if virtualization is enabled
         if (
                 self.engine.config.app_config.VIRTUALIZATION
                 and hardware_config.type & gv.HardwareType.sensor
