@@ -34,6 +34,6 @@ def check_dependencies(check_cv2: bool = True) -> None:
     if _uninstalled_dependencies is True:  # pragma: no cover
         raise RuntimeError(
             "All the dependencies required to use the camera have not been "
-            "installed. Run 'pip install . [camera]' in your virtual "
+            "installed. Run 'uv sync --inexact --extra camera' in your virtual "
             "environment to install them."
         )

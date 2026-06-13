@@ -25,6 +25,6 @@ def check_dependencies() -> None:
     if _uninstalled_dependencies is True:  # pragma: no cover
         raise RuntimeError(
             "All the dependencies required to use the database have not been "
-            "installed. Run 'pip install . [database]' in your virtual "
+            "installed. Run 'uv sync --inexact --extra database' in your virtual "
             "environment to install them."
         )

@@ -61,8 +61,8 @@ class TCA9548A(Multiplexer):
             except ImportError:
                 raise RuntimeError(
                     "Adafruit tca9548a and busdevice packages are required. "
-                    "Run `pip install adafruit-circuitpython-tca9548a` and "
-                    "`pip install adafruit-circuitpython-busdevice` "
+                    "Run `uv pip install adafruit-circuitpython-tca9548a` and "
+                    "`uv pip install adafruit-circuitpython-busdevice` "
                     "in your virtual env."
                 )
         else:

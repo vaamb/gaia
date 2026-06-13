@@ -56,7 +56,7 @@ class DHT11(DHTSensor):
             except ImportError:
                 raise RuntimeError(
                     "Adafruit dht package and libgpiod2 are required. Run "
-                    "`pip install adafruit-circuitpython-dht` in your "
+                    "`uv pip install adafruit-circuitpython-dht` in your "
                     "virtual env and `sudo apt install libgpiod2`."
                 )
         else:
@@ -72,7 +72,7 @@ class DHT22(DHTSensor):
             except ImportError:
                 raise RuntimeError(
                     "Adafruit dht package and libgpiod2 are required. Run "
-                    "`pip install adafruit-circuitpython-dht` in your "
+                    "`uv pip install adafruit-circuitpython-dht` in your "
                     "virtual env and `sudo apt install libgpiod2`."
                 )
         else:

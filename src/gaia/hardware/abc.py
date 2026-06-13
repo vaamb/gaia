@@ -703,7 +703,7 @@ class gpioAddressMixin(HardwareAddressMixin):
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit blinka package is required. Run `pip install "
+                    "Adafruit blinka package is required. Run `uv pip install "
                     "adafruit-blinka` in your virtual env`."
                 )
         else:

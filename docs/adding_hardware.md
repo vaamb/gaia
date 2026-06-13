@@ -87,7 +87,7 @@ class MySensor(i2cAddressMixin, Sensor):
                 from my_adafruit_package import MyDevice as MyDeviceClass
             except ImportError:
                 raise RuntimeError(
-                    "my-adafruit-package is required. Run `pip install "
+                    "my-adafruit-package is required. Run `uv pip install "
                     "my-adafruit-package` in your virtual env."
                 )
         else:

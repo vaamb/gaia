@@ -65,7 +65,7 @@ class gpioDimmer(DimmerMixin, gpioActuator):
                 import pwmio
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit blinka package is required. Run `pip install "
+                    "Adafruit blinka package is required. Run `uv pip install "
                     "adafruit-blinka` in your virtual env`."
                 )
         else:
