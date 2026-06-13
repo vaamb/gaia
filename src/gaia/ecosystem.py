@@ -348,7 +348,7 @@ class Ecosystem:
 
         subroutines_enabled = self._config.get_subroutines_enabled()
         subroutines_needed = set(subroutine_names).intersection(subroutines_enabled)
-        if not subroutines_needed:
+        if not subroutines_needed and not self.subroutines_started:
             self.logger.debug("No subroutine needed.")
             return
 
@@ -362,7 +362,6 @@ class Ecosystem:
         # Finally, start the new subroutines
         to_start = subroutines_needed - self.subroutines_started
         for subroutine in order_subroutines(to_start):
-            self.logger.debug(f"Starting the subroutine '{subroutine}'.")
             await self.start_subroutine(subroutine)
 
     def terminate_subroutines(self) -> None:
@@ -445,7 +444,7 @@ class Ecosystem:
             self.logger.error(error_msg)
             raise ValueError(error_msg)
         hardware_config = self.config.get_hardware_config(hardware_uid)
-        # Ensure a virtual hardware will be return if virtualization is enabled
+        # Ensure a virtual hardware is returned if virtualization is enabled
         if (
                 self.engine.config.app_config.VIRTUALIZATION
                 and hardware_config.type & gv.HardwareType.sensor
@@ -511,7 +510,9 @@ class Ecosystem:
         )
         existing: set[str] = set()
         stale: set[str] = set()
-        for hardware_uid in self.hardware:
+        # Use `self._hardware` not to have spurious warnings from
+        #  `self._check_hardware_is_up_to_date()`
+        for hardware_uid in self._hardware:
             existing.add(hardware_uid)
             in_config = self.config.hardware_dict.get(hardware_uid)
             if in_config is None:
@@ -519,6 +520,13 @@ class Ecosystem:
                 continue
             # /!\ Do not hold a reference to hardware or its reference count will never reach 0
             current = gv.to_anonymous(self.hardware[hardware_uid].dict_repr(), "uid")
+            # When virtualization is enabled, the mounted hardware's model gets
+            # a "virtual" prefix (cf. `add_hardware`) that the config doesn't have
+            if (
+                    current["model"].startswith("virtual")
+                    and not in_config["model"].startswith("virtual")
+            ):
+                current["model"] = current["model"].removeprefix("virtual")
             if current != in_config:
                 stale.add(hardware_uid)
         # First remove hardware not in config anymore
@@ -585,7 +593,7 @@ class Ecosystem:
             subroutines_to_stop: list[SubroutineNames] = subroutine_names
             for subroutine in reversed(subroutines_to_stop):
                 if self._subroutines[subroutine].started:
-                    await self._subroutines[subroutine].stop()
+                    await self.stop_subroutine(subroutine)
             raise
         else:
             self.logger.debug("Ecosystem successfully started.")
@@ -598,7 +606,7 @@ class Ecosystem:
         self.logger.info("Shutting down the ecosystem.")
         for subroutine in reversed(subroutine_names):
             if self._subroutines[subroutine].started:
-                await self._subroutines[subroutine].stop()
+                await self.stop_subroutine(subroutine)
         if not any(
                 self._subroutines[subroutine].started
                 for subroutine in subroutine_names

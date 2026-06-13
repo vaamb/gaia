@@ -62,6 +62,18 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
 
 
 @pytest.mark.asyncio
+async def test_refresh_subroutines_stops_all_when_none_needed(ecosystem: Ecosystem):
+    await ecosystem.enable_subroutine("dummy")
+    await ecosystem.refresh_subroutines()
+    assert ecosystem.subroutines_started == {"dummy"}
+
+    # Disabling the last enabled subroutine should stop it on the next refresh
+    await ecosystem.disable_subroutine("dummy")
+    await ecosystem.refresh_subroutines()
+    assert ecosystem.subroutines_started == set()
+
+
+@pytest.mark.asyncio
 async def test_hardware(ecosystem: Ecosystem, logs_content):
     # This test requires empty hardware
     for hardware_uid in [*ecosystem.hardware.keys()]:
