@@ -1,3 +1,4 @@
+from asyncio import Condition, Event
 from copy import deepcopy
 from contextlib import contextmanager
 import os
@@ -150,6 +151,10 @@ async def engine_config(engine_config_master: EngineConfig, logs_content) -> Yie
         engine_config_master._sun_times = {}
         if engine_config_master.started:
             engine_config_master.watchdog.stop()
+        # Asyncio primitives bind to the first event loop that awaits them;
+        # renew them so they can be awaited in the next test's event loop
+        engine_config_master.watchdog.new_config = Condition()
+        engine_config_master.watchdog._stop_event = Event()
         if engine_config_master.cache_dir.iterdir():
             shutil.rmtree(engine_config_master.cache_dir)
             engine_config_master.app_config._paths.pop("CACHE_DIR")
