@@ -764,7 +764,7 @@ class Engine(metaclass=SingletonMeta):
         def signal_handler(signum, frame) -> None:
             self._handle_stop_signal()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         try:
             for sig in SIGNALS:
