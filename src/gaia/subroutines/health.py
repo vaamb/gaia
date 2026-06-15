@@ -9,11 +9,10 @@ from typing import Type, TypedDict
 
 from anyio.to_thread import run_sync
 from apscheduler.triggers.cron import CronTrigger
-import numpy as np
 
 import gaia_validators as gv
 
-from gaia.dependencies.camera import check_dependencies, SerializableImage
+from gaia.dependencies.camera import check_dependencies, np, SerializableImage
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera, Measure
 from gaia.subroutines.template import SubroutineTemplate
@@ -163,6 +162,7 @@ class Health(SubroutineTemplate[Camera]):
 
     @staticmethod
     def _get_index(image0: SerializableImage, measure: Measure) -> float:
+        assert np is not None
         image1 = image0.apply_rgb_formula(indices[measure])
         return float(np.mean(image1.array))
 
