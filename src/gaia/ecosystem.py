@@ -469,6 +469,18 @@ class Ecosystem:
             )
             raise
 
+    async def _add_hardware_no_raise(
+            self,
+            hardware_uid: str,
+    ) -> None:
+        try:
+            await self.add_hardware(hardware_uid)
+        except Exception as e:
+            self.logger.debug(
+                f"Couldn't add hardware '{hardware_uid}' to ecosystem.",
+                exc_info=e,
+            )
+
     async def remove_hardware(self, hardware_uid: str) -> None:
         """Dismount a hardware device from the ecosystem.
 
@@ -498,7 +510,7 @@ class Ecosystem:
         """
         for hardware_uid, hardware_cfg in self.config.hardware_dict.items():
             if hardware_cfg["active"]:
-                await self.add_hardware(hardware_uid)
+                await self._add_hardware_no_raise(hardware_uid)
 
     async def refresh_hardware(self) -> None:
         """Synchronize mounted hardware with the current configuration.
@@ -531,16 +543,16 @@ class Ecosystem:
                 current["model"] = current["model"].removeprefix("virtual")
             if current != in_config:
                 stale.add(hardware_uid)
-        # First remove hardware not in config anymore
+        # First remove hardware not needed anymore
         for hardware_uid in existing - needed:
             await self.remove_hardware(hardware_uid)
         # Then update the staled hardware
         for hardware_uid in stale:
             await self.remove_hardware(hardware_uid)
-            await self.add_hardware(hardware_uid)
+            await self._add_hardware_no_raise(hardware_uid)
         # Finally mount the missing hardware
         for hardware_uid in needed - existing:
-            await self.add_hardware(hardware_uid)
+            await self._add_hardware_no_raise(hardware_uid)
         # Reset cached actuators
         for actuator_handler in self.actuator_hub.actuator_handlers.values():
             actuator_handler.reset_cached_actuators()
