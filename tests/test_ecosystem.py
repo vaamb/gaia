@@ -6,7 +6,9 @@ import gaia_validators as gv
 from gaia import Ecosystem, EcosystemConfig, Engine
 from gaia.config import default_actuators
 from gaia.exceptions import HardwareNotFound, SubroutineNotFound
+from gaia.hardware import hardware_models
 from gaia.hardware.abc import _MetaHardware
+from gaia.hardware.camera import PiCamera
 
 from . import data
 
@@ -95,7 +97,7 @@ async def test_hardware(ecosystem: Ecosystem, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_refresh(ecosystem: Ecosystem):
+async def test_refresh_hardware(ecosystem: Ecosystem):
     hardware_needed: set[str] = {
         data.camera_uid,
         data.heater_uid,
@@ -133,6 +135,44 @@ async def test_refresh(ecosystem: Ecosystem):
 
     # Refreshing a second time should not raise an exception
     await ecosystem.refresh_hardware()
+
+
+@pytest.mark.asyncio
+async def test_refresh_hardware_resiliency(
+        ecosystem: Ecosystem,
+        monkeypatch: pytest.MonkeyPatch,
+):
+    # Fake camera that raises during init
+    class CrashingCamera(PiCamera):
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError()
+
+    # `setitem` registers the fake model and reverts it once the test is done,
+    #  even if an assertion below fails, so the global `hardware_models` registry
+    #  isn't polluted for the other tests.
+    monkeypatch.setitem(hardware_models, "CrashingCamera", CrashingCamera)
+
+    crashing_uid = "crashing_uid"
+    ecosystem.config.hardware_dict[crashing_uid] = {
+        "name": "crashing_device",
+        "active": True,
+        "address": "PICAMERA",
+        "type": gv.HardwareType.camera,
+        "level": gv.HardwareLevel.environment,
+        "model": "CrashingCamera",
+    }
+
+    # Make sure the crashing hardware is needed but not mounted yet
+    assert crashing_uid in ecosystem.get_hardware_needed()
+    assert crashing_uid not in ecosystem.hardware
+    # This shouldn't raise
+    await ecosystem.refresh_hardware()
+    # The crashing hardware has been flagged as failing ...
+    assert crashing_uid not in ecosystem.get_hardware_needed()
+    assert crashing_uid in ecosystem._failing_hardware
+    assert crashing_uid not in ecosystem.hardware
+    # ... while the other (healthy) hardware is still mounted
+    assert data.sensor_uid in ecosystem.hardware
 
 
 def test_actuators_data(ecosystem: "Ecosystem"):
