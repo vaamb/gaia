@@ -165,13 +165,16 @@ async def test_refresh_hardware_resiliency(
     # Make sure the crashing hardware is needed but not mounted yet
     assert crashing_uid in ecosystem.get_hardware_needed()
     assert crashing_uid not in ecosystem.hardware
+    # Remove a healthy hardware
+    await ecosystem.remove_hardware(data.sensor_uid)
+    assert data.sensor_uid not in ecosystem.hardware
     # This shouldn't raise
     await ecosystem.refresh_hardware()
     # The crashing hardware has been flagged as failing ...
     assert crashing_uid not in ecosystem.get_hardware_needed()
     assert crashing_uid in ecosystem._failing_hardware
     assert crashing_uid not in ecosystem.hardware
-    # ... while the other (healthy) hardware is still mounted
+    # ... while the other (healthy) hardware has been mounted
     assert data.sensor_uid in ecosystem.hardware
 
 
