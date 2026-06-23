@@ -484,6 +484,11 @@ class Hardware(metaclass=_MetaHardware):
     @abstractmethod
     def validate_address(cls, address_str: str) -> Address: ...
 
+    @classmethod
+    async def check_requirements(cls) -> None:
+        """Override in subclasses for requirement checks logic."""
+        pass
+
     async def _on_initialize(self) -> None:
         """Override in subclasses for initialization logic."""
         pass
