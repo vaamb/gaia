@@ -397,10 +397,7 @@ class Ecosystem:
     def _check_hardware_is_up_to_date(self) -> None:
         if not self.started:
             return
-        hardware_needed: set[str] = set(
-            hardware_uid for hardware_uid in self.config.hardware_dict.keys()
-            if self.config.hardware_dict[hardware_uid]["active"]
-        )
+        hardware_needed: set[str] = self.get_hardware_needed()
         hardware_existing: set[str] = set(self._hardware.keys())
         if hardware_needed != hardware_existing:
             self.logger.warning(
@@ -412,6 +409,12 @@ class Ecosystem:
         """Return the hardware mounted (/active) in the ecosystem."""
         self._check_hardware_is_up_to_date()
         return self._hardware
+
+    def get_hardware_needed(self) -> set[str]:
+        hardware_needed: set[str] = set(
+            hardware_uid for hardware_uid in self.config.hardware_dict.keys()
+            if self.config.hardware_dict[hardware_uid]["active"]
+        )
 
     def get_hardware_group_uids(
         self,
@@ -506,10 +509,7 @@ class Ecosystem:
         3. Mounts newly added hardware
         4. Resets actuator handlers and PIDs to reflect hardware changes
         """
-        needed: set[str] = set(
-            hardware_uid for hardware_uid in self.config.hardware_dict.keys()
-            if self.config.hardware_dict[hardware_uid]["active"]
-        )
+        needed: set[str] = self.get_hardware_needed()
         existing: set[str] = set()
         stale: set[str] = set()
         # Use `self._hardware` not to have spurious warnings from
