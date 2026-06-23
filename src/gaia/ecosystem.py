@@ -128,6 +128,7 @@ class Ecosystem:
             self._virtual_self = VirtualEcosystem(
                 self, self.engine.virtual_world, **virtual_eco_cfg)
         self._hardware: dict[str, Hardware] = {}
+        self._failing_hardware: set[str] = set()
         self._alarms: list = []
         self.actuator_hub: ActuatorHub = ActuatorHub(self)
         self._subroutines: dict[SubroutineNames, SubroutineTemplate] = {
@@ -415,6 +416,7 @@ class Ecosystem:
             hardware_uid for hardware_uid in self.config.hardware_dict.keys()
             if self.config.hardware_dict[hardware_uid]["active"]
         )
+        return hardware_needed - self._failing_hardware
 
     def get_hardware_group_uids(
         self,
@@ -480,6 +482,7 @@ class Ecosystem:
                 f"Couldn't add hardware '{hardware_uid}' to ecosystem.",
                 exc_info=e,
             )
+            self._failing_hardware.add(hardware_uid)
 
     async def remove_hardware(self, hardware_uid: str) -> None:
         """Dismount a hardware device from the ecosystem.
@@ -522,6 +525,9 @@ class Ecosystem:
         4. Resets actuator handlers and PIDs to reflect hardware changes
         """
         needed: set[str] = self.get_hardware_needed()
+        # Drop failing hardware that is no longer in the config so the set
+        #  doesn't keep stale entries (it is reset on process restart anyway).
+        self._failing_hardware &= set(self.config.hardware_dict.keys())
         existing: set[str] = set()
         stale: set[str] = set()
         # Use `self._hardware` not to have spurious warnings from
