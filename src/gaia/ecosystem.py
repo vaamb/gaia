@@ -128,6 +128,7 @@ class Ecosystem:
             self._virtual_self = VirtualEcosystem(
                 self, self.engine.virtual_world, **virtual_eco_cfg)
         self._hardware: dict[str, Hardware] = {}
+        self._failing_hardware: set[str] = set()
         self._alarms: list = []
         self.actuator_hub: ActuatorHub = ActuatorHub(self)
         self._subroutines: dict[SubroutineNames, SubroutineTemplate] = {
@@ -397,10 +398,7 @@ class Ecosystem:
     def _check_hardware_is_up_to_date(self) -> None:
         if not self.started:
             return
-        hardware_needed: set[str] = set(
-            hardware_uid for hardware_uid in self.config.hardware_dict.keys()
-            if self.config.hardware_dict[hardware_uid]["active"]
-        )
+        hardware_needed: set[str] = self.get_hardware_needed()
         hardware_existing: set[str] = set(self._hardware.keys())
         if hardware_needed != hardware_existing:
             self.logger.warning(
@@ -412,6 +410,13 @@ class Ecosystem:
         """Return the hardware mounted (/active) in the ecosystem."""
         self._check_hardware_is_up_to_date()
         return self._hardware
+
+    def get_hardware_needed(self) -> set[str]:
+        hardware_needed: set[str] = set(
+            hardware_uid for hardware_uid in self.config.hardware_dict.keys()
+            if self.config.hardware_dict[hardware_uid]["active"]
+        )
+        return hardware_needed - self._failing_hardware
 
     def get_hardware_group_uids(
         self,
@@ -466,6 +471,19 @@ class Ecosystem:
             )
             raise
 
+    async def _add_hardware_no_raise(
+            self,
+            hardware_uid: str,
+    ) -> None:
+        try:
+            await self.add_hardware(hardware_uid)
+        except Exception as e:
+            self.logger.debug(
+                f"Couldn't add hardware '{hardware_uid}' to ecosystem.",
+                exc_info=e,
+            )
+            self._failing_hardware.add(hardware_uid)
+
     async def remove_hardware(self, hardware_uid: str) -> None:
         """Dismount a hardware device from the ecosystem.
 
@@ -495,7 +513,7 @@ class Ecosystem:
         """
         for hardware_uid, hardware_cfg in self.config.hardware_dict.items():
             if hardware_cfg["active"]:
-                await self.add_hardware(hardware_uid)
+                await self._add_hardware_no_raise(hardware_uid)
 
     async def refresh_hardware(self) -> None:
         """Synchronize mounted hardware with the current configuration.
@@ -506,10 +524,10 @@ class Ecosystem:
         3. Mounts newly added hardware
         4. Resets actuator handlers and PIDs to reflect hardware changes
         """
-        needed: set[str] = set(
-            hardware_uid for hardware_uid in self.config.hardware_dict.keys()
-            if self.config.hardware_dict[hardware_uid]["active"]
-        )
+        needed: set[str] = self.get_hardware_needed()
+        # Drop failing hardware that is no longer in the config so the set
+        #  doesn't keep stale entries (it is reset on process restart anyway).
+        self._failing_hardware &= set(self.config.hardware_dict.keys())
         existing: set[str] = set()
         stale: set[str] = set()
         # Use `self._hardware` not to have spurious warnings from
@@ -531,16 +549,16 @@ class Ecosystem:
                 current["model"] = current["model"].removeprefix("virtual")
             if current != in_config:
                 stale.add(hardware_uid)
-        # First remove hardware not in config anymore
+        # First remove hardware not needed anymore
         for hardware_uid in existing - needed:
             await self.remove_hardware(hardware_uid)
         # Then update the staled hardware
         for hardware_uid in stale:
             await self.remove_hardware(hardware_uid)
-            await self.add_hardware(hardware_uid)
+            await self._add_hardware_no_raise(hardware_uid)
         # Finally mount the missing hardware
         for hardware_uid in needed - existing:
-            await self.add_hardware(hardware_uid)
+            await self._add_hardware_no_raise(hardware_uid)
         # Reset cached actuators
         for actuator_handler in self.actuator_hub.actuator_handlers.values():
             actuator_handler.reset_cached_actuators()
