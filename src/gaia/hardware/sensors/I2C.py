@@ -33,17 +33,31 @@ class i2cSensor(i2cAddressMixin, Sensor):
 class AHT20(TempHumSensor, i2cSensor):
     default_address = 0x38
 
-    def _get_device(self) -> AHTx0Device:
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_ahtx0 import AHTx0 as AHTx0Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit aht0 package is required. Run `uv pip install "
-                    "adafruit-circuitpython-ahtx0` in your virtual env."
+                    "Adafruit aht0 package is required. Run "
+                    "`uv pip install adafruit-circuitpython-ahtx0` in your virtual env."
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import AHTx0Device
+        return AHTx0Device
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    def _get_device(self) -> AHTx0Device:
+        AHTx0Device = self._get_device_library()
         return AHTx0Device(self._get_i2c(), self.address.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
