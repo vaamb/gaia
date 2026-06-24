@@ -173,7 +173,8 @@ class VEML7700(LightSensorBase, i2cSensor):
         Measure.light: Unit.lux,
     }
 
-    def _get_device(self) -> VEML7700Device:
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_veml7700 import VEML7700 as VEML7700Device  # ty: ignore[unresolved-import]
@@ -184,6 +185,19 @@ class VEML7700(LightSensorBase, i2cSensor):
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import VEML7700Device
+        return VEML7700Device
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    def _get_device(self) -> VEML7700Device:
+        VEML7700Device = self._get_device_library()
         return VEML7700Device(self._get_i2c(), self.address.main)
 
     def _get_lux(self) -> float:
