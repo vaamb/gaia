@@ -53,6 +53,29 @@ class gpioDimmer(DimmerMixin, gpioActuator):
         super().__init__(*args, **kwargs)
         self._dimmer: pwmio.PWMOut | None = None
 
+    @classmethod
+    def _get_pwmio_library(cls):
+        if is_raspi():  # pragma: no cover
+            try:
+                import pwmio
+            except ImportError:
+                raise RuntimeError(
+                    "Adafruit blinka package is required. Run "
+                    "`uv pip install adafruit-blinka` in your virtual env."
+                )
+        else:
+            from gaia.hardware._compatibility import pwmio
+        return pwmio
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_pwmio_library()
+        except Exception as e:
+            return e
+        return None
+
     @property
     def dimmer(self) -> pwmio.PWMOut:
         if not self._dimmer:
@@ -60,16 +83,7 @@ class gpioDimmer(DimmerMixin, gpioActuator):
         return self._dimmer
 
     def _get_dimmer(self) -> pwmio.PWMOut:
-        if is_raspi():  # pragma: no cover
-            try:
-                import pwmio
-            except ImportError:
-                raise RuntimeError(
-                    "Adafruit blinka package is required. Run `uv pip install "
-                    "adafruit-blinka` in your virtual env`."
-                )
-        else:
-            from gaia.hardware._compatibility import pwmio
+        pwmio = self._get_pwmio_library()
         # Valid ignore: pwmio is either the real module or compatibility class, both have a callable PWMOut at runtime
         return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)  # ty: ignore
 
