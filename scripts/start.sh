@@ -77,8 +77,8 @@ log INFO "Starting Gaia..."
 if [[ "$FOREGROUND" = true ]]; then
     log INFO "Running in foreground mode (logs will be shown in terminal)"
     # Run Gaia in the foreground
-    python3 -m gaia
-    EXIT_CODE=$?
+    EXIT_CODE=0
+    python3 -m gaia || EXIT_CODE=$?
     
     # Clean up and exit with the same code as Gaia
     deactivate ||

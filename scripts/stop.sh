@@ -42,7 +42,7 @@ get_gaia_pid() {
 }
 
 # Check if Gaia is running
-GAIA_PID=$(get_gaia_pid)
+GAIA_PID=$(get_gaia_pid) || true
 
 if [[ -z "$GAIA_PID" ]]; then
     log INFO "No running instance of Gaia found."
