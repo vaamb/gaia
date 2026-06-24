@@ -385,6 +385,8 @@ class Hardware(metaclass=_MetaHardware):
     automatically generate a unique uid, properly format info and save it in
     ecosystems.cfg
     """
+    _requirements_error: ClassVar[Exception | None | EllipsisType] = ...
+
     @classmethod
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
@@ -485,9 +487,25 @@ class Hardware(metaclass=_MetaHardware):
     def validate_address(cls, address_str: str) -> Address: ...
 
     @classmethod
-    async def check_requirements(cls) -> None:
+    async def _on_check_requirements(cls) -> None | Exception:
         """Override in subclasses for requirement checks logic."""
         pass
+
+    @classmethod
+    async def check_requirements(cls) -> None:
+        if cls._requirements_error is Ellipsis:
+            # The check hasn't been performed yet
+            maybe_error = await cls._on_check_requirements()
+            if isinstance(maybe_error, Exception):
+                # Log the failed requirement
+                hardware_logger.error(
+                    f"Requirements not met for hardware {cls.__name__}. "
+                    f"ERROR msg(s): `{maybe_error}`.")
+            cls._requirements_error = maybe_error
+
+        if cls._requirements_error is not None:
+            # There was an error before, raise it
+            raise cls._requirements_error
 
     async def _on_initialize(self) -> None:
         """Override in subclasses for initialization logic."""
