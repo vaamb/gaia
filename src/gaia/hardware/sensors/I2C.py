@@ -79,17 +79,31 @@ class ENS160(i2cSensor):
         Measure.tvoc: Unit.ppm,
     }
 
-    def _get_device(self) -> ENS160Device:
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_ens160 import ENS160 as ENS160Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit ens160 package is required. Run `uv pip install "
-                    "adafruit-circuitpython-ens160` in your virtual env."
+                    "Adafruit ens160 package is required. Run "
+                    "`uv pip install adafruit-circuitpython-ens160` in your virtual env."
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import ENS160Device
+        return ENS160Device
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    def _get_device(self) -> ENS160Device:
+        ENS160Device = self._get_device_library()
         return ENS160Device(self._get_i2c(), self.address.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None, float | None]:
