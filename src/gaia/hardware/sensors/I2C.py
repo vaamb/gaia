@@ -247,17 +247,31 @@ class CapacitiveSensorMixin(i2cSensor):
         Measure.capacitive: None,
     }
 
-    def _get_device(self) -> SeesawDevice:
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_seesaw.seesaw import Seesaw  as SeesawDevice # ty: ignore[unresolved-import]
+                from adafruit_seesaw.seesaw import Seesaw as SeesawDevice  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit seesaw package is required. Run `uv pip install "
-                    "adafruit-circuitpython-seesaw` in your virtual env."
+                    "Adafruit seesaw package is required. Run "
+                    "`uv pip install adafruit-circuitpython-seesaw` in your virtual env."
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import SeesawDevice
+        return SeesawDevice
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    def _get_device(self) -> SeesawDevice:
+        SeesawDevice = self._get_device_library()
         return SeesawDevice(self._get_i2c(), self.address.main)
 
 
