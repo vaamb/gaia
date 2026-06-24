@@ -728,10 +728,10 @@ class EngineConfig(metaclass=SingletonMeta):
                     f"{ecosystem_name}.")
                 try:
                     await hardware_cls.check_requirements()
-                except Exception as e:
+                except Exception:
                     self.logger.error(
-                        f"Requirements not met for hardware {hardware_name} in ecosystem "
-                        f"{ecosystem_name}. ERROR msg(s): `{e}`.")
+                        f"Hardware {hardware_name} in ecosystem {ecosystem_name}. "
+                        f"failed requirements for model {hardware_cls.__name__}")
                 else:
                     self.logger.debug(
                         f"Requirements for hardware {hardware_name} in ecosystem "
