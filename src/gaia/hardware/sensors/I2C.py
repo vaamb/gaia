@@ -305,9 +305,7 @@ class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensorMixin):
 
             except Exception as e:
                 self._logger.error(
-                    f"Sensor {self._name} encountered an error. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
+                    f"Encountered an error. ERROR msg: `{e.__class__.__name__}: {e}`.")
                 break
             else:
                 break

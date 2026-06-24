@@ -712,12 +712,12 @@ class EngineConfig(metaclass=SingletonMeta):
 
     async def _check_hardware_requirements(self) -> None:
         # Verify that all the hardware requirements are met
-        for ecosystem_uid, ecosystem_cfg in self.ecosystems_config_dict.items():
+        for ecosystem_cfg in self.ecosystems_config_dict.values():
             ecosystem_name: str = ecosystem_cfg["name"]
             # Check hardware config
             self.logger.debug(
                 f"Checking hardware requirements for ecosystem {ecosystem_name}.")
-            for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+            for hardware_dict in ecosystem_cfg["hardware"].values():
                 hardware_name: str = hardware_dict["name"]
                 # The `ecosystem_configs` dict should have gone through
                 #  `_validate_ecosystems_logic()` by now, so the following should
