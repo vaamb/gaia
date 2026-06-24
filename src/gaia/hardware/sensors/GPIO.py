@@ -49,7 +49,8 @@ class DHTSensor(TempHumSensor, gpioSensor):
 
 
 class DHT11(DHTSensor):
-    def _get_device(self) -> DHT11Device:
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_dht import DHT11 as DHT11Device  # ty: ignore[unresolved-import]
@@ -60,7 +61,20 @@ class DHT11(DHTSensor):
                     "virtual env and `sudo apt install libgpiod2`."
                 )
         else:
-            from gaia.hardware.sensors._devices._compatibility import DHT11Device 
+            from gaia.hardware.sensors._devices._compatibility import DHT11Device
+        return DHT11Device
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    def _get_device(self) -> DHT11Device:
+        DHT11Device = self._get_device_library()
         return DHT11Device(self.pin, use_pulseio=False)
 
 
