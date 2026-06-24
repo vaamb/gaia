@@ -210,17 +210,31 @@ class VCNL4040(LightSensorBase, i2cSensor):
         Measure.light: Unit.lux,
     }
 
-    def _get_device(self) -> VCNL4040Device:
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_vcnl4040 import VCNL4040 as VCNL4040Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit vcnl4040 package is required. Run `uv pip install "
-                    "adafruit-circuitpython-vcnl4040` in your virtual env."
+                    "Adafruit vcnl4040 package is required. Run "
+                    "`uv pip install adafruit-circuitpython-vcnl4040` in your virtual env."
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import VCNL4040Device
+        return VCNL4040Device
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    def _get_device(self) -> VCNL4040Device:
+        VCNL4040Device = self._get_device_library()
         return VCNL4040Device(self._get_i2c(), self.address.main)
 
     def _get_lux(self) -> float:
