@@ -23,7 +23,9 @@ class PiCamera(PiCameraAddressMixin, Camera):
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
         try:
             cls._get_device_library()
         except Exception as e:

@@ -35,7 +35,9 @@ class AHT20(TempHumSensor, i2cSensor):
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
         try:
             cls._get_device_library()
         except Exception as e:
@@ -81,7 +83,9 @@ class ENS160(i2cSensor):
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
         try:
             cls._get_device_library()
         except Exception as e:
@@ -175,7 +179,9 @@ class VEML7700(LightSensorBase, i2cSensor):
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
         try:
             cls._get_device_library()
         except Exception as e:
@@ -212,7 +218,9 @@ class VCNL4040(LightSensorBase, i2cSensor):
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
         try:
             cls._get_device_library()
         except Exception as e:
@@ -249,7 +257,9 @@ class CapacitiveSensorMixin(i2cSensor):
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
         try:
             cls._get_device_library()
         except Exception as e:

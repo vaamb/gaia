@@ -719,7 +719,9 @@ class gpioAddressMixin(HardwareAddressMixin):
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
         try:
             cls._get_pin_library()
         except Exception as e:
@@ -871,7 +873,9 @@ class WebSocketAddressMixin(HardwareAddressMixin):
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
 
         if cls._websocket_manager is not None and cls._websocket_manager.is_running:
             # The manager is already running correctly, no need to further check
@@ -1159,17 +1163,20 @@ class LightSensorMixin(SensorMixin):
 class CameraMixin(HardwareTypeMixin):
     """Mixin for camera-type hardware."""
     def __init__(self, *args, **kwargs) -> None:
+        check_dependencies()
         super().__init__(*args, **kwargs)
         self._device: Any | None = None
         self._camera_dir: Path | None = None
 
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
         try:
             check_dependencies()
         except Exception as e:
-            raise e
+            return e
         return None
 
     @property
