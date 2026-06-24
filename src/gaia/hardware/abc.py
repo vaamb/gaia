@@ -717,6 +717,29 @@ class gpioAddressMixin(HardwareAddressMixin):
             )
         return address
 
+    @classmethod
+    def _get_pin_library(cls):
+        if is_raspi():  # pragma: no cover
+            try:
+                from adafruit_blinka.microcontroller.bcm283x.pin import Pin
+            except ImportError:
+                raise RuntimeError(
+                    "Adafruit blinka package is required. Run "
+                    "`uv pip install adafruit-blinka` in your virtual env."
+                )
+        else:
+            from gaia.hardware._compatibility import Pin
+        return Pin
+
+    @classmethod
+    async def _on_check_requirements(cls):
+        await super()._on_check_requirements()
+        try:
+            cls._get_pin_library()
+        except Exception as e:
+            return e
+        return None
+
     @property
     def pin(self) -> Pin:
         if self._pin is None:
@@ -724,16 +747,7 @@ class gpioAddressMixin(HardwareAddressMixin):
         return self._pin
 
     def _get_pin(self) -> Pin:
-        if is_raspi():  # pragma: no cover
-            try:
-                from adafruit_blinka.microcontroller.bcm283x.pin import Pin
-            except ImportError:
-                raise RuntimeError(
-                    "Adafruit blinka package is required. Run `uv pip install "
-                    "adafruit-blinka` in your virtual env`."
-                )
-        else:
-            from gaia.hardware._compatibility import Pin
+        Pin = self._get_pin_library()
         address = self.address.main
         # GPIO hardware should have int addresses
         assert isinstance(address, int)
