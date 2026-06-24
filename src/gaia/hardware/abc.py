@@ -718,7 +718,7 @@ class gpioAddressMixin(HardwareAddressMixin):
         return address
 
     @classmethod
-    async def _on_check_requirements(cls):
+    async def _on_check_requirements(cls) -> None | Exception:
         await super()._on_check_requirements()
         try:
             cls._get_pin_library()
@@ -870,12 +870,12 @@ class WebSocketAddressMixin(HardwareAddressMixin):
         return address
 
     @classmethod
-    async def _on_check_requirements(cls):
+    async def _on_check_requirements(cls) -> None | Exception:
         await super()._on_check_requirements()
 
         if cls._websocket_manager is not None and cls._websocket_manager.is_running:
             # The manager is already running correctly, no need to further check
-            return
+            return None
 
         if not GaiaConfigHelper.config_is_set():
             warnings.warn(
@@ -894,7 +894,7 @@ class WebSocketAddressMixin(HardwareAddressMixin):
             writer.close()
             await writer.wait_closed()
             return RuntimeError("WebSocketHardware's port is not free")
-        return
+        return None
 
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
@@ -1164,7 +1164,7 @@ class CameraMixin(HardwareTypeMixin):
         self._camera_dir: Path | None = None
 
     @classmethod
-    async def _on_check_requirements(cls) -> None:
+    async def _on_check_requirements(cls) -> None | Exception:
         await super()._on_check_requirements()
         try:
             check_dependencies()
