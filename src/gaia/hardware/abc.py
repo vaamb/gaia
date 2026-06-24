@@ -500,7 +500,7 @@ class Hardware(metaclass=_MetaHardware):
                 # Log the failed requirement
                 hardware_logger.error(
                     f"Requirements not met for hardware {cls.__name__}. "
-                    f"ERROR msg(s): `{maybe_error}`.")
+                    f"ERROR msg(s): `{maybe_error.__class__.__name__}: {maybe_error}`.")
             cls._requirements_error = maybe_error
 
         if cls._requirements_error is not None:
