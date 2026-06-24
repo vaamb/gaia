@@ -521,6 +521,8 @@ class Hardware(metaclass=_MetaHardware):
             raise RuntimeError(f"Hardware {hardware_cfg.uid} already exists.")
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
+        # Make sure the requirements are met
+        await hardware_cls.check_requirements()
         # Create hardware
         hardware = hardware_cls.from_config(hardware_cfg, ecosystem_uid)
         # Perform subclass-specific initialization routine
