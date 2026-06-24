@@ -869,6 +869,33 @@ class WebSocketAddressMixin(HardwareAddressMixin):
             )
         return address
 
+    @classmethod
+    async def _on_check_requirements(cls):
+        await super()._on_check_requirements()
+
+        if cls._websocket_manager is not None and cls._websocket_manager.is_running:
+            # The manager is already running correctly, no need to further check
+            return
+
+        if not GaiaConfigHelper.config_is_set():
+            warnings.warn(
+                "Using `WebSocketHardware.check_requirements()` will materialize "
+                "Gaia's whole app configuration."
+            )
+        port = GaiaConfigHelper.get_config().HARDWARE_WEBSOCKET_PORT
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", port), timeout=1)
+
+        except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
+            # Could not connect, the port is free
+            pass
+        else:
+            writer.close()
+            await writer.wait_closed()
+            return RuntimeError("WebSocketHardware's port is not free")
+        return
+
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         await self.register()
