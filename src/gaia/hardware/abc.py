@@ -683,6 +683,7 @@ class HardwareTypeHint(ABC):
 
         # Callables
         _format_measures: Callable[[list[gv.Measure]], dict[Measure, Unit | None]]
+        _on_check_requirements: Callable[[], Awaitable[None]]
         _on_initialize: Callable[[], Awaitable[None]]
         _on_terminate: Callable[[], Awaitable[None]]
 
