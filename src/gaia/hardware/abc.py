@@ -1118,10 +1118,14 @@ class LightSensorMixin(SensorMixin):
 class CameraMixin(HardwareTypeMixin):
     """Mixin for camera-type hardware."""
     def __init__(self, *args, **kwargs) -> None:
-        check_dependencies()
         super().__init__(*args, **kwargs)
         self._device: Any | None = None
         self._camera_dir: Path | None = None
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None:
+        await super()._on_check_requirements()
+        check_dependencies()
 
     @property
     def device(self) -> Any:
