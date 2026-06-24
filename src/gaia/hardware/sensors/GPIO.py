@@ -4,7 +4,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import gpioAddressMixin, hardware_logger, Sensor
+from gaia.hardware.abc import gpioAddressMixin, Sensor
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 
@@ -37,7 +37,7 @@ class DHTSensor(TempHumSensor, gpioSensor):
                 sleep(0.5)
 
             except Exception as e:
-                hardware_logger.error(
+                self._logger.error(
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )

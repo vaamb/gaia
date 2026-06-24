@@ -993,15 +993,13 @@ class SwitchMixin(ActuatorMixin):
         await super()._on_initialize()
         success = await self.turn_off()
         if not success:
-            hardware_logger.warning(
-                f"Failed to turn {self.name} ({self.uid}) off")
+            self._logger.warning("Failed to turn off")
 
     async def _on_terminate(self) -> None:
         await super()._on_terminate()
         success = await self.turn_off()
         if not success:
-            hardware_logger.warning(
-                f"Failed to turn {self.name} ({self.uid}) off")
+            self._logger.warning("Failed to turn off")
 
     @abstractmethod
     async def turn_on(self) -> bool: ...
@@ -1019,15 +1017,13 @@ class DimmerMixin(ActuatorMixin):
         await super()._on_initialize()
         success = await self.set_pwm_level(0)
         if not success:
-            hardware_logger.warning(
-                f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+            self._logger.warning("Failed to set PWM level to 0")
 
     async def _on_terminate(self) -> None:
         await super()._on_terminate()
         success = await self.set_pwm_level(0)
         if not success:
-            hardware_logger.warning(
-                f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+            self._logger.warning("Failed to set PWM level to 0")
 
     @abstractmethod
     async def set_pwm_level(self, level: float | int) -> bool: ...

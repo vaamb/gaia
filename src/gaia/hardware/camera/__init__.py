@@ -8,7 +8,7 @@ from typing import Any, Type
 from anyio.to_thread import run_sync
 
 from gaia.dependencies.camera import SerializableImage
-from gaia.hardware.abc import Camera, PiCameraAddressMixin, hardware_logger
+from gaia.hardware.abc import Camera, PiCameraAddressMixin
 from gaia.hardware.utils import is_raspi
 
 
@@ -55,9 +55,8 @@ class PiCamera(PiCameraAddressMixin, Camera):
                     now = datetime.now(timezone.utc)
                     array = self.device.capture_array("main")
                 except Exception as e:
-                    hardware_logger.error(
-                        f"Camera {self._name} encountered an error. "
-                        f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                    self._logger.error(
+                        f"Encountered an error. ERROR msg: `{e.__class__.__name__}: {e}`."
                     )
                 else:
                     image = SerializableImage(array, metadata={"timestamp": now})

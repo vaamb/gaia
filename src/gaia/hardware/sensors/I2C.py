@@ -7,8 +7,7 @@ from typing import Type
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import (
-    hardware_logger, i2cAddressMixin, Measure, PlantLevelMixin,
-    Sensor, SensorRead, Unit)
+    i2cAddressMixin, Measure, PlantLevelMixin, Sensor, SensorRead, Unit)
 from gaia.hardware.sensors.abc import LightSensorBase, TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
@@ -225,7 +224,7 @@ class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensorMixin):
                 continue
 
             except Exception as e:
-                hardware_logger.error(
+                self._logger.error(
                     f"Sensor {self._name} encountered an error. "
                     f"ERROR msg: `{e.__class__.__name__}: {e}`."
                 )
