@@ -21,17 +21,31 @@ class PiCamera(PiCameraAddressMixin, Camera):
         if hasattr(self, "_device") and self._device is not None:
             self._device.close()
 
-    def _get_device(self) -> Picamera2Device:
+    @classmethod
+    def _get_camera_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from picamera2 import Picamera2 as Picamera2Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "picamera package is required. Run `uv pip install "
-                    "picamera` in your virtual env."
+                    "picamera package is required. Run "
+                    "`uv pip install picamera` in your virtual env."
                 )
         else:
             from gaia.hardware.camera._devices._compatibility import Picamera2Device
+        return Picamera2Device
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_camera_library()
+        except Exception as e:
+            return e
+        return None
+
+    def _get_device(self) -> Picamera2Device:
+        Picamera2Device = self._get_camera_library()
         return Picamera2Device()
 
     async def get_image(self, size: tuple | None = None) -> SerializableImage:
