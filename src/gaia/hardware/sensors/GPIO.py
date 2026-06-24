@@ -50,6 +50,15 @@ class DHTSensor(TempHumSensor, gpioSensor):
 
 class DHT11(DHTSensor):
     @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
     def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
@@ -64,6 +73,12 @@ class DHT11(DHTSensor):
             from gaia.hardware.sensors._devices._compatibility import DHT11Device
         return DHT11Device
 
+    def _get_device(self) -> DHT11Device:
+        DHT11Device = self._get_device_library()
+        return DHT11Device(self.pin, use_pulseio=False)
+
+
+class DHT22(DHTSensor):
     @classmethod
     async def _on_check_requirements(cls) -> None | Exception:
         await super()._on_check_requirements()
@@ -73,12 +88,6 @@ class DHT11(DHTSensor):
             return e
         return None
 
-    def _get_device(self) -> DHT11Device:
-        DHT11Device = self._get_device_library()
-        return DHT11Device(self.pin, use_pulseio=False)
-
-
-class DHT22(DHTSensor):
     @classmethod
     def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
@@ -93,15 +102,6 @@ class DHT22(DHTSensor):
         else:
             from gaia.hardware.sensors._devices._compatibility import DHT22Device
         return DHT22Device
-
-    @classmethod
-    async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
-        try:
-            cls._get_device_library()
-        except Exception as e:
-            return e
-        return None
 
     def _get_device(self) -> DHT22Device:
         DHT22Device = self._get_device_library()

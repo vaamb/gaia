@@ -34,6 +34,15 @@ class AHT20(TempHumSensor, i2cSensor):
     default_address = 0x38
 
     @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
     def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
@@ -46,15 +55,6 @@ class AHT20(TempHumSensor, i2cSensor):
         else:
             from gaia.hardware.sensors._devices._compatibility import AHTx0Device
         return AHTx0Device
-
-    @classmethod
-    async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
-        try:
-            cls._get_device_library()
-        except Exception as e:
-            return e
-        return None
 
     def _get_device(self) -> AHTx0Device:
         AHTx0Device = self._get_device_library()
@@ -80,6 +80,15 @@ class ENS160(i2cSensor):
     }
 
     @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
     def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
@@ -92,15 +101,6 @@ class ENS160(i2cSensor):
         else:
             from gaia.hardware.sensors._devices._compatibility import ENS160Device
         return ENS160Device
-
-    @classmethod
-    async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
-        try:
-            cls._get_device_library()
-        except Exception as e:
-            return e
-        return None
 
     def _get_device(self) -> ENS160Device:
         ENS160Device = self._get_device_library()
@@ -174,6 +174,15 @@ class VEML7700(LightSensorBase, i2cSensor):
     }
 
     @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
     def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
@@ -186,15 +195,6 @@ class VEML7700(LightSensorBase, i2cSensor):
         else:
             from gaia.hardware.sensors._devices._compatibility import VEML7700Device
         return VEML7700Device
-
-    @classmethod
-    async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
-        try:
-            cls._get_device_library()
-        except Exception as e:
-            return e
-        return None
 
     def _get_device(self) -> VEML7700Device:
         VEML7700Device = self._get_device_library()
@@ -211,6 +211,15 @@ class VCNL4040(LightSensorBase, i2cSensor):
     }
 
     @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
     def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
@@ -223,15 +232,6 @@ class VCNL4040(LightSensorBase, i2cSensor):
         else:
             from gaia.hardware.sensors._devices._compatibility import VCNL4040Device
         return VCNL4040Device
-
-    @classmethod
-    async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
-        try:
-            cls._get_device_library()
-        except Exception as e:
-            return e
-        return None
 
     def _get_device(self) -> VCNL4040Device:
         VCNL4040Device = self._get_device_library()
@@ -248,6 +248,15 @@ class CapacitiveSensorMixin(i2cSensor):
     }
 
     @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
     def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
@@ -260,15 +269,6 @@ class CapacitiveSensorMixin(i2cSensor):
         else:
             from gaia.hardware.sensors._devices._compatibility import SeesawDevice
         return SeesawDevice
-
-    @classmethod
-    async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
-        try:
-            cls._get_device_library()
-        except Exception as e:
-            return e
-        return None
 
     def _get_device(self) -> SeesawDevice:
         SeesawDevice = self._get_device_library()

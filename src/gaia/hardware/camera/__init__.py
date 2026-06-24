@@ -22,7 +22,16 @@ class PiCamera(PiCameraAddressMixin, Camera):
             self._device.close()
 
     @classmethod
-    def _get_camera_library(cls):
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from picamera2 import Picamera2 as Picamera2Device  # ty: ignore[unresolved-import]
@@ -35,17 +44,8 @@ class PiCamera(PiCameraAddressMixin, Camera):
             from gaia.hardware.camera._devices._compatibility import Picamera2Device
         return Picamera2Device
 
-    @classmethod
-    async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
-        try:
-            cls._get_camera_library()
-        except Exception as e:
-            return e
-        return None
-
     def _get_device(self) -> Picamera2Device:
-        Picamera2Device = self._get_camera_library()
+        Picamera2Device = self._get_device_library()
         return Picamera2Device()
 
     async def get_image(self, size: tuple | None = None) -> SerializableImage:

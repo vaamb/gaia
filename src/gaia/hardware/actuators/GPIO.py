@@ -54,7 +54,16 @@ class gpioDimmer(DimmerMixin, gpioActuator):
         self._dimmer: pwmio.PWMOut | None = None
 
     @classmethod
-    def _get_pwmio_library(cls):
+    async def _on_check_requirements(cls) -> None | Exception:
+        await super()._on_check_requirements()
+        try:
+            cls._get_dimmer_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_dimmer_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 import pwmio
@@ -67,25 +76,16 @@ class gpioDimmer(DimmerMixin, gpioActuator):
             from gaia.hardware._compatibility import pwmio
         return pwmio
 
-    @classmethod
-    async def _on_check_requirements(cls) -> None | Exception:
-        await super()._on_check_requirements()
-        try:
-            cls._get_pwmio_library()
-        except Exception as e:
-            return e
-        return None
+    def _get_dimmer(self) -> pwmio.PWMOut:
+        pwmio = self._get_dimmer_library()
+        # Valid ignore: pwmio is either the real module or compatibility class, both have a callable PWMOut at runtime
+        return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)  # ty: ignore
 
     @property
     def dimmer(self) -> pwmio.PWMOut:
         if not self._dimmer:
             self._dimmer = self._get_dimmer()
         return self._dimmer
-
-    def _get_dimmer(self) -> pwmio.PWMOut:
-        pwmio = self._get_pwmio_library()
-        # Valid ignore: pwmio is either the real module or compatibility class, both have a callable PWMOut at runtime
-        return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)  # ty: ignore
 
     async def set_pwm_level(self, level: float | int) -> bool:
         return await run_sync(self._set_pwm_level, level)

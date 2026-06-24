@@ -718,6 +718,15 @@ class gpioAddressMixin(HardwareAddressMixin):
         return address
 
     @classmethod
+    async def _on_check_requirements(cls):
+        await super()._on_check_requirements()
+        try:
+            cls._get_pin_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
     def _get_pin_library(cls):
         if is_raspi():  # pragma: no cover
             try:
@@ -731,27 +740,18 @@ class gpioAddressMixin(HardwareAddressMixin):
             from gaia.hardware._compatibility import Pin
         return Pin
 
-    @classmethod
-    async def _on_check_requirements(cls):
-        await super()._on_check_requirements()
-        try:
-            cls._get_pin_library()
-        except Exception as e:
-            return e
-        return None
-
-    @property
-    def pin(self) -> Pin:
-        if self._pin is None:
-            self._pin = self._get_pin()
-        return self._pin
-
     def _get_pin(self) -> Pin:
         Pin = self._get_pin_library()
         address = self.address.main
         # GPIO hardware should have int addresses
         assert isinstance(address, int)
         return Pin(address)
+
+    @property
+    def pin(self) -> Pin:
+        if self._pin is None:
+            self._pin = self._get_pin()
+        return self._pin
 
 
 class i2cAddressMixin(HardwareAddressMixin):
@@ -1139,7 +1139,11 @@ class CameraMixin(HardwareTypeMixin):
     @classmethod
     async def _on_check_requirements(cls) -> None:
         await super()._on_check_requirements()
-        check_dependencies()
+        try:
+            check_dependencies()
+        except Exception as e:
+            raise e
+        return None
 
     @property
     def device(self) -> Any:
