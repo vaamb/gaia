@@ -8,7 +8,7 @@ from typing import Any, Type
 from anyio.to_thread import run_sync
 
 from gaia.dependencies.camera import SerializableImage
-from gaia.hardware.abc import Camera, PiCameraAddressMixin, hardware_logger
+from gaia.hardware.abc import Camera, PiCameraAddressMixin
 from gaia.hardware.utils import is_raspi
 
 
@@ -21,17 +21,33 @@ class PiCamera(PiCameraAddressMixin, Camera):
         if hasattr(self, "_device") and self._device is not None:
             self._device.close()
 
-    def _get_device(self) -> Picamera2Device:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from picamera2 import Picamera2 as Picamera2Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "picamera package is required. Run `uv pip install "
-                    "picamera` in your virtual env."
+                    "picamera package is required. Run "
+                    "`uv pip install picamera` in your virtual env."
                 )
         else:
             from gaia.hardware.camera._devices._compatibility import Picamera2Device
+        return Picamera2Device
+
+    def _get_device(self) -> Picamera2Device:
+        Picamera2Device = self._get_device_library()
         return Picamera2Device()
 
     async def get_image(self, size: tuple | None = None) -> SerializableImage:
@@ -55,9 +71,8 @@ class PiCamera(PiCameraAddressMixin, Camera):
                     now = datetime.now(timezone.utc)
                     array = self.device.capture_array("main")
                 except Exception as e:
-                    hardware_logger.error(
-                        f"Camera {self._name} encountered an error. "
-                        f"ERROR msg: `{e.__class__.__name__}: {e}`."
+                    self._logger.error(
+                        f"Encountered an error. ERROR msg: `{e.__class__.__name__}: {e}`."
                     )
                 else:
                     image = SerializableImage(array, metadata={"timestamp": now})

@@ -385,6 +385,8 @@ class Hardware(metaclass=_MetaHardware):
     automatically generate a unique uid, properly format info and save it in
     ecosystems.cfg
     """
+    _requirements_error: ClassVar[Exception | None | EllipsisType] = ...
+
     @classmethod
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
@@ -484,6 +486,27 @@ class Hardware(metaclass=_MetaHardware):
     @abstractmethod
     def validate_address(cls, address_str: str) -> Address: ...
 
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        """Override in subclasses for requirement checks logic."""
+        pass
+
+    @classmethod
+    async def check_requirements(cls) -> None:
+        if cls._requirements_error is Ellipsis:
+            # The check hasn't been performed yet
+            maybe_error = await cls._on_check_requirements()
+            if isinstance(maybe_error, Exception):
+                # Log the failed requirement
+                hardware_logger.error(
+                    f"Requirements not met for hardware {cls.__name__}. "
+                    f"ERROR msg(s): `{maybe_error.__class__.__name__}: {maybe_error}`.")
+            cls._requirements_error = maybe_error
+
+        if cls._requirements_error is not None:
+            # There was an error before, raise it
+            raise cls._requirements_error
+
     async def _on_initialize(self) -> None:
         """Override in subclasses for initialization logic."""
         pass
@@ -498,6 +521,8 @@ class Hardware(metaclass=_MetaHardware):
             raise RuntimeError(f"Hardware {hardware_cfg.uid} already exists.")
         # Get the subclass needed based on the model used
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
+        # Make sure the requirements are met
+        await hardware_cls.check_requirements()
         # Create hardware
         hardware = hardware_cls.from_config(hardware_cfg, ecosystem_uid)
         # Perform subclass-specific initialization routine
@@ -658,6 +683,7 @@ class HardwareTypeHint(ABC):
 
         # Callables
         _format_measures: Callable[[list[gv.Measure]], dict[Measure, Unit | None]]
+        _on_check_requirements: Callable[[], Awaitable[None | Exception]]
         _on_initialize: Callable[[], Awaitable[None]]
         _on_terminate: Callable[[], Awaitable[None]]
 
@@ -691,27 +717,43 @@ class gpioAddressMixin(HardwareAddressMixin):
             )
         return address
 
-    @property
-    def pin(self) -> Pin:
-        if self._pin is None:
-            self._pin = self._get_pin()
-        return self._pin
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_pin_library()
+        except Exception as e:
+            return e
+        return None
 
-    def _get_pin(self) -> Pin:
+    @classmethod
+    def _get_pin_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit blinka package is required. Run `uv pip install "
-                    "adafruit-blinka` in your virtual env`."
+                    "Adafruit blinka package is required. Run "
+                    "`uv pip install adafruit-blinka` in your virtual env."
                 )
         else:
             from gaia.hardware._compatibility import Pin
+        return Pin
+
+    def _get_pin(self) -> Pin:
+        Pin = self._get_pin_library()
         address = self.address.main
         # GPIO hardware should have int addresses
         assert isinstance(address, int)
         return Pin(address)
+
+    @property
+    def pin(self) -> Pin:
+        if self._pin is None:
+            self._pin = self._get_pin()
+        return self._pin
 
 
 class i2cAddressMixin(HardwareAddressMixin):
@@ -828,6 +870,35 @@ class WebSocketAddressMixin(HardwareAddressMixin):
                 "'WEBSOCKET_<remote_ip_addr>'"
             )
         return address
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+
+        if cls._websocket_manager is not None and cls._websocket_manager.is_running:
+            # The manager is already running correctly, no need to further check
+            return None
+
+        if not GaiaConfigHelper.config_is_set():
+            warnings.warn(
+                "Using `WebSocketHardware.check_requirements()` will materialize "
+                "Gaia's whole app configuration."
+            )
+        port = GaiaConfigHelper.get_config().HARDWARE_WEBSOCKET_PORT
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", port), timeout=1)
+
+        except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
+            # Could not connect, the port is free
+            pass
+        else:
+            writer.close()
+            await writer.wait_closed()
+            return RuntimeError("WebSocketHardware's port is not free")
+        return None
 
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
@@ -970,15 +1041,13 @@ class SwitchMixin(ActuatorMixin):
         await super()._on_initialize()
         success = await self.turn_off()
         if not success:
-            hardware_logger.warning(
-                f"Failed to turn {self.name} ({self.uid}) off")
+            self._logger.warning("Failed to turn off")
 
     async def _on_terminate(self) -> None:
         await super()._on_terminate()
         success = await self.turn_off()
         if not success:
-            hardware_logger.warning(
-                f"Failed to turn {self.name} ({self.uid}) off")
+            self._logger.warning("Failed to turn off")
 
     @abstractmethod
     async def turn_on(self) -> bool: ...
@@ -996,15 +1065,13 @@ class DimmerMixin(ActuatorMixin):
         await super()._on_initialize()
         success = await self.set_pwm_level(0)
         if not success:
-            hardware_logger.warning(
-                f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+            self._logger.warning("Failed to set PWM level to 0")
 
     async def _on_terminate(self) -> None:
         await super()._on_terminate()
         success = await self.set_pwm_level(0)
         if not success:
-            hardware_logger.warning(
-                f"Failed to set {self.name} ({self.uid})'s PWM level to 0")
+            self._logger.warning("Failed to set PWM level to 0")
 
     @abstractmethod
     async def set_pwm_level(self, level: float | int) -> bool: ...
@@ -1100,6 +1167,17 @@ class CameraMixin(HardwareTypeMixin):
         super().__init__(*args, **kwargs)
         self._device: Any | None = None
         self._camera_dir: Path | None = None
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            check_dependencies()
+        except Exception as e:
+            return e
+        return None
 
     @property
     def device(self) -> Any:

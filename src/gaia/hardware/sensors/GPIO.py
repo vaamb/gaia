@@ -4,7 +4,7 @@ from time import sleep
 import typing as t
 from typing import Type
 
-from gaia.hardware.abc import gpioAddressMixin, hardware_logger, Sensor
+from gaia.hardware.abc import gpioAddressMixin, Sensor
 from gaia.hardware.sensors.abc import TempHumSensor
 from gaia.hardware.utils import is_raspi
 
@@ -37,10 +37,8 @@ class DHTSensor(TempHumSensor, gpioSensor):
                 sleep(0.5)
 
             except Exception as e:
-                hardware_logger.error(
-                    f"Sensor {self._name} encountered an error. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
+                self._logger.error(
+                    f"Encountered an error. ERROR msg: `{e.__class__.__name__}: {e}`.")
                 sleep(0.5)
 
             else:
@@ -49,7 +47,19 @@ class DHTSensor(TempHumSensor, gpioSensor):
 
 
 class DHT11(DHTSensor):
-    def _get_device(self) -> DHT11Device:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_dht import DHT11 as DHT11Device  # ty: ignore[unresolved-import]
@@ -60,12 +70,28 @@ class DHT11(DHTSensor):
                     "virtual env and `sudo apt install libgpiod2`."
                 )
         else:
-            from gaia.hardware.sensors._devices._compatibility import DHT11Device 
+            from gaia.hardware.sensors._devices._compatibility import DHT11Device
+        return DHT11Device
+
+    def _get_device(self) -> DHT11Device:
+        DHT11Device = self._get_device_library()
         return DHT11Device(self.pin, use_pulseio=False)
 
 
 class DHT22(DHTSensor):
-    def _get_device(self) -> DHT22Device:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_dht import DHT22 as DHT22Device  # ty: ignore[unresolved-import]
@@ -77,6 +103,10 @@ class DHT22(DHTSensor):
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import DHT22Device
+        return DHT22Device
+
+    def _get_device(self) -> DHT22Device:
+        DHT22Device = self._get_device_library()
         return DHT22Device(self.pin, use_pulseio=False)
 
 

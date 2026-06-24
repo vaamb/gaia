@@ -7,8 +7,7 @@ from typing import Type
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import (
-    hardware_logger, i2cAddressMixin, Measure, PlantLevelMixin,
-    Sensor, SensorRead, Unit)
+    i2cAddressMixin, Measure, PlantLevelMixin, Sensor, SensorRead, Unit)
 from gaia.hardware.sensors.abc import LightSensorBase, TempHumSensor
 from gaia.hardware.utils import is_raspi
 from gaia.utils import get_unit, temperature_converter
@@ -34,17 +33,33 @@ class i2cSensor(i2cAddressMixin, Sensor):
 class AHT20(TempHumSensor, i2cSensor):
     default_address = 0x38
 
-    def _get_device(self) -> AHTx0Device:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_ahtx0 import AHTx0 as AHTx0Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit aht0 package is required. Run `uv pip install "
-                    "adafruit-circuitpython-ahtx0` in your virtual env."
+                    "Adafruit aht0 package is required. Run "
+                    "`uv pip install adafruit-circuitpython-ahtx0` in your virtual env."
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import AHTx0Device
+        return AHTx0Device
+
+    def _get_device(self) -> AHTx0Device:
+        AHTx0Device = self._get_device_library()
         return AHTx0Device(self._get_i2c(), self.address.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None]:
@@ -66,17 +81,33 @@ class ENS160(i2cSensor):
         Measure.tvoc: Unit.ppm,
     }
 
-    def _get_device(self) -> ENS160Device:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_ens160 import ENS160 as ENS160Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit ens160 package is required. Run `uv pip install "
-                    "adafruit-circuitpython-ens160` in your virtual env."
+                    "Adafruit ens160 package is required. Run "
+                    "`uv pip install adafruit-circuitpython-ens160` in your virtual env."
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import ENS160Device
+        return ENS160Device
+
+    def _get_device(self) -> ENS160Device:
+        ENS160Device = self._get_device_library()
         return ENS160Device(self._get_i2c(), self.address.main)
 
     def _get_raw_data(self) -> tuple[float | None, float | None, float | None]:
@@ -146,7 +177,19 @@ class VEML7700(LightSensorBase, i2cSensor):
         Measure.light: Unit.lux,
     }
 
-    def _get_device(self) -> VEML7700Device:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_veml7700 import VEML7700 as VEML7700Device  # ty: ignore[unresolved-import]
@@ -157,6 +200,10 @@ class VEML7700(LightSensorBase, i2cSensor):
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import VEML7700Device
+        return VEML7700Device
+
+    def _get_device(self) -> VEML7700Device:
+        VEML7700Device = self._get_device_library()
         return VEML7700Device(self._get_i2c(), self.address.main)
 
     def _get_lux(self) -> float:
@@ -169,17 +216,33 @@ class VCNL4040(LightSensorBase, i2cSensor):
         Measure.light: Unit.lux,
     }
 
-    def _get_device(self) -> VCNL4040Device:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_vcnl4040 import VCNL4040 as VCNL4040Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit vcnl4040 package is required. Run `uv pip install "
-                    "adafruit-circuitpython-vcnl4040` in your virtual env."
+                    "Adafruit vcnl4040 package is required. Run "
+                    "`uv pip install adafruit-circuitpython-vcnl4040` in your virtual env."
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import VCNL4040Device
+        return VCNL4040Device
+
+    def _get_device(self) -> VCNL4040Device:
+        VCNL4040Device = self._get_device_library()
         return VCNL4040Device(self._get_i2c(), self.address.main)
 
     def _get_lux(self) -> float:
@@ -192,17 +255,33 @@ class CapacitiveSensorMixin(i2cSensor):
         Measure.capacitive: None,
     }
 
-    def _get_device(self) -> SeesawDevice:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_seesaw.seesaw import Seesaw  as SeesawDevice # ty: ignore[unresolved-import]
+                from adafruit_seesaw.seesaw import Seesaw as SeesawDevice  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit seesaw package is required. Run `uv pip install "
-                    "adafruit-circuitpython-seesaw` in your virtual env."
+                    "Adafruit seesaw package is required. Run "
+                    "`uv pip install adafruit-circuitpython-seesaw` in your virtual env."
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import SeesawDevice
+        return SeesawDevice
+
+    def _get_device(self) -> SeesawDevice:
+        SeesawDevice = self._get_device_library()
         return SeesawDevice(self._get_i2c(), self.address.main)
 
 
@@ -225,10 +304,8 @@ class CapacitiveMoisture(PlantLevelMixin, CapacitiveSensorMixin):
                 continue
 
             except Exception as e:
-                hardware_logger.error(
-                    f"Sensor {self._name} encountered an error. "
-                    f"ERROR msg: `{e.__class__.__name__}: {e}`."
-                )
+                self._logger.error(
+                    f"Encountered an error. ERROR msg: `{e.__class__.__name__}: {e}`.")
                 break
             else:
                 break

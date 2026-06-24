@@ -522,7 +522,8 @@ class EngineConfig(metaclass=SingletonMeta):
             for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
                 hardware_name: str = hardware_dict["name"]
                 self.logger.debug(
-                    f"Checking hardware {hardware_name} for ecosystem {ecosystem_name}.")
+                    f"Checking hardware config for hardware {hardware_name} in "
+                    f"ecosystem {ecosystem_name}.")
                 try:
                     EcosystemConfig.validate_hardware_dict(
                         gv.to_identified(hardware_dict, {"uid": hardware_uid}),
@@ -535,7 +536,8 @@ class EngineConfig(metaclass=SingletonMeta):
                     unfixable_error = True
                 else:
                     self.logger.debug(
-                        f"Hardware {hardware_name} validated for ecosystem {ecosystem_name}.")
+                        f"Hardware config for {hardware_name} in ecosystem "
+                        f"{ecosystem_name} has been validated.")
                 finally:
                     addresses_used.append(hardware_dict["address"])
 
@@ -708,6 +710,33 @@ class EngineConfig(metaclass=SingletonMeta):
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
         await self._dump_private_config()
 
+    async def _check_hardware_requirements(self) -> None:
+        # Verify that all the hardware requirements are met
+        for ecosystem_cfg in self.ecosystems_config_dict.values():
+            ecosystem_name: str = ecosystem_cfg["name"]
+            # Check hardware config
+            self.logger.debug(
+                f"Checking hardware requirements for ecosystem {ecosystem_name}.")
+            for hardware_dict in ecosystem_cfg["hardware"].values():
+                hardware_name: str = hardware_dict["name"]
+                # The `ecosystem_configs` dict should have gone through
+                #  `_validate_ecosystems_logic()` by now, so the following should
+                #  never fail
+                hardware_cls = hardware_models[hardware_dict["model"]]
+                self.logger.debug(
+                    f"Checking requirements for hardware {hardware_name} in ecosystem "
+                    f"{ecosystem_name}.")
+                try:
+                    await hardware_cls.check_requirements()
+                except Exception:
+                    self.logger.error(
+                        f"Hardware {hardware_name} in ecosystem {ecosystem_name}. "
+                        f"failed requirements for model {hardware_cls.__name__}")
+                else:
+                    self.logger.debug(
+                        f"Requirements for hardware {hardware_name} in ecosystem "
+                        f"{ecosystem_name} are met.")
+
     async def initialize_configs(self) -> None:
         # This steps needs to remain separate and explicits as it loads files
         # Private configs need to be loaded first so we can check nycthemeral
@@ -726,6 +755,7 @@ class EngineConfig(metaclass=SingletonMeta):
         ecosystems_cfg_path: Path = self.get_file_path(ConfigType.ecosystems)
         if ecosystems_cfg_path.exists():
             await self.load(ConfigType.ecosystems)
+            await self._check_hardware_requirements()
         else:
             self.logger.warning(
                 "No custom `ecosystems.cfg` configuration file detected. "
