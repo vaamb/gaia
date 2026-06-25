@@ -11,7 +11,7 @@ from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice as _TCA9548A
+    from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice
 
 
 class _MetaMultiplexer(type):
@@ -78,10 +78,22 @@ class TCA9548A(Multiplexer):
     def __init__(self, i2c_address=0x70, i2c: None | busio.I2C = None) -> None:
         super().__init__(i2c_address, i2c)
 
-    def _get_device(self) -> _TCA9548A:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls):
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_tca9548a import TCA9548A as _TCA9548A  # ty: ignore[unresolved-import]
+                from adafruit_tca9548a import TCA9548A as TCA9548ADevice  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit tca9548a and busdevice packages are required. "
@@ -90,9 +102,13 @@ class TCA9548A(Multiplexer):
                     "in your virtual env."
                 )
         else:
-            from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice as _TCA9548A
+            from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice
         # Valid ignore: get_i2c() returns either the real or compatibility I2C, both work at runtime
-        return _TCA9548A(get_i2c(), self._address)  # ty: ignore[invalid-argument-type]
+        return TCA9548ADevice
+
+    def _get_device(self) -> TCA9548ADevice:
+        TCA9548ADevice = self._get_device_library()
+        return TCA9548ADevice(get_i2c(), self._address)  # ty: ignore[invalid-argument-type]
 
     def get_channel(self, number: int) -> Any:
         return self.device[number]
