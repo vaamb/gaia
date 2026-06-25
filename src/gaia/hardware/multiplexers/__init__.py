@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import typing as t
-from typing import Any
+from types import EllipsisType
+from typing import Any, ClassVar
 from weakref import WeakValueDictionary
 
 import busio  # TODO: maybe use the compatibility module ?
 
-from gaia.hardware.utils import get_i2c, is_raspi
+from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -29,6 +30,8 @@ class _MetaMultiplexer(type):
 
 
 class Multiplexer(metaclass=_MetaMultiplexer):
+    _requirements_error: ClassVar[Exception | None | EllipsisType] = ...
+
     def __init__(self, i2c_address: int, i2c: None | busio.I2C = None) -> None:
         if i2c is None:
             self._i2c = get_i2c()
@@ -36,6 +39,27 @@ class Multiplexer(metaclass=_MetaMultiplexer):
             self._i2c = i2c
         self._address: int = i2c_address
         self.device = self._get_device()
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        """Override in subclasses for requirement checks logic."""
+        pass
+
+    @classmethod
+    async def check_requirements(cls) -> None:
+        if cls._requirements_error is Ellipsis:
+            # The check hasn't been performed yet
+            maybe_error = await cls._on_check_requirements()
+            if isinstance(maybe_error, Exception):
+                # Log the failed requirement
+                hardware_logger.error(
+                    f"Requirements not met for multiplexer {cls.__name__}. "
+                    f"ERROR msg(s): `{maybe_error.__class__.__name__}: {maybe_error}`.")
+            cls._requirements_error = maybe_error
+
+        if cls._requirements_error is not None:
+            # There was an error before, raise it
+            raise cls._requirements_error
 
     def _get_device(self) -> Any:
         raise NotImplementedError("This method must be implemented in a subclass")
