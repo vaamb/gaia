@@ -20,7 +20,7 @@ def _patch_logging(verbose: bool = False):
     handlers.append("stream_handler")
 
 
-async def _validate_configs(verbose: bool = False) -> None:
+async def _validate_configs(check_requirements: bool = True, verbose: bool = False) -> None:
     _patch_logging(verbose)
     # Initialize engine config
     engine_config =  EngineConfig()
@@ -54,6 +54,8 @@ async def _validate_configs(verbose: bool = False) -> None:
         engine_config.logger.info("Ecosystems configuration file found.")
         try:
             await engine_config.load(ConfigType.ecosystems)
+            if check_requirements:
+                await engine_config._check_hardware_requirements()
         except Exception as e:
             any_error = True
             engine_config.logger.error(
@@ -73,15 +75,22 @@ async def _validate_configs(verbose: bool = False) -> None:
 
 @click.command()
 @click.option(
+    "--check-requirements", "-r",
+    type=bool,
+    default=True,
+    help="Check hardware requirements.",
+    is_flag=True,
+)
+@click.option(
     "--verbose", "-v",
     type=bool,
     default=False,
     help="Enable verbose logging.",
     is_flag=True,
 )
-def validate_configs(verbose: bool = False) -> None:
+def validate_configs(check_requirements: bool = True, verbose: bool = False) -> None:
     """Validate the ecosystems and the private configuration files."""
-    asyncio.run(_validate_configs(verbose))
+    asyncio.run(_validate_configs(check_requirements, verbose))
 
 
 async def _generate_default_configs(ecosystem: bool = True, private: bool = True) -> None:
