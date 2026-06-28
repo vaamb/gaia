@@ -98,7 +98,7 @@ class TCA9548A(Multiplexer):
         return None
 
     @classmethod
-    def _get_device_library(cls):
+    def _get_device_library(cls) -> type[TCA9548ADevice]:
         if is_raspi():  # pragma: no cover
             try:
                 from adafruit_tca9548a import TCA9548A as TCA9548ADevice  # ty: ignore[unresolved-import]

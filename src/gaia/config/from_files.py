@@ -2008,7 +2008,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         multiplexer_model = hardware_config.multiplexer_model
         if (
                 multiplexer_model
-                and not multiplexer_model in multiplexer_models
+                and multiplexer_model not in multiplexer_models
         ):
             raise ValueError(
                 f"Multiplexer model '{multiplexer_model}' is not supported."
