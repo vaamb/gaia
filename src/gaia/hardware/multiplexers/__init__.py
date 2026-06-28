@@ -7,6 +7,7 @@ from weakref import WeakValueDictionary
 
 import busio  # TODO: maybe use the compatibility module ?
 
+from gaia.exceptions import HardwareNotFound
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 
 
@@ -60,6 +61,13 @@ class Multiplexer(metaclass=_MetaMultiplexer):
         if cls._requirements_error is not None:
             # There was an error before, raise it
             raise cls._requirements_error
+
+    @classmethod
+    def get_model_subclass(cls, model: str) -> type[Multiplexer]:
+        try:
+            return multiplexer_models[model]
+        except KeyError:
+            raise HardwareNotFound(f"{model} is not implemented.")
 
     def _get_device(self) -> Any:
         raise NotImplementedError("This method must be implemented in a subclass")
