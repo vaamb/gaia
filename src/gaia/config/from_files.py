@@ -30,7 +30,7 @@ from gaia.config.default_actuators import Direction, EnvironmentDirection, Envir
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, PlantNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models, Hardware
-from gaia.hardware.multiplexers import multiplexer_models
+from gaia.hardware.multiplexers import multiplexer_models, Multiplexer
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
     create_uid, get_yaml, humanize_list, is_time_between, json, SingletonMeta)
@@ -718,6 +718,9 @@ class EngineConfig(metaclass=SingletonMeta):
             # Check hardware config
             self.logger.debug(
                 f"Checking hardware requirements for ecosystem {ecosystem_name}.")
+            # Multiple hardware can have the same multiplexer. Perform the check
+            #  at the end
+            multiplexer_models: set[str] = set()
             for hardware_dict in ecosystem_cfg["hardware"].values():
                 hardware_name: str = hardware_dict["name"]
                 # The `ecosystem_configs` dict should have gone through
@@ -731,12 +734,32 @@ class EngineConfig(metaclass=SingletonMeta):
                     await hardware_cls.check_requirements()
                 except Exception:
                     self.logger.error(
-                        f"Hardware {hardware_name} in ecosystem {ecosystem_name}. "
-                        f"failed requirements for model {hardware_cls.__name__}")
+                        f"Hardware {hardware_name} in ecosystem {ecosystem_name} "
+                        f"failed to meet requirements for model {hardware_cls.__name__}.")
                 else:
                     self.logger.debug(
                         f"Requirements for hardware {hardware_name} in ecosystem "
                         f"{ecosystem_name} are met.")
+                multiplexer_model = hardware_dict.get("multiplexer_model")
+                if multiplexer_model:
+                    multiplexer_models.add(multiplexer_model)
+            # Check multiplexer requirements
+            for multiplexer_model in multiplexer_models:
+                # The `ecosystem_configs` dict should have gone through
+                #  `_validate_ecosystems_logic()` by now, so the following should
+                #  never fail
+                multiplexer_cls = Multiplexer.get_model_subclass(multiplexer_model)
+                try:
+                    await multiplexer_cls.check_requirements()
+                except Exception:
+                    self.logger.error(
+                        f"Multiplexer `{multiplexer_cls.__name__}` in ecosystem "
+                        f"{ecosystem_name} failed to meet requirements")
+                else:
+                    self.logger.debug(
+                        f"Requirements for multiplexer `{multiplexer_cls.__name__}`"
+                        f" in ecosystem {ecosystem_name} are met.")
+
 
     async def initialize_configs(self) -> None:
         # This steps needs to remain separate and explicits as it loads files
