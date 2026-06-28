@@ -30,6 +30,7 @@ from gaia.config.default_actuators import Direction, EnvironmentDirection, Envir
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, PlantNotFound, UndefinedParameter)
 from gaia.hardware import hardware_models, Hardware
+from gaia.hardware.multiplexers import multiplexer_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
     create_uid, get_yaml, humanize_list, is_time_between, json, SingletonMeta)
@@ -1981,6 +1982,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         validated_config["address"] = str(address)
         if str(address) in addresses_used:
             raise ValueError(f"Address '{address}' already used.")
+        multiplexer_model = hardware_config.multiplexer_model
+        if (
+                multiplexer_model
+                and not multiplexer_model in multiplexer_models
+        ):
+            raise ValueError(
+                f"Multiplexer model '{multiplexer_model}' is not supported."
+            )
         return validated_config
 
     def create_new_hardware(
