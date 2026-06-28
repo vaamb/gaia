@@ -29,7 +29,7 @@ from gaia.config import (
 from gaia.config.default_actuators import Direction, EnvironmentDirection, EnvironmentParameter
 from gaia.exceptions import (
     EcosystemNotFound, HardwareNotFound, PlantNotFound, UndefinedParameter)
-from gaia.hardware import hardware_models
+from gaia.hardware import hardware_models, Hardware
 from gaia.subroutines import subroutine_dict
 from gaia.utils import (
     create_uid, get_yaml, humanize_list, is_time_between, json, SingletonMeta)
@@ -722,7 +722,7 @@ class EngineConfig(metaclass=SingletonMeta):
                 # The `ecosystem_configs` dict should have gone through
                 #  `_validate_ecosystems_logic()` by now, so the following should
                 #  never fail
-                hardware_cls = hardware_models[hardware_dict["model"]]
+                hardware_cls = Hardware.get_model_subclass(hardware_dict["model"])
                 self.logger.debug(
                     f"Checking requirements for hardware {hardware_name} in ecosystem "
                     f"{ecosystem_name}.")
@@ -1973,7 +1973,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 "This hardware model is not supported. Use "
                 "'EcosystemConfig.supported_hardware()' to see supported hardware."
             )
-        hardware_cls = hardware_models[hardware_config.model]
+        hardware_cls = Hardware.get_model_subclass(hardware_config.model)
         # Check address
         address = hardware_cls.validate_address(hardware_config.address)
         # Replace default address with the actual address
