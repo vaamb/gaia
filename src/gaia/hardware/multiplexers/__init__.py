@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import typing as t
-from typing import Any
+from types import EllipsisType
+from typing import Any, ClassVar
 from weakref import WeakValueDictionary
 
 import busio  # TODO: maybe use the compatibility module ?
 
-from gaia.hardware.utils import get_i2c, is_raspi
+from gaia.exceptions import HardwareNotFound
+from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice as _TCA9548A
+    from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice
 
 
 class _MetaMultiplexer(type):
@@ -29,6 +31,8 @@ class _MetaMultiplexer(type):
 
 
 class Multiplexer(metaclass=_MetaMultiplexer):
+    _requirements_error: ClassVar[Exception | None | EllipsisType] = ...
+
     def __init__(self, i2c_address: int, i2c: None | busio.I2C = None) -> None:
         if i2c is None:
             self._i2c = get_i2c()
@@ -36,6 +40,34 @@ class Multiplexer(metaclass=_MetaMultiplexer):
             self._i2c = i2c
         self._address: int = i2c_address
         self.device = self._get_device()
+
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        """Override in subclasses for requirement checks logic."""
+        pass
+
+    @classmethod
+    async def check_requirements(cls) -> None:
+        if cls._requirements_error is Ellipsis:
+            # The check hasn't been performed yet
+            maybe_error = await cls._on_check_requirements()
+            if isinstance(maybe_error, Exception):
+                # Log the failed requirement
+                hardware_logger.error(
+                    f"Requirements not met for multiplexer {cls.__name__}. "
+                    f"ERROR msg(s): `{maybe_error.__class__.__name__}: {maybe_error}`.")
+            cls._requirements_error = maybe_error
+
+        if cls._requirements_error is not None:
+            # There was an error before, raise it
+            raise cls._requirements_error
+
+    @classmethod
+    def get_model_subclass(cls, model: str) -> type[Multiplexer]:
+        try:
+            return multiplexer_models[model]
+        except KeyError:
+            raise HardwareNotFound(f"{model} is not implemented.")
 
     def _get_device(self) -> Any:
         raise NotImplementedError("This method must be implemented in a subclass")
@@ -54,10 +86,22 @@ class TCA9548A(Multiplexer):
     def __init__(self, i2c_address=0x70, i2c: None | busio.I2C = None) -> None:
         super().__init__(i2c_address, i2c)
 
-    def _get_device(self) -> _TCA9548A:
+    @classmethod
+    async def _on_check_requirements(cls) -> None | Exception:
+        maybe_error = await super()._on_check_requirements()
+        if maybe_error is not None:
+            return maybe_error
+        try:
+            cls._get_device_library()
+        except Exception as e:
+            return e
+        return None
+
+    @classmethod
+    def _get_device_library(cls) -> type[TCA9548ADevice]:
         if is_raspi():  # pragma: no cover
             try:
-                from adafruit_tca9548a import TCA9548A as _TCA9548A  # ty: ignore[unresolved-import]
+                from adafruit_tca9548a import TCA9548A as TCA9548ADevice  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
                     "Adafruit tca9548a and busdevice packages are required. "
@@ -66,9 +110,13 @@ class TCA9548A(Multiplexer):
                     "in your virtual env."
                 )
         else:
-            from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice as _TCA9548A
+            from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice
         # Valid ignore: get_i2c() returns either the real or compatibility I2C, both work at runtime
-        return _TCA9548A(get_i2c(), self._address)  # ty: ignore[invalid-argument-type]
+        return TCA9548ADevice
+
+    def _get_device(self) -> TCA9548ADevice:
+        TCA9548ADevice = self._get_device_library()
+        return TCA9548ADevice(get_i2c(), self._address)  # ty: ignore[invalid-argument-type]
 
     def get_channel(self, number: int) -> Any:
         return self.device[number]

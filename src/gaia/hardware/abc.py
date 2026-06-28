@@ -28,7 +28,7 @@ from gaia.config import GaiaConfigHelper
 from gaia.dependencies.camera import check_dependencies, SerializableImage
 from gaia.exceptions import DeviceError, HardwareNotFound
 from gaia.hardware._websocket import WebSocketHardwareManager
-from gaia.hardware.multiplexers import Multiplexer, multiplexer_models
+from gaia.hardware.multiplexers import Multiplexer
 from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
@@ -445,7 +445,7 @@ class Hardware(metaclass=_MetaHardware):
         if multiplexer_model:
             # For type narrowing, if `multiplexer_model` is set, so is `address.multiplexer_address`
             assert self._address.multiplexer_address is not None
-            multiplexer_cls = multiplexer_models[multiplexer_model]
+            multiplexer_cls = Multiplexer.get_model_subclass(multiplexer_model)
             self._multiplexer = multiplexer_cls(
                 i2c_address=self._address.multiplexer_address)
         else:
@@ -523,6 +523,9 @@ class Hardware(metaclass=_MetaHardware):
         hardware_cls = cls.get_model_subclass(hardware_cfg.model)
         # Make sure the requirements are met
         await hardware_cls.check_requirements()
+        if hardware_cfg.multiplexer_model is not None:
+            multiplexer_cls = Multiplexer.get_model_subclass(hardware_cfg.multiplexer_model)
+            await multiplexer_cls.check_requirements()
         # Create hardware
         hardware = hardware_cls.from_config(hardware_cfg, ecosystem_uid)
         # Perform subclass-specific initialization routine

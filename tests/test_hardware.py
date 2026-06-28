@@ -10,7 +10,9 @@ from websockets.exceptions import ConnectionClosed
 import gaia_validators as gv
 
 from gaia import Engine
+from gaia.exceptions import HardwareNotFound
 from gaia.hardware import hardware_models
+from gaia.hardware.multiplexers import Multiplexer, TCA9548A
 from gaia.hardware.abc import (
     _MetaHardware, Address, CameraMixin, DimmerMixin, gpioAddressMixin, GPIOAddress,
     Hardware, I2CAddress, i2cAddressMixin, InvalidAddressError, Measure, OneWireAddress,
@@ -240,6 +242,68 @@ async def test_i2c_address_injection(virtual_ecosystem: VirtualEcosystem):
         hardware = await Hardware.initialize(hardware_cfg, ecosystem_uid)
         assert hardware.address.main not in ("default", "def", 0x0)
         assert hardware.address.multiplexer_address != 0x0
+
+
+class TestMultiplexer:
+    @pytest.fixture(autouse=True)
+    def _reset_requirements_cache(self):
+        # The requirement check result is cached on the class. Reset it after
+        #  each test so a forced error does not leak into other tests.
+        yield
+        TCA9548A._requirements_error = ...
+
+    def test_get_model_subclass(self):
+        assert Multiplexer.get_model_subclass("TCA9548A") is TCA9548A
+        with pytest.raises(HardwareNotFound):
+            Multiplexer.get_model_subclass("NotAMultiplexer")
+
+    @pytest.mark.asyncio
+    async def test_check_requirements_met(self, monkeypatch):
+        # Off-Raspberry Pi the compatibility device is always importable, so the
+        #  check must succeed and cache a `None` (no error).
+        monkeypatch.setattr(TCA9548A, "_requirements_error", ...)
+        await TCA9548A.check_requirements()
+        assert TCA9548A._requirements_error is None
+
+    @pytest.mark.asyncio
+    async def test_check_requirements_caches_and_raises(self, monkeypatch):
+        error = RuntimeError("library missing")
+
+        async def failing_check(cls):
+            return error
+
+        monkeypatch.setattr(TCA9548A, "_requirements_error", ...)
+        monkeypatch.setattr(
+            TCA9548A, "_on_check_requirements", classmethod(failing_check))
+
+        with pytest.raises(RuntimeError, match="library missing"):
+            await TCA9548A.check_requirements()
+        # The error is cached so the underlying check is not repeated
+        assert TCA9548A._requirements_error is error
+
+    @pytest.mark.asyncio
+    async def test_initialize_propagates_multiplexer_requirement_error(
+            self, virtual_ecosystem: VirtualEcosystem, monkeypatch):
+        # Regression: a failed multiplexer requirement must surface when a
+        #  multiplexed hardware is initialized. This proves the check is wired
+        #  into `Hardware.initialize` and that the multiplexer is resolved
+        #  through the multiplexer registry (not the hardware one).
+        error = RuntimeError("multiplexer library missing")
+
+        async def failing_check(cls):
+            return error
+
+        # Reset the cache here (not in a fixture): the `virtual_ecosystem`
+        #  fixture spins up the engine config, which already ran — and cached —
+        #  the real requirement check during its setup.
+        monkeypatch.setattr(TCA9548A, "_requirements_error", ...)
+        monkeypatch.setattr(
+            TCA9548A, "_on_check_requirements", classmethod(failing_check))
+
+        hardware_cfg = gv.HardwareConfig(
+            **{"uid": f"mux_{i2c_sensor_veml7700_uid}", **IO_dict[i2c_sensor_veml7700_uid]})
+        with pytest.raises(RuntimeError, match="multiplexer library missing"):
+            await Hardware.initialize(hardware_cfg, ecosystem_uid)
 
 
 @pytest.mark.asyncio
