@@ -5,7 +5,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem
-from gaia.subroutines import Light, Sensors
+from gaia.subroutines import Light
 
 from ..data import light_uid
 
@@ -73,11 +73,7 @@ class TestLightSubroutine:
         with pytest.raises(ValueError):
             await light_subroutine.turn_light("WrongMode")
 
-    async def test_routine(self, light_subroutine: Light, sensors_subroutine: Sensors):
-        # Sensors data are required for full capabilities
-        sensors_subroutine.enable()
-        await sensors_subroutine.start()
-
+    async def test_routine(self, light_subroutine: Light):
         # Enable the subroutines
         light_subroutine.enable()
 
@@ -95,7 +91,3 @@ class TestLightSubroutine:
 
         # Disable the subroutine
         light_subroutine.disable()
-
-        # Stop the sensors subroutine and disable it
-        await sensors_subroutine.stop()
-        sensors_subroutine.disable()

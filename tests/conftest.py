@@ -19,9 +19,7 @@ from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.events import Events
 from gaia.hardware.abc import _MetaHardware
-from gaia.subroutines import (
-    Climate, Health, Light, Pictures, Sensors, subroutine_dict, subroutine_names,
-    Weather)
+from gaia.subroutines import subroutine_dict, subroutine_names
 from gaia.utils import get_yaml, SingletonMeta
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
@@ -223,92 +221,6 @@ async def ecosystem(engine: Engine, logs_content) -> YieldFixture[Ecosystem]:
 async def virtual_ecosystem(ecosystem: Ecosystem) -> YieldFixture[VirtualEcosystem]:
     ecosystem.virtual_self.time_between_measures = -1
     yield ecosystem.virtual_self
-
-
-@pytest_asyncio.fixture(scope="function")
-async def climate_subroutine(ecosystem: Ecosystem) -> YieldFixture[Climate]:
-    climate_subroutine: Climate = ecosystem.get_subroutine("climate")
-
-    # Sensors subroutine is required
-    await ecosystem.enable_subroutine("sensors")
-    await ecosystem.start_subroutine("sensors")
-
-    try:
-        yield climate_subroutine
-    finally:
-        if ecosystem.get_subroutine_status("sensors"):
-            await ecosystem.stop_subroutine("sensors")
-        if climate_subroutine.started:
-            await climate_subroutine.stop()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def weather_subroutine(ecosystem: Ecosystem) -> YieldFixture[Weather]:
-    ecosystem.config.set_management("camera", True)
-    weather_subroutine: Weather = ecosystem.get_subroutine("weather")
-
-    try:
-        yield weather_subroutine
-    finally:
-        if weather_subroutine.started:
-            await weather_subroutine.stop()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def health_subroutine(ecosystem: Ecosystem) -> YieldFixture[Health]:
-    ecosystem.config.set_management("camera", True)
-    health_subroutine: Health = ecosystem.get_subroutine("health")
-
-    try:
-        yield health_subroutine
-    finally:
-        if health_subroutine.started:
-            await health_subroutine.stop()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
-    light_subroutine: Light = ecosystem.get_subroutine("light")
-
-    try:
-        yield light_subroutine
-    finally:
-        if light_subroutine.started:
-            await light_subroutine.stop()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Pictures]:
-    ecosystem.config.set_management("camera", True)
-    pictures_subroutine: Pictures = ecosystem.get_subroutine("pictures")
-
-    try:
-        yield pictures_subroutine
-    finally:
-        if pictures_subroutine.started:
-            await pictures_subroutine.stop()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
-    sensor_subroutine: Sensors = ecosystem.get_subroutine("sensors")
-
-    try:
-        yield sensor_subroutine
-    finally:
-        if sensor_subroutine.started:
-            await sensor_subroutine.stop()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Dummy]:
-    dummy_subroutine: Dummy = ecosystem.get_subroutine("dummy")
-
-    try:
-        yield dummy_subroutine
-    finally:
-        if dummy_subroutine.started:
-            await dummy_subroutine.stop()
 
 
 @pytest_asyncio.fixture(scope="function")
