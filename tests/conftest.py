@@ -204,6 +204,7 @@ async def ecosystem_config(engine_config: EngineConfig, logs_content) -> YieldFi
 
 @pytest_asyncio.fixture(scope="function")
 async def ecosystem(engine: Engine, logs_content) -> YieldFixture[Ecosystem]:
+    await engine.initialize_ecosystems()
     ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
     with logs_content():

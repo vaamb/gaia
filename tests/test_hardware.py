@@ -600,5 +600,4 @@ class TestWebsocketHardware:
 
 @pytest.mark.asyncio
 async def test_cleanup(engine: Engine):
-    await engine.remove_ecosystem(ecosystem_uid)
     assert not _MetaHardware.instances

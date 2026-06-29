@@ -234,22 +234,20 @@ async def test_engine_run(engine: Engine, logs_content):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_engine_loop_survives_refresh_error(engine: Engine, logs_content):
+async def test_engine_loop_survives_refresh_error(engine: Engine, caplog: pytest.LogCaptureFixture):
     await engine.start()
 
+    caplog.clear()
     with patch.object(
             engine, "refresh_ecosystems", side_effect=RuntimeError("Oops")):
         await engine._notify_loop()
-        await sleep(0.15)  # Let the loop wake up, fail and go back to waiting
-    with logs_content() as logs:
-        assert "Encountered an error while refreshing the ecosystems" in logs
+    assert "Encountered an error while refreshing the ecosystems." in caplog.messages[0]
 
     # The loop should still be alive and react to the next config change
+    caplog.clear()
     assert not engine.task.done()
     await engine._notify_loop()
-    await sleep(0.15)
-    with logs_content() as logs:
-        assert "Refreshing the ecosystems" in logs
+    assert "Refreshing the ecosystems ..." in caplog.messages[0]
 
     await engine.stop()
     await engine.terminate()
