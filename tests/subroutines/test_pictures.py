@@ -7,47 +7,47 @@ from ..data import camera_uid
 
 
 @pytest.mark.asyncio
-async def test_manageable(ecosystem: Ecosystem, pictures_subroutine: Pictures):
-    assert pictures_subroutine.manageable
+class TestPictureSubroutine:
+    async def test_manageable(
+            self,
+            ecosystem: Ecosystem,
+            pictures_subroutine: Pictures,
+    ):
+        assert pictures_subroutine.manageable
 
-    ecosystem.config.delete_hardware(camera_uid)
-    await ecosystem.refresh_hardware()
+        ecosystem.config.delete_hardware(camera_uid)
+        await ecosystem.refresh_hardware()
 
-    assert not pictures_subroutine.manageable
+        assert not pictures_subroutine.manageable
 
+    async def test_hardware_needed(self, pictures_subroutine: Pictures):
+        uids = pictures_subroutine.get_hardware_needed_uid()
+        assert uids == {camera_uid}
 
-def test_hardware_needed(pictures_subroutine: Pictures):
-    uids = pictures_subroutine.get_hardware_needed_uid()
-    assert uids == {camera_uid}
+    async def test_routine(self, pictures_subroutine: Pictures):
+        # Enable the subroutine
+        pictures_subroutine.enable()
 
+        # Test start, routine, refresh and stop
+        await pictures_subroutine.start()
 
-@pytest.mark.asyncio
-async def test_routine(pictures_subroutine: Pictures):
-    # Enable the subroutine
-    pictures_subroutine.enable()
+        assert not pictures_subroutine.picture_arrays
 
-    # Test start, routine, refresh and stop
-    await pictures_subroutine.start()
+        await pictures_subroutine.routine()
 
-    assert not pictures_subroutine.picture_arrays
+        assert pictures_subroutine.picture_arrays
 
-    await pictures_subroutine.routine()
+        await pictures_subroutine.refresh()
 
-    assert pictures_subroutine.picture_arrays
+        await pictures_subroutine.stop()
 
-    await pictures_subroutine.refresh()
+        # Disable the subroutine
+        pictures_subroutine.disable()
 
-    await pictures_subroutine.stop()
+    async def test_reset_background_arrays(self, pictures_subroutine: Pictures):
+        pictures_subroutine.enable()
+        await pictures_subroutine.start()
 
-    # Disable the subroutine
-    pictures_subroutine.disable()
+        assert pictures_subroutine.ecosystem.picture_arrays
 
-
-@pytest.mark.asyncio
-async def test_reset_background_arrays(pictures_subroutine: Pictures):
-    pictures_subroutine.enable()
-    await pictures_subroutine.start()
-
-    assert pictures_subroutine.ecosystem.picture_arrays
-
-    await pictures_subroutine.reset_background_arrays()
+        await pictures_subroutine.reset_background_arrays()
