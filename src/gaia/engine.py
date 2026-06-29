@@ -421,13 +421,14 @@ class Engine(metaclass=SingletonMeta):
                         f"ERROR msg: `{e.__class__.__name__}: {e}`."
                     )
             if self.started:
-                await sleep(0.1)  # Allow to do other stuff if there are too much config changes
+                [await sleep(0) for _ in range(10)]  # Allow to do other stuff if there are too much config changes
             else:
                 break
 
     async def _notify_loop(self) -> None:
         async with self.config.new_config:
             self.config.new_config.notify_all()
+        [await sleep(0) for _ in range(42)]
 
     """
     API calls
