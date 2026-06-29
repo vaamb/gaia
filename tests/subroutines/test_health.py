@@ -56,7 +56,7 @@ class TestHealthSubroutine:
             self,
             health_subroutine: Health,
             light_subroutine: Light,
-            logs_content
+            caplog: pytest.LogCaptureFixture
     ):
         light_subroutine.enable()
         await light_subroutine.start()
@@ -64,14 +64,12 @@ class TestHealthSubroutine:
         health_subroutine.enable()
         await health_subroutine.start()
 
-        with logs_content():
-            pass  # Clear logs
+        caplog.clear()
 
         await health_subroutine._get_the_images()
 
-        with logs_content() as logs:
-            assert "Light has been set to 'manual' mode" in logs
-            assert "Light has been set to 'automatic' mode" in logs
+        assert "Light has been set to 'manual' mode." in caplog.messages
+        assert "Light has been set to 'automatic' mode." in caplog.messages
 
         await light_subroutine.stop()
         light_subroutine.disable()
