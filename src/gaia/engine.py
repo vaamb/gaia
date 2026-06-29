@@ -81,9 +81,6 @@ class Engine(metaclass=SingletonMeta):
         if self.plugins_needed:
             # Initialize the database and the message broker
             await self.init_plugins()
-        for ecosystem_uid in self.config.ecosystems_uid:
-            await self.add_ecosystem(ecosystem_uid)
-        self._state = EngineState.INITIALIZED
 
     @classmethod
     async def initialize(
@@ -98,6 +95,7 @@ class Engine(metaclass=SingletonMeta):
         except Exception:
             await engine.terminate()
             raise
+        engine._state = EngineState.INITIALIZED
         return engine
 
     async def terminate(self) -> None:
@@ -694,8 +692,11 @@ class Engine(metaclass=SingletonMeta):
         self.config.start_watchdog()
         # Start background tasks and plugins
         self.start_background_tasks()
-        if self.plugins_initialized:
+        if self.plugins_needed:
             await self.start_plugins()
+        # Initialize the ecosystems
+        for ecosystem_uid in self.config.ecosystems_uid:
+            await self.add_ecosystem(ecosystem_uid)
         # Start the engine thread
         self.task = asyncio.create_task(self._loop(), name="engine-loop")
         await sleep(0)  # Allow _loop() to start
