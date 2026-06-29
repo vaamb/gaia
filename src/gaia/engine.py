@@ -589,6 +589,11 @@ class Engine(metaclass=SingletonMeta):
             ],
         )
 
+    async def initialize_ecosystems(self) -> None:
+        to_initialize = set(self.config.ecosystems_uid) - set(self.ecosystems.keys())
+        for ecosystem_uid in to_initialize:
+            await self.add_ecosystem(ecosystem_uid)
+
     async def refresh_ecosystems(self, send_info: bool = True):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file.
 
@@ -614,9 +619,7 @@ class Engine(metaclass=SingletonMeta):
         # Initialize the ecosystems found in the config file but not yet initialized
         self.logger.debug(
             "Looking for ecosystems present in the config file but not yet initialized.")
-        to_initialize = set(self.config.ecosystems_uid) - set(self.ecosystems.keys())
-        for ecosystem_uid in to_initialize:
-            await self.add_ecosystem(ecosystem_uid)
+        await self.initialize_ecosystems()
 
         # Start the ecosystems which are expected to run and are not running
         self.logger.debug(
@@ -696,8 +699,7 @@ class Engine(metaclass=SingletonMeta):
         if self.plugins_needed:
             await self.start_plugins()
         # Initialize the ecosystems
-        for ecosystem_uid in self.config.ecosystems_uid:
-            await self.add_ecosystem(ecosystem_uid)
+        await self.initialize_ecosystems()
         # Start the engine thread
         self.task = asyncio.create_task(self._loop(), name="engine-loop")
         await sleep(0)  # Allow _loop() to start
