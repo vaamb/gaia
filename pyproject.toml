@@ -41,17 +41,22 @@ dispatcher = [
     "aio-pika~=9.0",
     "event-dispatcher @ git+https://github.com/vaamb/event-dispatcher.git@0.8.1",
 ]
+
+[project.urls]
+repository  = "https://github.com/vaamb/gaia.git"
+
+[dependency-groups]
+qc = [
+    "ruff~=0.7",
+    "ty==0.0.30",
+]
+
 test = [
     "coverage~=7.6",
     "pytest~=9.0.0",
     "pytest-asyncio~=1.3.0",
     "pytest-timeout~=2.2.0",
-    "ruff~=0.7",
-    "ty==0.0.30",
 ]
-
-[project.urls]
-repository  = "https://github.com/vaamb/gaia.git"
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]
