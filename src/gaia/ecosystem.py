@@ -148,7 +148,7 @@ class Ecosystem:
     #   Creation and deletion
     # ---------------------------------------------------------------------------
     async def _async_init(self) -> None:
-        await self.initialize_hardware()
+        pass
 
     @classmethod
     async def initialize(
@@ -511,9 +511,8 @@ class Ecosystem:
         This is called during ecosystem initialization to set up the initial
         hardware state.
         """
-        for hardware_uid, hardware_cfg in self.config.hardware_dict.items():
-            if hardware_cfg["active"]:
-                await self._add_hardware_no_raise(hardware_uid)
+        for hardware_uid in self.get_hardware_needed():
+            await self._add_hardware_no_raise(hardware_uid)
 
     async def refresh_hardware(self) -> None:
         """Synchronize mounted hardware with the current configuration.
@@ -599,7 +598,7 @@ class Ecosystem:
             if self.virtualized:
                 self.virtual_self.start()
             # Mount all the hardware
-            await self.refresh_hardware()
+            await self.initialize_hardware()
             # Refresh subroutines
             await self.refresh_subroutines()
             # Send ecosystems info
