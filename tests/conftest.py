@@ -84,20 +84,6 @@ def temp_dir(patch) -> YieldFixture[str]:
 
 
 @pytest.fixture(scope="session")
-def logs_content(temp_dir) -> YieldFixture[Callable[[], ContextManager[str]]]:
-    log_path = os.path.join(temp_dir, "logs", debug_log_file)
-
-    @contextmanager
-    def get_logs_content():
-        with open(log_path, "r+") as logger_handle:
-            logs = logger_handle.read()
-            yield logs
-            logger_handle.truncate(0)
-
-    yield get_logs_content
-
-
-@pytest.fixture(scope="session")
 def testing_cfg(temp_dir) -> None:
     class Config(BaseConfig):
         TESTING = True
@@ -132,12 +118,12 @@ async def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
-async def engine_config(engine_config_master: EngineConfig, logs_content) -> YieldFixture[EngineConfig]:
+async def engine_config(engine_config_master: EngineConfig, caplog: pytest.LogCaptureFixture) -> YieldFixture[EngineConfig]:
     app_config = deepcopy(engine_config_master.app_config)
     ecosystem_config = deepcopy(engine_config_master.ecosystems_config_dict)
     private_config = deepcopy(engine_config_master.private_config)
-    with logs_content():
-        pass  # Clear logs
+
+    caplog.clear()
 
     try:
         yield engine_config_master
@@ -159,10 +145,10 @@ async def engine_config(engine_config_master: EngineConfig, logs_content) -> Yie
 
 
 @pytest_asyncio.fixture(scope="function")
-async def engine(engine_config: EngineConfig, logs_content) -> YieldFixture[Engine]:
+async def engine(engine_config: EngineConfig, caplog: pytest.LogCaptureFixture) -> YieldFixture[Engine]:
     engine = await Engine.initialize(engine_config=engine_config)
-    with logs_content():
-        pass  # Clear logs
+
+    caplog.clear()
 
     try:
         yield engine
@@ -189,10 +175,10 @@ async def virtual_world(engine: Engine) -> YieldFixture[VirtualWorld]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def ecosystem_config(engine_config: EngineConfig, logs_content) -> YieldFixture[EcosystemConfig]:
+async def ecosystem_config(engine_config: EngineConfig, caplog: pytest.LogCaptureFixture) -> YieldFixture[EcosystemConfig]:
     ecosystem_config = engine_config.get_ecosystem_config(ecosystem_uid)
-    with logs_content():
-        pass  # Clear logs
+
+    caplog.clear()
 
     try:
         yield ecosystem_config
@@ -201,14 +187,13 @@ async def ecosystem_config(engine_config: EngineConfig, logs_content) -> YieldFi
 
 
 @pytest_asyncio.fixture(scope="function")
-async def ecosystem(engine: Engine, logs_content) -> YieldFixture[Ecosystem]:
+async def ecosystem(engine: Engine, caplog: pytest.LogCaptureFixture) -> YieldFixture[Ecosystem]:
     await engine.initialize_ecosystems()
     ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
     await ecosystem.initialize_hardware()
 
-    with logs_content():
-        pass  # Clear logs
+    caplog.clear()
 
     try:
         yield ecosystem

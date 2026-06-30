@@ -315,7 +315,7 @@ class TestWebsocketHardware:
         await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
         return websocket
 
-    async def test_manager(self, logs_content):
+    async def test_manager(self, caplog: pytest.LogCaptureFixture):
         manager = WebSocketHardwareManager()
 
         # Make sure the manager start and can handle connections
@@ -323,8 +323,7 @@ class TestWebsocketHardware:
         websocket = await connect(WEBSOCKET_URL)
         await websocket.send("test")
         await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
-        with logs_content() as logs:
-            assert "Device test is trying to connect" in logs
+        assert "Device test is trying to connect" in caplog.text
 
         # Stop manager
         await manager.stop()
@@ -357,7 +356,7 @@ class TestWebsocketHardware:
 
         await manager.stop()
 
-    async def test_unregistered_device_rejected(self, logs_content):
+    async def test_unregistered_device_rejected(self, caplog: pytest.LogCaptureFixture):
         manager = WebSocketHardwareManager()
         await manager.start()
 
@@ -365,15 +364,14 @@ class TestWebsocketHardware:
         await websocket.send("unknown_uid")
         await yield_control()
 
-        with logs_content() as logs:
-            assert "is trying to connect but is not registered" in logs
+        assert "is trying to connect but is not registered" in caplog.text
 
         with pytest.raises(ConnectionClosed):
             await websocket.recv()
 
         await manager.stop()
 
-    async def test_wrong_ip_device_rejected(self, logs_content):
+    async def test_wrong_ip_device_rejected(self, caplog: pytest.LogCaptureFixture):
         fake_uid = "fake_uid_wrong_ip"
         manager = WebSocketHardwareManager()
         await manager.register_hardware(fake_uid, "192.168.1.1")
@@ -383,22 +381,20 @@ class TestWebsocketHardware:
         await websocket.send(fake_uid)
         await yield_control()
 
-        with logs_content() as logs:
-            assert "is trying to connect from an unexpected" in logs
+        assert "is trying to connect from an unexpected" in caplog.text
 
         with pytest.raises(ConnectionClosed):
             await websocket.recv()
 
         await manager.stop()
 
-    async def test_hardware(self, logs_content):
+    async def test_hardware(self, caplog: pytest.LogCaptureFixture):
         hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})
         hardware = cast(WebSocketSwitch, await Hardware.initialize(hardware_cfg, ecosystem_uid))
 
         # Test device connection
         websocket = await self._connect_device(hardware)
-        with logs_content() as logs:
-            assert f"Device {hardware.uid} connected" in logs
+        assert f"Device {hardware.uid} connected" in caplog.text
 
         # Test ´_send_msg_and_forget()´
         msg = "Test msg"

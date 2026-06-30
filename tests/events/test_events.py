@@ -143,11 +143,10 @@ async def test_send_payload(events_handler: Events, ecosystem: Ecosystem):
 
 
 @pytest.mark.asyncio
-async def test_on_connect(events_handler: Events, logs_content):
+async def test_on_connect(events_handler: Events, caplog: pytest.LogCaptureFixture):
     await events_handler.on_connect(None)
 
-    with logs_content() as logs:
-        assert "Connection to the message broker successful" in logs
+    assert "Connection to the message broker successful" in caplog.text
 
     response = events_handler._dispatcher.emit_store[0]
 
@@ -159,11 +158,10 @@ async def test_on_connect(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_on_register(events_handler: Events, logs_content):
+async def test_on_register(events_handler: Events, caplog: pytest.LogCaptureFixture):
     await events_handler.on_register()
 
-    with logs_content() as logs:
-        assert "Received registration request" in logs
+    assert "Received registration request" in caplog.text
 
     response = events_handler._dispatcher.emit_store[0]
 
@@ -172,45 +170,43 @@ async def test_on_register(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_on_camera_token(events_handler: Events, logs_content):
+async def test_on_camera_token(events_handler: Events, caplog: pytest.LogCaptureFixture):
     test_token = "test_camera_token_123"
 
     await events_handler.on_camera_token(test_token)
 
     assert events_handler.camera_token == test_token
 
-    with logs_content() as logs:
-        assert "Received camera token from Ouranos" in logs
-
+    assert "Received camera token from Ouranos" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_on_disconnect(events_handler: Events, logs_content):
+async def test_on_disconnect(events_handler: Events, caplog: pytest.LogCaptureFixture):
     await events_handler.on_disconnect()
 
-    with logs_content() as logs:
-        assert "Received a disconnection request" in logs
+    assert "Received a disconnection request" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_on_registration_ack_wrong_uuid(events_handler: Events, logs_content):
+async def test_on_registration_ack_wrong_uuid(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     await events_handler.on_registration_ack("wrong_uid")
 
-    with logs_content() as logs:
-        assert "wrongly formatted registration acknowledgment" in logs
+    assert "wrongly formatted registration acknowledgment" in caplog.text
 
     uuid_str = uuid.uuid4().__str__()
     await events_handler.on_registration_ack(uuid_str)
 
-    with logs_content() as logs:
-        assert "registration acknowledgment for another dispatcher" in logs
+    assert "registration acknowledgment for another dispatcher" in caplog.text
 
 
 @pytest.mark.asyncio
 async def test_on_registration_ack(
         engine_config: EngineConfig,
         events_handler: Events,
-        logs_content,
+        caplog: pytest.LogCaptureFixture,
 ):
     engine_config._private_config = PrivateConfigValidator(**{
         "places": {
@@ -224,8 +220,7 @@ async def test_on_registration_ack(
     host_uid = events_handler._dispatcher.host_uid.__str__()
     await events_handler.on_registration_ack(host_uid)
 
-    with logs_content() as logs:
-        assert "registration successful, sending initial ecosystems info" in logs
+    assert "registration successful, sending initial ecosystems info" in caplog.text
 
     responses = deque(events_handler._dispatcher.emit_store)
 
@@ -343,29 +338,29 @@ async def test_on_registration_ack(
 
 
 @pytest.mark.asyncio
-async def test_on_initialized_ack(events_handler: Events, logs_content):
+async def test_on_initialized_ack(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     await events_handler.on_initialization_ack(None)
 
-    with logs_content() as logs:
-        assert "Ouranos successfully received ecosystems info" in logs
+    assert "Ouranos successfully received ecosystems info" in caplog.text
 
     await events_handler.on_initialization_ack(["base_info"])
 
-    with logs_content() as logs:
-        assert "Non-received info: base_info" in logs
+    assert "Non-received info: base_info" in caplog.text
 
 
 @pytest.mark.asyncio
 async def test_on_turn_actuator(
         events_handler: Events,
         ecosystem: Ecosystem,
-        logs_content,
+        caplog: pytest.LogCaptureFixture,
 ):
     await ecosystem.enable_subroutine("light")
     await ecosystem.start_subroutine("light")
 
-    with logs_content() as logs:
-        pass  # To clean up logs
+    caplog.clear()
 
     actuator_name: str = cast(str, gv.HardwareType.light.name)
     handler = ecosystem.actuator_hub.get_handler(actuator_name)
@@ -382,10 +377,9 @@ async def test_on_turn_actuator(
     })
     await events_handler.on_turn_actuator(turn_actuator_payload)
 
-    with logs_content() as logs:
-        assert "Received 'turn_actuator' event" in logs
-        assert actuator_name in logs
-        assert payload_mode.name in logs
+    assert "Received 'turn_actuator' event" in caplog.text
+    assert actuator_name in caplog.text
+    assert payload_mode.name in caplog.text
 
     handler = ecosystem.actuator_hub.get_handler(actuator_name)
     assert handler.status is current_state
@@ -510,13 +504,15 @@ async def test_send_picture_arrays(events_handler: Events, ecosystem: Ecosystem)
 
 
 @pytest.mark.asyncio
-async def test_upload_picture_arrays_no_token(events_handler: Events, logs_content):
+async def test_upload_picture_arrays_no_token(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     events_handler.camera_token = None
 
     await events_handler.upload_picture_arrays()
 
-    with logs_content() as logs:
-        assert "No camera token found, cannot send picture arrays" in logs
+    assert "No camera token found, cannot send picture arrays" in caplog.text
 
 
 @pytest.mark.asyncio

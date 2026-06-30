@@ -44,7 +44,7 @@ def test_engine_plugins_needed(engine: Engine):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_engine_message_broker(engine: Engine, logs_content):
+async def test_engine_message_broker(engine: Engine, caplog: pytest.LogCaptureFixture):
     # Test when communication is disabled in config
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = False
     assert engine.use_message_broker is False
@@ -78,8 +78,7 @@ async def test_engine_message_broker(engine: Engine, logs_content):
     # Test message broker and event handler initialization
     engine.config.app_config.AGGREGATOR_COMMUNICATION_URL = url
     await engine.init_message_broker()
-    with logs_content() as logs:
-        assert "Initialising the event dispatcher" in logs
+    assert "Initialising the event dispatcher" in caplog.text
 
     assert engine._message_broker is not None
     assert isinstance(engine.message_broker, AsyncDispatcher)
@@ -96,7 +95,7 @@ async def test_engine_message_broker(engine: Engine, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_engine_database(engine: Engine, logs_content):
+async def test_engine_database(engine: Engine, caplog: pytest.LogCaptureFixture):
     # Test when DB is disabled in config
     engine.config.app_config.USE_DATABASE = False
     assert engine.use_db is False
@@ -112,8 +111,7 @@ async def test_engine_database(engine: Engine, logs_content):
     assert engine.use_db is True
 
     await engine.init_database()
-    with logs_content() as logs:
-        assert "Initialising the database" in logs
+    assert "Initialising the database" in caplog.text
     assert isinstance(engine.db, AsyncSQLAlchemyWrapper)
 
     # Test DB start and stop
@@ -125,7 +123,7 @@ async def test_engine_database(engine: Engine, logs_content):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_engine_plugins(engine: Engine, logs_content):
+async def test_engine_plugins(engine: Engine, caplog: pytest.LogCaptureFixture):
     assert engine.config.app_config.COMMUNICATE_WITH_OURANOS is False
     assert engine.config.app_config.USE_DATABASE is False
     assert engine.plugins_needed is False
@@ -140,8 +138,7 @@ async def test_engine_plugins(engine: Engine, logs_content):
     assert engine.plugins_needed is True
 
     await engine.init_plugins()
-    with logs_content() as logs:
-        assert "Initialising the plugins" in logs
+    assert "Initialising the plugins" in caplog.text
     assert engine.plugins_initialized is True
 
     await engine.start_plugins()
@@ -154,17 +151,15 @@ async def test_engine_plugins(engine: Engine, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_engine_background_tasks(engine: Engine, logs_content):
+async def test_engine_background_tasks(engine: Engine, caplog: pytest.LogCaptureFixture):
     engine.start_background_tasks()
-    with logs_content() as logs:
-        assert "Starting the background tasks" in logs
+    assert "Starting the background tasks" in caplog.text
     engine.stop_background_tasks()
-    with logs_content() as logs:
-        assert "Stopping the background tasks" in logs
+    assert "Stopping the background tasks" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_engine_states(engine: Engine, logs_content):
+async def test_engine_states(engine: Engine, caplog: pytest.LogCaptureFixture):
     assert not engine.started
     assert not engine.running
     assert not engine.paused
@@ -172,8 +167,7 @@ async def test_engine_states(engine: Engine, logs_content):
     assert not engine.terminated
 
     await engine.start()
-    with logs_content() as logs:
-        assert "Starting Gaia ..." in logs
+    assert "Starting Gaia ..." in caplog.text
     assert engine.started
     assert engine.running
     assert not engine.paused
@@ -183,8 +177,7 @@ async def test_engine_states(engine: Engine, logs_content):
         await engine.resume()
 
     engine.pause()
-    with logs_content() as logs:
-        assert "Pausing Gaia ..." in logs
+    assert "Pausing Gaia ..." in caplog.text
     assert engine.started
     assert not engine.running
     assert engine.paused
@@ -194,8 +187,7 @@ async def test_engine_states(engine: Engine, logs_content):
         engine.pause()
 
     await engine.resume()
-    with logs_content() as logs:
-        assert "Resuming Gaia ..." in logs
+    assert "Resuming Gaia ..." in caplog.text
     assert engine.started
     assert engine.running
     assert not engine.paused
@@ -205,11 +197,9 @@ async def test_engine_states(engine: Engine, logs_content):
         await engine.resume()
 
     await engine.stop()
-    with logs_content() as logs:
-        assert "Stopping Gaia ..." in logs
+    assert "Stopping Gaia ..." in caplog.text
     await engine.terminate()
-    with logs_content() as logs:
-        assert "Terminating Gaia ..." in logs
+    assert "Terminating Gaia ..." in caplog.text
     assert not engine.started
     assert not engine.running
     assert not engine.paused
@@ -220,12 +210,11 @@ async def test_engine_states(engine: Engine, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_engine_run(engine: Engine, logs_content):
+async def test_engine_run(engine: Engine, caplog: pytest.LogCaptureFixture):
     task = create_task(engine.run())
 
     await yield_control()  # Allow to set up and start up
-    with logs_content() as logs:
-        assert "Starting Gaia ..." in logs
+    assert "Starting Gaia ..." in caplog.text
 
     engine._handle_stop_signal()
 
@@ -254,57 +243,55 @@ async def test_engine_loop_survives_refresh_error(engine: Engine, caplog: pytest
 
 
 @pytest.mark.asyncio
-async def test_ecosystem_managements(engine: Engine, ecosystem_config: EcosystemConfig, logs_content):
+async def test_ecosystem_managements(
+        engine: Engine,
+        ecosystem_config: EcosystemConfig,
+        caplog: pytest.LogCaptureFixture,
+):
     # Ecosystems are initialized during the engine initialization
     await engine.terminate_ecosystems()
     # /!\ Ecosystem need a runnable subroutine in order to start
     ecosystem_config.set_management("light", True)
 
     await engine.add_ecosystem(ecosystem_uid)
-    with logs_content() as logs:
-        assert f"Ecosystem {ecosystem_uid} has been created" in logs
+    assert f"Ecosystem {ecosystem_uid} has been created" in caplog.text
     with pytest.raises(RuntimeError, match=r"Ecosystem .* already exists"):
         await engine.add_ecosystem(ecosystem_uid)
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is not running"):
         await engine.stop_ecosystem(ecosystem_uid)
 
     await engine.start_ecosystem(ecosystem_uid)
-    with logs_content() as logs:
-        assert f"Starting ecosystem {ecosystem_uid}" in logs
+    assert f"Starting ecosystem {ecosystem_uid}" in caplog.text
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         await engine.start_ecosystem(ecosystem_uid)
     with pytest.raises(RuntimeError, match=r"Cannot dismount a started ecosystem."):
         await engine.remove_ecosystem(ecosystem_uid)
 
     await engine.stop_ecosystem(ecosystem_uid)
-    with logs_content() as logs:
-        assert f"Ecosystem {ecosystem_uid} has been stopped" in logs
+    assert f"Ecosystem {ecosystem_uid} has been stopped" in caplog.text
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is not running"):
         await engine.stop_ecosystem(ecosystem_uid)
 
     await engine.remove_ecosystem(ecosystem_uid)
-    with logs_content() as logs:
-        assert f"Ecosystem {ecosystem_uid} has been dismounted" in logs
+    assert f"Ecosystem {ecosystem_uid} has been dismounted" in caplog.text
     with pytest.raises(ValueError, match=r"Ecosystem .* is not linked to this engine"):
         await engine.start_ecosystem(ecosystem_uid)
 
 
 @pytest.mark.asyncio
-async def test_refresh_ecosystems_lighting_hours(engine: Engine, logs_content):
+async def test_refresh_ecosystems_lighting_hours(engine: Engine, caplog: pytest.LogCaptureFixture):
     # Simply dispatches work to `EngineConfig` and `Ecosystem`, methods are
     #  tested there
     engine.config._sun_times = {
         "home": {"last_update": date.today(), "data": sun_times}
     }
     await engine.refresh_ecosystems_lighting_hours()
-    with logs_content() as logs:
-        assert "Refreshing ecosystems lighting hours" in logs
+    assert "Refreshing ecosystems lighting hours" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_refresh_chaos(engine: Engine, logs_content):
+async def test_refresh_chaos(engine: Engine, caplog: pytest.LogCaptureFixture):
     # Simply dispatches work to `EcosystemConfig` and `EngineConfig`, methods are
     #  tested there
     await engine.update_chaos_time_window()
-    with logs_content() as logs:
-        assert "Updating ecosystems chaos time window" in logs
+    assert "Updating ecosystems chaos time window" in caplog.text

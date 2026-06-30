@@ -18,12 +18,11 @@ class Events(Events_):
 
 def assert_success(
         events_handler: Events,
-        logs_content,
+        caplog,
         expected_events_emitted: int = 2,
         crud_result_index: int = 0
 ) -> None:
-    with logs_content() as logs:
-        assert "was successfully treated" in logs
+    assert "was successfully treated" in caplog.text
     assert len(events_handler._dispatcher.emit_store) == expected_events_emitted
     emitted_msg: gv.RequestResultDict = \
         events_handler._dispatcher.emit_store[crud_result_index]["data"]
@@ -31,7 +30,10 @@ def assert_success(
 
 
 @pytest.mark.asyncio
-async def test_wrong_engine_uid(events_handler: Events, logs_content):
+async def test_wrong_engine_uid(
+        events_handler: Events, 
+        caplog: pytest.LogCaptureFixture,
+):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": "wrong_uid", "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -41,12 +43,14 @@ async def test_wrong_engine_uid(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    with logs_content() as logs:
-        assert "Received a CRUD request intended to engine" in logs
+    assert "Received a CRUD request intended to engine" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_missing_ecosystem_uid(events_handler: Events, logs_content):
+async def test_missing_ecosystem_uid(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
         action=gv.CrudAction.create,
@@ -57,15 +61,14 @@ async def test_missing_ecosystem_uid(events_handler: Events, logs_content):
     await events_handler.on_crud(message)
 
     error_msg = "Create hardware requires the 'ecosystem_uid' field to be set."
-    with logs_content() as logs:
-        assert error_msg in logs
+    assert error_msg in caplog.text
     emitted_msg: gv.RequestResultDict = events_handler._dispatcher.emit_store[0]["data"]
     assert emitted_msg["status"] == gv.Result.failure
     assert error_msg in emitted_msg["message"]
 
 
 @pytest.mark.asyncio
-async def test_success(events_handler: Events, logs_content):
+async def test_success(events_handler: Events, caplog: pytest.LogCaptureFixture):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -75,11 +78,11 @@ async def test_success(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
 
 @pytest.mark.asyncio
-async def test_create_ecosystem(events_handler: Events, logs_content):
+async def test_create_ecosystem(events_handler: Events, caplog: pytest.LogCaptureFixture):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -89,7 +92,7 @@ async def test_create_ecosystem(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert len(data_update) == 2
@@ -118,7 +121,7 @@ async def test_update_ecosystem_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_ecosystem(events_handler: Events, logs_content):
+async def test_update_ecosystem(events_handler: Events, caplog: pytest.LogCaptureFixture):
     new_name = "NewName"
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid},
@@ -129,7 +132,7 @@ async def test_update_ecosystem(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     ecosystem_config = \
         events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]
@@ -153,7 +156,7 @@ async def test_delete_ecosystem_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_delete_ecosystem(events_handler: Events, logs_content):
+async def test_delete_ecosystem(events_handler: Events, caplog: pytest.LogCaptureFixture):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
@@ -163,7 +166,7 @@ async def test_delete_ecosystem(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content, 1)
+    assert_success(events_handler, caplog, 1)
 
     assert len(events_handler.ecosystems) == 0
     assert len(events_handler.engine.ecosystems_started) == 0
@@ -171,7 +174,7 @@ async def test_delete_ecosystem(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_create_place(events_handler: Events, logs_content):
+async def test_create_place(events_handler: Events, caplog: pytest.LogCaptureFixture):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.create,
@@ -181,7 +184,7 @@ async def test_create_place(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert data_update["uid"] == engine_uid
@@ -208,7 +211,7 @@ async def test_update_place_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_place(events_handler: Events, logs_content):
+async def test_update_place(events_handler: Events, caplog: pytest.LogCaptureFixture):
     events_handler.engine.config.set_place("home", (0, 0))
 
     message = gv.CrudPayloadDict = gv.CrudPayload(
@@ -220,7 +223,7 @@ async def test_update_place(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert data_update["uid"] == engine_uid
@@ -247,7 +250,7 @@ async def test_delete_place_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_delete_place(events_handler: Events, logs_content):
+async def test_delete_place(events_handler: Events, caplog: pytest.LogCaptureFixture):
     events_handler.engine.config.set_place("home", (0, 0))
 
     message = gv.CrudPayloadDict = gv.CrudPayload(
@@ -259,7 +262,7 @@ async def test_delete_place(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     assert data_update["uid"] == engine_uid
@@ -269,7 +272,7 @@ async def test_delete_place(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_update_chaos(events_handler: Events, logs_content):
+async def test_update_chaos(events_handler: Events, caplog: pytest.LogCaptureFixture):
     frequency = 10
     duration = 5
     intensity = 1.10
@@ -282,7 +285,7 @@ async def test_update_chaos(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ChaosParametersPayload(**data_update[0])
@@ -292,7 +295,10 @@ async def test_update_chaos(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_update_nycthemeral_config(events_handler: Events, logs_content):
+async def test_update_nycthemeral_config(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     events_handler.engine.config.set_place("home", (0, 0))
 
     span = gv.NycthemeralSpanMethod.mimic
@@ -315,7 +321,7 @@ async def test_update_nycthemeral_config(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content, 2, 0)  # crud_result and nycthemeral_info
+    assert_success(events_handler, caplog, 2, 0)  # crud_result and nycthemeral_info
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
 
@@ -328,7 +334,7 @@ async def test_update_nycthemeral_config(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_update_management(events_handler: Events, logs_content):
+async def test_update_management(events_handler: Events, caplog: pytest.LogCaptureFixture):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.update,
@@ -338,7 +344,7 @@ async def test_update_management(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update = events_handler._dispatcher.emit_store[1]["data"]
     verified = gv.ManagementConfigPayload(**data_update[0])
@@ -346,7 +352,10 @@ async def test_update_management(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_create_climate_parameter(events_handler: Events, logs_content):
+async def test_create_climate_parameter(
+        events_handler: Events, 
+        caplog: pytest.LogCaptureFixture,
+):
     parameter = gv.ClimateParameter.temperature
     day = 10.0
     night = 15.0
@@ -365,7 +374,7 @@ async def test_create_climate_parameter(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
@@ -407,7 +416,10 @@ async def test_update_climate_parameter_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_climate_parameter(events_handler: Events, logs_content):
+async def test_update_climate_parameter(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     parameter = gv.ClimateParameter.light
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
         parameter=parameter,
@@ -433,7 +445,7 @@ async def test_update_climate_parameter(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
@@ -470,7 +482,10 @@ async def test_delete_climate_parameter_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_delete_climate_parameter(events_handler: Events, logs_content):
+async def test_delete_climate_parameter(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     parameter = gv.ClimateParameter.light
     events_handler.ecosystems[ecosystem_uid].config.set_climate_parameter(
         parameter=parameter,
@@ -488,7 +503,7 @@ async def test_delete_climate_parameter(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.ClimateConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
@@ -497,7 +512,10 @@ async def test_delete_climate_parameter(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_create_weather_event(events_handler: Events, logs_content):
+async def test_create_weather_event(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     parameter = gv.WeatherParameter.fog
     pattern = "0 7 * * *"
     duration = 30.0
@@ -515,7 +533,7 @@ async def test_create_weather_event(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.WeatherConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
@@ -556,7 +574,10 @@ async def test_update_weather_event_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_weather_event(events_handler: Events, logs_content):
+async def test_update_weather_event(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     parameter = gv.WeatherParameter.rain
     pattern = "0 7 * * *"
     duration = 30.0
@@ -574,7 +595,7 @@ async def test_update_weather_event(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.WeatherConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
@@ -608,7 +629,10 @@ async def test_delete_weather_event_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_delete_weather_event(events_handler: Events, logs_content):
+async def test_delete_weather_event(
+        events_handler: Events,
+        caplog: pytest.LogCaptureFixture,
+):
     parameter = gv.WeatherParameter.fog
     events_handler.ecosystems[ecosystem_uid].config.set_weather_parameter(
         parameter=parameter,
@@ -625,7 +649,7 @@ async def test_delete_weather_event(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.WeatherConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
@@ -634,7 +658,7 @@ async def test_delete_weather_event(events_handler: Events, logs_content):
 
 
 @pytest.mark.asyncio
-async def test_create_hardware(events_handler: Events, logs_content):
+async def test_create_hardware(events_handler: Events, caplog: pytest.LogCaptureFixture):
     events_handler.engine.config.ecosystems_config_dict[ecosystem_uid]["hardware"] = {}
     valid_hardware_info = {
         **humidifier_info,
@@ -650,7 +674,7 @@ async def test_create_hardware(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.HardwareConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
@@ -684,7 +708,7 @@ async def test_update_hardware_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_update_hardware(events_handler: Events, logs_content):
+async def test_update_hardware(events_handler: Events, caplog: pytest.LogCaptureFixture):
     valid_hardware_info = {
         "uid": humidifier_uid,
         "model": "gpioSwitch",
@@ -699,7 +723,7 @@ async def test_update_hardware(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.HardwareConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
@@ -728,7 +752,7 @@ async def test_delete_hardware_failure(events_handler: Events):
 
 
 @pytest.mark.asyncio
-async def test_delete_hardware(events_handler: Events, logs_content):
+async def test_delete_hardware(events_handler: Events, caplog: pytest.LogCaptureFixture):
     message = gv.CrudPayloadDict = gv.CrudPayload(
         routing={"engine_uid": engine_uid, "ecosystem_uid": ecosystem_uid},
         action=gv.CrudAction.delete,
@@ -738,7 +762,7 @@ async def test_delete_hardware(events_handler: Events, logs_content):
 
     await events_handler.on_crud(message)
 
-    assert_success(events_handler, logs_content)
+    assert_success(events_handler, caplog)
 
     data_update: list[gv.HardwareConfigPayloadDict] = \
         events_handler._dispatcher.emit_store[1]["data"]
