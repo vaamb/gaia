@@ -10,54 +10,52 @@ from ..data import (
 
 
 @pytest.mark.asyncio
-async def test_manageable(ecosystem: Ecosystem, sensors_subroutine: Sensors):
-    assert sensors_subroutine.manageable
+class TestSensorsSubroutine:
+    async def test_manageable(self, ecosystem: Ecosystem, sensors_subroutine: Sensors):
+        assert sensors_subroutine.manageable
 
-    for hardware_uid in sensors_subroutine.get_hardware_needed_uid():
-        ecosystem.config.delete_hardware(hardware_uid)
+        for hardware_uid in sensors_subroutine.get_hardware_needed_uid():
+            ecosystem.config.delete_hardware(hardware_uid)
 
-    await ecosystem.refresh_hardware()
+        await ecosystem.refresh_hardware()
 
-    assert not sensors_subroutine.manageable
+        assert not sensors_subroutine.manageable
 
+    async def test_hardware_needed(self, sensors_subroutine: Sensors):
+        uids = sensors_subroutine.get_hardware_needed_uid()
+        assert uids == {
+            i2c_sensor_ens160_uid,
+            i2c_sensor_veml7700_uid,
+            sensor_uid,
+            ws_sensor_uid,
+        }
 
-def test_hardware_needed(sensors_subroutine: Sensors):
-    uids = sensors_subroutine.get_hardware_needed_uid()
-    assert uids == {
-        i2c_sensor_ens160_uid,
-        i2c_sensor_veml7700_uid,
-        sensor_uid,
-        ws_sensor_uid,
-    }
+    async def test_routine(self, sensors_subroutine: Sensors):
+        # Rely on the correct implementation of virtualDHT22
+        # Setup climate parameters to test alarms
+        sensors_subroutine.config.set_management(gv.ManagementFlags.alarms, True)
+        sensors_subroutine.config.set_climate_parameter(
+            "temperature", **{"day": 42.0, "night": 42.0, "hysteresis": 1.0, "alarm": 0.5})
 
+        # Enable the subroutine
+        sensors_subroutine.enable()
 
-@pytest.mark.asyncio
-async def test_routine(sensors_subroutine: Sensors):
-    # Rely on the correct implementation of virtualDHT22
-    # Setup climate parameters to test alarms
-    sensors_subroutine.config.set_management(gv.ManagementFlags.alarms, True)
-    sensors_subroutine.config.set_climate_parameter(
-        "temperature", **{"day": 42.0, "night": 42.0, "hysteresis": 1.0, "alarm": 0.5})
+        # Test start, routine, refresh and stop
+        await sensors_subroutine.start()
 
-    # Enable the subroutine
-    sensors_subroutine.enable()
+        assert sensors_subroutine.sensors_data == gv.Empty()
 
-    # Test start, routine, refresh and stop
-    await sensors_subroutine.start()
+        await sensors_subroutine.routine()
 
-    assert sensors_subroutine.sensors_data == gv.Empty()
+        assert isinstance(sensors_subroutine.sensors_data, gv.SensorsData)
+        assert len(sensors_subroutine.sensors_data.records) > 0
+        assert len(sensors_subroutine.sensors_data.average) > 0
+        assert len(sensors_subroutine.sensors_data.alarms) > 0
 
-    await sensors_subroutine.routine()
+        assert sensors_subroutine.ecosystem.sensors_data.records
 
-    assert isinstance(sensors_subroutine.sensors_data, gv.SensorsData)
-    assert len(sensors_subroutine.sensors_data.records) > 0
-    assert len(sensors_subroutine.sensors_data.average) > 0
-    assert len(sensors_subroutine.sensors_data.alarms) > 0
+        await sensors_subroutine.refresh()
 
-    assert sensors_subroutine.ecosystem.sensors_data.records
+        await sensors_subroutine.stop()
 
-    await sensors_subroutine.refresh()
-
-    await sensors_subroutine.stop()
-
-    sensors_subroutine.disable()
+        sensors_subroutine.disable()

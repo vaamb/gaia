@@ -13,181 +13,170 @@ from .. import data
 
 
 @pytest.mark.asyncio
-async def test_manageable(ecosystem: Ecosystem, climate_subroutine: Climate):
-    # Save config
-    climate_config = ecosystem.config.climate
+class TestClimateSubroutine:
+    async def test_manageable(self, ecosystem: Ecosystem, climate_subroutine: Climate):
+        # Save config
+        climate_config = ecosystem.config.climate
 
-    assert climate_subroutine.manageable
+        assert climate_subroutine.manageable
 
-    # Make sure sensors subroutine is required
-    await climate_subroutine.ecosystem.stop_subroutine("sensors")
-    assert not climate_subroutine.manageable
+        # Make sure sensors subroutine is required
+        await climate_subroutine.ecosystem.stop_subroutine("sensors")
+        assert not climate_subroutine.manageable
 
-    await climate_subroutine.ecosystem.start_subroutine("sensors")
-    assert climate_subroutine.manageable
+        await climate_subroutine.ecosystem.start_subroutine("sensors")
+        assert climate_subroutine.manageable
 
-    # Make sure a climate parameter is needed
-    ecosystem.config.environment["climate"] = {}
-    assert not climate_subroutine.manageable
+        # Make sure a climate parameter is needed
+        ecosystem.config.environment["climate"] = {}
+        assert not climate_subroutine.manageable
 
-    climate_subroutine.ecosystem.config.set_climate_parameter(
-        parameter="temperature", day=25, night=20, hysteresis=2)
-    assert climate_subroutine.manageable
+        climate_subroutine.ecosystem.config.set_climate_parameter(
+            parameter="temperature", day=25, night=20, hysteresis=2)
+        assert climate_subroutine.manageable
 
-    # Make sure a regulator is needed
-    climate_subroutine.ecosystem.config.delete_hardware(data.heater_uid)
-    await ecosystem.refresh_hardware()
-    assert not climate_subroutine.manageable
+        # Make sure a regulator is needed
+        climate_subroutine.ecosystem.config.delete_hardware(data.heater_uid)
+        await ecosystem.refresh_hardware()
+        assert not climate_subroutine.manageable
 
-    # Restore config
-    ecosystem.config.environment["climate"] = climate_config
+        # Restore config
+        ecosystem.config.environment["climate"] = climate_config
 
+    async def test_target(self, climate_subroutine: Climate):
+        day = time(hour=12)
+        target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, day)
+        assert target[0] == data.temperature_cfg["day"]
+        assert target[1] == data.temperature_cfg["hysteresis"]
 
-def test_target(climate_subroutine: Climate):
-    day = time(hour=12)
-    target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, day)
-    assert target[0] == data.temperature_cfg["day"]
-    assert target[1] == data.temperature_cfg["hysteresis"]
+        night = time(hour=22)
+        target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, night)
+        assert target[0] == data.temperature_cfg["night"]
+        assert target[1] == data.temperature_cfg["hysteresis"]
 
-    night = time(hour=22)
-    target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, night)
-    assert target[0] == data.temperature_cfg["night"]
-    assert target[1] == data.temperature_cfg["hysteresis"]
+    async def test_hardware_needed(self, climate_subroutine: Climate):
+        uids = climate_subroutine.get_hardware_needed_uid()
+        assert uids == {
+            data.ws_dimmer_uid,
+            data.heater_uid,
+            data.humidifier_uid,
+            data.ws_switch_uid,
+        }
 
+    async def test_expected_actuators(self, climate_subroutine: Climate):
+        expected_actuators = climate_subroutine.compute_expected_actuators()
+        assert expected_actuators == {
+            # Default actuator
+            (gv.ClimateParameter.temperature, "increase"): "heater",
+            (gv.ClimateParameter.humidity, "decrease"): "dehumidifier",
+            # Overridden actuator
+            (gv.ClimateParameter.humidity, "increase"): "fogger",
+        }
 
-def test_hardware_needed(climate_subroutine: Climate):
-    uids = climate_subroutine.get_hardware_needed_uid()
-    assert uids == {
-        data.ws_dimmer_uid,
-        data.heater_uid,
-        data.humidifier_uid,
-        data.ws_switch_uid,
-    }
+    async def test_turn_actuator(self, climate_subroutine: Climate):
+        valid_actuator_group: str = cast(str, gv.HardwareType.heater.name)
+        invalid_actuator_group: str = cast(str, gv.HardwareType.cooler.name)
 
+        with pytest.raises(RuntimeError, match=r"Climate subroutine is not started"):
+            await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.on)
 
-def test_expected_actuators(climate_subroutine: Climate):
-    expected_actuators = climate_subroutine.compute_expected_actuators()
-    assert expected_actuators == {
-        # Default actuator
-        (gv.ClimateParameter.temperature, "increase"): "heater",
-        (gv.ClimateParameter.humidity, "decrease"): "dehumidifier",
-        # Overridden actuator
-        (gv.ClimateParameter.humidity, "increase"): "fogger",
-    }
+        climate_subroutine.enable()
+        await climate_subroutine.start()
+        handler = climate_subroutine.ecosystem.actuator_hub.get_handler(valid_actuator_group)
+        handler.activate()
 
-
-@pytest.mark.asyncio
-async def test_turn_actuator(climate_subroutine: Climate):
-    valid_actuator_group: str = cast(str, gv.HardwareType.heater.name)
-    invalid_actuator_group: str = cast(str, gv.HardwareType.cooler.name)
-
-    with pytest.raises(RuntimeError, match=r"Climate subroutine is not started"):
         await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.on)
+        await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.off)
+        await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.automatic)
 
-    climate_subroutine.enable()
-    await climate_subroutine.start()
-    handler = climate_subroutine.ecosystem.actuator_hub.get_handler(valid_actuator_group)
-    handler.activate()
+        with pytest.raises(ValueError, match=r"Actuator group 'cooler' is not mounted."):
+            await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.on)
 
-    await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.on)
-    await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.off)
-    await climate_subroutine.turn_climate_actuator(valid_actuator_group, gv.ActuatorModePayload.automatic)
+        with pytest.raises(ValueError, match=r"Actuator group 'cooler' is not mounted."):
+            await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.off)
 
-    with pytest.raises(ValueError, match=r"Actuator group 'cooler' is not mounted."):
-        await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.on)
+        with pytest.raises(ValueError):
+            await climate_subroutine.turn_climate_actuator(
+                "WrongHardwareType", gv.ActuatorModePayload.automatic)
 
-    with pytest.raises(ValueError, match=r"Actuator group 'cooler' is not mounted."):
-        await climate_subroutine.turn_climate_actuator(invalid_actuator_group, gv.ActuatorModePayload.off)
+        with pytest.raises(ValueError):
+            await climate_subroutine.turn_climate_actuator(valid_actuator_group, "WrongMode")
 
-    with pytest.raises(ValueError):
-        await climate_subroutine.turn_climate_actuator(
-            "WrongHardwareType", gv.ActuatorModePayload.automatic)
+        handler.deactivate()
 
-    with pytest.raises(ValueError):
-        await climate_subroutine.turn_climate_actuator(valid_actuator_group, "WrongMode")
+    async def test_regulated_parameters(self, climate_subroutine: Climate):
+        parameters = climate_subroutine.regulated_parameters
+        assert parameters == []
 
-    handler.deactivate()
+        # Computing manageable updates the regulated parameters but when not started
+        #  it should still return an empty list
+        assert climate_subroutine.manageable
+        parameters = climate_subroutine.regulated_parameters
+        assert parameters == []
 
+        climate_subroutine.enable()
+        await climate_subroutine.start()
+        parameters = climate_subroutine.regulated_parameters
+        assert set(parameters) == {gv.ClimateParameter.temperature, gv.ClimateParameter.humidity}  # depends on hardware available
 
-@pytest.mark.asyncio
-async def test_regulated_parameters(climate_subroutine: Climate):
-    parameters = climate_subroutine.regulated_parameters
-    assert parameters == []
+    async def test_safe_stop_from_sensors(
+            self,
+            climate_subroutine: Climate,
+            sensors_subroutine: Sensors,
+    ):
+        assert sensors_subroutine.enabled
+        assert sensors_subroutine.started
 
-    # Computing manageable updates the regulated parameters but when not started
-    #  it should still return an empty list
-    assert climate_subroutine.manageable
-    parameters = climate_subroutine.regulated_parameters
-    assert parameters == []
+        climate_subroutine.enable()
+        await climate_subroutine.start()
 
-    climate_subroutine.enable()
-    await climate_subroutine.start()
-    parameters = climate_subroutine.regulated_parameters
-    assert set(parameters) == {gv.ClimateParameter.temperature, gv.ClimateParameter.humidity}  # depends on hardware available
+        assert climate_subroutine.enabled
+        assert climate_subroutine.started
 
+        await sensors_subroutine.stop()
 
-@pytest.mark.asyncio
-async def test_safe_stop_from_sensors(
-        climate_subroutine: Climate,
-        sensors_subroutine: Sensors,
-):
-    assert sensors_subroutine.enabled
-    assert sensors_subroutine.started
+        assert climate_subroutine.enabled
+        assert not climate_subroutine.started
+        assert not climate_subroutine.manageable
 
-    climate_subroutine.enable()
-    await climate_subroutine.start()
+    async def test_get_measure_for_parameter(self, climate_subroutine: Climate):
+        measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.temperature)
+        assert measure == gv.ClimateParameter.temperature.name
 
-    assert climate_subroutine.enabled
-    assert climate_subroutine.started
+        measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.humidity)
+        assert measure == "absolute_humidity"
 
-    await sensors_subroutine.stop()
+    async def test_routine(self, climate_subroutine: Climate, sensors_subroutine: Sensors):
+        # Sensors data are required ...
+        await sensors_subroutine.routine()
+        assert not isinstance(sensors_subroutine.sensors_data, gv.Empty)
 
-    assert climate_subroutine.enabled
-    assert not climate_subroutine.started
-    assert not climate_subroutine.manageable
+        # Enable the subroutine
+        climate_subroutine.enable()
 
+        await climate_subroutine.start()
 
-@pytest.mark.asyncio
-async def test_get_measure_for_parameter(climate_subroutine: Climate):
-    measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.temperature)
-    assert measure == gv.ClimateParameter.temperature.name
+        assert set(climate_subroutine.regulated_parameters) == {
+            gv.ClimateParameter.temperature,
+            gv.ClimateParameter.humidity,
+        }
 
-    measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.humidity)
-    assert measure == "absolute_humidity"
+        assert set(climate_subroutine.actuator_handlers) == {
+            (gv.ClimateParameter.temperature, "increase"),  # "heater"
+            (gv.ClimateParameter.humidity, "decrease"),  # "dehumidifier"
+            (gv.ClimateParameter.humidity, "increase"),  # "fogger"
+        }
 
+        assert set(climate_subroutine.pids) == {
+            gv.ClimateParameter.temperature,
+            gv.ClimateParameter.humidity,
+        }
 
-@pytest.mark.asyncio
-async def test_routine(climate_subroutine: Climate, sensors_subroutine: Sensors):
-    # Sensors data are required ...
-    await sensors_subroutine.routine()
-    assert not isinstance(sensors_subroutine.sensors_data, gv.Empty)
+        await climate_subroutine.routine()
 
-    # Enable the subroutine
-    climate_subroutine.enable()
+        await climate_subroutine.refresh()
 
-    await climate_subroutine.start()
+        await climate_subroutine.stop()
 
-    assert set(climate_subroutine.regulated_parameters) == {
-        gv.ClimateParameter.temperature,
-        gv.ClimateParameter.humidity,
-    }
-
-    assert set(climate_subroutine.actuator_handlers) == {
-        (gv.ClimateParameter.temperature, "increase"),  # "heater"
-        (gv.ClimateParameter.humidity, "decrease"),  # "dehumidifier"
-        (gv.ClimateParameter.humidity, "increase"),  # "fogger"
-    }
-
-    assert set(climate_subroutine.pids) == {
-        gv.ClimateParameter.temperature,
-        gv.ClimateParameter.humidity,
-    }
-
-    await climate_subroutine.routine()
-
-    await climate_subroutine.refresh()
-
-    await climate_subroutine.stop()
-
-    # Disable the subroutine
-    climate_subroutine.disable()
+        # Disable the subroutine
+        climate_subroutine.disable()

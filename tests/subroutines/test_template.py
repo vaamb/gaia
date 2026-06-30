@@ -13,94 +13,97 @@ hardware_info = sensor_info
 hardware_uid = sensor_uid
 
 
-def test_subroutine_dict_sync():
-    # Ensure `subroutine_dict` key and values stay consistent
-    for subroutine_name, subroutine in subroutine_dict.items():
-        assert subroutine_name == subroutine.__name__.lower()
-    # Ensure `subroutine_names` and `subroutine_dict` keys remain identical
-    assert sorted(subroutine_names) == sorted(subroutine_dict.keys())
-
-
 @pytest.mark.asyncio
-async def test_states(dummy_subroutine: Dummy, logs_content):
-    dummy_subroutine.manageable_state = False
+class TestSubroutineTemplate:
+    async def test_subroutine_dict_sync(self):
+        # Ensure `subroutine_dict` key and values stay consistent
+        for subroutine_name, subroutine in subroutine_dict.items():
+            assert subroutine_name == subroutine.__name__.lower()
+        # Ensure `subroutine_names` and `subroutine_dict` keys remain identical
+        assert sorted(subroutine_names) == sorted(subroutine_dict.keys())
 
-    with pytest.raises(RuntimeError, match=r"The subroutine is not enabled."):
-        await dummy_subroutine.start()
-    with pytest.raises(RuntimeError, match=r"The subroutine is not running."):
-        await dummy_subroutine.stop()
-    assert not dummy_subroutine.enabled
+    async def test_states(
+            self,
+            dummy_subroutine: Dummy,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        dummy_subroutine.manageable_state = False
 
-    dummy_subroutine.enable()
-    assert dummy_subroutine.enabled
-    with logs_content() as logs:
-        assert "Enabling the subroutine." in logs
-    with pytest.raises(RuntimeError, match=r"The subroutine is not manageable."):
-        await dummy_subroutine.start()
-
-    dummy_subroutine.manageable_state = True
-    await dummy_subroutine.start()
-    with logs_content() as logs:
-        assert "Starting the subroutine." in logs
-    with pytest.raises(RuntimeError, match=r"The subroutine is already running."):
-        await dummy_subroutine.start()
-
-    await dummy_subroutine.stop()
-    with logs_content() as logs:
-        assert "Stopping the subroutine." in logs
-
-    dummy_subroutine.disable()
-    with logs_content() as logs:
-        assert "Disabling the subroutine." in logs
-    assert not dummy_subroutine.enabled
-
-
-@pytest.mark.asyncio
-async def test_start_and_stop_failures(dummy_subroutine: Dummy, logs_content):
-    dummy_subroutine.enable()
-
-    # A failing `_start()` should be logged, re-raised and leave the
-    # subroutine stopped
-    with patch.object(dummy_subroutine, "_start", side_effect=RuntimeError("Oops")):
-        with pytest.raises(RuntimeError, match=r"Oops"):
+        with pytest.raises(RuntimeError, match=r"The subroutine is not enabled."):
             await dummy_subroutine.start()
-    with logs_content() as logs:
-        assert "Starting failed." in logs
-    assert not dummy_subroutine.started
-
-    await dummy_subroutine.start()
-
-    # A failing `_stop()` should be logged, re-raised and leave the
-    # subroutine started
-    with patch.object(dummy_subroutine, "_stop", side_effect=RuntimeError("Oops")):
-        with pytest.raises(RuntimeError, match=r"Oops"):
+        with pytest.raises(RuntimeError, match=r"The subroutine is not running."):
             await dummy_subroutine.stop()
-    with logs_content() as logs:
-        assert "Stopping failed." in logs
-    assert dummy_subroutine.started
+        assert not dummy_subroutine.enabled
 
-    await dummy_subroutine.stop()
-    dummy_subroutine.disable()
+        caplog.clear()
+        dummy_subroutine.enable()
+        assert dummy_subroutine.enabled
+        assert "Enabling the subroutine." in caplog.messages
+        with pytest.raises(RuntimeError, match=r"The subroutine is not manageable."):
+            await dummy_subroutine.start()
 
+        caplog.clear()
+        dummy_subroutine.manageable_state = True
+        await dummy_subroutine.start()
+        assert "Starting the subroutine." in caplog.messages
+        with pytest.raises(RuntimeError, match=r"The subroutine is already running."):
+            await dummy_subroutine.start()
 
-def test_properties(dummy_subroutine: Dummy, ecosystem: Ecosystem):
-    dummy_subroutine.manageable_state = False
-    assert not dummy_subroutine.manageable
-    dummy_subroutine.manageable_state = True
-    assert dummy_subroutine.manageable
+        caplog.clear()
+        await dummy_subroutine.stop()
+        assert "Stopping the subroutine." in caplog.messages
 
-    assert dummy_subroutine.ecosystem.__dict__ is ecosystem.__dict__
+        caplog.clear()
+        dummy_subroutine.disable()
+        assert "Disabling the subroutine." in caplog.messages
+        assert not dummy_subroutine.enabled
 
+    async def test_start_and_stop_failures(
+            self,
+            dummy_subroutine: Dummy,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        dummy_subroutine.enable()
 
-@pytest.mark.asyncio
-async def test_subroutine(dummy_subroutine: Dummy):
-    with pytest.raises(RuntimeError, match=r"subroutine has to be started"):
+        # A failing `_start()` should be logged, re-raised and leave the
+        # subroutine stopped
+        caplog.clear()
+        with patch.object(dummy_subroutine, "_start", side_effect=RuntimeError("Oops")):
+            with pytest.raises(RuntimeError, match=r"Oops"):
+                await dummy_subroutine.start()
+        assert "Starting failed." in caplog.messages[2]
+        assert not dummy_subroutine.started
+
+        await dummy_subroutine.start()
+
+        # A failing `_stop()` should be logged, re-raised and leave the
+        # subroutine started
+        caplog.clear()
+        with patch.object(dummy_subroutine, "_stop", side_effect=RuntimeError("Oops")):
+            with pytest.raises(RuntimeError, match=r"Oops"):
+                await dummy_subroutine.stop()
+        assert "Stopping failed." in caplog.messages[1]
+        assert dummy_subroutine.started
+
+        await dummy_subroutine.stop()
+        dummy_subroutine.disable()
+
+    async def test_properties(self, dummy_subroutine: Dummy, ecosystem: Ecosystem):
+        dummy_subroutine.manageable_state = False
+        assert not dummy_subroutine.manageable
+        dummy_subroutine.manageable_state = True
+        assert dummy_subroutine.manageable
+
+        assert dummy_subroutine.ecosystem.__dict__ is ecosystem.__dict__
+
+    async def test_subroutine(self, dummy_subroutine: Dummy):
+        with pytest.raises(RuntimeError, match=r"subroutine has to be started"):
+            await dummy_subroutine.routine()
+
+        dummy_subroutine.enable()
+        await dummy_subroutine.start()
+
         await dummy_subroutine.routine()
 
-    dummy_subroutine.enable()
-    await dummy_subroutine.start()
-
-    await dummy_subroutine.routine()
-
-    await dummy_subroutine.stop()
-    dummy_subroutine.disable()
+        await dummy_subroutine.stop()
+        dummy_subroutine.disable()
