@@ -38,7 +38,6 @@ class _EcosystemPayloads:
 
     @property
     def management(self) -> gv.ManagementConfig:
-        x = 1
         return gv.ManagementConfig(**self.config.managements)
 
     @property
