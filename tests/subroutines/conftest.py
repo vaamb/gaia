@@ -108,7 +108,10 @@ async def pictures_subroutine(ecosystem: Ecosystem) -> YieldFixture[Pictures]:
 
 # Dummy subroutine
 @pytest_asyncio.fixture(scope="function")
-async def dummy_subroutine(ecosystem: Ecosystem) -> YieldFixture[Dummy]:
+async def dummy_subroutine(ecosystem: Ecosystem, monkeypatch) -> YieldFixture[Dummy]:
+    # Inject the dummy subroutine inside the ecosystem
+    monkeypatch.setitem(ecosystem._subroutines, "dummy", Dummy(ecosystem))
+
     dummy_subroutine: Dummy = ecosystem.get_subroutine("dummy")
 
     async with auto_clean(dummy_subroutine) as subroutine:

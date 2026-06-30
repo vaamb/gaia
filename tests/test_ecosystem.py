@@ -48,14 +48,14 @@ async def test_ecosystem_states(ecosystem: Ecosystem, caplog: pytest.LogCaptureF
 async def test_subroutine_management(ecosystem: "Ecosystem"):
     # Simply dispatches work to subroutine, methods are tested there
 
-    await ecosystem.enable_subroutine("dummy")
-    await ecosystem.start_subroutine("dummy")
-    assert ecosystem.get_subroutine_status("dummy")
-    assert ecosystem.subroutines_started == {"dummy"}
+    await ecosystem.enable_subroutine("light")
+    await ecosystem.start_subroutine("light")
+    assert ecosystem.get_subroutine_status("light")
+    assert ecosystem.subroutines_started == {"light"}
     await ecosystem.refresh_subroutines()
-    await ecosystem.stop_subroutine("dummy")
+    await ecosystem.stop_subroutine("light")
     assert ecosystem.subroutines_started == set()
-    await ecosystem.disable_subroutine("dummy")
+    await ecosystem.disable_subroutine("light")
 
     with pytest.raises(SubroutineNotFound, match=r"is not valid."):
         await ecosystem.enable_subroutine("WrongSubroutine")
@@ -63,12 +63,12 @@ async def test_subroutine_management(ecosystem: "Ecosystem"):
 
 @pytest.mark.asyncio
 async def test_refresh_subroutines_stops_all_when_none_needed(ecosystem: Ecosystem):
-    await ecosystem.enable_subroutine("dummy")
+    await ecosystem.enable_subroutine("light")
     await ecosystem.refresh_subroutines()
-    assert ecosystem.subroutines_started == {"dummy"}
+    assert ecosystem.subroutines_started == {"light"}
 
     # Disabling the last enabled subroutine should stop it on the next refresh
-    await ecosystem.disable_subroutine("dummy")
+    await ecosystem.disable_subroutine("light")
     await ecosystem.refresh_subroutines()
     assert ecosystem.subroutines_started == set()
 
