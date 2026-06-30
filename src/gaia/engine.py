@@ -57,6 +57,7 @@ class Engine(metaclass=SingletonMeta):
         self.logger: logging.Logger = logging.getLogger("gaia.engine")
         self.logger.info("Initializing Gaia.")
         self._ecosystems: dict[str, Ecosystem] = {}
+        self._failing_ecosystems: set[str] = set()
         self._uid: str = self.config.app_config.ENGINE_UID
         self._virtual_world: VirtualWorld | None = None
         self._scheduler: AsyncIOScheduler = AsyncIOScheduler()
@@ -531,6 +532,13 @@ class Engine(metaclass=SingletonMeta):
         except KeyError:
             raise ValueError(f"Ecosystem '{ecosystem_uid}' is not linked to this engine")
 
+    def get_ecosystems_needed(self) -> set[str]:
+        ecosystem_needed: set[str] = {
+            ecosystem_uid for ecosystem_uid in self.config.ecosystems_uid
+            #if self.config.ecosystems_config_dict[ecosystem_uid]["status"]
+        }
+        return ecosystem_needed - self._failing_ecosystems
+
     async def add_ecosystem(self, ecosystem_uid: str) -> Ecosystem:
         """Create an Ecosystem and link it to the Engine.
 
@@ -543,6 +551,19 @@ class Engine(metaclass=SingletonMeta):
         self.ecosystems[ecosystem_uid] = ecosystem
         self.logger.debug(f"Ecosystem {ecosystem_uid} has been created.")
         return ecosystem
+
+    async def _add_ecosystem_no_raise(
+            self,
+            ecosystem_uid: str,
+    ) -> None:
+        try:
+            await self.add_ecosystem(ecosystem_uid)
+        except Exception as e:
+            self.logger.debug(
+                f"Couldn't add ecosystem '{ecosystem_uid}' to engine.",
+                exc_info=e,
+            )
+            self._failing_ecosystems.add(ecosystem_uid)
 
     async def start_ecosystem(self, ecosystem_uid: str) -> None:
         """Start an Ecosystem.
@@ -590,9 +611,9 @@ class Engine(metaclass=SingletonMeta):
         )
 
     async def initialize_ecosystems(self) -> None:
-        to_initialize = set(self.config.ecosystems_uid) - set(self.ecosystems.keys())
+        to_initialize = self.get_ecosystems_needed() - set(self.ecosystems.keys())
         for ecosystem_uid in to_initialize:
-            await self.add_ecosystem(ecosystem_uid)
+            await self._add_ecosystem_no_raise(ecosystem_uid)
 
     async def refresh_ecosystems(self, send_info: bool = True):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file.
