@@ -49,15 +49,14 @@ class TestEngineConfig:
             self,
             engine_config: EngineConfig,
             ecosystem_config: EcosystemConfig,
-            logs_content,
+            caplog: pytest.LogCaptureFixture,
     ):
         assert engine_config.home_sun_times is None
         ecosystem_config.nycthemeral_cycle["lighting"] = gv.LightMethod.elongate
         engine_config.home_coordinates = (0, 0)
         engine_config.refresh_sun_times()
-        with logs_content() as logs:
-            assert "have been refreshed" in logs
-            assert "Failed to refresh" not in logs
+        assert "have been refreshed" in caplog.text
+        assert "Failed to refresh" not in caplog.text
         assert engine_config.home_sun_times is not None
 
     def test_status(self, engine_config: EngineConfig, ecosystem_config: EcosystemConfig):
@@ -105,13 +104,16 @@ class TestEngineConfig:
 
 @pytest.mark.asyncio
 class TestWatchdog:
-    async def test_config_files_watchdog(self, engine_config: EngineConfig, logs_content):
+    async def test_config_files_watchdog(
+            self,
+            engine_config: EngineConfig,
+            caplog: pytest.LogCaptureFixture,
+    ):
         yaml = get_yaml()
 
         # Start watchdog and make sure it can only be started once
         engine_config.watchdog.start()
-        with logs_content() as logs:
-            assert "Starting the configuration files watchdog" in logs
+        assert "Starting the configuration files watchdog" in caplog.text
         with pytest.raises(RuntimeError):
             engine_config.watchdog.start()
 
@@ -120,21 +122,18 @@ class TestWatchdog:
         with open(engine_config.gaia_dir / ConfigType.ecosystems.value, "w") as cfg:
             yaml.dump(engine_config.ecosystems_config_dict, cfg)
         await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
-        with logs_content() as logs:
-            assert "Change in ecosystems configuration file detected" in logs
+        assert "Change in ecosystems configuration file detected" in caplog.text
 
         # Test watchdog for private cfg
         engine_config.set_place(place="Nowhere", coordinates=(0.0, 0.0))
         with open(engine_config.gaia_dir / ConfigType.private.value, "w") as cfg:
             yaml.dump(engine_config.private_config, cfg)
         await sleep(0.15)  # Allow to check at least once if files changed. Rem: watcher period set to 0.10 sec
-        with logs_content() as logs:
-            assert "Change in private configuration file detected" in logs
+        assert "Change in private configuration file detected" in caplog.text
 
         # Stop watchdog and make sure it can only be stopped once
         engine_config.watchdog.stop()
-        with logs_content() as logs:
-            assert "Stopping the configuration files watchdog" in logs
+        assert "Stopping the configuration files watchdog" in caplog.text
         with pytest.raises(RuntimeError):
             engine_config.watchdog.stop()
 
@@ -190,7 +189,11 @@ class TestEcosystemConfigGeneral:
 
 @pytest.mark.asyncio
 class TestEcosystemConfigGeneralEnvironment:
-    async def test_chaos(self, ecosystem_config: EcosystemConfig, logs_content):
+    async def test_chaos(
+            self,
+            ecosystem_config: EcosystemConfig,
+            caplog: pytest.LogCaptureFixture,
+    ):
         today = datetime.now(timezone.utc).replace(
             hour=14, minute=0, second=0, microsecond=0)
 
@@ -220,8 +223,8 @@ class TestEcosystemConfigGeneralEnvironment:
         assert chaos_time_window["end"] == today + timedelta(days=duration)
 
         await ecosystem_config.update_chaos_time_window()
-        with logs_content() as logs:
-            assert "Chaos time window is already up to date." in logs
+
+        assert "Chaos time window is already up to date." in caplog.text
 
         chaos_factor = ecosystem_config.get_chaos_factor(today + timedelta(days=1))
         # chaos_factor should be at its maximum

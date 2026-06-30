@@ -27,20 +27,18 @@ def test_properties(
 
 
 @pytest.mark.asyncio
-async def test_ecosystem_states(ecosystem: "Ecosystem", logs_content):
+async def test_ecosystem_states(ecosystem: Ecosystem, caplog: pytest.LogCaptureFixture):
     assert not ecosystem.started
 
     await ecosystem.start()
     assert ecosystem.started
-    with logs_content() as logs:
-        assert "Ecosystem successfully started" in logs
+    assert "Ecosystem successfully started" in caplog.text
     with pytest.raises(RuntimeError, match=r"Ecosystem .* is already running"):
         await ecosystem.start()
 
     await ecosystem.stop()
     assert not ecosystem.started
-    with logs_content() as logs:
-        assert "Ecosystem successfully stopped" in logs
+    assert "Ecosystem successfully stopped" in caplog.text
     with pytest.raises(
         RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
         await ecosystem.stop()
@@ -76,21 +74,19 @@ async def test_refresh_subroutines_stops_all_when_none_needed(ecosystem: Ecosyst
 
 
 @pytest.mark.asyncio
-async def test_hardware(ecosystem: Ecosystem, logs_content):
+async def test_hardware(ecosystem: Ecosystem, caplog: pytest.LogCaptureFixture):
     # This test requires empty hardware
     for hardware_uid in [*ecosystem.hardware.keys()]:
         await ecosystem.remove_hardware(hardware_uid)
 
     await ecosystem.add_hardware(data.hardware_uid)
-    with logs_content() as logs:
-        assert f"Hardware {data.hardware_info['name']} has been set up." in logs
+    assert f"Hardware {data.hardware_info['name']} has been set up." in caplog.text
 
     with pytest.raises(ValueError, match=r"Hardware .* is already mounted."):
         await ecosystem.add_hardware(data.hardware_uid)
 
     await ecosystem.remove_hardware(data.hardware_uid)
-    with logs_content() as logs:
-        assert f"Hardware {data.hardware_info['name']} has been dismounted." in logs
+    assert f"Hardware {data.hardware_info['name']} has been dismounted." in caplog.text
 
     with pytest.raises(HardwareNotFound, match=f"Hardware '{data.hardware_uid}' not found."):
         await ecosystem.remove_hardware(data.hardware_uid)
