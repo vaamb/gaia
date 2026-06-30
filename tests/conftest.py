@@ -1,13 +1,11 @@
 from asyncio import Condition, Event
 from copy import deepcopy
-from contextlib import contextmanager
 import os
 import shutil
 import tempfile
 from time import monotonic
-from typing import Callable, ContextManager, Generator, TypeVar
+from typing import Generator, TypeVar
 
-from pydantic import RootModel
 import pytest
 import pytest_asyncio
 
@@ -19,12 +17,10 @@ from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.events import Events
 from gaia.hardware.abc import _MetaHardware
-from gaia.subroutines import subroutine_dict, subroutine_names
 from gaia.utils import get_yaml, SingletonMeta
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
-from .data import debug_log_file, ecosystem_info, ecosystem_uid, engine_uid
-from .subroutines.dummy_subroutine import Dummy
+from .data import ecosystem_info, ecosystem_uid, engine_uid
 from .utils import MockDispatcher, yield_control
 
 
@@ -34,45 +30,7 @@ YieldFixture = Generator[T, None, None]
 
 
 @pytest.fixture(scope="session")
-def patch() -> None:
-    # Patch subroutine dict and list to add the dummy subroutine
-    subroutine_dict["dummy"] = Dummy
-    subroutine_names.append("dummy")
-
-    # Patch gaia_validators.ManagementFlags to add the dummy subroutine
-    from enum import IntFlag
-
-    management_flags = {
-        flag.name: flag.value
-        for flag in gv.ManagementFlags.__members__.values()
-    }
-    max_flag = max(*[flag.value for flag in gv.ManagementFlags])
-    management_flags["dummy"] = management_flags["dummy_enabled"] = max_flag * 2
-    gv.ManagementFlags = IntFlag("ManagementFlags", management_flags)
-
-    # Patch gaia_validators.ManagementConfig to add the dummy subroutine
-    class ManagementConfig(gv.ManagementConfig):
-        dummy: bool = False
-
-    gv.ManagementConfig = ManagementConfig
-
-    # Patch gaia.config.from_files to use the new ManagementConfig
-    from pydantic import Field
-    from gaia.config import from_files
-
-    class EcosystemConfigValidator(from_files.EcosystemConfigValidator):
-        management: gv.ManagementConfig = Field(default_factory=gv.ManagementConfig)
-
-    class RootEcosystemsConfigValidator(RootModel):
-        root: dict[str, EcosystemConfigValidator]
-
-    from_files.RootEcosystemsConfigValidator = RootEcosystemsConfigValidator
-
-    yield
-
-
-@pytest.fixture(scope="session")
-def temp_dir(patch) -> YieldFixture[str]:
+def temp_dir() -> YieldFixture[str]:
     yaml = get_yaml()
     temp_dir = tempfile.mkdtemp(prefix="gaia-")
     with open(os.path.join(temp_dir, "ecosystems.cfg"), "w") as file:

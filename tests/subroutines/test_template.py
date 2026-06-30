@@ -2,11 +2,17 @@ from unittest.mock import patch
 
 import pytest
 
-from gaia import Ecosystem
-from gaia.subroutines import subroutine_dict, subroutine_names
+import gaia_validators as gv
 
-from ..data import sensor_info, sensor_uid
-from .dummy_subroutine import Dummy
+from gaia import Ecosystem
+from gaia.config import from_files
+from gaia import subroutines
+from gaia.subroutines import subroutine_dict
+
+from tests.data import sensor_info, sensor_uid
+from tests.subroutines.dummy_subroutine import (
+    Dummy, PatchedManagementConfig, PatchedManagementFlags,
+    PatchedRootEcosystemsConfigValidator)
 
 
 hardware_info = sensor_info
@@ -15,12 +21,34 @@ hardware_uid = sensor_uid
 
 @pytest.mark.asyncio
 class TestSubroutineTemplate:
+    @pytest.fixture(autouse=True)
+    def _patch_dummy_subroutine(self, monkeypatch: pytest.MonkeyPatch):
+        # Patch gv management related objects
+        monkeypatch.setattr(gv, "ManagementFlags", PatchedManagementFlags)
+        monkeypatch.setattr(gv, "ManagementConfig", PatchedManagementConfig)
+
+        # Patch config RootEcosystemsConfigValidator
+        monkeypatch.setattr(
+            from_files, "RootEcosystemsConfigValidator",
+            PatchedRootEcosystemsConfigValidator)
+
+        # Patch subroutine dict and names
+        monkeypatch.setitem(subroutine_dict, "dummy", Dummy)
+        patched_subroutine_names = [*subroutines.subroutine_names, "dummy"]
+        monkeypatch.setattr(subroutines, "subroutine_names", patched_subroutine_names)
+
+        yield
+
+    async def get_patched_subroutine(self, ecosystem: Ecosystem):
+        ...
+
+
     async def test_subroutine_dict_sync(self):
         # Ensure `subroutine_dict` key and values stay consistent
         for subroutine_name, subroutine in subroutine_dict.items():
             assert subroutine_name == subroutine.__name__.lower()
         # Ensure `subroutine_names` and `subroutine_dict` keys remain identical
-        assert sorted(subroutine_names) == sorted(subroutine_dict.keys())
+        assert sorted(subroutines.subroutine_names) == sorted(subroutine_dict.keys())
 
     async def test_states(
             self,
