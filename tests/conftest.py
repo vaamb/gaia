@@ -205,6 +205,8 @@ async def ecosystem(engine: Engine, logs_content) -> YieldFixture[Ecosystem]:
     await engine.initialize_ecosystems()
     ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
+    await ecosystem.initialize_hardware()
+
     with logs_content():
         pass  # Clear logs
 
