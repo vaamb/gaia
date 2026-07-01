@@ -157,10 +157,19 @@ async def ecosystem_config(
 
 @pytest_asyncio.fixture(scope="function")
 async def ecosystem(
+        request: pytest.FixtureRequest,
         engine: Engine,
         caplog: pytest.LogCaptureFixture,
 ) -> AsyncYieldFixture[Ecosystem]:
+    param = getattr(request, "param", {})
+    hardware_dict = param.get("hardware")
+    plants_dict = param.get("plants")
+    ecosystems_dict = get_ecosystem_info(hardware_dict, plants_dict)
+    ecosystems_dict = engine.config._validate_ecosystem_dict(ecosystems_dict)
+    engine.config._ecosystems_config_dict = ecosystems_dict
+
     await engine.initialize_ecosystems()
+
     ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
     await ecosystem.initialize_hardware()
