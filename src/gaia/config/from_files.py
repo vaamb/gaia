@@ -509,6 +509,12 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"ERROR msg: `{e.__class__.__name__}: {e}`"
             )
 
+    @staticmethod
+    def _validate_ecosystem_dict(
+            ecosystem_dict: dict[str, EcosystemConfigDict],
+    ) -> dict[str, EcosystemConfigDict]:
+        return validate_from_root_model(ecosystem_dict, RootEcosystemsConfigValidator)
+
     def _validate_ecosystems_logic(
             self, ecosystem_configs: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
@@ -569,7 +575,7 @@ class EngineConfig(metaclass=SingletonMeta):
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
-            validated = validate_from_root_model(unvalidated, RootEcosystemsConfigValidator)
+            validated = self._validate_ecosystem_dict(unvalidated)
         except pydantic.ValidationError as e:  # pragma: no cover
             self.logger.error(
                 f"Could not load ecosystems configuration file. "
@@ -586,6 +592,10 @@ class EngineConfig(metaclass=SingletonMeta):
         for ecosystem_config in self.ecosystems_config.values():
             ecosystem_config.reset_caches()
 
+    @staticmethod
+    def _validate_private_dict(private_dict: PrivateConfigDict) -> PrivateConfigDict:
+        return PrivateConfigValidator(**private_dict).model_dump()
+
     async def _load_private_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
         self._check_files_lock_acquired()
@@ -595,7 +605,7 @@ class EngineConfig(metaclass=SingletonMeta):
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
-            validated = PrivateConfigValidator(**unvalidated).model_dump()
+            validated = self._validate_private_dict(unvalidated)
         except pydantic.ValidationError as e:  # pragma: no cover
             self.logger.error(
                 f"Could not validate private configuration file. "
