@@ -4,7 +4,7 @@ import os
 import shutil
 import tempfile
 from time import monotonic
-from typing import Generator, TypeVar
+from typing import AsyncGenerator, Generator, TypeVar
 
 import pytest
 import pytest_asyncio
@@ -27,6 +27,7 @@ from .utils import MockDispatcher, yield_control
 T = TypeVar("T")
 
 YieldFixture = Generator[T, None, None]
+AsyncYieldFixture = AsyncGenerator[T, None]
 
 
 @pytest.fixture(scope="session")
@@ -68,7 +69,7 @@ def testing_cfg(temp_dir) -> None:
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
-async def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
+async def engine_config_master(testing_cfg: None) -> AsyncYieldFixture[EngineConfig]:
     engine_config = EngineConfig()
     await engine_config.initialize_configs()
 
@@ -76,7 +77,10 @@ async def engine_config_master(testing_cfg: None) -> YieldFixture[EngineConfig]:
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
-async def engine_config(engine_config_master: EngineConfig, caplog: pytest.LogCaptureFixture) -> YieldFixture[EngineConfig]:
+async def engine_config(
+        engine_config_master: EngineConfig,
+        caplog: pytest.LogCaptureFixture,
+) -> AsyncYieldFixture[EngineConfig]:
     app_config = deepcopy(engine_config_master.app_config)
     ecosystem_config = deepcopy(engine_config_master.ecosystems_config_dict)
     private_config = deepcopy(engine_config_master.private_config)
@@ -103,7 +107,10 @@ async def engine_config(engine_config_master: EngineConfig, caplog: pytest.LogCa
 
 
 @pytest_asyncio.fixture(scope="function")
-async def engine(engine_config: EngineConfig, caplog: pytest.LogCaptureFixture) -> YieldFixture[Engine]:
+async def engine(
+        engine_config: EngineConfig,
+        caplog: pytest.LogCaptureFixture,
+) -> AsyncYieldFixture[Engine]:
     engine = await Engine.initialize(engine_config=engine_config)
 
     caplog.clear()
@@ -128,12 +135,15 @@ async def engine(engine_config: EngineConfig, caplog: pytest.LogCaptureFixture) 
 
 
 @pytest_asyncio.fixture(scope="function")
-async def virtual_world(engine: Engine) -> YieldFixture[VirtualWorld]:
+async def virtual_world(engine: Engine) -> AsyncYieldFixture[VirtualWorld]:
     yield engine.virtual_world
 
 
 @pytest_asyncio.fixture(scope="function")
-async def ecosystem_config(engine_config: EngineConfig, caplog: pytest.LogCaptureFixture) -> YieldFixture[EcosystemConfig]:
+async def ecosystem_config(
+        engine_config: EngineConfig,
+        caplog: pytest.LogCaptureFixture,
+) -> AsyncYieldFixture[EcosystemConfig]:
     ecosystem_config = engine_config.get_ecosystem_config(ecosystem_uid)
 
     caplog.clear()
@@ -145,7 +155,10 @@ async def ecosystem_config(engine_config: EngineConfig, caplog: pytest.LogCaptur
 
 
 @pytest_asyncio.fixture(scope="function")
-async def ecosystem(engine: Engine, caplog: pytest.LogCaptureFixture) -> YieldFixture[Ecosystem]:
+async def ecosystem(
+        engine: Engine,
+        caplog: pytest.LogCaptureFixture,
+) -> AsyncYieldFixture[Ecosystem]:
     await engine.initialize_ecosystems()
     ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
@@ -163,13 +176,13 @@ async def ecosystem(engine: Engine, caplog: pytest.LogCaptureFixture) -> YieldFi
 
 
 @pytest_asyncio.fixture(scope="function")
-async def virtual_ecosystem(ecosystem: Ecosystem) -> YieldFixture[VirtualEcosystem]:
+async def virtual_ecosystem(ecosystem: Ecosystem) -> AsyncYieldFixture[VirtualEcosystem]:
     ecosystem.virtual_self.time_between_measures = -1
     yield ecosystem.virtual_self
 
 
 @pytest_asyncio.fixture(scope="function")
-async def light_handler(ecosystem: Ecosystem) -> YieldFixture[ActuatorHandler]:
+async def light_handler(ecosystem: Ecosystem) -> AsyncYieldFixture[ActuatorHandler]:
     # We need to hold the pid associated to light handler
     pid = ecosystem.actuator_hub.get_pid(gv.ClimateParameter.light)
     light_handler: ActuatorHandler = ecosystem.get_actuator_handler("light")
@@ -192,7 +205,7 @@ def mock_dispatcher_module()  -> MockDispatcher:
 async def mock_dispatcher(
         mock_dispatcher_module: MockDispatcher,
         engine: Engine,
-) -> YieldFixture[MockDispatcher]:
+) -> AsyncYieldFixture[MockDispatcher]:
     engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
     engine.message_broker = mock_dispatcher_module
     await engine.start_message_broker()
@@ -209,7 +222,7 @@ async def mock_dispatcher(
 async def events_handler(
         ecosystem: Ecosystem,
         mock_dispatcher: MockDispatcher,
-) -> YieldFixture[Events]:
+) -> AsyncYieldFixture[Events]:
     events_handler = Events(ecosystem.engine)
     mock_dispatcher.register_event_handler(events_handler)
     ecosystem.engine.event_handler = events_handler
@@ -223,7 +236,7 @@ async def events_handler(
 @pytest_asyncio.fixture(scope="function")
 async def registered_events_handler(
         events_handler: Events,
-) -> YieldFixture[Events]:
+) -> AsyncYieldFixture[Events]:
     events_handler._last_heartbeat = monotonic()
     assert events_handler.is_connected()
     events_handler.registered = True
