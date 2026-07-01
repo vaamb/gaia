@@ -274,7 +274,10 @@ weather_cfg: dict[str, gv.AnonymousWeatherConfigDict] = {
 }
 
 
-def get_ecosystem_info():
+def get_ecosystem_info(
+        hardware_dict: dict | None = None,
+        plants_dict: dict | None = None,
+):
     return {
         ecosystem_uid: {
             "name": ecosystem_name,
@@ -303,7 +306,7 @@ def get_ecosystem_info():
                 "climate": climate_dict,
                 "weather": weather_cfg,
             },
-            "IO": IO_dict,
-            "plants": {},
+            "hardware": hardware_dict or IO_dict,
+            "plants": plants_dict or {},
         },
     }
