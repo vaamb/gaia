@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, TypeVar
-from unittest.mock import patch
 
 import pytest_asyncio
 
