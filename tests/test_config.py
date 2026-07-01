@@ -11,7 +11,7 @@ from gaia.subroutines import subroutine_names
 from gaia.utils import get_yaml
 
 from .data import (
-    ecosystem_info, ecosystem_name, humidifier_info, humidifier_uid,
+    ecosystem_name, get_ecosystem_info, humidifier_info, humidifier_uid,
     lighting_method, plant_info, rain_cfg, sensor_info, sensor_uid,
     sun_times, temperature_cfg)
 
@@ -138,6 +138,7 @@ class TestWatchdog:
             engine_config.watchdog.stop()
 
         # Restore config files
+        ecosystem_info = get_ecosystem_info()
         with open(engine_config.gaia_dir / ConfigType.ecosystems.value, "w") as cfg:
             yaml.dump(ecosystem_info, cfg)
         with open(engine_config.gaia_dir / ConfigType.private.value, "w") as cfg:

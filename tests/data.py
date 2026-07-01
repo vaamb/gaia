@@ -274,35 +274,36 @@ weather_cfg: dict[str, gv.AnonymousWeatherConfigDict] = {
 }
 
 
-ecosystem_info = {
-    ecosystem_uid: {
-        "name": ecosystem_name,
-        "status": False,
-        "management": {
-            "sensors": False,
-            "light": False,
-            "climate": False,
-            "watering": False,
-            "health": False,
-            "alarms": False,
-            "pictures": False,
-            "database": False,
-        },
-        "environment": {
-            "chaos": {
-                "frequency": 0,
-                "duration": 0,
-                "intensity": 0.0,
+def get_ecosystem_info():
+    return {
+        ecosystem_uid: {
+            "name": ecosystem_name,
+            "status": False,
+            "management": {
+                "sensors": False,
+                "light": False,
+                "climate": False,
+                "watering": False,
+                "health": False,
+                "alarms": False,
+                "pictures": False,
+                "database": False,
             },
-            "nycthemeral_cycle": {
-                "day": lighting_start,
-                "night": lighting_stop,
-                "lighting": lighting_method,
+            "environment": {
+                "chaos": {
+                    "frequency": 0,
+                    "duration": 0,
+                    "intensity": 0.0,
+                },
+                "nycthemeral_cycle": {
+                    "day": lighting_start,
+                    "night": lighting_stop,
+                    "lighting": lighting_method,
+                },
+                "climate": climate_dict,
+                "weather": weather_cfg,
             },
-            "climate": climate_dict,
-            "weather": weather_cfg,
+            "IO": IO_dict,
+            "plants": {},
         },
-        "IO": IO_dict,
-        "plants": {},
-    },
-}
+    }

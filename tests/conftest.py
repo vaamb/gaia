@@ -20,7 +20,7 @@ from gaia.hardware.abc import _MetaHardware
 from gaia.utils import get_yaml, SingletonMeta
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
-from .data import ecosystem_info, ecosystem_uid, engine_uid
+from .data import ecosystem_uid, engine_uid, get_ecosystem_info
 from .utils import MockDispatcher, yield_control
 
 
@@ -34,6 +34,7 @@ AsyncYieldFixture = AsyncGenerator[T, None]
 def temp_dir() -> YieldFixture[str]:
     yaml = get_yaml()
     temp_dir = tempfile.mkdtemp(prefix="gaia-")
+    ecosystem_info = get_ecosystem_info()
     with open(os.path.join(temp_dir, "ecosystems.cfg"), "w") as file:
         yaml.dump(ecosystem_info, file)
 
