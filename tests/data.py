@@ -35,14 +35,14 @@ i2c_sensor_veml7700_uid = "xWQ9uF1bplKs0nk7"
 i2c_sensor_veml7700_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualI2CSensor_VEML7700",
     "active": True,
-    "address": "I2C_0x70#0@default",
+    "address": "I2C_default",
     "model": "virtualVEML7700",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
 #    "groups": None,
     "measures": ["light"],
 #    "plants": [],
-    "multiplexer_model": "TCA9548A",
+#    "multiplexer_model": None,
 }
 
 

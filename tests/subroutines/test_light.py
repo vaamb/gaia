@@ -7,15 +7,22 @@ import gaia_validators as gv
 from gaia import Ecosystem
 from gaia.subroutines import Light
 
-from ..data import light_uid
+from tests import data as test_data
+
+
+light_dict = {
+    test_data.i2c_sensor_veml7700_uid: test_data.i2c_sensor_veml7700_info,
+    test_data.light_uid: test_data.light_info,
+}
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("ecosystem", [{"hardware": light_dict}], indirect=True)
 class TestLightSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, light_subroutine: Light):
         assert light_subroutine.manageable
 
-        ecosystem.config.delete_hardware(light_uid)
+        ecosystem.config.delete_hardware(test_data.light_uid)
         await ecosystem.refresh_hardware()
 
         assert not light_subroutine.manageable
@@ -58,7 +65,7 @@ class TestLightSubroutine:
 
     async def test_hardware_needed(self, light_subroutine: Light):
         uids = light_subroutine.get_hardware_needed_uid()
-        assert uids == {light_uid}
+        assert uids == {test_data.light_uid}
 
     async def test_turn_light(self, light_subroutine: Light):
         with pytest.raises(RuntimeError, match=r"Light subroutine is not started"):
