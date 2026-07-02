@@ -3,7 +3,7 @@ import pytest
 from gaia import Ecosystem
 from gaia.subroutines import Pictures
 
-import tests.data as test_data
+from tests import data as test_data
 
 
 pictures_dict = {

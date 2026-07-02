@@ -26,7 +26,7 @@ class TestSensorsSubroutine:
 
     async def test_hardware_needed(self, sensors_subroutine: Sensors):
         uids = sensors_subroutine.get_hardware_needed_uid()
-        assert uids == {test_data.sensor_uid, }
+        assert uids == {test_data.sensor_uid}
 
     async def test_routine(self, sensors_subroutine: Sensors):
         # Rely on the correct implementation of virtualDHT22

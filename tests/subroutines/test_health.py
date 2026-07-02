@@ -6,7 +6,7 @@ from gaia import Ecosystem
 from gaia.hardware.abc import Measure
 from gaia.subroutines import Health, Light
 
-import tests.data as test_data
+from tests import data as test_data
 
 
 health_dict = {
