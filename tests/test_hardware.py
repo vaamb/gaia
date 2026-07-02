@@ -301,7 +301,7 @@ class TestMultiplexer:
             TCA9548A, "_on_check_requirements", classmethod(failing_check))
 
         hardware_cfg = gv.HardwareConfig(
-            **{"uid": f"mux_{i2c_sensor_veml7700_uid}", **IO_dict[i2c_sensor_veml7700_uid]})
+            **{"uid": f"mux_{i2c_sensor_ens160_uid}", **IO_dict[i2c_sensor_ens160_uid]})
         with pytest.raises(RuntimeError, match="multiplexer library missing"):
             await Hardware.initialize(hardware_cfg, ecosystem_uid)
 
