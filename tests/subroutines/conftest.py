@@ -37,14 +37,7 @@ async def sensors_subroutine(ecosystem: Ecosystem) -> YieldFixture[Sensors]:
 
 # Subroutines needing sensors subroutine
 @pytest_asyncio.fixture(scope="function")
-async def light_subroutine(
-        ecosystem: Ecosystem,
-        sensors_subroutine: Sensors,
-) -> YieldFixture[Light]:
-    # Sensors subroutine is required for full routine
-    sensors_subroutine.enable()
-    await sensors_subroutine.start()
-
+async def light_subroutine(ecosystem: Ecosystem) -> YieldFixture[Light]:
     light_subroutine: Light = ecosystem.get_subroutine("light")
 
     async with auto_clean(light_subroutine) as subroutine:
