@@ -6,30 +6,37 @@ from gaia import Ecosystem
 from gaia.hardware.abc import Measure
 from gaia.subroutines import Health, Light
 
-from ..data import camera_uid
+import tests.data as test_data
+
+
+health_dict = {
+    test_data.light_uid: test_data.light_info,
+    test_data.camera_uid: test_data.camera_info,
+}
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("ecosystem", [{"hardware": health_dict}], indirect=True)
 class TestHealthSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, health_subroutine: Health):
-        camera_cfg = health_subroutine.config.hardware_dict[camera_uid].copy()
+        camera_cfg = health_subroutine.config.hardware_dict[test_data.camera_uid].copy()
         assert health_subroutine.manageable
 
-        health_subroutine.config.hardware_dict[camera_uid]["measures"] = []
+        health_subroutine.config.hardware_dict[test_data.camera_uid]["measures"] = []
         await ecosystem.refresh_hardware()
         assert not health_subroutine.manageable
 
-        health_subroutine.config.hardware_dict[camera_uid] = camera_cfg
+        health_subroutine.config.hardware_dict[test_data.camera_uid] = camera_cfg
         await ecosystem.refresh_hardware()
         assert health_subroutine.manageable
 
-        health_subroutine.config.delete_hardware(camera_uid)
+        health_subroutine.config.delete_hardware(test_data.camera_uid)
         await ecosystem.refresh_hardware()
         assert not health_subroutine.manageable
 
     async def test_hardware_needed(self, health_subroutine: Health):
         uids = health_subroutine.get_hardware_needed_uid()
-        assert uids == {camera_uid}
+        assert uids == {test_data.camera_uid}
 
     async def test_routine(self, health_subroutine: Health):
         # Enable the subroutine
@@ -78,7 +85,7 @@ class TestHealthSubroutine:
         health_subroutine.enable()
         await health_subroutine.start()
 
-        camera = health_subroutine.hardware[camera_uid]
+        camera = health_subroutine.hardware[test_data.camera_uid]
 
         image = await camera.get_image()
         index = health_subroutine._get_index(image, Measure.mpri)
