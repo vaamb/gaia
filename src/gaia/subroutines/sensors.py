@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import Task
+from asyncio import CancelledError, Task
 from datetime import datetime, timezone
 from math import floor
 from statistics import mean
@@ -34,6 +34,7 @@ class Sensors(SubroutineTemplate[Sensor]):
         super().__init__(*args, **kwargs)
         loop_period = float(self.ecosystem.engine.config.app_config.SENSORS_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
+        self._get_sensor_records_futures: list[_SensorFuture] = []
         self._slow_sensor_futures: set[_SensorFuture] = set()
         self._sensors_data: gv.SensorsData | gv.Empty = gv.Empty()
         #self._data_lock = Lock()
@@ -105,6 +106,17 @@ class Sensors(SubroutineTemplate[Sensor]):
             await self.ecosystem.stop_subroutine("climate")
         self.ecosystem.engine.scheduler.remove_job(
             f"{self.ecosystem.uid}-sensors_routine")
+        # Cancel any in-flight sensor reads so they don't outlive the subroutine
+        futures = [*self._get_sensor_records_futures, *self._slow_sensor_futures]
+        for future in futures:
+            future.cancel()
+        if futures:
+            try:
+                await asyncio.gather(*futures)
+            except CancelledError:
+                # Futures created via `anyio.run_sync()` raise `CancelledError`
+                #  when a parent task is cancelled
+                pass
         self._sending_data_task = None
 
     """API calls"""
@@ -138,7 +150,7 @@ class Sensors(SubroutineTemplate[Sensor]):
             future.hardware_uid
             for future in self._slow_sensor_futures
         ]
-        futures: list[_SensorFuture] = []
+        self._get_lux_futures: list[_SensorFuture] = []
         for hardware in self.hardware.values():
             # Do not try to get data from sensors still trying to get their measures
             if hardware.uid in slow_sensors:
@@ -149,11 +161,11 @@ class Sensors(SubroutineTemplate[Sensor]):
             )
             future = cast(_SensorFuture, future)
             future.hardware_uid = hardware.uid
-            futures.append(future)
+            self._get_lux_futures.append(future)
         # Try to get data from sensors that took too long during last loop
-        futures.extend(self._slow_sensor_futures)
+        self._get_lux_futures.extend(self._slow_sensor_futures)
         # Wait for 5 secs for sensors to get data. This allows GPIO sensors to fail once
-        done, pending = await asyncio.wait(futures, timeout=5)
+        done, pending = await asyncio.wait(self._get_lux_futures, timeout=5)
         new_slow_futures = pending - self._slow_sensor_futures
         # Log the sensors that took too long
         for future in new_slow_futures:
