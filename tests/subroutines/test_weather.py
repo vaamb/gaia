@@ -8,10 +8,16 @@ from gaia import Ecosystem
 from gaia.actuator_handler import Timer
 from gaia.subroutines.weather import Weather
 
-from ..data import humidifier_uid
+from tests import data as test_data
+
+
+weather_dict = {
+    test_data.humidifier_uid: test_data.humidifier_info,
+}
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("ecosystem", [{"hardware": weather_dict}], indirect=True)
 class TestWeatherSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, weather_subroutine: Weather):
         assert weather_subroutine.manageable
@@ -26,13 +32,13 @@ class TestWeatherSubroutine:
         assert weather_subroutine.manageable
 
         # Make sure a hardware belonging to the group is needed
-        ecosystem.config.delete_hardware(humidifier_uid)
+        ecosystem.config.delete_hardware(test_data.humidifier_uid)
         await ecosystem.refresh_hardware()
         assert not weather_subroutine.manageable
 
     def test_hardware_needed(self, weather_subroutine: Weather):
         uids = weather_subroutine.get_hardware_needed_uid()
-        assert uids == {humidifier_uid}
+        assert uids == {test_data.humidifier_uid}
 
     async def test_routine(self, weather_subroutine: Weather):
         # Enable the subroutine

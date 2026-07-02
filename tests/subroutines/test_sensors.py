@@ -5,11 +5,14 @@ import gaia_validators as gv
 from gaia import Ecosystem
 from gaia.subroutines import Sensors
 
-from ..data import (
-    i2c_sensor_ens160_uid, i2c_sensor_veml7700_uid, sensor_uid, ws_sensor_uid)
+from tests import data as test_data
+
+
+sensors_dict = {test_data.sensor_uid: test_data.sensor_info}
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("ecosystem", [{"hardware": sensors_dict}], indirect=True)
 class TestSensorsSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, sensors_subroutine: Sensors):
         assert sensors_subroutine.manageable
@@ -23,12 +26,7 @@ class TestSensorsSubroutine:
 
     async def test_hardware_needed(self, sensors_subroutine: Sensors):
         uids = sensors_subroutine.get_hardware_needed_uid()
-        assert uids == {
-            i2c_sensor_ens160_uid,
-            i2c_sensor_veml7700_uid,
-            sensor_uid,
-            ws_sensor_uid,
-        }
+        assert uids == {test_data.sensor_uid}
 
     async def test_routine(self, sensors_subroutine: Sensors):
         # Rely on the correct implementation of virtualDHT22

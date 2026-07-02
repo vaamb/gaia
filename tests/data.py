@@ -35,14 +35,14 @@ i2c_sensor_veml7700_uid = "xWQ9uF1bplKs0nk7"
 i2c_sensor_veml7700_info: gv.AnonymousHardwareConfigDict = {
     "name": "VirtualI2CSensor_VEML7700",
     "active": True,
-    "address": "I2C_0x70#0@default",
+    "address": "I2C_default",
     "model": "virtualVEML7700",
     "type": gv.HardwareType.sensor,
     "level": gv.HardwareLevel.environment,
 #    "groups": None,
     "measures": ["light"],
 #    "plants": [],
-    "multiplexer_model": "TCA9548A",
+#    "multiplexer_model": None,
 }
 
 
@@ -274,35 +274,39 @@ weather_cfg: dict[str, gv.AnonymousWeatherConfigDict] = {
 }
 
 
-ecosystem_info = {
-    ecosystem_uid: {
-        "name": ecosystem_name,
-        "status": False,
-        "management": {
-            "sensors": False,
-            "light": False,
-            "climate": False,
-            "watering": False,
-            "health": False,
-            "alarms": False,
-            "pictures": False,
-            "database": False,
-        },
-        "environment": {
-            "chaos": {
-                "frequency": 0,
-                "duration": 0,
-                "intensity": 0.0,
+def get_ecosystem_info(
+        hardware_dict: dict | None = None,
+        plants_dict: dict | None = None,
+):
+    return {
+        ecosystem_uid: {
+            "name": ecosystem_name,
+            "status": False,
+            "management": {
+                "sensors": False,
+                "light": False,
+                "climate": False,
+                "watering": False,
+                "health": False,
+                "alarms": False,
+                "pictures": False,
+                "database": False,
             },
-            "nycthemeral_cycle": {
-                "day": lighting_start,
-                "night": lighting_stop,
-                "lighting": lighting_method,
+            "environment": {
+                "chaos": {
+                    "frequency": 0,
+                    "duration": 0,
+                    "intensity": 0.0,
+                },
+                "nycthemeral_cycle": {
+                    "day": lighting_start,
+                    "night": lighting_stop,
+                    "lighting": lighting_method,
+                },
+                "climate": climate_dict,
+                "weather": weather_cfg,
             },
-            "climate": climate_dict,
-            "weather": weather_cfg,
+            "hardware": hardware_dict or IO_dict,
+            "plants": plants_dict or {},
         },
-        "IO": IO_dict,
-        "plants": {},
-    },
-}
+    }

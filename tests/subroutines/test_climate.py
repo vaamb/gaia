@@ -9,10 +9,19 @@ from gaia import Ecosystem
 from gaia.subroutines.sensors import Sensors
 from gaia.subroutines.climate import Climate
 
-from .. import data
+from tests import data as test_data
+
+
+climate_dict = {
+    test_data.sensor_uid: test_data.sensor_info,  # DHT22 for temperature and humidity measures
+    test_data.heater_uid: test_data.heater_info,
+    test_data.humidifier_uid: test_data.humidifier_info,
+    test_data.ws_dimmer_uid: test_data.ws_dimmer_info,  # dehumidifier
+}
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("ecosystem", [{"hardware": climate_dict}], indirect=True)
 class TestClimateSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, climate_subroutine: Climate):
         # Save config
@@ -36,7 +45,7 @@ class TestClimateSubroutine:
         assert climate_subroutine.manageable
 
         # Make sure a regulator is needed
-        climate_subroutine.ecosystem.config.delete_hardware(data.heater_uid)
+        climate_subroutine.ecosystem.config.delete_hardware(test_data.heater_uid)
         await ecosystem.refresh_hardware()
         assert not climate_subroutine.manageable
 
@@ -46,21 +55,20 @@ class TestClimateSubroutine:
     async def test_target(self, climate_subroutine: Climate):
         day = time(hour=12)
         target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, day)
-        assert target[0] == data.temperature_cfg["day"]
-        assert target[1] == data.temperature_cfg["hysteresis"]
+        assert target[0] == test_data.temperature_cfg["day"]
+        assert target[1] == test_data.temperature_cfg["hysteresis"]
 
         night = time(hour=22)
         target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, night)
-        assert target[0] == data.temperature_cfg["night"]
-        assert target[1] == data.temperature_cfg["hysteresis"]
+        assert target[0] == test_data.temperature_cfg["night"]
+        assert target[1] == test_data.temperature_cfg["hysteresis"]
 
     async def test_hardware_needed(self, climate_subroutine: Climate):
         uids = climate_subroutine.get_hardware_needed_uid()
         assert uids == {
-            data.ws_dimmer_uid,
-            data.heater_uid,
-            data.humidifier_uid,
-            data.ws_switch_uid,
+            test_data.heater_uid,
+            test_data.humidifier_uid,
+            test_data.ws_dimmer_uid,
         }
 
     async def test_expected_actuators(self, climate_subroutine: Climate):
