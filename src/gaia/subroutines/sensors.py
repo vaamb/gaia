@@ -150,7 +150,7 @@ class Sensors(SubroutineTemplate[Sensor]):
             future.hardware_uid
             for future in self._slow_sensor_futures
         ]
-        self._get_lux_futures: list[_SensorFuture] = []
+        self._get_sensor_records_futures: list[_SensorFuture] = []
         for hardware in self.hardware.values():
             # Do not try to get data from sensors still trying to get their measures
             if hardware.uid in slow_sensors:
@@ -161,11 +161,11 @@ class Sensors(SubroutineTemplate[Sensor]):
             )
             future = cast(_SensorFuture, future)
             future.hardware_uid = hardware.uid
-            self._get_lux_futures.append(future)
+            self._get_sensor_records_futures.append(future)
         # Try to get data from sensors that took too long during last loop
-        self._get_lux_futures.extend(self._slow_sensor_futures)
+        self._get_sensor_records_futures.extend(self._slow_sensor_futures)
         # Wait for 5 secs for sensors to get data. This allows GPIO sensors to fail once
-        done, pending = await asyncio.wait(self._get_lux_futures, timeout=5)
+        done, pending = await asyncio.wait(self._get_sensor_records_futures, timeout=5)
         new_slow_futures = pending - self._slow_sensor_futures
         # Log the sensors that took too long
         for future in new_slow_futures:
