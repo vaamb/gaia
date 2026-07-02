@@ -3,10 +3,16 @@ import pytest
 from gaia import Ecosystem
 from gaia.subroutines import Pictures
 
-from ..data import camera_uid
+import tests.data as test_data
+
+
+pictures_dict = {
+    test_data.camera_uid: test_data.camera_info,
+}
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("ecosystem", [{"hardware": pictures_dict}], indirect=True)
 class TestPictureSubroutine:
     async def test_manageable(
             self,
@@ -15,14 +21,14 @@ class TestPictureSubroutine:
     ):
         assert pictures_subroutine.manageable
 
-        ecosystem.config.delete_hardware(camera_uid)
+        ecosystem.config.delete_hardware(test_data.camera_uid)
         await ecosystem.refresh_hardware()
 
         assert not pictures_subroutine.manageable
 
     async def test_hardware_needed(self, pictures_subroutine: Pictures):
         uids = pictures_subroutine.get_hardware_needed_uid()
-        assert uids == {camera_uid}
+        assert uids == {test_data.camera_uid}
 
     async def test_routine(self, pictures_subroutine: Pictures):
         # Enable the subroutine
