@@ -885,7 +885,7 @@ class EngineConfig(metaclass=SingletonMeta):
             f"configuration use the function `create_ecosystem()`."
         )
 
-    def get_ecosystem_config(self, ecosystem_id: str) -> "EcosystemConfig":
+    def get_ecosystem_config(self, ecosystem_id: str) -> EcosystemConfig:
         return EcosystemConfig(ecosystem_id=ecosystem_id, engine_config=self)
 
     @property
@@ -1125,6 +1125,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     @property
     def _config_dict(self) -> EcosystemConfigDict:
         return self._engine_config.ecosystems_config_dict[self.uid]
+
+    @_config_dict.setter
+    def _config_dict(self, value: EcosystemConfigDict) -> None:
+        self._engine_config.ecosystems_config_dict[self.uid] = value
 
     @property
     def general(self) -> EngineConfig:

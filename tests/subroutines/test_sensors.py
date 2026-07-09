@@ -12,7 +12,7 @@ sensors_dict = {test_data.sensor_uid: test_data.sensor_info}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem", [{"hardware": sensors_dict}], indirect=True)
+@pytest.mark.parametrize("ecosystem_config", [{"hardware": sensors_dict}], indirect=True)
 class TestSensorsSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, sensors_subroutine: Sensors):
         assert sensors_subroutine.manageable

@@ -16,7 +16,7 @@ health_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem", [{"hardware": health_dict}], indirect=True)
+@pytest.mark.parametrize("ecosystem_config", [{"hardware": health_dict}], indirect=True)
 class TestHealthSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, health_subroutine: Health):
         camera_cfg = health_subroutine.config.hardware_dict[test_data.camera_uid].copy()

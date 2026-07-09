@@ -12,7 +12,7 @@ pictures_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem", [{"hardware": pictures_dict}], indirect=True)
+@pytest.mark.parametrize("ecosystem_config", [{"hardware": pictures_dict}], indirect=True)
 class TestPictureSubroutine:
     async def test_manageable(
             self,

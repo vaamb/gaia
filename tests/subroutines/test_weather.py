@@ -17,7 +17,7 @@ weather_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem", [{"hardware": weather_dict}], indirect=True)
+@pytest.mark.parametrize("ecosystem_config", [{"hardware": weather_dict}], indirect=True)
 class TestWeatherSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, weather_subroutine: Weather):
         assert weather_subroutine.manageable
