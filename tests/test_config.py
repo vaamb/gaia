@@ -14,6 +14,13 @@ from .data import (
     ecosystem_name, get_ecosystem_info, humidifier_info, humidifier_uid,
     lighting_method, plant_info, rain_cfg, sensor_info, sensor_uid,
     sun_times, temperature_cfg)
+import tests.data as test_data
+
+
+hardware_dict = {
+    test_data.sensor_uid: test_data.sensor_info,
+    test_data.humidifier_uid: test_data.humidifier_info,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +428,7 @@ class TestEcosystemConfigWeather:
         assert weather_to_group.get((gv.WeatherParameter.rain, "decrease")) is None
 
 
+@pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
 class TestEcosystemConfigHardware:
     def test_create_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):
