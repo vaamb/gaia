@@ -10,10 +10,6 @@ from gaia.exceptions import HardwareNotFound, PlantNotFound, UndefinedParameter
 from gaia.subroutines import subroutine_names
 from gaia.utils import get_yaml
 
-from .data import (
-    ecosystem_name, get_ecosystem_info, humidifier_info, humidifier_uid,
-    lighting_method, plant_info, rain_cfg, sensor_info, sensor_uid,
-    sun_times, temperature_cfg)
 import tests.data as test_data
 
 
@@ -67,14 +63,14 @@ class TestEngineConfig:
         assert engine_config.home_sun_times is not None
 
     def test_status(self, engine_config: EngineConfig, ecosystem_config: EcosystemConfig):
-        assert engine_config.ecosystems_name == [ecosystem_name]
+        assert engine_config.ecosystems_name == [test_data.ecosystem_name]
         assert engine_config.get_ecosystems_expected_to_run() == set()
         ecosystem_config.status = True
         assert engine_config.get_ecosystems_expected_to_run() == {ecosystem_config.uid}
 
     def test_get_IDs(self, engine_config: EngineConfig, ecosystem_config: EcosystemConfig):
-        assert engine_config.get_IDs(ecosystem_name).uid == ecosystem_config.uid
-        assert engine_config.get_IDs(ecosystem_name).name == ecosystem_config.name
+        assert engine_config.get_IDs(test_data.ecosystem_name).uid == ecosystem_config.uid
+        assert engine_config.get_IDs(test_data.ecosystem_name).name == ecosystem_config.name
         with pytest.raises(ValueError):
             engine_config.get_IDs("not in config")
 
@@ -145,7 +141,7 @@ class TestWatchdog:
             engine_config.watchdog.stop()
 
         # Restore config files
-        ecosystem_info = get_ecosystem_info()
+        ecosystem_info = test_data.get_ecosystem_info()
         with open(engine_config.gaia_dir / ConfigType.ecosystems.value, "w") as cfg:
             yaml.dump(ecosystem_info, cfg)
         with open(engine_config.gaia_dir / ConfigType.private.value, "w") as cfg:
@@ -158,7 +154,7 @@ class TestWatchdog:
 @pytest.mark.asyncio
 class TestEcosystemConfigGeneral:
     def test_singleton(self, ecosystem_config: EcosystemConfig):
-        assert ecosystem_config is EcosystemConfig(ecosystem_name)
+        assert ecosystem_config is EcosystemConfig(test_data.ecosystem_name)
 
     def test_dict(
             self,
@@ -172,7 +168,7 @@ class TestEcosystemConfigGeneral:
         )
 
     def test_name(self, ecosystem_config: EcosystemConfig):
-        assert ecosystem_config.name == ecosystem_name
+        assert ecosystem_config.name == test_data.ecosystem_name
         ecosystem_config.name = "name"
         assert ecosystem_config.name == "name"
 
@@ -239,7 +235,7 @@ class TestEcosystemConfigGeneralEnvironment:
         assert chaos_factor == max_intensity
 
     async def test_light_method(self, ecosystem_config: EcosystemConfig):
-        assert ecosystem_config.lighting_method is lighting_method
+        assert ecosystem_config.lighting_method is test_data.lighting_method
         new_method = gv.LightMethod.elongate
 
         with pytest.raises(ValueError, match="coordinates of 'home' are not provided"):
@@ -260,7 +256,7 @@ class TestEcosystemConfigGeneralEnvironment:
         # Reset caches after this big change in config
         ecosystem_config.reset_caches()
         ecosystem_config.general._sun_times = {
-            "home": {"last_update": date.today(), "data": sun_times}
+            "home": {"last_update": date.today(), "data": test_data.sun_times}
         }
         assert ecosystem_config.lighting_method is new_method
 
@@ -338,7 +334,7 @@ class TestEcosystemConfigClimate:
     def test_get_climate_parameter(self, ecosystem_config: EcosystemConfig):
         result = ecosystem_config.get_climate_parameter("temperature")
         assert result == gv.ClimateConfig(
-            parameter=gv.ClimateParameter.temperature, **temperature_cfg)
+            parameter=gv.ClimateParameter.temperature, **test_data.temperature_cfg)
 
     def test_get_climate_parameter_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(UndefinedParameter):
@@ -363,10 +359,10 @@ class TestEcosystemConfigClimate:
         ecosystem_config.update_climate_parameter("temperature", day=50.0)
         updated = ecosystem_config.get_climate_parameter("temperature")
         assert updated.day == 50.0
-        assert updated.night == temperature_cfg["night"]
+        assert updated.night == test_data.temperature_cfg["night"]
 
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.update_climate_parameter("light", **temperature_cfg)
+            ecosystem_config.update_climate_parameter("light", **test_data.temperature_cfg)
 
     def test_delete_climate_parameter(self, ecosystem_config: EcosystemConfig):
         ecosystem_config.delete_climate_parameter("temperature")
@@ -382,7 +378,7 @@ class TestEcosystemConfigWeather:
     def test_get_weather_parameter(self, ecosystem_config: EcosystemConfig):
         result = ecosystem_config.get_weather_parameter("rain")
         assert result == gv.WeatherConfig(
-            parameter=gv.WeatherParameter.rain, **rain_cfg)
+            parameter=gv.WeatherParameter.rain, **test_data.rain_cfg)
 
     def test_get_weather_parameter_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(UndefinedParameter):
@@ -408,10 +404,10 @@ class TestEcosystemConfigWeather:
         ecosystem_config.update_weather_parameter("rain", duration=60)
         updated = ecosystem_config.get_weather_parameter("rain")
         assert updated.duration == 60
-        assert updated.level == rain_cfg["level"]
+        assert updated.level == test_data.rain_cfg["level"]
 
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.update_weather_parameter("fog", **rain_cfg)
+            ecosystem_config.update_weather_parameter("fog", **test_data.rain_cfg)
 
     def test_delete_weather_parameter(self, ecosystem_config: EcosystemConfig):
         ecosystem_config.delete_weather_parameter("rain")
@@ -432,11 +428,11 @@ class TestEcosystemConfigWeather:
 class TestEcosystemConfigHardware:
     def test_create_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):
-            ecosystem_config.create_new_hardware(**sensor_info)
+            ecosystem_config.create_new_hardware(**test_data.sensor_info)
 
     def test_create_fail_model(self, ecosystem_config: EcosystemConfig):
         invalid_hardware_info = {
-            **sensor_info,
+            **test_data.sensor_info,
             "address": "GPIO_11",  # Use a free address
             "model": "Invalid",
         }
@@ -445,7 +441,7 @@ class TestEcosystemConfigHardware:
 
     def test_create_fail_type(self, ecosystem_config: EcosystemConfig):
         invalid_hardware_info = {
-            **sensor_info,
+            **test_data.sensor_info,
             "address": "GPIO_7",  # Use a free address
             "type": "Invalid",
         }
@@ -455,7 +451,7 @@ class TestEcosystemConfigHardware:
 
     def test_create_fail_level(self, ecosystem_config: EcosystemConfig):
         invalid_hardware_info = {
-            **sensor_info,
+            **test_data.sensor_info,
             "address": "GPIO_7",  # Use a free address
             "level": "Invalid",
         }
@@ -465,7 +461,7 @@ class TestEcosystemConfigHardware:
 
     def test_create_success(self, ecosystem_config: EcosystemConfig):
         valid_hardware_info = {
-            **humidifier_info,
+            **test_data.humidifier_info,
             "model": "gpioSwitch",
             "address": "GPIO_11",  # Use a free address
         }
@@ -477,49 +473,49 @@ class TestEcosystemConfigHardware:
 
     def test_update_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):
-            hardware_address = sensor_info["address"]
-            ecosystem_config.update_hardware(humidifier_uid, address=hardware_address)
+            hardware_address = test_data.sensor_info["address"]
+            ecosystem_config.update_hardware(test_data.humidifier_uid, address=hardware_address)
 
     def test_update_fail_model(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match="This hardware model is not supported"):
-            ecosystem_config.update_hardware(humidifier_uid, model="Invalid")
+            ecosystem_config.update_hardware(test_data.humidifier_uid, model="Invalid")
 
     def test_update_fail_type(self, ecosystem_config: EcosystemConfig):
         error_msg = "VALUE ERROR at parameter 'type', input 'Invalid' is not valid"
         with pytest.raises(ValueError, match=error_msg):
-            ecosystem_config.update_hardware(humidifier_uid, type="Invalid")
+            ecosystem_config.update_hardware(test_data.humidifier_uid, type="Invalid")
 
     def test_update_fail_level(self, ecosystem_config: EcosystemConfig):
         error_msg = "VALUE ERROR at parameter 'level', input 'Invalid' is not valid"
         with pytest.raises(ValueError, match=error_msg):
-            ecosystem_config.update_hardware(humidifier_uid, level="Invalid")
+            ecosystem_config.update_hardware(test_data.humidifier_uid, level="Invalid")
 
     def test_update_success(self, ecosystem_config: EcosystemConfig):
-        ecosystem_config.update_hardware(humidifier_uid, model="gpioSwitch", address="BOARD_37")
+        ecosystem_config.update_hardware(test_data.humidifier_uid, model="gpioSwitch", address="BOARD_37")
 
     def test_delete_fail_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(HardwareNotFound):
             ecosystem_config.delete_hardware("invalid_uid")
 
     def test_hardware_delete_success(self, ecosystem_config: EcosystemConfig):
-        ecosystem_config.delete_hardware(sensor_uid)
+        ecosystem_config.delete_hardware(test_data.sensor_uid)
 
 
 class TestEcosystemConfigPlants:
     def test_create_plant_success(self, ecosystem_config: EcosystemConfig):
-        ecosystem_config.create_new_plant(**plant_info)
-        uid = ecosystem_config.get_plant_uid(plant_info["name"])
+        ecosystem_config.create_new_plant(**test_data.plant_info)
+        uid = ecosystem_config.get_plant_uid(test_data.plant_info["name"])
         cfg = ecosystem_config.get_plant_config(uid)
-        assert cfg.name == plant_info["name"]
-        assert cfg.species == plant_info["species"]
+        assert cfg.name == test_data.plant_info["name"]
+        assert cfg.species == test_data.plant_info["species"]
 
     def test_get_plant_uid_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(PlantNotFound):
             ecosystem_config.get_plant_uid("nonexistent")
 
     def test_update_plant_success(self, ecosystem_config: EcosystemConfig):
-        ecosystem_config.create_new_plant(**plant_info)
-        uid = ecosystem_config.get_plant_uid(plant_info["name"])
+        ecosystem_config.create_new_plant(**test_data.plant_info)
+        uid = ecosystem_config.get_plant_uid(test_data.plant_info["name"])
         ecosystem_config.update_plant(uid, species="updated_species")
         assert ecosystem_config.get_plant_config(uid).species == "updated_species"
 
@@ -528,8 +524,8 @@ class TestEcosystemConfigPlants:
             ecosystem_config.update_plant("invalid_uid", species="x")
 
     def test_delete_plant_success(self, ecosystem_config: EcosystemConfig):
-        ecosystem_config.create_new_plant(**plant_info)
-        uid = ecosystem_config.get_plant_uid(plant_info["name"])
+        ecosystem_config.create_new_plant(**test_data.plant_info)
+        uid = ecosystem_config.get_plant_uid(test_data.plant_info["name"])
         ecosystem_config.delete_plant(uid)
         with pytest.raises(PlantNotFound):
             ecosystem_config.get_plant_config(uid)
