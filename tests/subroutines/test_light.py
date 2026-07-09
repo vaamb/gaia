@@ -17,7 +17,7 @@ light_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem", [{"hardware": light_dict}], indirect=True)
+@pytest.mark.parametrize("ecosystem_config", [{"hardware": light_dict}], indirect=True)
 class TestLightSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, light_subroutine: Light):
         assert light_subroutine.manageable
