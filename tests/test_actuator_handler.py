@@ -38,7 +38,7 @@ class TestTimer:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem", [{"hardware": hardware_dict}], indirect=True)
+@pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
 class TestActuatorHandler:
     async def test_linked_actuators(self, light_handler: ActuatorHandler):
         light: DimmableSwitchMixin = light_handler.ecosystem.hardware[test_data.light_uid]

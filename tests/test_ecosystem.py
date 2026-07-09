@@ -21,7 +21,7 @@ hardware_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem", [{"hardware": hardware_dict}], indirect=True)
+@pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
 class TestEcosystem:
     async def test_properties(
             self,
