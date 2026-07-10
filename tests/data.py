@@ -306,7 +306,7 @@ def get_ecosystem_info(
                 "climate": climate_dict,
                 "weather": weather_cfg,
             },
-            "hardware": hardware_dict or IO_dict,
+            "hardware": hardware_dict or {},
             "plants": plants_dict or {},
         },
     }
