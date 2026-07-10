@@ -9,7 +9,7 @@ from gaia import Ecosystem
 from gaia.hardware.abc import SensorMixin, SensorRead
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
-from tests.data import IO_dict, sensor_uid
+from tests import data as test_data
 
 
 @pytest.mark.asyncio
@@ -35,6 +35,9 @@ class TestVirtualEcosystem:
         assert isclose(virtual_ecosystem.humidity, virtual_world.humidity, rel_tol=0.01)
         assert isclose(virtual_ecosystem.light, virtual_world.light, rel_tol=0.01)
 
+    @pytest.mark.parametrize("ecosystem_config",
+                             [{"hardware": {test_data.humidifier_uid: test_data.humidifier_info}}],
+                             indirect=True)
     async def test_actuators_virtualization(
             self,
             ecosystem: Ecosystem,
@@ -67,14 +70,17 @@ class TestVirtualEcosystem:
 
         del pid
 
+    @pytest.mark.parametrize("ecosystem_config",
+                             [{"hardware": {test_data.sensor_uid: test_data.sensor_info}}],
+                             indirect=True)
     async def test_sensors_virtualization(
             self,
             virtual_ecosystem: VirtualEcosystem,
             ecosystem: Ecosystem,
     ):
         # The hardware model should automatically be virtualized
-        assert not IO_dict[sensor_uid]["model"].startswith("virtual")
-        virtual_DHT22: SensorMixin = cast(SensorMixin, ecosystem.hardware[sensor_uid])
+        assert not test_data.sensor_info["model"].startswith("virtual")
+        virtual_DHT22: SensorMixin = cast(SensorMixin, ecosystem.hardware[test_data.sensor_uid])
         assert virtual_DHT22.model.startswith("virtual")
 
         # Get sensor data for the humidity
