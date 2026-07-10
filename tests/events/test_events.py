@@ -192,6 +192,7 @@ class TestOnEvent:
 
         assert "registration acknowledgment for another dispatcher" in caplog.text
 
+    @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
     async def test_on_registration_ack(
             self,
             engine_config: EngineConfig,
@@ -292,15 +293,16 @@ class TestOnEvent:
         payload = responses.popleft()
         assert payload["event"] == "hardware"
         assert get_uid(payload) == test_data.ecosystem_uid
-        for h in get_data(payload):
-            h: gv.HardwareConfig
-            hardware_uid = h["uid"]
-            assert h["uid"] in test_data.IO_dict.keys()
-            assert h["name"] == test_data.IO_dict[hardware_uid]["name"]
-            assert h["address"] == test_data.IO_dict[hardware_uid]["address"]
-            assert h["model"] == test_data.IO_dict[hardware_uid]["model"]
-            assert h["type"] == test_data.IO_dict[hardware_uid]["type"]
-            assert h["level"] == test_data.IO_dict[hardware_uid]["level"]
+        # The only injected hardware parametrized is the light switch
+        data = get_data(payload)
+        assert len(data) == 1
+        h: gv.HardwareConfig = data[0]
+        assert h["uid"] in test_data.IO_dict.keys()
+        assert h["name"] == test_data.light_info["name"]
+        assert h["address"] == test_data.light_info["address"]
+        assert h["model"] == test_data.light_info["model"]
+        assert h["type"] == test_data.light_info["type"]
+        assert h["level"] == test_data.light_info["level"]
 
         """Plants payload"""
         payload = responses.popleft()
