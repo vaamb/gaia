@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import sys
-from typing import cast, Literal, Type, TypedDict, TypeVar
+from typing import cast, Literal, NamedTuple, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -1065,6 +1065,20 @@ class EngineConfig(metaclass=SingletonMeta):
 # ---------------------------------------------------------------------------
 #   EcosystemConfig class
 # ---------------------------------------------------------------------------
+class ScaledClimateTarget(NamedTuple):
+    day: float
+    night: float
+    hysteresis: float
+
+
+DEFAULT_LIGHT_CLIMATE_CFG = gv.ClimateConfig(**{  # ty: ignore[invalid-argument-type]
+    "parameter": gv.ClimateParameter.light,
+    "day": 250_000,
+    "night": -30_000,
+    "hysteresis": 0.0,
+})
+
+
 class _MetaEcosystemConfig(type):
     instances: WeakValueDictionary[str, EcosystemConfig] = WeakValueDictionary()
 
@@ -1779,6 +1793,23 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
+
+    def get_scaled_climate_target(
+            self,
+            parameter: str | gv.ClimateParameter,
+    ) -> ScaledClimateTarget:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
+        if (
+                parameter is gv.ClimateParameter.light
+                and not self.has_climate_parameter(parameter)
+        ):
+            # Unconfigured light runs on/off by default: a large positive day
+            # value forces the PID fully on, a negative night value forces it fully off.
+            cfg = DEFAULT_LIGHT_CLIMATE_CFG
+        else:
+            cfg = self.get_climate_parameter(parameter)
+        chaos = self.get_chaos_factor()
+        return ScaledClimateTarget(cfg.day * chaos, cfg.night * chaos, cfg.hysteresis * chaos)
 
     # ---------------------------------------------------------------------------
     #      Weather parameters
