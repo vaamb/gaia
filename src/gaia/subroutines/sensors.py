@@ -207,7 +207,7 @@ class Sensors(SubroutineTemplate[Sensor]):
 
     def _add_sensor_warnings(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
         # Get the target, the hysteresis and the alarm threshold
-        pod: Literal["day", "night"] = self.config.period_of_day.name
+        pod: Literal["day", "night"] = "day" if self.config.is_day() else "night"
         parameter_limits: dict[str, tuple[float, float, float]] = {
             parameter: (values[pod], values["hysteresis"], values["alarm"])
             for parameter, values in self.config.climate.items()

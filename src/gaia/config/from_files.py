@@ -1467,16 +1467,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if refresh:
             await self.refresh_lighting_hours()
 
-    @property
-    def period_of_day(self) -> gv.PeriodOfDay:
+    def is_day(self, now: time | None = None) -> bool:
         nycthemeral_span = self.nycthemeral_span_hours
-        if is_time_between(
-                nycthemeral_span.day,
-                nycthemeral_span.night,
-                datetime.now().time(),
-        ):
-            return gv.PeriodOfDay.day
-        return gv.PeriodOfDay.night
+        return is_time_between(
+            nycthemeral_span.day,
+            nycthemeral_span.night,
+            now or datetime.now().time(),
+        )
 
     def _compute_lighting_method(self) -> gv.LightingMethod:
         lighting_method: gv.LightingMethod = safe_enum_from_name(
