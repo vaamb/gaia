@@ -14,15 +14,14 @@ from gaia import Ecosystem, EngineConfig, Engine
 from gaia.database import db as gaia_db
 from gaia.database.models import SensorBuffer, SensorRecord
 from gaia.database.routines import log_sensors_data
-from gaia.subroutines import Sensors
 
-from .data import ecosystem_uid, sensor_uid
+from tests import data as test_data
 
 
 def generate_sensor_data(timestamp: datetime | None = None) -> dict:
     return {
-        "sensor_uid": sensor_uid,
-        "ecosystem_uid": ecosystem_uid,
+        "sensor_uid": test_data.sensor_uid,
+        "ecosystem_uid": test_data.ecosystem_uid,
         "measure": "temperature",
         "timestamp": timestamp or datetime.now().astimezone(timezone.utc),
         "value": 42,
@@ -97,25 +96,28 @@ async def test_buffer(db: AsyncSQLAlchemyWrapper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="`sensors_subroutine` has been moved to the subroutines module")
 async def test_log_sensors_data(
         db: AsyncSQLAlchemyWrapper,
         engine_with_db: Engine,
         ecosystem: Ecosystem,
-        sensors_subroutine: Sensors,
+        monkeypatch: pytest.MonkeyPatch,
 ):
     # Store the state
     db_management = ecosystem.config.get_management("database")
-    subroutine_enabled = sensors_subroutine.enabled
-    subroutine_started = sensors_subroutine.started
 
     # Set everything to the desired state
     ecosystem.config.set_management("database", True)
-    sensors_subroutine.enable()
-    if not subroutine_started:
-        await sensors_subroutine.start()
 
-    await sensors_subroutine.routine()
+    # Patch sensors_data
+    sensors_subroutine = ecosystem.get_subroutine("sensors")
+    monkeypatch.setattr(sensors_subroutine, "_started", True)
+    sensors_data: gv.SensorsData = gv.SensorsData(**{
+        "timestamp": datetime.now(timezone.utc),
+        "records": [gv.SensorRecord(test_data.sensor_uid, "temperature", 42.0)],
+        "average": [gv.MeasureAverage("temperature", 42.0)],
+        "alarms": [],
+    })
+    monkeypatch.setattr(sensors_subroutine, "sensors_data", sensors_data)
 
     # Test the DB routine
     await log_sensors_data(engine_with_db)
@@ -135,9 +137,3 @@ async def test_log_sensors_data(
 
     # Restore the previous state
     ecosystem.config.set_management("database", db_management)
-    if subroutine_enabled:
-        sensors_subroutine.enable()
-    else:
-        sensors_subroutine.disable()
-    if not subroutine_started:
-        await sensors_subroutine.stop()
