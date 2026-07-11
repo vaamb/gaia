@@ -1599,6 +1599,25 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self._lighting_method = self._compute_lighting_method()
         self._lighting_hours = self._compute_lighting_hours()
 
+    def is_lighting_needed(self, now: time | None = None) -> bool:
+        now = now or datetime.now().time()
+        hours = self.lighting_hours
+        if self.lighting_method == gv.LightMethod.elongate:
+            # If `lighting_method` is `elongate`, `morning_end` and `evening_start`
+            #  should have been computed
+            assert hours.morning_end is not None
+            assert hours.evening_start is not None
+            # Is time between lightning hours
+            if (
+                hours.morning_start <= now <= hours.morning_end
+                or hours.evening_start <= now <= hours.evening_end
+            ):
+                return True
+            else:
+                return False
+        else:
+            return is_time_between(hours.morning_start, hours.evening_end, now)
+
     # ---------------------------------------------------------------------------
     #      Chaos parameters
     # ---------------------------------------------------------------------------
