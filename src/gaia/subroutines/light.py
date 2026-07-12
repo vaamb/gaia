@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import CancelledError, Task
-from datetime import datetime, time
 from statistics import mean
 from time import monotonic
 import typing
@@ -11,23 +10,13 @@ from typing import Type
 import gaia_validators as gv
 
 from gaia.actuator_handler import HystericalPID
-from gaia.exceptions import UndefinedParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Actuator, DimmerMixin, LightSensorMixin
 from gaia.subroutines.template import SubroutineTemplate
-from gaia.utils import is_time_between
 
 
 if typing.TYPE_CHECKING:
     from gaia.actuator_handler import ActuatorHandler
-
-
-DEFAULT_CLIMATE_CFG = gv.ClimateConfig(**{  # ty: ignore[invalid-argument-type]
-    "parameter": gv.ClimateParameter.light,
-    "day": 250_000,
-    "night": -30_000,
-    "hysteresis": 0.0,
-})
 
 
 class Light(SubroutineTemplate[Actuator]):
@@ -213,7 +202,9 @@ class Light(SubroutineTemplate[Actuator]):
 
     async def _update_pid(self) -> None:
         pid: HystericalPID = self.get_pid()
-        target, hysteresis = self.compute_target()
+        scaled_target = self.config.get_scaled_climate_target(gv.ClimateParameter.light)
+        target = scaled_target.day if self.config.is_lighting_needed() else scaled_target.night
+        hysteresis = scaled_target.hysteresis
         pid.target = target
         pid.hysteresis = hysteresis
         current_value: float = await self._get_ambient_light_level()
@@ -236,40 +227,6 @@ class Light(SubroutineTemplate[Actuator]):
             await self._update_actuator_handler(self.actuator_handler)
 
     """API calls"""
-    def _compute_target_status(self, _now: time | None = None) -> bool:
-        now = _now or datetime.now().time()
-        hours = self.config.lighting_hours
-        if self.config.lighting_method == gv.LightMethod.elongate:
-            # If `lighting_method` is `elongate`, `morning_end` and `evening_start`
-            #  should have been computed
-            assert hours.morning_end is not None
-            assert hours.evening_start is not None
-            # Is time between lightning hours
-            if (
-                hours.morning_start <= now <= hours.morning_end
-                or hours.evening_start <= now <= hours.evening_end
-            ):
-                return True
-            else:
-                return False
-        else:
-            return is_time_between(hours.morning_start, hours.evening_end, now)
-
-    def compute_target(self, _now: time | None = None) -> tuple[float, float]:
-        try:
-            climate_cfg = self.config.get_climate_parameter(gv.ClimateParameter.light)
-        except UndefinedParameter:
-            climate_cfg = DEFAULT_CLIMATE_CFG
-        chaos_factor = self.config.get_chaos_factor()
-        now = _now or datetime.now().time()
-        target_status = self._compute_target_status(now)
-        if target_status:
-            target = climate_cfg.day * chaos_factor
-        else:
-            target = climate_cfg.night * chaos_factor
-        hysteresis = climate_cfg.hysteresis * chaos_factor
-        return target, hysteresis
-
     async def turn_light(
             self,
             turn_to: gv.ActuatorModePayload = gv.ActuatorModePayload.automatic,
