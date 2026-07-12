@@ -428,6 +428,10 @@ class TestEcosystemConfigClimate:
         assert scaled_target.night == test_data.temperature_cfg["night"]
         assert scaled_target.hysteresis == test_data.temperature_cfg["hysteresis"]
 
+        # TODO: enable once climate cfg is parametrized
+        with pytest.raises(UndefinedParameter):
+            ecosystem_config.get_scaled_climate_target("wind")
+
 
 class TestEcosystemConfigWeather:
     def test_get_weather_parameter(self, ecosystem_config: EcosystemConfig):
