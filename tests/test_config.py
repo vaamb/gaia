@@ -409,6 +409,12 @@ class TestEcosystemConfigClimate:
         with pytest.raises(UndefinedParameter):
             ecosystem_config.delete_climate_parameter("temperature")
 
+    def test_target(self, ecosystem_config: EcosystemConfig):
+        scaled_target = ecosystem_config.get_scaled_climate_target("temperature")
+        assert scaled_target.day == test_data.temperature_cfg["day"]
+        assert scaled_target.night == test_data.temperature_cfg["night"]
+        assert scaled_target.hysteresis == test_data.temperature_cfg["hysteresis"]
+
 
 class TestEcosystemConfigWeather:
     def test_get_weather_parameter(self, ecosystem_config: EcosystemConfig):

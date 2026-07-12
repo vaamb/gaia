@@ -52,17 +52,6 @@ class TestClimateSubroutine:
         # Restore config
         ecosystem.config.environment["climate"] = climate_config
 
-    async def test_target(self, climate_subroutine: Climate):
-        day = time(hour=12)
-        target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, day)
-        assert target[0] == test_data.temperature_cfg["day"]
-        assert target[1] == test_data.temperature_cfg["hysteresis"]
-
-        night = time(hour=22)
-        target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, night)
-        assert target[0] == test_data.temperature_cfg["night"]
-        assert target[1] == test_data.temperature_cfg["hysteresis"]
-
     async def test_hardware_needed(self, climate_subroutine: Climate):
         uids = climate_subroutine.get_hardware_needed_uid()
         assert uids == {
