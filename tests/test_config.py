@@ -306,6 +306,42 @@ class TestEcosystemConfigGeneralEnvironment:
         assert ecosystem_config.nycthemeral_span_hours.day == time(8, 42)
         assert ecosystem_config.nycthemeral_span_hours.night == time(21, 00)
 
+    async def test_lighting_needed(self, ecosystem_config: EcosystemConfig):
+        lighting_hours = gv.LightingHours(
+            morning_start=time(8),
+            morning_end=time(10),
+            evening_start=time(18),
+            evening_end=time(20),
+        )
+
+        now = time(6)
+        ecosystem_config._lighting_hours = lighting_hours
+        ecosystem_config._lighting_method = gv.LightMethod.elongate
+        assert not ecosystem_config.is_lighting_needed(now)
+        ecosystem_config._lighting_method = gv.LightMethod.fixed
+        assert not ecosystem_config.is_lighting_needed(now)
+
+        now = time(9)
+        ecosystem_config._lighting_hours = lighting_hours
+        ecosystem_config._lighting_method = gv.LightMethod.elongate
+        assert ecosystem_config.is_lighting_needed(now)
+        ecosystem_config._lighting_method = gv.LightMethod.fixed
+        assert ecosystem_config.is_lighting_needed(now)
+
+        now = time(11)
+        ecosystem_config._lighting_hours = lighting_hours
+        ecosystem_config._lighting_method = gv.LightMethod.elongate
+        assert not ecosystem_config.is_lighting_needed(now)
+        ecosystem_config._lighting_method = gv.LightMethod.fixed
+        assert ecosystem_config.is_lighting_needed(now)
+
+        now = time(21)
+        ecosystem_config._lighting_hours = lighting_hours
+        ecosystem_config._lighting_method = gv.LightMethod.elongate
+        assert not ecosystem_config.is_lighting_needed(now)
+        ecosystem_config._lighting_method = gv.LightMethod.fixed
+        assert not ecosystem_config.is_lighting_needed(now)
+
 
 class TestEcosystemConfigActuators:
     def test_actuator_couples(self, ecosystem_config: EcosystemConfig):

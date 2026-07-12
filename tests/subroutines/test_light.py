@@ -27,42 +27,6 @@ class TestLightSubroutine:
 
         assert not light_subroutine.manageable
 
-    async def test_expected_status(self, light_subroutine: Light):
-        lighting_hours = gv.LightingHours(
-            morning_start=time(8),
-            morning_end=time(10),
-            evening_start=time(18),
-            evening_end=time(20),
-        )
-
-        now = time(6)
-        light_subroutine.config._lighting_hours = lighting_hours
-        light_subroutine.config._lighting_method = gv.LightMethod.elongate
-        assert not light_subroutine._compute_target_status(now)
-        light_subroutine.config._lighting_method = gv.LightMethod.fixed
-        assert not light_subroutine._compute_target_status(now)
-
-        now = time(9)
-        light_subroutine.config._lighting_hours = lighting_hours
-        light_subroutine.config._lighting_method = gv.LightMethod.elongate
-        assert light_subroutine._compute_target_status(now)
-        light_subroutine.config._lighting_method = gv.LightMethod.fixed
-        assert light_subroutine._compute_target_status(now)
-
-        now = time(11)
-        light_subroutine.config._lighting_hours = lighting_hours
-        light_subroutine.config._lighting_method = gv.LightMethod.elongate
-        assert not light_subroutine._compute_target_status(now)
-        light_subroutine.config._lighting_method = gv.LightMethod.fixed
-        assert light_subroutine._compute_target_status(now)
-
-        now = time(21)
-        light_subroutine.config._lighting_hours = lighting_hours
-        light_subroutine.config._lighting_method = gv.LightMethod.elongate
-        assert not light_subroutine._compute_target_status(now)
-        light_subroutine.config._lighting_method = gv.LightMethod.fixed
-        assert not light_subroutine._compute_target_status(now)
-
     async def test_hardware_needed(self, light_subroutine: Light):
         uids = light_subroutine.get_hardware_needed_uid()
         assert uids == {test_data.light_uid}
