@@ -303,7 +303,7 @@ class Climate(SubroutineTemplate[Actuator]):
             sensors_average: dict[str, float],
     ) -> None:
         pid: HystericalPID = self.pids[climate_parameter]
-        scaled_target = self.config.get_scaled_climate_target(gv.ClimateParameter.light)
+        scaled_target = self.config.get_scaled_climate_target(climate_parameter)
         target = scaled_target.day if self.config.is_day() else scaled_target.night
         hysteresis = scaled_target.hysteresis
         pid.target = target
