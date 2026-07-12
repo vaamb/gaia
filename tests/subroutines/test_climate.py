@@ -1,4 +1,3 @@
-from datetime import time
 from typing import cast
 
 import pytest
@@ -51,17 +50,6 @@ class TestClimateSubroutine:
 
         # Restore config
         ecosystem.config.environment["climate"] = climate_config
-
-    async def test_target(self, climate_subroutine: Climate):
-        day = time(hour=12)
-        target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, day)
-        assert target[0] == test_data.temperature_cfg["day"]
-        assert target[1] == test_data.temperature_cfg["hysteresis"]
-
-        night = time(hour=22)
-        target = climate_subroutine.compute_target(gv.ClimateParameter.temperature, night)
-        assert target[0] == test_data.temperature_cfg["night"]
-        assert target[1] == test_data.temperature_cfg["hysteresis"]
 
     async def test_hardware_needed(self, climate_subroutine: Climate):
         uids = climate_subroutine.get_hardware_needed_uid()
@@ -153,6 +141,39 @@ class TestClimateSubroutine:
 
         measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.humidity)
         assert measure == "absolute_humidity"
+
+    async def test_update_pid_targets_its_own_parameter(
+            self,
+            climate_subroutine: Climate,
+            monkeypatch: pytest.MonkeyPatch,
+    ):
+        config = climate_subroutine.config
+        # `light` is not a regulated climate parameter, so it is not configured here.
+        # `get_scaled_climate_target` silently falls back on its default config for it,
+        #  meaning that a `_update_pid` looking up the wrong parameter would not raise
+        #  but would feed the PIDs the default light targets and saturate them.
+        assert not config.has_climate_parameter(gv.ClimateParameter.light)
+        default_light_target = config.get_scaled_climate_target(gv.ClimateParameter.light)
+
+        climate_subroutine.enable()
+        await climate_subroutine.start()
+
+        sensors_average = {"temperature": 25.0, "absolute_humidity": 10.0}
+        parameters = (
+            (gv.ClimateParameter.temperature, test_data.temperature_cfg),
+            (gv.ClimateParameter.humidity, test_data.humidity_cfg),
+        )
+
+        for is_day, period in ((True, "day"), (False, "night")):
+            monkeypatch.setattr(config, "is_day", lambda now=None, rv=is_day: rv)
+
+            for parameter, climate_cfg in parameters:
+                climate_subroutine._update_pid(parameter, sensors_average)
+
+                pid = climate_subroutine.pids[parameter]
+                assert pid.target == climate_cfg[period]
+                assert pid.hysteresis == climate_cfg["hysteresis"]
+                assert pid.target != getattr(default_light_target, period)
 
     async def test_routine(self, climate_subroutine: Climate, sensors_subroutine: Sensors):
         # Sensors data are required ...

@@ -13,7 +13,7 @@ from math import pi, sin
 from pathlib import Path
 import random
 import sys
-from typing import cast, Literal, Type, TypedDict, TypeVar
+from typing import cast, Literal, NamedTuple, Type, TypedDict, TypeVar
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -1065,6 +1065,20 @@ class EngineConfig(metaclass=SingletonMeta):
 # ---------------------------------------------------------------------------
 #   EcosystemConfig class
 # ---------------------------------------------------------------------------
+class ScaledClimateTarget(NamedTuple):
+    day: float
+    night: float
+    hysteresis: float
+
+
+DEFAULT_LIGHT_CLIMATE_CFG = gv.ClimateConfig(**{  # ty: ignore[invalid-argument-type]
+    "parameter": gv.ClimateParameter.light,
+    "day": 250_000,
+    "night": -30_000,
+    "hysteresis": 0.0,
+})
+
+
 class _MetaEcosystemConfig(type):
     instances: WeakValueDictionary[str, EcosystemConfig] = WeakValueDictionary()
 
@@ -1467,16 +1481,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if refresh:
             await self.refresh_lighting_hours()
 
-    @property
-    def period_of_day(self) -> gv.PeriodOfDay:
+    def is_day(self, now: time | None = None) -> bool:
         nycthemeral_span = self.nycthemeral_span_hours
-        if is_time_between(
-                nycthemeral_span.day,
-                nycthemeral_span.night,
-                datetime.now().time(),
-        ):
-            return gv.PeriodOfDay.day
-        return gv.PeriodOfDay.night
+        return is_time_between(
+            nycthemeral_span.day,
+            nycthemeral_span.night,
+            now or datetime.now().time(),
+        )
 
     def _compute_lighting_method(self) -> gv.LightingMethod:
         lighting_method: gv.LightingMethod = safe_enum_from_name(
@@ -1587,6 +1598,25 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # ... and the lighting method and hours
         self._lighting_method = self._compute_lighting_method()
         self._lighting_hours = self._compute_lighting_hours()
+
+    def is_lighting_needed(self, now: time | None = None) -> bool:
+        now = now or datetime.now().time()
+        hours = self.lighting_hours
+        if self.lighting_method == gv.LightMethod.elongate:
+            # If `lighting_method` is `elongate`, `morning_end` and `evening_start`
+            #  should have been computed
+            assert hours.morning_end is not None
+            assert hours.evening_start is not None
+            # Is time between lightning hours
+            if (
+                hours.morning_start <= now <= hours.morning_end
+                or hours.evening_start <= now <= hours.evening_end
+            ):
+                return True
+            else:
+                return False
+        else:
+            return is_time_between(hours.morning_start, hours.evening_end, now)
 
     # ---------------------------------------------------------------------------
     #      Chaos parameters
@@ -1782,6 +1812,23 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file")
+
+    def get_scaled_climate_target(
+            self,
+            parameter: str | gv.ClimateParameter,
+    ) -> ScaledClimateTarget:
+        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
+        if (
+                parameter is gv.ClimateParameter.light
+                and not self.has_climate_parameter(parameter)
+        ):
+            # Unconfigured light runs on/off by default: a large positive day
+            # value forces the PID fully on, a negative night value forces it fully off.
+            cfg = DEFAULT_LIGHT_CLIMATE_CFG
+        else:
+            cfg = self.get_climate_parameter(parameter)
+        chaos = self.get_chaos_factor()
+        return ScaledClimateTarget(cfg.day * chaos, cfg.night * chaos, cfg.hysteresis * chaos)
 
     # ---------------------------------------------------------------------------
     #      Weather parameters

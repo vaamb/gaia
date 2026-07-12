@@ -303,7 +303,9 @@ class Climate(SubroutineTemplate[Actuator]):
             sensors_average: dict[str, float],
     ) -> None:
         pid: HystericalPID = self.pids[climate_parameter]
-        target, hysteresis = self.compute_target(climate_parameter)
+        scaled_target = self.config.get_scaled_climate_target(climate_parameter)
+        target = scaled_target.day if self.config.is_day() else scaled_target.night
+        hysteresis = scaled_target.hysteresis
         pid.target = target
         pid.hysteresis = hysteresis
         measure = self._get_measure_for_parameter(climate_parameter)
@@ -333,27 +335,6 @@ class Climate(SubroutineTemplate[Actuator]):
                 await self._update_actuator_handler(actuator_handler)
 
     """API calls"""
-    def _compute_target_status(self, _now: time | None = None) -> bool:
-        now = _now or datetime.now().time()
-        hours = self.config.lighting_hours
-        return hours.morning_start <= now <= hours.evening_end
-
-    def compute_target(
-            self,
-            climate_parameter: gv.ClimateParameter,
-            _now: time | None = None,
-    ) -> tuple[float, float]:
-        climate_cfg = self.config.get_climate_parameter(climate_parameter.name)
-        chaos_factor = self.config.get_chaos_factor()
-        now = _now or datetime.now().time()
-        target_status = self._compute_target_status(now)
-        if target_status:
-            target = climate_cfg.day * chaos_factor
-        else:
-            target = climate_cfg.night * chaos_factor
-        hysteresis = climate_cfg.hysteresis * chaos_factor
-        return target, hysteresis
-
     async def turn_climate_actuator(
         self,
         actuator_group: str,
