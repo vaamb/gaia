@@ -306,6 +306,19 @@ class TestEcosystemConfigGeneralEnvironment:
         assert ecosystem_config.nycthemeral_span_hours.day == time(8, 42)
         assert ecosystem_config.nycthemeral_span_hours.night == time(21, 00)
 
+    async def test_day(self, ecosystem_config: EcosystemConfig):
+        ecosystem_config._nycthemeral_span_method = gv.NycthemeralSpanMethod.fixed
+        ecosystem_config._nycthemeral_span_hours = gv.NycthemeralSpanConfig(
+            day=time(9, 00),
+            night=time(17, 42)
+        )
+
+        assert not ecosystem_config.is_day(time(8, 45))
+        assert ecosystem_config.is_day(time(9, 00))
+        assert ecosystem_config.is_day(time(12, 00))
+        assert not ecosystem_config.is_day(time(17, 42))
+        assert not ecosystem_config.is_day(time(21, 15))
+
     async def test_lighting_needed(self, ecosystem_config: EcosystemConfig):
         lighting_hours = gv.LightingHours(
             morning_start=time(8),
