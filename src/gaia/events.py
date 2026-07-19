@@ -367,6 +367,7 @@ class Events(AsyncEventHandler):
         data = gv.EnginePayload(
             engine_uid=self.engine.config.app_config.ENGINE_UID,
             address=local_ip_address(),
+            contract_version=self.engine.config.app_config.GAIA_CONTRACT,
         ).model_dump()
         result = await self.emit("register_engine", data=data, ttl=15)  # ty: ignore[invalid-argument-type]
         if result:
