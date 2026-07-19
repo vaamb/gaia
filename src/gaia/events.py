@@ -411,7 +411,7 @@ class Events(AsyncEventHandler):
             return
         if data["status"] == gv.Result.failure:
             own_contract = self.engine.config.app_config.GAIA_CONTRACT
-            ouranos_contract = data['contract_version']
+            ouranos_contract = data["contract_version"]
             self.logger.error(
                 f"Registration refused: contract mismatch. Gaia uses v.{own_contract}, "
                 f"Ouranos v.{ouranos_contract}.")
