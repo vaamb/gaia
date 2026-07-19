@@ -220,7 +220,12 @@ class TestOnEvent:
         }).model_dump()
 
         host_uid = events_handler._dispatcher.host_uid.__str__()
-        await events_handler.on_registration_ack(host_uid)
+        payload = gv.EngineRegistrationAck(
+            host_uid=host_uid,
+            contract_version=0,
+            status=gv.Result.success,
+        ).model_dump()
+        await events_handler.on_registration_ack(payload)
 
         assert "registration successful, sending initial ecosystems info" in caplog.text
 
