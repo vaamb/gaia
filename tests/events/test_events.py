@@ -128,6 +128,7 @@ class TestOnEvent:
     async def test_on_connect(
             self,
             events_handler: Events,
+            engine_config: EngineConfig,
             caplog: pytest.LogCaptureFixture,
     ):
         await events_handler.on_connect(None)
@@ -138,6 +139,7 @@ class TestOnEvent:
 
         assert response["event"] == "register_engine"
         assert response["data"]["engine_uid"] == test_data.engine_uid
+        assert response["data"]["contract_version"] == engine_config.app_config.GAIA_CONTRACT
 
         if events_handler._ping_task is not None:
             events_handler._ping_task.cancel()
