@@ -413,7 +413,7 @@ class Events(AsyncEventHandler):
             ouranos_contract = data['contract_version']
             self.logger.error(
                 f"Registration refused: contract mismatch. Gaia uses v.{own_contract}, "
-                f"Ouranos v.{ouranos_contract}).")
+                f"Ouranos v.{ouranos_contract}.")
             return
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info.")
