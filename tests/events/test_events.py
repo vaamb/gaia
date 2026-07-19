@@ -178,19 +178,30 @@ class TestOnEvent:
 
         assert "Received a disconnection request" in caplog.text
 
-    async def test_on_registration_ack_wrong_uuid(
+    async def test_on_registration_ack_failure(
             self,
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        await events_handler.on_registration_ack("wrong_uid")
-
-        assert "wrongly formatted registration acknowledgment" in caplog.text
-
         uuid_str = uuid.uuid4().__str__()
-        await events_handler.on_registration_ack(uuid_str)
+        payload = gv.EngineRegistrationAck(
+            host_uid=uuid_str,
+            contract_version=0,
+            status=gv.Result.failure,
+        ).model_dump()
+        await events_handler.on_registration_ack(payload)
 
         assert "registration acknowledgment for another dispatcher" in caplog.text
+
+        host_uid = events_handler._dispatcher.host_uid.__str__()
+        payload = gv.EngineRegistrationAck(
+            host_uid=host_uid,
+            contract_version=0,
+            status=gv.Result.failure,
+        ).model_dump()
+        await events_handler.on_registration_ack(payload)
+
+        assert "Registration refused: contract mismatch." in caplog.text
 
     @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
     async def test_on_registration_ack(
