@@ -14,7 +14,7 @@ fi
 cat > "${INSTALL_DIR}/pyproject.toml" << EOF
 [project]
 name = "gaia-app"
-version = "0.10.0"
+version = "0.11.0"
 description = "An app to manage greenhouses, terrariums and aquariums"
 requires-python = ">=3.11"
 dependencies = ["gaia"]
