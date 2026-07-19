@@ -18,6 +18,8 @@
 - `Hardware._on_initialize()` / `_on_terminate()` lifecycle hooks
 - `Engine` lifecycle tracked by `EngineState` enum
   (`INITIALIZED → RUNNING → PAUSED → STOPPED → TERMINATED`)
+- Gaia–Ouranos contract version sent at registration (`GAIA_CONTRACT`); registration
+  aborts when Ouranos reports a contract mismatch in the `registration_ack`
 
 ### Changed
 - **Hardware — major refactor**: mixin-based composition replaces the old class

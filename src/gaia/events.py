@@ -367,6 +367,7 @@ class Events(AsyncEventHandler):
         data = gv.EnginePayload(
             engine_uid=self.engine.config.app_config.ENGINE_UID,
             address=local_ip_address(),
+            contract_version=self.engine.config.app_config.GAIA_CONTRACT,
         ).model_dump()
         result = await self.emit("register_engine", data=data, ttl=15)  # ty: ignore[invalid-argument-type]
         if result:
@@ -401,17 +402,19 @@ class Events(AsyncEventHandler):
         await sleep(0.25)  # Allow to finish engine initialization in some cases
         await self.register()
 
-    @validate_payload(RootModel[str])
-    async def on_registration_ack(self, host_uid: str) -> None:
-        try:
-            uuid = UUID(host_uid)
-        except ValueError:
-            self.logger.warning(
-                "Received a wrongly formatted registration acknowledgment.")
-            return
+    @validate_payload(gv.EngineRegistrationAck)
+    async def on_registration_ack(self, data: gv.EngineRegistrationAckDict) -> None:
+        uuid = data["host_uid"] if isinstance(data["host_uid"], UUID) else UUID(data["host_uid"])
         if self.dispatcher.host_uid != uuid:
             self.logger.warning(
                 "Received a registration acknowledgment for another dispatcher.")
+            return
+        if data["status"] == gv.Result.failure:
+            own_contract = self.engine.config.app_config.GAIA_CONTRACT
+            ouranos_contract = data["contract_version"]
+            self.logger.error(
+                f"Registration refused: contract mismatch. Gaia uses v.{own_contract}, "
+                f"Ouranos v.{ouranos_contract}.")
             return
         self.logger.info(
             "Engine registration successful, sending initial ecosystems info.")

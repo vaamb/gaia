@@ -15,6 +15,7 @@ from gaia.config.base import BaseConfig
 class AppInfo:
     APP_NAME = "Gaia"
     VERSION = version
+    GAIA_CONTRACT = 1
 
 
 class GetPathMixin:

@@ -128,6 +128,7 @@ class TestOnEvent:
     async def test_on_connect(
             self,
             events_handler: Events,
+            engine_config: EngineConfig,
             caplog: pytest.LogCaptureFixture,
     ):
         await events_handler.on_connect(None)
@@ -138,6 +139,7 @@ class TestOnEvent:
 
         assert response["event"] == "register_engine"
         assert response["data"]["engine_uid"] == test_data.engine_uid
+        assert response["data"]["contract_version"] == engine_config.app_config.GAIA_CONTRACT
 
         if events_handler._ping_task is not None:
             events_handler._ping_task.cancel()
@@ -178,19 +180,30 @@ class TestOnEvent:
 
         assert "Received a disconnection request" in caplog.text
 
-    async def test_on_registration_ack_wrong_uuid(
+    async def test_on_registration_ack_failure(
             self,
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        await events_handler.on_registration_ack("wrong_uid")
-
-        assert "wrongly formatted registration acknowledgment" in caplog.text
-
         uuid_str = uuid.uuid4().__str__()
-        await events_handler.on_registration_ack(uuid_str)
+        payload = gv.EngineRegistrationAck(
+            host_uid=uuid_str,
+            contract_version=0,
+            status=gv.Result.failure,
+        ).model_dump()
+        await events_handler.on_registration_ack(payload)
 
         assert "registration acknowledgment for another dispatcher" in caplog.text
+
+        host_uid = events_handler._dispatcher.host_uid.__str__()
+        payload = gv.EngineRegistrationAck(
+            host_uid=host_uid,
+            contract_version=0,
+            status=gv.Result.failure,
+        ).model_dump()
+        await events_handler.on_registration_ack(payload)
+
+        assert "Registration refused: contract mismatch." in caplog.text
 
     @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
     async def test_on_registration_ack(
@@ -209,7 +222,12 @@ class TestOnEvent:
         }).model_dump()
 
         host_uid = events_handler._dispatcher.host_uid.__str__()
-        await events_handler.on_registration_ack(host_uid)
+        payload = gv.EngineRegistrationAck(
+            host_uid=host_uid,
+            contract_version=0,
+            status=gv.Result.success,
+        ).model_dump()
+        await events_handler.on_registration_ack(payload)
 
         assert "registration successful, sending initial ecosystems info" in caplog.text
 
