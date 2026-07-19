@@ -18,8 +18,9 @@
 - `Hardware._on_initialize()` / `_on_terminate()` lifecycle hooks
 - `Engine` lifecycle tracked by `EngineState` enum
   (`INITIALIZED → RUNNING → PAUSED → STOPPED → TERMINATED`)
+- `--check-requirements` flag on the `validate-configs` CLI (#460)
 - Gaia–Ouranos contract version sent at registration (`GAIA_CONTRACT`); registration
-  aborts when Ouranos reports a contract mismatch in the `registration_ack`
+  aborts when Ouranos reports a contract mismatch in the `registration_ack` (#472)
 
 ### Changed
 - **Hardware — major refactor**: mixin-based composition replaces the old class
@@ -54,10 +55,35 @@
 - Config file dump is more compact: climate, hardware, and plants sections shortened
 - Production logging switched to a less verbose format
 - `EcosystemConfig.lighting_hours` setter removed — set via config files only
+- `Engine` loop made robust to exceptions; `Engine` state management improved (#444, #445)
+- Subroutine `refresh()` logic unified through a template method; `Hardware` instance
+  caching restored (#446, #447)
+- Hardware and multiplexer requirements checked at startup rather than at materialization
+  (#452, #454)
+- Ecosystems initialized at engine start, and hardware at ecosystem start, rather than at
+  their own initialization (#456, #458)
+- One hardware or ecosystem failing to initialize no longer aborts the mounting of the
+  others (#451, #459)
+- Climatic target computation centralized in `EcosystemConfig` (#471)
+- Start and stop scripts aligned with Ouranos and hardened; installation messaging switched
+  to `uv` (#441, #448, #450, #453)
+
+### Fixed
+- `gpioSwitch` now initializes its linked pin before acting on it (#435)
+- `AHT20` library import (#437)
+- Subroutine-management issues in `Ecosystem` (#442)
+- `Light` and `Sensors` futures no longer outlive the subroutine's stop (#463, #464, #465)
+- `ActuatorHandler.level` defaults to 0, and `_level` is restricted to `float` (#438, #434)
 
 ### Development
+- `gaia-validators` (0.11.0), `event-dispatcher` (0.8.1), `sqlalchemy-wrapper` (0.4.0),
+  `pydantic` (2.12), `pytest` (9.0), and `pytest-asyncio` (1.3) bumped
 - `uv` replaces the previous virtual environment manager
-- `ty` (Astral) type checking added to the GitHub Actions workflow
+- `ty` (Astral) type checking added to the GitHub Actions workflow; version pinned and
+  newly flagged type errors fixed (#436, #440)
+- Test suite reworked: `caplog` replaces the custom `logs_content` fixture, the aggressive
+  test-wide `patch` fixture removed, and subroutine/hardware tests parametrized with
+  per-test configs (#457, #461, #462, #466, #467, #468, #469, #470)
 
 ---
 
