@@ -404,7 +404,7 @@ class Events(AsyncEventHandler):
 
     @validate_payload(gv.EngineRegistrationAck)
     async def on_registration_ack(self, data: gv.EngineRegistrationAckDict) -> None:
-        uuid = UUID(data["host_uid"])
+        uuid = data["host_uid"] if isinstance(data["host_uid"], UUID) else UUID(data["host_uid"])
         if self.dispatcher.host_uid != uuid:
             self.logger.warning(
                 "Received a registration acknowledgment for another dispatcher.")
