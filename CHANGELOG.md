@@ -2,7 +2,8 @@
 
 ---
 
-## Unreleased
+## 0.11.0 — 2026-07-19
+_Contracts: gaia ↔ ouranos-core v1_
 
 ### Added
 - DS18B20 (1-Wire temperature sensor) and WebSocket hardware models

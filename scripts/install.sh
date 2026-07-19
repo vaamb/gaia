@@ -62,7 +62,7 @@ fi
 
 # Version requirements
 readonly MIN_PYTHON_VERSION="3.11"
-readonly GAIA_VERSION="0.10.0"
+readonly GAIA_VERSION="0.11.0"
 readonly GAIA_REPO="https://github.com/vaamb/gaia.git"
 
 # Default values
