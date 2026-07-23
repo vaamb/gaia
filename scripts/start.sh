@@ -39,10 +39,25 @@ fi
 # Create logs directory if it doesn't exist
 mkdir -p "${GAIA_DIR}/logs" || die "Failed to create logs directory"
 
-# Check if already running
+# Check that a PID is really a Gaia process, and not a recycled PID.
+# Gaia renames itself to "gaia" (setproctitle), but only once its imports are
+# done: until then it is still "<python> -m gaia". Matching the command line
+# covers both, so an instance still starting up is not mistaken for a dead one.
+is_gaia_proc() {
+    local pid=$1
+    local cmdline
+    # tr flattens the NUL-separated argv (2>/dev/null before the redirect so a
+    # dead PID's failed open is silenced); a missing /proc entry returns 1.
+    cmdline=$(tr '\0' ' ' 2>/dev/null < "/proc/${pid}/cmdline") || return 1
+    # read strips the trailing NUL-padding setproctitle leaves behind.
+    read -r cmdline <<< "$cmdline"
+    [[ "$cmdline" == "gaia" || "$cmdline" == *"-m gaia" ]]
+}
+
+# Check if already running — prefer PID file
 if [[ -f "${GAIA_DIR}/gaia.pid" ]]; then
     PID=$(cat "${GAIA_DIR}/gaia.pid")
-    if kill -0 "$PID" 2>/dev/null && pgrep -x "gaia" | grep -qw "$PID"; then
+    if kill -0 "$PID" 2>/dev/null && is_gaia_proc "$PID"; then
         log WARN "Gaia is already running with PID $PID"
         log INFO "If you want to restart, please run: gaia restart"
         exit 1
@@ -50,8 +65,11 @@ if [[ -f "${GAIA_DIR}/gaia.pid" ]]; then
     # Stale PID file — process is gone, clean up and continue
     rm -f "${GAIA_DIR}/gaia.pid"
 fi
-if pgrep -x "gaia" > /dev/null; then
-    PID=$(pgrep -x "gaia" | head -n 1)
+# Fallback to pgrep if no PID file — match both the renamed process and one
+# still starting up ("<python> -m gaia"); -f on the latter is safe as it
+# cannot match this script's own command line.
+PID=$({ pgrep -x "gaia"; pgrep -f -- "-m gaia"; } 2>/dev/null | head -n1 || true)
+if [[ -n "$PID" ]]; then
     log WARN "Gaia is already running with PID $PID"
     log INFO "If you want to restart, please run: gaia restart"
     exit 1
