@@ -26,19 +26,37 @@ mkdir -p "${GAIA_DIR}/logs" || die "Failed to create logs directory"
 # Log stop attempt
 log INFO "Attempting to stop Gaia..."
 
+# Check that a PID is really a Gaia process, and not a recycled PID.
+# Gaia renames itself to "gaia" (setproctitle), but only once its imports are
+# done: until then it is still "<python> -m gaia". Matching the command line
+# covers both, so an instance can be stopped while it is still starting up.
+is_gaia_proc() {
+    local pid=$1
+    local cmdline
+    # tr flattens the NUL-separated argv (2>/dev/null before the redirect so a
+    # dead PID's failed open is silenced); a missing /proc entry returns 1.
+    cmdline=$(tr '\0' ' ' 2>/dev/null < "/proc/${pid}/cmdline") || return 1
+    # read strips the trailing NUL-padding setproctitle leaves behind.
+    read -r cmdline <<< "$cmdline"
+    [[ "$cmdline" == "gaia" || "$cmdline" == *"-m gaia" ]]
+}
+
 # Function to check if Gaia is running
 get_gaia_pid() {
     # Prefer PID file when available
     if [[ -f "${GAIA_DIR}/gaia.pid" ]]; then
         local pid
         pid=$(cat "${GAIA_DIR}/gaia.pid" 2>/dev/null || echo "")
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && pgrep -x "gaia" | grep -qw "$pid"; then
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && is_gaia_proc "$pid"; then
             echo "$pid"
+            return 0
         fi
-    # Fallback to strict process match
-    else
-        pgrep -x "gaia" | head -n1
     fi
+    # Fallback: the PID file may be missing or stale while an instance started
+    # by other means is still running. Match both the renamed process and one
+    # still starting up ("<python> -m gaia"); -f on the latter is safe as it
+    # cannot match this script's own command line.
+    { pgrep -x "gaia"; pgrep -f -- "-m gaia"; } 2>/dev/null | head -n1 || true
 }
 
 # Check if Gaia is running
@@ -67,6 +85,7 @@ if kill -15 "$GAIA_PID" 2>/dev/null; then
         echo -n "."
         sleep 1
     done
+    echo ""
 
     # Check if process is still running
     if kill -0 "$GAIA_PID" 2>/dev/null; then

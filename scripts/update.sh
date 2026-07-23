@@ -204,11 +204,11 @@ copy_scripts() {
     cp -r "${GAIA_DIR}/lib/gaia/scripts/"* "${GAIA_DIR}/scripts/" ||
         die "Failed to copy scripts"
     # Make scripts executable
-    chmod +x "${OURANOS_DIR}/scripts/"*.sh
-    chmod +x "${OURANOS_DIR}/scripts/utils/"*.sh
+    chmod +x "${GAIA_DIR}/scripts/"*.sh
+    chmod +x "${GAIA_DIR}/scripts/utils/"*.sh
     # Convert scripts to unix format
-    dos2unix "${OURANOS_DIR}/scripts/"*.sh
-    dos2unix "${OURANOS_DIR}/scripts/utils/"*.sh
+    dos2unix "${GAIA_DIR}/scripts/"*.sh
+    dos2unix "${GAIA_DIR}/scripts/utils/"*.sh
     # Copy migrations and alembic.ini
     cp -r "${GAIA_DIR}/lib/gaia/migrations/"* "${GAIA_DIR}/migrations/" ||
         die "Failed to copy migration scripts"
