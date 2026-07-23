@@ -2,6 +2,19 @@
 
 ---
 
+## Unreleased
+
+### Development
+- Sandbox script (`scripts/utils/sandbox.sh`) to run the install and update
+  scripts in an isolated throwaway environment, leaving the real install,
+  `~/.profile` and systemd untouched (#476)
+
+### Fixed
+- `copy_scripts` in the install and update scripts targeted `${OURANOS_DIR}`
+  instead of `${GAIA_DIR}` (#476)
+
+---
+
 ## 0.11.0 — 2026-07-19
 _Contracts: gaia ↔ ouranos-core v1_
 
