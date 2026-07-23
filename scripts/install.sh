@@ -63,7 +63,9 @@ fi
 # Version requirements
 readonly MIN_PYTHON_VERSION="3.11"
 readonly GAIA_VERSION="0.11.0"
-readonly GAIA_REPO="https://github.com/vaamb/gaia.git"
+# Overridable so the installation can be tested, or run from a fork or a local
+# mirror, without reaching for GitHub
+readonly GAIA_REPO="${GAIA_REPO:-https://github.com/vaamb/gaia.git}"
 
 # Default values
 readonly GAIA_DIR="${PWD}/gaia"
