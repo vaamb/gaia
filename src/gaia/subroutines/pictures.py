@@ -15,8 +15,6 @@ import gaia_validators as gv
 from gaia.dependencies.camera import SerializableImage
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
-from gaia.array_utils import (
-    compute_mse, dump_picture_array, load_picture_array, rgb_to_gray)
 from gaia.subroutines.template import SubroutineTemplate
 
 
