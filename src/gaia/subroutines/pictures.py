@@ -4,6 +4,7 @@ import asyncio
 from asyncio import Task
 from math import ceil
 from time import monotonic
+import typing as t
 from typing import Type, TypedDict
 
 # from anyio.to_process import run_sync as run_sync_in_process  # Crashes somehow
@@ -12,10 +13,13 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 import gaia_validators as gv
 
-from gaia.dependencies.camera import SerializableImage
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
 from gaia.subroutines.template import SubroutineTemplate
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia.dependencies.camera import SerializableImage
 
 
 class ScoredImage(TypedDict):
@@ -58,6 +62,8 @@ class Pictures(SubroutineTemplate[Camera]):
         self._scored_images: dict[str, ScoredImage] = {}
 
     async def _load_background_arrays(self) -> None:
+        from gaia.dependencies.camera import SerializableImage
+
         for camera_uid in self.hardware:
             array_path = self._cache_dir / f"{camera_uid}-background.pkl"
             if not array_path.exists():

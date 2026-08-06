@@ -12,7 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
 
-from gaia.dependencies.camera import check_dependencies, np, SerializableImage
+from gaia.dependencies.camera import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera, Measure
 from gaia.subroutines.template import SubroutineTemplate
@@ -20,6 +20,7 @@ from gaia.subroutines.template import SubroutineTemplate
 
 if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.database.models import SensorBuffer, SensorRecord
+    from gaia.dependencies.camera import SerializableImage
     from gaia.subroutines.light import Light
 
 
@@ -162,7 +163,8 @@ class Health(SubroutineTemplate[Camera]):
 
     @staticmethod
     def _get_index(image0: SerializableImage, measure: Measure) -> float:
-        assert np is not None
+        from gaia.dependencies.camera import np
+
         image1 = image0.apply_rgb_formula(indices[measure])
         return float(np.mean(image1.array))
 

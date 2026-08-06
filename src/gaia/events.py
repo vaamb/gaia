@@ -22,13 +22,12 @@ import gaia_validators as gv
 
 from gaia import Ecosystem, Engine
 from gaia.config.from_files import ConfigType
-from gaia.dependencies.camera import SerializableImagePayload
 from gaia.ecosystem import _EcosystemPayloads
 from gaia.utils import humanize_list, local_ip_address
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia_validators.image import SerializableImage
+    from gaia_validators.image import SerializableImage, SerializableImagePayload
     from sqlalchemy_wrapper import AsyncSQLAlchemyWrapper
 
 
@@ -632,6 +631,8 @@ class Events(AsyncEventHandler):
             self,
             ecosystem_uids: str | list[str] | None = None,
     ) -> None:
+        from gaia.dependencies.camera import SerializableImagePayload
+
         for uid, picture_arrays in self._iter_picture_arrays(ecosystem_uids):
             if self._resize_ratio != 1.0:
                 picture_arrays = [
