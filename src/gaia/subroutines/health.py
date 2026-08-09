@@ -12,13 +12,15 @@ from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
 
-from gaia.dependencies.camera import check_dependencies, np, SerializableImage
+from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera, Measure
 from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia_validators.image import SerializableImage
+
     from gaia.database.models import SensorBuffer, SensorRecord
     from gaia.subroutines.light import Light
 
@@ -75,21 +77,28 @@ class Health(SubroutineTemplate[Camera]):
         self.logger.debug(f"Health routine took {routine_time:.1f} s.")
 
     def _compute_if_manageable(self) -> bool:
-        try:
-            check_dependencies()
-        except RuntimeError:
-            self.logger.warning(
-                "Health subroutine does not have all the dependencies installed.")
-            return False
         cameras_uid = self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera)
+        any_workable_camera: bool = False
         for camera_uid in cameras_uid:
             camera_cfg = self.config.get_hardware_config(camera_uid)
             measures_name = [measure.name.lower() for measure in camera_cfg.measures]
             indices_name = [index.value.lower() for index in indices.keys()]
             if any(measure in indices_name for measure in measures_name):
-                return True
-        self.logger.warning("No health camera detected.")
-        return False
+                any_workable_camera = True
+                break
+        if not any_workable_camera:
+            self.logger.warning("No health camera detected.")
+            return False
+        # `check_dependencies("camera")` loads heavy modules (numpy and cv2).
+        # Only do it once we're sure we'll need them, not before
+        try:
+            check_dependencies("camera")
+        except RuntimeError:
+            self.logger.warning(
+                "Health subroutine does not have all the dependencies installed.")
+            return False
+        else:
+            return True
 
     async def _start(self) -> None:
         h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
@@ -162,7 +171,8 @@ class Health(SubroutineTemplate[Camera]):
 
     @staticmethod
     def _get_index(image0: SerializableImage, measure: Measure) -> float:
-        assert np is not None
+        from gaia.dependencies import np
+
         image1 = image0.apply_rgb_formula(indices[measure])
         return float(np.mean(image1.array))
 

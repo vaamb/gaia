@@ -15,7 +15,7 @@ class Picamera2Device:
         return {"size": (800, 600), **main}
 
     def capture_array(self, name="main") -> Any:
-        import numpy as np
+        from gaia.dependencies import np
 
         width, height = self._cfg["size"]
         array = np.stack(

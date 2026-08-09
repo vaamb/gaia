@@ -8,7 +8,6 @@ import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler, ActuatorHub
 from gaia.config import EcosystemConfig
-from gaia.dependencies.camera import SerializableImage
 from gaia.exceptions import HardwareNotFound, SubroutineNotFound
 from gaia.hardware.abc import ActuatorMixin, Hardware
 from gaia.subroutines import (
@@ -18,6 +17,8 @@ from gaia.virtual import VirtualEcosystem
 
 
 if typing.TYPE_CHECKING:  # pragma: no cover
+    from gaia_validators.image import SerializableImage
+
     from gaia.engine import Engine
     from gaia.events import Events
 

@@ -4,6 +4,7 @@ import asyncio
 from asyncio import Task
 from math import ceil
 from time import monotonic
+import typing as t
 from typing import Type, TypedDict
 
 # from anyio.to_process import run_sync as run_sync_in_process  # Crashes somehow
@@ -12,10 +13,14 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 import gaia_validators as gv
 
-from gaia.dependencies.camera import SerializableImage
+from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
 from gaia.subroutines.template import SubroutineTemplate
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia_validators.image import SerializableImage
 
 
 class ScoredImage(TypedDict):
@@ -58,6 +63,8 @@ class Pictures(SubroutineTemplate[Camera]):
         self._scored_images: dict[str, ScoredImage] = {}
 
     async def _load_background_arrays(self) -> None:
+        from gaia.dependencies import SerializableImage
+
         for camera_uid in self.hardware:
             array_path = self._cache_dir / f"{camera_uid}-background.pkl"
             if not array_path.exists():
@@ -146,12 +153,20 @@ class Pictures(SubroutineTemplate[Camera]):
 
     def _compute_if_manageable(self) -> bool:
         if not self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera):
-            self.logger.warning("No Camera detected, disabling Picture subroutine.")
+            self.logger.warning("No camera detected, disabling Pictures subroutine.")
             return False
         if not self.ecosystem.engine.use_message_broker:
             self.logger.warning(
                 "The engine is not using event dispatcher, the photo taken "
                 "will not be sent to Ouranos.")
+        # `check_dependencies("camera")` loads heavy modules (numpy and cv2).
+        # Only do it once we're sure we'll need them, not before
+        try:
+            check_dependencies("camera")
+        except RuntimeError:
+            self.logger.warning(
+                "Pictures subroutine does not have all the dependencies installed.")
+            return False
         return True
 
     async def _start(self) -> None:

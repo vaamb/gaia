@@ -4,12 +4,26 @@
 
 ## Unreleased
 
+### Changed
+- Optional dependencies (`camera`, `database`, `dispatcher`) are now lazy-loaded from a
+  single `gaia.dependencies` module: a PEP 562 `__getattr__` resolves `np`, `cv2`,
+  `SerializableImage`, `SerializableImagePayload` and the dispatcher classes on first
+  access. The per-group `dependencies/{camera,database,dispatcher}.py` modules are
+  removed and `check_dependencies()` now takes a single module group rather than
+  `Module | list[Module]` (#478)
+- `cv2` and `numpy` are no longer imported at startup when no camera is configured.
+  `import gaia` plus the engine, subroutines and hardware drops from ~83 MB to ~47 MB
+  RSS (#478)
+
 ### Development
 - Sandbox script (`scripts/utils/sandbox.sh`) to run the install and update
   scripts in an isolated throwaway environment, leaving the real install,
   `~/.profile` and systemd untouched (#476)
 
 ### Fixed
+- The `Pictures` subroutine now checks its camera dependencies when computing whether it
+  is manageable, as `Health` already did, so a missing `camera` extra disables it with a
+  clear warning instead of failing later in the picture loop (#478)
 - `copy_scripts` in the install and update scripts targeted `${OURANOS_DIR}`
   instead of `${GAIA_DIR}` (#476)
 

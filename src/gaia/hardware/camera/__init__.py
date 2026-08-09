@@ -7,12 +7,13 @@ from typing import Any, Type
 
 from anyio.to_thread import run_sync
 
-from gaia.dependencies.camera import SerializableImage
 from gaia.hardware.abc import Camera, PiCameraAddressMixin
 from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia_validators.image import SerializableImage
+
     from gaia.hardware.camera._devices._compatibility import Picamera2Device
 
 
@@ -54,6 +55,8 @@ class PiCamera(PiCameraAddressMixin, Camera):
         return await run_sync(self._get_image, size)
 
     def _get_image(self, size: tuple | None) -> SerializableImage:
+        from gaia.dependencies import SerializableImage
+
         config: dict[str, Any] = {
             "format": "RGB888"
         }
