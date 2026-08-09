@@ -1,23 +1,85 @@
 from __future__ import annotations
 
-from typing import Literal
+from importlib import import_module
+from importlib.util import find_spec
+import typing as t
 
 
-Module = Literal["camera", "database", "dispatcher"]
+ModuleGroup = t.Literal["camera", "database", "dispatcher"]
 
 
-def check_dependencies(module: Module | list[Module]) -> None:
-    if isinstance(module, str):
-        module = [module]
-    if "camera" in module:
-        from .camera import check_dependencies
+_lazy_objects: dict[str, tuple[str, str | None, ModuleGroup]] = {
+    # camera
+    "np": ("numpy", None, "camera"),
+    "cv2": ("cv2", None, "camera"),
+    "SerializableImage": ("gaia_validators.image", "SerializableImage", "camera"),
+    "SerializableImagePayload": ("gaia_validators.image", "SerializableImagePayload", "camera"),
+    # database
+    "sqlalchemy": ("sqlalchemy", None, "database"),
+    "sqlalchemy_wrapper": ("sqlalchemy_wrapper", None, "database"),
+    # dispatcher
+    "AsyncAMQPDispatcher": ("dispatcher", "AsyncAMQPDispatcher", "dispatcher"),
+    "AsyncInMemoryDispatcher": ("dispatcher", "AsyncInMemoryDispatcher", "dispatcher"),
+    "AsyncRedisDispatcher": ("dispatcher", "AsyncRedisDispatcher", "dispatcher"),
+}
 
-        check_dependencies(check_cv2=True)
-    if "database" in module:
-        from .database import check_dependencies
 
-        check_dependencies()
-    if "dispatcher" in module:
-        from .dispatcher import check_dependencies
+def _get_missing_dependencies_msg(module_group: ModuleGroup) -> str:
+    return (
+        f"All the dependencies required to use the {module_group} have not been "
+        f"installed. Run 'uv sync --inexact --extra {module_group}' in your virtual "
+        f"environment to install them."
+    )
 
-        check_dependencies()
+
+def _is_available(module_name: str) -> bool:
+    try:
+        return find_spec(module_name) is not None
+    except (ImportError, ValueError):  # pragma: no cover
+        return False
+
+
+def check_dependencies(module_group: ModuleGroup) -> None:
+    if module_group == "camera":
+        for module_name in ("numpy", "cv2", "gaia_validators.image"):
+            if not _is_available(module_name):  # pragma: no cover
+                raise RuntimeError(_get_missing_dependencies_msg("camera"))
+
+    elif module_group == "database":
+        for module_name in ("sqlalchemy", "sqlalchemy_wrapper"):
+            if not _is_available(module_name):  # pragma: no cover
+                raise RuntimeError(_get_missing_dependencies_msg("database"))
+
+    elif module_group == "dispatcher":
+        for module_name in ("dispatcher",):
+            if not _is_available(module_name):  # pragma: no cover
+                raise RuntimeError(_get_missing_dependencies_msg("dispatcher"))
+
+    else:
+        raise ValueError(f"module {module_group!r} is not available")
+
+
+def __getattr__(name: str) -> t.Any:
+    try:
+        module_name, attribute, module_group = _lazy_objects[name]
+    except KeyError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    try:
+        module = import_module(module_name)
+        obj = module if attribute is None else getattr(module, attribute)
+    except ImportError:  # pragma: no cover
+        raise RuntimeError(_get_missing_dependencies_msg(module_group))
+    # Cache the result for future accesses
+    globals()[name] = obj
+    return obj
+
+
+if t.TYPE_CHECKING:  # pragma: no cover
+    import cv2
+    import numpy as np
+    import sqlalchemy
+
+    from dispatcher import (
+        AsyncAMQPDispatcher, AsyncInMemoryDispatcher, AsyncRedisDispatcher)
+    from gaia_validators.image import SerializableImage, SerializableImagePayload
+    import sqlalchemy_wrapper

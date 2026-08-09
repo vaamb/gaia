@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from gaia.dependencies import check_dependencies
+
+check_dependencies("database")
+
 from datetime import datetime, timezone
 import typing as t
 

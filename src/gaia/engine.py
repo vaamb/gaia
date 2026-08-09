@@ -176,7 +176,7 @@ class Engine(metaclass=SingletonMeta):
             raise ValueError(f"{broker_type} is not supported")
         self.logger.info("Initialising the event dispatcher.")
         if broker_type == "amqp":
-            from dispatcher import AsyncAMQPDispatcher
+            from gaia.dependencies import AsyncAMQPDispatcher
 
             if broker_url == "amqp://":
                 broker_url = "amqp://guest:guest@localhost:5672//"
@@ -195,7 +195,7 @@ class Engine(metaclass=SingletonMeta):
                 },
             )
         elif broker_type == "redis":
-            from dispatcher import AsyncRedisDispatcher
+            from gaia.dependencies import AsyncRedisDispatcher
 
             if broker_url == "redis://":
                 broker_url = "redis://localhost:6379/0"
@@ -207,7 +207,7 @@ class Engine(metaclass=SingletonMeta):
                 },
             )
         elif broker_type == "memory":
-            from dispatcher import AsyncInMemoryDispatcher
+            from gaia.dependencies import AsyncInMemoryDispatcher
 
             self.message_broker = AsyncInMemoryDispatcher("gaia")
         events_handler = Events(engine=self)

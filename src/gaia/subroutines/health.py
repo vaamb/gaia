@@ -12,15 +12,16 @@ from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
 
-from gaia.dependencies.camera import check_dependencies
+from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera, Measure
 from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
+    from gaia_validators.image import SerializableImage
+
     from gaia.database.models import SensorBuffer, SensorRecord
-    from gaia.dependencies.camera import SerializableImage
     from gaia.subroutines.light import Light
 
 
@@ -77,7 +78,7 @@ class Health(SubroutineTemplate[Camera]):
 
     def _compute_if_manageable(self) -> bool:
         try:
-            check_dependencies()
+            check_dependencies("camera")
         except RuntimeError:
             self.logger.warning(
                 "Health subroutine does not have all the dependencies installed.")
@@ -163,7 +164,7 @@ class Health(SubroutineTemplate[Camera]):
 
     @staticmethod
     def _get_index(image0: SerializableImage, measure: Measure) -> float:
-        from gaia.dependencies.camera import np
+        from gaia.dependencies import np
 
         image1 = image0.apply_rgb_formula(indices[measure])
         return float(np.mean(image1.array))

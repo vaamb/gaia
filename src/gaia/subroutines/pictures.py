@@ -13,13 +13,14 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 import gaia_validators as gv
 
+from gaia.dependencies import check_dependencies
 from gaia.hardware import camera_models
 from gaia.hardware.abc import Camera
 from gaia.subroutines.template import SubroutineTemplate
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.dependencies.camera import SerializableImage
+    from gaia_validators.image import SerializableImage
 
 
 class ScoredImage(TypedDict):
@@ -62,7 +63,7 @@ class Pictures(SubroutineTemplate[Camera]):
         self._scored_images: dict[str, ScoredImage] = {}
 
     async def _load_background_arrays(self) -> None:
-        from gaia.dependencies.camera import SerializableImage
+        from gaia.dependencies import SerializableImage
 
         for camera_uid in self.hardware:
             array_path = self._cache_dir / f"{camera_uid}-background.pkl"
@@ -151,8 +152,14 @@ class Pictures(SubroutineTemplate[Camera]):
                 f"'PICTURE_SIZE'.")
 
     def _compute_if_manageable(self) -> bool:
+        try:
+            check_dependencies("camera")
+        except RuntimeError:
+            self.logger.warning(
+                "Pictures subroutine does not have all the dependencies installed.")
+            return False
         if not self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera):
-            self.logger.warning("No Camera detected, disabling Picture subroutine.")
+            self.logger.warning("No camera detected, disabling Pictures subroutine.")
             return False
         if not self.ecosystem.engine.use_message_broker:
             self.logger.warning(

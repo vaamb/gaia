@@ -17,7 +17,8 @@ from gaia.virtual import VirtualEcosystem
 
 
 if typing.TYPE_CHECKING:  # pragma: no cover
-    from gaia.dependencies.camera import SerializableImage
+    from gaia_validators.image import SerializableImage
+
     from gaia.engine import Engine
     from gaia.events import Events
 

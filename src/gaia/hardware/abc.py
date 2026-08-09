@@ -25,7 +25,7 @@ import gaia_validators as gv
 from gaia_validators import safe_enum_from_name, safe_enum_from_value
 
 from gaia.config import GaiaConfigHelper
-from gaia.dependencies.camera import check_dependencies
+from gaia.dependencies import check_dependencies
 from gaia.exceptions import DeviceError, HardwareNotFound
 from gaia.hardware._websocket import WebSocketHardwareManager
 from gaia.hardware.multiplexers import Multiplexer
@@ -36,7 +36,7 @@ from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 if t.TYPE_CHECKING:  # pragma: no cover
     from websockets import ServerConnection
 
-    from gaia.dependencies.camera import SerializableImage
+    from gaia_validators.image import SerializableImage
 
     if is_raspi():
         from adafruit_blinka.microcontroller.bcm283x.pin import Pin
@@ -1168,7 +1168,7 @@ class LightSensorMixin(SensorMixin):
 class CameraMixin(HardwareTypeMixin):
     """Mixin for camera-type hardware."""
     def __init__(self, *args, **kwargs) -> None:
-        check_dependencies()
+        check_dependencies("camera")
         super().__init__(*args, **kwargs)
         self._device: Any | None = None
         self._camera_dir: Path | None = None
@@ -1179,7 +1179,7 @@ class CameraMixin(HardwareTypeMixin):
         if maybe_error is not None:
             return maybe_error
         try:
-            check_dependencies()
+            check_dependencies("camera")
         except Exception as e:
             return e
         return None
@@ -1219,7 +1219,7 @@ class CameraMixin(HardwareTypeMixin):
         return self._camera_dir
 
     async def load_image(self, image_path: Path) -> SerializableImage:
-        from gaia.dependencies.camera import SerializableImage
+        from gaia.dependencies import SerializableImage
 
         image = await run_sync(SerializableImage.read, str(image_path))
         return image

@@ -631,7 +631,7 @@ class Events(AsyncEventHandler):
             self,
             ecosystem_uids: str | list[str] | None = None,
     ) -> None:
-        from gaia.dependencies.camera import SerializableImagePayload
+        from gaia.dependencies import SerializableImagePayload
 
         for uid, picture_arrays in self._iter_picture_arrays(ecosystem_uids):
             if self._resize_ratio != 1.0:
