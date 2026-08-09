@@ -152,12 +152,6 @@ class Pictures(SubroutineTemplate[Camera]):
                 f"'PICTURE_SIZE'.")
 
     def _compute_if_manageable(self) -> bool:
-        try:
-            check_dependencies("camera")
-        except RuntimeError:
-            self.logger.warning(
-                "Pictures subroutine does not have all the dependencies installed.")
-            return False
         if not self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera):
             self.logger.warning("No camera detected, disabling Pictures subroutine.")
             return False
@@ -165,6 +159,14 @@ class Pictures(SubroutineTemplate[Camera]):
             self.logger.warning(
                 "The engine is not using event dispatcher, the photo taken "
                 "will not be sent to Ouranos.")
+        # `check_dependencies("camera")` loads heavy modules (numpy and cv2).
+        # Only do it once we're sure we'll need them, not before
+        try:
+            check_dependencies("camera")
+        except RuntimeError:
+            self.logger.warning(
+                "Pictures subroutine does not have all the dependencies installed.")
+            return False
         return True
 
     async def _start(self) -> None:

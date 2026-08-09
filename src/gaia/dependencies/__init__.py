@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from importlib import import_module
-from importlib.util import find_spec
 import typing as t
 
 
@@ -32,11 +31,20 @@ def _get_missing_dependencies_msg(module_group: ModuleGroup) -> str:
     )
 
 
+_availability: dict[str, bool] = {}
+
+
 def _is_available(module_name: str) -> bool:
+    if module_name in _availability:
+        return _availability[module_name]
     try:
-        return find_spec(module_name) is not None
-    except (ImportError, ValueError):  # pragma: no cover
-        return False
+        import_module(module_name)
+    except Exception:  # pragma: no cover
+        available = False
+    else:
+        available = True
+    _availability[module_name] = available
+    return available
 
 
 def check_dependencies(module_group: ModuleGroup) -> None:

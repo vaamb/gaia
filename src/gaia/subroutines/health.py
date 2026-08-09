@@ -77,21 +77,28 @@ class Health(SubroutineTemplate[Camera]):
         self.logger.debug(f"Health routine took {routine_time:.1f} s.")
 
     def _compute_if_manageable(self) -> bool:
+        cameras_uid = self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera)
+        any_workable_camera: bool = False
+        for camera_uid in cameras_uid:
+            camera_cfg = self.config.get_hardware_config(camera_uid)
+            measures_name = [measure.name.lower() for measure in camera_cfg.measures]
+            indices_name = [index.value.lower() for index in indices.keys()]
+            if any(measure in indices_name for measure in measures_name):
+                any_workable_camera = True
+                break
+        if not any_workable_camera:
+            self.logger.warning("No health camera detected.")
+            return False
+        # `check_dependencies("camera")` loads heavy modules (numpy and cv2).
+        # Only do it once we're sure we'll need them, not before
         try:
             check_dependencies("camera")
         except RuntimeError:
             self.logger.warning(
                 "Health subroutine does not have all the dependencies installed.")
             return False
-        cameras_uid = self.ecosystem.get_hardware_group_uids(gv.HardwareType.camera)
-        for camera_uid in cameras_uid:
-            camera_cfg = self.config.get_hardware_config(camera_uid)
-            measures_name = [measure.name.lower() for measure in camera_cfg.measures]
-            indices_name = [index.value.lower() for index in indices.keys()]
-            if any(measure in indices_name for measure in measures_name):
-                return True
-        self.logger.warning("No health camera detected.")
-        return False
+        else:
+            return True
 
     async def _start(self) -> None:
         h, m = self.ecosystem.engine.config.app_config.HEALTH_LOGGING_TIME.split("h")
