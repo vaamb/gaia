@@ -1350,9 +1350,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return
         # Try to get the target
         target: str | None
-        if (method & gv.LightingMethod.elongate) == gv.LightingMethod.elongate:
+        if method == gv.LightingMethod.elongate:
             target = DEFAULT_PLACE
-        elif (method & gv.NycthemeralSpanMethod.mimic) == gv.NycthemeralSpanMethod.mimic:
+        elif method == gv.NycthemeralSpanMethod.mimic:
             nyct_cfg: gv.NycthemeralCycleConfigDict = \
                 ecosystem_dict["environment"]["nycthemeral_cycle"]
             target = nyct_cfg.get("target")
@@ -1498,7 +1498,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Log any incompatibilities with the lighting method chosen
         self._log_nycthemeral_method_issues(lighting_method)
         # If using fixed method, no check is required
-        if lighting_method & gv.LightingMethod.fixed:
+        if lighting_method == gv.LightingMethod.fixed:
             return gv.LightingMethod.fixed
         # Otherwise, we need to make sure we have suntimes for "home"
         sun_times = self.general.get_sun_times(DEFAULT_PLACE)
