@@ -13,6 +13,10 @@ readonly SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null
 # Default values
 FOREGROUND=false
 
+# Number of lines kept in "${GAIA_DIR}/logs/stdout" when running in the
+# background.
+readonly STDOUT_LINES=20
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -104,12 +108,16 @@ if [[ "$FOREGROUND" = true ]]; then
     log INFO "Gaia process exited with code $EXIT_CODE"
     exit $EXIT_CODE
 else
-    # Run Gaia in the background and log the PID
-    nohup python3 -m gaia > "${GAIA_DIR}/logs/stdout" 2>&1 &
+    # Run Gaia in the background and log the PID.
+    # Rem: stdout goes through ring_log.sh so that it stays bounded. A process
+    # substitution is used rather than a pipe as `$!` would otherwise be the
+    # PID of ring_log.sh rather than the one of Gaia.
+    nohup python3 -m gaia \
+        > >("${SCRIPT_DIR}/utils/ring_log.sh" "${GAIA_DIR}/logs/stdout" "${STDOUT_LINES}") 2>&1 &
     GAIA_PID=$!
     echo "$GAIA_PID" > "${GAIA_DIR}/gaia.pid"
     log INFO "Gaia started in background mode"
-    log INFO "Gaia stdout and stderr output redirected to ${GAIA_DIR}/logs/stdout"
+    log INFO "Gaia stdout and stderr output redirected to ${GAIA_DIR}/logs/stdout (last ${STDOUT_LINES} lines kept)"
 
     deactivate ||
         log WARN "Failed to deactivate virtual environment"
