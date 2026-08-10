@@ -1492,9 +1492,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def _compute_lighting_method(self) -> gv.LightingMethod:
         lighting_method: gv.LightingMethod = safe_enum_from_name(
             gv.LightingMethod, self.nycthemeral_cycle["lighting"])
-        # During testing, we just accept any lighting method
-        if self.general.app_config.TESTING:
-            return lighting_method
         # Log any incompatibilities with the lighting method chosen
         self._log_nycthemeral_method_issues(lighting_method)
         # If using fixed method, no check is required
