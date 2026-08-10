@@ -501,7 +501,7 @@ class EngineConfig(metaclass=SingletonMeta):
             EcosystemConfig.validate_nycthemeral_method(
                 method, ecosystem_cfg, self.private_config["places"])
         except ConfigValidationError as e:
-            method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
+            method_name = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
             ecosystem_name = ecosystem_cfg["name"]
             self.logger.warning(
                 f"{method_name} method cannot be set to '{method.name}' for "
@@ -1386,7 +1386,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.validate_nycthemeral_method(
                 method, self._config_dict, self.general.private_config["places"])
         except ConfigValidationError as e:
-            method_name = "Lighting" if method in gv.LightingMethod else "Nycthemeral span"
+            method_name = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
             self.logger.warning(
                 f"{method_name} method cannot be set to '{method.name}'. Will "
                 f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__}: {e}`"
