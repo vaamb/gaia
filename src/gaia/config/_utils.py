@@ -137,11 +137,10 @@ logging_config: dict[str, Any] = {
         "file_handler": {
             "level": "INFO",
             "formatter": "file_formatter",
-            "class": "logging.handlers.RotatingFileHandler",
+            "class": "logging.handlers.TimedRotatingFileHandler",
             "filename": "gaia.log",
-            "mode": "a",
-            "maxBytes": 4 * 1024 * 1024,
-            "backupCount": 5,
+            "when": "W0",
+            "backupCount": 4,
         },
     },
     "loggers": {
