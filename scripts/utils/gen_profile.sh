@@ -29,9 +29,9 @@ gaia() {
     restart) "\${GAIA_DIR}/scripts/stop.sh" && "\${GAIA_DIR}/scripts/start.sh" ;;
     status) systemctl status gaia.service ;;
     logs) tail -f "\${GAIA_DIR}/logs/gaia.log" ;;
-    stdout) tail -f "\${GAIA_DIR}/logs/stdout" ;;
+    stdout) watch -n 2 cat "\${GAIA_DIR}/logs/stdout" ;;
     update) "\${GAIA_DIR}/scripts/update.sh" ;;
-    *) echo "Usage: gaia {start|stop|restart|status|logs|update}" ;;
+    *) echo "Usage: gaia {start|stop|restart|status|logs|stdout|update}" ;;
   esac
 }
 complete -W "start stop restart status logs stdout update" gaia

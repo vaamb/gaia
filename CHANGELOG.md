@@ -5,6 +5,10 @@
 ## Unreleased
 
 ### Changed
+- `logs/stdout` no longer grows for as long as Gaia runs: when started in the background,
+  its output goes through `scripts/utils/ring_log.sh`, which keeps only the last 20 lines.
+  The full logs remain available in the rotated `logs/gaia.log`. `gaia stdout` now redraws
+  the file with `watch` rather than `tail -f`-ing it, as it is rewritten in place (#483)
 - Optional dependencies (`camera`, `database`, `dispatcher`) are now lazy-loaded from a
   single `gaia.dependencies` module: a PEP 562 `__getattr__` resolves `np`, `cv2`,
   `SerializableImage`, `SerializableImagePayload` and the dispatcher classes on first
