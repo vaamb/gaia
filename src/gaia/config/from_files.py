@@ -1350,9 +1350,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             return
         # Try to get the target
         target: str | None
-        if (method & gv.LightingMethod.elongate) == gv.LightingMethod.elongate:
+        if method == gv.LightingMethod.elongate:
             target = DEFAULT_PLACE
-        elif (method & gv.NycthemeralSpanMethod.mimic) == gv.NycthemeralSpanMethod.mimic:
+        elif method == gv.NycthemeralSpanMethod.mimic:
             nyct_cfg: gv.NycthemeralCycleConfigDict = \
                 ecosystem_dict["environment"]["nycthemeral_cycle"]
             target = nyct_cfg.get("target")
@@ -1398,7 +1398,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Log any incompatibilities with the nycthemeral span method chosen
         self._log_nycthemeral_method_issues(span_method)
         # If using fixed method, no check required
-        if span_method & gv.NycthemeralSpanMethod.fixed:
+        if span_method == gv.NycthemeralSpanMethod.fixed:
             return gv.NycthemeralSpanMethod.fixed
         # Else, we need to make sure we have suntimes for the nycthemeral target
         target = self.nycthemeral_span_target
@@ -1492,13 +1492,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def _compute_lighting_method(self) -> gv.LightingMethod:
         lighting_method: gv.LightingMethod = safe_enum_from_name(
             gv.LightingMethod, self.nycthemeral_cycle["lighting"])
-        # During testing, we just accept any lighting method
-        if self.general.app_config.TESTING:
-            return lighting_method
         # Log any incompatibilities with the lighting method chosen
         self._log_nycthemeral_method_issues(lighting_method)
         # If using fixed method, no check is required
-        if lighting_method & gv.LightingMethod.fixed:
+        if lighting_method == gv.LightingMethod.fixed:
             return gv.LightingMethod.fixed
         # Otherwise, we need to make sure we have suntimes for "home"
         sun_times = self.general.get_sun_times(DEFAULT_PLACE)
