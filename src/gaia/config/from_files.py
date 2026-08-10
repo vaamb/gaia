@@ -1398,7 +1398,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Log any incompatibilities with the nycthemeral span method chosen
         self._log_nycthemeral_method_issues(span_method)
         # If using fixed method, no check required
-        if span_method & gv.NycthemeralSpanMethod.fixed:
+        if span_method == gv.NycthemeralSpanMethod.fixed:
             return gv.NycthemeralSpanMethod.fixed
         # Else, we need to make sure we have suntimes for the nycthemeral target
         target = self.nycthemeral_span_target
