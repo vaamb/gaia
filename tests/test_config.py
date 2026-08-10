@@ -6,6 +6,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia.config import ConfigType, EcosystemConfig, EngineConfig
+from gaia.config.from_files import ConfigValidationError
 from gaia.exceptions import HardwareNotFound, PlantNotFound, UndefinedParameter
 from gaia.subroutines import subroutine_names
 from gaia.utils import get_yaml
@@ -235,35 +236,64 @@ class TestEcosystemConfigGeneralEnvironment:
         assert chaos_factor == max_intensity
 
     async def test_light_method(self, ecosystem_config: EcosystemConfig):
+        # By default, the computed lighting method should be "fixed"
+        assert ecosystem_config._compute_lighting_method() == gv.LightingMethod.fixed
         assert ecosystem_config.lighting_method is test_data.lighting_method
-        new_method = gv.LightMethod.elongate
 
+        # Lighting method cannot be set to elongate without home coordinates
         with pytest.raises(ValueError, match="coordinates of 'home' are not provided"):
-            await ecosystem_config.set_lighting_method(new_method)
+            await ecosystem_config.set_lighting_method(gv.LightMethod.elongate)
 
-        ecosystem_config.general.home_coordinates = (0, 0)
-        await ecosystem_config.set_lighting_method(new_method)
+        ecosystem_config.general.set_place("home", (0, 0))
+        # Lighting method shouldn't change just by providing home coordinates
+        assert ecosystem_config._compute_lighting_method() == gv.LightingMethod.fixed
 
-        # Should not happen
-        del ecosystem_config.general.places["home"]
-        ecosystem_config.general._sun_times = {}
-        ecosystem_config.general.app_config.TESTING = False
-        # Reset caches after this big change in config
-        ecosystem_config.reset_caches()
-        # Sun times is none so `light_method` falls back to `fixed`
-        assert ecosystem_config.lighting_method is gv.LightMethod.fixed
-        ecosystem_config.general.app_config.TESTING = True
-        # Reset caches after this big change in config
-        ecosystem_config.reset_caches()
-        ecosystem_config.general._sun_times = {
-            "home": {"last_update": date.today(), "data": test_data.sun_times}
-        }
-        assert ecosystem_config.lighting_method is new_method
+        await ecosystem_config.set_lighting_method(gv.LightMethod.elongate)
+        assert ecosystem_config._compute_lighting_method() == gv.LightingMethod.elongate
 
-    async def test_nycthemeral_span(self, ecosystem_config: EcosystemConfig):
+        # When the home place is not available anymore, we should fall back to "fixed"
+        ecosystem_config.general.delete_place("home")
+        assert ecosystem_config._compute_lighting_method() == gv.LightingMethod.fixed
+
+        # Going back to the fixed method should always work
+        await ecosystem_config.set_lighting_method(gv.LightMethod.fixed)
+        assert ecosystem_config._compute_lighting_method() == gv.LightingMethod.fixed
+
+    async def test_nycthemeral_span_method(self, ecosystem_config: EcosystemConfig):
         assert ecosystem_config.nycthemeral_span_hours == gv.NycthemeralSpanConfig()
 
-        # Test span hours
+        # By default, the computed span method should be "fixed"
+        assert ecosystem_config._compute_nycthemeral_span_method() == gv.NycthemeralSpanMethod.fixed
+
+        # Span method cannot be set to mimic without a valid target ...
+        with pytest.raises(
+                ConfigValidationError,
+                match="no target is specified in the ecosystems configuration file"
+        ):
+            await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
+
+        # ... and valid targets need to be set
+        with pytest.raises(ValueError, match="The place targeted must first be set"):
+            await ecosystem_config.set_nycthemeral_span_target("a_real_place")
+
+        ecosystem_config.general.set_place("a_real_place", (42.618, 21.1415))
+        await ecosystem_config.set_nycthemeral_span_target("a_real_place")
+
+        # Span method shouldn't change just by providing a target with valid coordinates
+        assert ecosystem_config._compute_nycthemeral_span_method() == gv.NycthemeralSpanMethod.fixed
+
+        await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
+        assert ecosystem_config._compute_nycthemeral_span_method() == gv.NycthemeralSpanMethod.mimic
+
+        # When the targeted place is not available anymore, we should fall back to "fixed"
+        ecosystem_config.general.delete_place("a_real_place")
+        assert ecosystem_config._compute_nycthemeral_span_method() == gv.NycthemeralSpanMethod.fixed
+
+        # Going back to the fixed method should always work
+        await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.fixed)
+        assert ecosystem_config._compute_nycthemeral_span_method() == gv.NycthemeralSpanMethod.fixed
+
+    async def test_nycthemeral_span_hours(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match="Invalid time parameters provided"):
             await ecosystem_config.set_nycthemeral_span_hours({"wrong": "value"})
 
@@ -271,33 +301,7 @@ class TestEcosystemConfigGeneralEnvironment:
         assert ecosystem_config.nycthemeral_span_hours.day == time(4, 21)
         assert ecosystem_config.nycthemeral_span_hours.night == time(22, 00)
 
-        # Test span method
-        with pytest.raises(ValueError, match="is not a valid"):
-            await ecosystem_config.set_nycthemeral_span_method("wrong_value")
-
-        # Fixed method should always work
-        await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.fixed)
-
-        # Mimic is more tedious
-        with pytest.raises(
-                ValueError,
-                match="no target is specified in the ecosystems configuration file"
-        ):
-            await ecosystem_config.set_nycthemeral_span_method(
-                gv.NycthemeralSpanMethod.mimic)
-
-        with pytest.raises(ValueError, match="The place targeted must first be set with"):
-            await ecosystem_config.set_nycthemeral_span_target("span_target")
-
-        ecosystem_config.general.set_place("span_target", (42.618, 21.1415))
-        await ecosystem_config.set_nycthemeral_span_target("span_target")
-
-        await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
-
-        assert isinstance(
-            ecosystem_config.nycthemeral_span_method, gv.NycthemeralSpanMethod)
-
-        # Test setting the whole cycle
+    async def test_nycthemeral_cycle(self, ecosystem_config: EcosystemConfig):
         await ecosystem_config.set_nycthemeral_cycle(
             span="fixed", lighting="fixed", target=None, day="8h42", night="21h00")
         assert ecosystem_config.nycthemeral_span_method == gv.NycthemeralSpanMethod.fixed
