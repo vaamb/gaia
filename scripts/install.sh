@@ -267,6 +267,7 @@ setup_uv_and_sync() {
         die "Failed to generate Gaia pyproject.toml"
 
     # Sync virtual environment
+    uv venv --python /usr/bin/python3 --system-site-packages
     uv sync --all-packages ||
         die "Failed to create Python virtual environment and sync it"
 }
