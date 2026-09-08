@@ -212,7 +212,7 @@ class Pictures(SubroutineTemplate[Camera]):
     async def reset_background_array(self, camera_uid: str) -> None:
         array_path = self._cache_dir / f"{camera_uid}-background.pkl"
         camera = self.hardware[camera_uid]
-        image: SerializableImage = await camera.get_image()
+        image: SerializableImage = await camera.get_image(self._picture_size)
         image.to_grayscale(inplace=True)
         await run_sync(image.dump_array, array_path)
 
