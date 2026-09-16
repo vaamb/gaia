@@ -1,6 +1,12 @@
 Gaia
 ====
 
+[![Test](https://github.com/vaamb/gaia/actions/workflows/test.yml/badge.svg)](https://github.com/vaamb/gaia/actions/workflows/test.yml)
+[![Quality control](https://github.com/vaamb/gaia/actions/workflows/qc.yml/badge.svg)](https://github.com/vaamb/gaia/actions/workflows/qc.yml)
+[![Latest tag](https://img.shields.io/github/v/tag/vaamb/gaia?label=version)](https://github.com/vaamb/gaia/tags)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-green)](LICENSE)
+
 Gaia is an automation client for controlling and monitoring enclosed plant growth
 environments — greenhouses, terrariums, aquariums, or any chamber where temperature,
 humidity, light, and CO₂ matter. It runs on a Raspberry Pi, reads sensors, drives
