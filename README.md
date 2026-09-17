@@ -147,6 +147,6 @@ uvx ty check src/
 Status
 ------
 
-Active. Running in production on a Raspberry Pi at home since 2020. The core data
+Active. Running in production on a Raspberry Pi at home since 2018. The core data
 flow is stable; APIs may still change. Requires Ouranos for the full feature set
 but works as a standalone logger and controller.
