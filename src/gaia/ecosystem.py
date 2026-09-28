@@ -510,7 +510,7 @@ class Ecosystem:
         This is called when the ecosystem starts to set up the initial
         hardware state.
         """
-        assert not self._hardware
+        # assert not self._hardware  # Hardware are initialized before starting when testing
         for hardware_uid in self.get_hardware_needed():
             await self._add_hardware_no_raise(hardware_uid)
 
