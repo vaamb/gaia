@@ -183,6 +183,9 @@ async def ecosystem(
     finally:
         if ecosystem.started:
             await ecosystem.stop()
+        else:
+            # Hardware was mounted out of `ecosystem.start()`
+            await ecosystem.terminate_hardware()
         await ecosystem.terminate()
         del ecosystem
 

@@ -51,6 +51,9 @@ class TestEcosystem:
         with pytest.raises(
             RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
             await ecosystem.stop()
+        
+        # Test that starting an ecosystem that was stopped doesn't crash
+        await ecosystem.start()
 
     async def test_subroutine_management(self, ecosystem: Ecosystem):
         # Simply dispatches work to subroutine, methods are tested there
@@ -76,7 +79,6 @@ class TestEcosystem:
         await ecosystem.disable_subroutine("light")
         await ecosystem.refresh_subroutines()
         assert ecosystem.subroutines_started == set()
-
 
     async def test_hardware(self, ecosystem: Ecosystem, caplog: pytest.LogCaptureFixture):
         # This test requires empty hardware
@@ -162,6 +164,22 @@ class TestEcosystem:
         assert crashing_uid not in ecosystem.hardware
         # ... while the other (healthy) hardware has been mounted
         assert test_data.sensor_uid in ecosystem.hardware
+
+    async def test_hardware_ecosystem_restart(self, ecosystem: Ecosystem):
+        await ecosystem.start()
+        hardware = set(ecosystem.hardware)
+        assert hardware
+
+        await ecosystem.stop()
+        assert ecosystem.hardware == {}
+        assert not ecosystem.virtual_self.status
+
+        await ecosystem.start()
+        assert set(ecosystem.hardware) == hardware
+        assert not ecosystem._failing_hardware
+
+        await ecosystem.refresh_hardware()
+        assert set(ecosystem.hardware) == hardware
 
     async def test_actuators_data(self, ecosystem: Ecosystem):
         actuator_states = ecosystem.actuator_hub.as_dict()
