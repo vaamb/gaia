@@ -50,7 +50,7 @@ repository  = "https://github.com/vaamb/gaia.git"
 [dependency-groups]
 qc = [
     "ruff~=0.15.0",
-    "ty==0.0.30",
+    "ty==0.0.78",
 ]
 
 test = [
