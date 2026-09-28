@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import enum
 from datetime import datetime, timezone
 from functools import partial
+import inspect
 import logging
 import time
 import typing
@@ -234,7 +235,7 @@ class Timer:
 
     async def _job(self, callback: Callable) -> None:
         await self._future
-        if asyncio.iscoroutinefunction(callback):
+        if inspect.iscoroutinefunction(callback):
             await callback()
         else:
             callback()
@@ -759,9 +760,10 @@ class ActuatorHub:
     def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
         group_to_parameter = self.ecosystem.config.get_group_to_parameter()
         parameter = group_to_parameter[actuator_group]
-        if parameter in gv.WeatherParameter:
+        if isinstance(parameter, gv.WeatherParameter):
+            # Weather parameters don't have PIDs attached to them
             return None
-        elif parameter in gv.ClimateParameter:
+        elif isinstance(parameter, gv.ClimateParameter):
             if parameter not in self.pids:
                 raise RuntimeError(
                     f"Trying to get an undefined PID for the actuator group "
@@ -797,7 +799,7 @@ class ActuatorHub:
             return actuator_handler
 
     def as_dict(self) -> dict[str, gv.ActuatorStateDict]:
-        default_state_dict = {
+        default_state_dict: gv.ActuatorStateDict = {
             "active": False,
             "status": False,
             "level": None,
