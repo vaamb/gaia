@@ -437,3 +437,6 @@ class VirtualEcosystem:
     def start(self) -> None:
         self.reset()
         self._start_time = monotonic()
+
+    def stop(self) -> None:
+        self.reset()

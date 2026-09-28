@@ -614,6 +614,8 @@ class Ecosystem:
             for subroutine in reversed(subroutines_to_stop):
                 if self._subroutines[subroutine].started:
                     await self.stop_subroutine(subroutine)
+            if self.virtualized:
+                self.virtual_self.stop()
             raise
         else:
             self.logger.debug("Ecosystem successfully started.")
@@ -635,6 +637,9 @@ class Ecosystem:
         else:
             self.logger.error("Failed to stop the ecosystem.")
             raise RuntimeError(f"Failed to stop ecosystem {self.name}")
+            # Stop the virtual ecosystem
+            if self.virtualized:
+                self.virtual_self.stop()
         self._started = False
 
     # ---------------------------------------------------------------------------
