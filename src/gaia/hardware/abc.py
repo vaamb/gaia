@@ -552,7 +552,8 @@ class Hardware(metaclass=_MetaHardware):
         for m in measures:
             measure = safe_enum_from_name(Measure, m.name.lower())
             try:
-                unit = safe_enum_from_value(Unit, m.unit)
+                # Valid ty ignore: whe `m.unit` is `None`, it falls through to the exception path
+                unit = safe_enum_from_value(Unit, m.unit)  # ty: ignore[invalid-argument-type]
             except ValueError:
                 unit = None
             rv[measure] = unit
@@ -657,9 +658,9 @@ class Hardware(metaclass=_MetaHardware):
             address=self.address_repr,
             type=self._type,
             level=self._level,
-            groups=self._groups,  # ty: ignore[invalid-argument-type]
+            groups=self._groups,
             model=self._model,
-            measures=self._measures,  # ty: ignore[invalid-argument-type]
+            measures=self._measures,
             plants=self._plants,
             multiplexer_model=self.multiplexer_model,
         ).model_dump(exclude_defaults=shorten)
