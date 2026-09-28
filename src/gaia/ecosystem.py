@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import logging
+import sys
 import typing
 from typing import cast, Literal, overload, Self
 
@@ -15,6 +16,11 @@ from gaia.subroutines import (
     Climate, Health, Light, Pictures, Sensors, subroutine_dict,
     subroutine_names, SubroutineNames, SubroutineTemplate, Weather)
 from gaia.virtual import VirtualEcosystem
+
+if sys.version_info < (3, 12):
+    from typing_extensions import Unpack
+else:
+    from typing import Unpack
 
 
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -51,14 +57,14 @@ class _EcosystemPayloads:
         # Valid ignore
         return gv.NycthemeralCycleInfo(
             **self.config.nycthemeral_cycle,
-            **self.config.lighting_hours.model_dump(),  # ty: ignore[invalid-argument-type]
+            **self.config.lighting_hours.model_dump(),
         )
 
     @property
     def climate(self) -> list[gv.ClimateConfig]:
         # Valid ignore: implicit conversion from dict to model by pydantic
         return [
-            gv.ClimateConfig(parameter=key, **value)  # ty: ignore[invalid-argument-type]
+            gv.ClimateConfig(parameter=key, **value)
             for key, value in self.config.climate.items()
         ]
 
@@ -74,7 +80,7 @@ class _EcosystemPayloads:
         hardware_dict = self.config.hardware_dict
         # Valid ignore: implicit conversion from dict to model by pydantic
         return [
-            gv.HardwareConfig(uid=key, **value)  # ty: ignore[invalid-argument-type]
+            gv.HardwareConfig(uid=key, **value)
             for key, value in hardware_dict.items()
         ]
 
@@ -753,7 +759,7 @@ class Ecosystem:
 
     async def set_nycthemeral_cycle(
             self,
-            **value: gv.NycthemeralCycleConfigDict,
+            **value: Unpack[gv.NycthemeralCycleConfigDict],
     ) -> None:
         await self.config.set_nycthemeral_cycle(**value)
 

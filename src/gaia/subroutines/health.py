@@ -182,7 +182,7 @@ class Health(SubroutineTemplate[Camera]):
             measure: Measure,
     ) -> _PartialHealthRecord:
         index = await run_sync(Health._get_index, image0, measure)
-        return _PartialHealthRecord(**{  # ty: ignore[missing-typed-dict-key]
+        return _PartialHealthRecord(**{
             "measure": measure.value,
             "value": index,
         })

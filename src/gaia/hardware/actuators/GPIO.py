@@ -81,7 +81,7 @@ class gpioDimmer(DimmerMixin, gpioActuator):
     def _get_dimmer(self) -> pwmio.PWMOut:
         pwmio = self._get_dimmer_library()
         # Valid ignore: pwmio is either the real module or compatibility class, both have a callable PWMOut at runtime
-        return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)  # ty: ignore
+        return pwmio.PWMOut(self.pin, frequency=100, duty_cycle=0)
 
     @property
     def dimmer(self) -> pwmio.PWMOut:
