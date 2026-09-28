@@ -182,8 +182,8 @@ class Ecosystem:
     async def terminate(self) -> None:
         """Release all resources held by the ecosystem.
 
-        This method cleans up subroutines, actuator handlers, and hardware.
-        It should be called when the ecosystem is no longer needed.
+        This method cleans up subroutines and actuator handlers. It should be
+        called when the ecosystem is no longer needed.
 
         :raises RuntimeError: If the ecosystem is currently running. Call
                               stop() first.
@@ -194,8 +194,6 @@ class Ecosystem:
         self.terminate_subroutines()
         # Terminate the actuator hub
         self.terminate_actuator_hub()
-        # Terminate the hardware
-        await self.terminate_hardware()
         # Detach the virtual ecosystem
         if self.virtualized:
             self._virtual_self = None
@@ -509,9 +507,10 @@ class Ecosystem:
     async def initialize_hardware(self) -> None:
         """Mount all active hardware defined in the configuration.
 
-        This is called during ecosystem initialization to set up the initial
+        This is called when the ecosystem starts to set up the initial
         hardware state.
         """
+        assert not self._hardware
         for hardware_uid in self.get_hardware_needed():
             await self._add_hardware_no_raise(hardware_uid)
 
@@ -570,14 +569,20 @@ class Ecosystem:
     async def terminate_hardware(self) -> None:
         """Terminate and dismount all hardware.
 
-        Called during ecosystem termination to release hardware resources.
+        Called when the ecosystem stops to release hardware resources.
         """
-        for hardware_uid in [*self.hardware.keys()]:
-            hardware = self.hardware[hardware_uid]
-            # No need to unlink actuator handlers associated with the hardware
-            # as they won't be used anymore
+        # Use `self._hardware` not to have warnings from
+        #  `self._check_hardware_is_up_to_date()`
+        for hardware_uid in [*self._hardware.keys()]:
+            hardware = self._hardware[hardware_uid]
             await hardware.terminate()
-            del self.hardware[hardware_uid], hardware
+            del self._hardware[hardware_uid], hardware
+        # Actuator handlers continue to exist after a stop, remove their
+        # references to the hardware
+        for actuator_handler in self.actuator_hub.actuator_handlers.values():
+            actuator_handler.reset_cached_actuators()
+        # Give failing hardware a chance to start on the next start
+        self._failing_hardware.clear()
 
     # ---------------------------------------------------------------------------
     #   Lifecycle management
@@ -614,6 +619,7 @@ class Ecosystem:
             for subroutine in reversed(subroutines_to_stop):
                 if self._subroutines[subroutine].started:
                     await self.stop_subroutine(subroutine)
+            await self.terminate_hardware()
             if self.virtualized:
                 self.virtual_self.stop()
             raise
@@ -629,17 +635,18 @@ class Ecosystem:
         for subroutine in reversed(subroutine_names):
             if self._subroutines[subroutine].started:
                 await self.stop_subroutine(subroutine)
-        if not any(
+        if any(
                 self._subroutines[subroutine].started
                 for subroutine in subroutine_names
         ):
-            self.logger.debug("Ecosystem successfully stopped.")
-        else:
             self.logger.error("Failed to stop the ecosystem.")
             raise RuntimeError(f"Failed to stop ecosystem {self.name}")
-            # Stop the virtual ecosystem
-            if self.virtualized:
-                self.virtual_self.stop()
+        # Dismount all the hardware
+        await self.terminate_hardware()
+        # Stop the virtual ecosystem
+        if self.virtualized:
+            self.virtual_self.stop()
+        self.logger.debug("Ecosystem successfully stopped.")
         self._started = False
 
     # ---------------------------------------------------------------------------
