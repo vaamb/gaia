@@ -1748,8 +1748,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"'{self.name}' in ecosystems configuration file."
             )
         else:
-            # Valid ignore: implicit conversion from dict to model by pydantic
-            return gv.ClimateConfig(parameter=parameter, **data)  # ty: ignore[invalid-argument-type]
+            return gv.ClimateConfig(parameter=parameter, **data)
 
     def set_climate_parameter(
             self,
@@ -1789,8 +1788,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
             )
-        current_value = self.climate[parameter].copy()
-        current_value.update(**remove_missing(value))
+        current_value: gv.AnonymousClimateConfigDict = self.climate[parameter].copy()
+        current_value.update(**remove_missing(value))  # ty: ignore[invalid-argument-type]
         self.set_climate_parameter(parameter, **current_value)
 
     def delete_climate_parameter(
@@ -1898,8 +1897,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No weather parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
             )
-        current_value = self.weather[parameter].copy()
-        current_value.update(**remove_missing(value))
+        current_value: gv.AnonymousWeatherConfigDict = self.weather[parameter].copy()
+        current_value.update(**remove_missing(value))  # ty: ignore[invalid-argument-type]
         self.set_weather_parameter(parameter, **current_value)
 
     def delete_weather_parameter(
@@ -2044,7 +2043,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             # Valid ignore: implicit conversion from dict to model by pydantic
-            hardware_config = gv.HardwareConfig(**hardware_dict)  # ty: ignore[invalid-argument-type]
+            hardware_config = gv.HardwareConfig(**hardware_dict)
         except pydantic.ValidationError as e:
             raise ValueError(
                 f"Invalid hardware information provided. "
@@ -2134,11 +2133,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No hardware with uid '{uid}' found in the hardware config."
             )
         anonymous_hardware_dict = self.hardware_dict[uid].copy()
-        hardware_dict = gv.to_identified(anonymous_hardware_dict, {"uid": uid})
+        hardware_dict: gv.HardwareConfigDict = \
+            gv.to_identified(anonymous_hardware_dict, {"uid": uid})
         # Replace uid with a special uid for validation so it doesn't conflict
         # with existing hardware
         hardware_dict["uid"] = "__validation__"
-        hardware_dict.update(**remove_missing(updating_values))
+        hardware_dict.update(**remove_missing(updating_values))  # ty: ignore[invalid-argument-type]
         # Don't check address if not trying to update it. To do so, do not pass any address
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
@@ -2180,8 +2180,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         try:
             hardware_config = self.hardware_dict[uid]
-            # Valid ignore: implicit conversion from dict to model by pydantic
-            return gv.HardwareConfig(uid=uid, **hardware_config)  # ty: ignore[invalid-argument-type]
+            return gv.HardwareConfig(uid=uid, **hardware_config)
         except KeyError:
             raise HardwareNotFound(
                 f"No hardware with uid '{uid}' found in the hardware config."
@@ -2255,8 +2254,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"No plant with uid '{uid}' found in the plant config."
             )
         anonymous_plant_dict = self.plants_dict[uid].copy()
-        plant_dict = gv.to_identified(anonymous_plant_dict, {"uid": uid})
-        plant_dict.update(**remove_missing(updating_values))
+        plant_dict: gv.PlantConfigDict = \
+            gv.to_identified(anonymous_plant_dict, {"uid": uid})
+        plant_dict.update(**remove_missing(updating_values))  # ty: ignore[invalid-argument-type]
         try:
             plant_dict = gv.PlantConfig(**plant_dict).model_dump()
         except pydantic.ValidationError as e:
