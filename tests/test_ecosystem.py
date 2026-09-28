@@ -51,6 +51,9 @@ class TestEcosystem:
         with pytest.raises(
             RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
             await ecosystem.stop()
+        
+        # Test that starting an ecosystem that was stopped doesn't crash
+        await ecosystem.start()
 
     async def test_subroutine_management(self, ecosystem: Ecosystem):
         # Simply dispatches work to subroutine, methods are tested there
