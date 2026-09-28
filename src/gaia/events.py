@@ -651,7 +651,7 @@ class Events(AsyncEventHandler):
             )
 
     async def _upload_image(self, image: "SerializableImage") -> None:
-        from aiohttp import ClientSession
+        from aiohttp import ClientSession, ClientTimeout
         # Format data
         if self._resize_ratio != 1.0:
             image = image.resize(ratio=self._resize_ratio)
@@ -665,7 +665,8 @@ class Events(AsyncEventHandler):
         # Upload data
         try:
             async with ClientSession(headers=headers) as session:
-                async with session.post(url, data=to_send, timeout=3.0) as resp:
+                async with session.post(
+                        url, data=to_send, timeout=ClientTimeout(total=4)) as resp:
                     response = await resp.json()
                     self.logger.debug(f"Image sent. Response: {response}")
         except Exception as e:
