@@ -647,6 +647,11 @@ class Engine(metaclass=SingletonMeta):
             ],
         )
 
+    async def initialize_ecosystems(self) -> None:
+        to_initialize = self.get_ecosystems_needed() - set(self.ecosystems.keys())
+        for ecosystem_uid in to_initialize:
+            await self._add_ecosystem_no_raise(ecosystem_uid)
+
     async def refresh_ecosystems(self, send_info: bool = True):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file.
 
@@ -766,9 +771,7 @@ class Engine(metaclass=SingletonMeta):
         if self.plugins_needed:
             await self.start_plugins()
         # Initialize the ecosystems
-        to_initialize = self.get_ecosystems_needed() - set(self.ecosystems.keys())
-        for ecosystem_uid in to_initialize:
-            await self._add_ecosystem_no_raise(ecosystem_uid)
+        await self.initialize_ecosystems()
         # Start the engine thread
         self.task = asyncio.create_task(self._loop(), name="engine-loop")
         await sleep(0)  # Allow _loop() to start
