@@ -296,6 +296,14 @@ class TestEngine:
         await engine.refresh_ecosystems(send_info=False)
         assert test_data.ecosystem_uid not in engine.ecosystems
 
+        # Once its config changed, it should be given a new chance
+        ecosystem_config.name = "Fixed ecosystem"
+        await engine.refresh_ecosystems(send_info=False)
+        assert test_data.ecosystem_uid not in engine._failing_ecosystems
+        assert test_data.ecosystem_uid in engine.ecosystems_started
+
+        await engine.stop_ecosystem(test_data.ecosystem_uid)
+
     async def test_stop_with_failing_ecosystem(
             self,
             engine: Engine,
