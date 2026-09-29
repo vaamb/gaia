@@ -1,4 +1,4 @@
-from asyncio import Condition, Event
+from asyncio import Event
 from copy import deepcopy
 import os
 import shutil
@@ -100,7 +100,7 @@ async def engine_config(
             engine_config_master.watchdog.stop()
         # Asyncio primitives bind to the first event loop that awaits them;
         # renew them so they can be awaited in the next test's event loop
-        engine_config_master.watchdog.new_config = Condition()
+        engine_config_master.watchdog.new_config = Event()
         engine_config_master.watchdog._stop_event = Event()
         if engine_config_master.cache_dir.iterdir():
             shutil.rmtree(engine_config_master.cache_dir)

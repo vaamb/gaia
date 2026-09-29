@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import Condition, Event, Lock, Task
+from asyncio import Event, Lock, Task
 from contextlib import suppress
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
@@ -346,7 +346,9 @@ class ConfigWatchdog:
         self.logger.debug("Initializing ConfigWatchdog")
         self._stop_event = Event()
         self._task: Task | None = None
-        self.new_config = Condition()
+        # An Event rather than a Condition so that changes detected while the
+        #  engine is refreshing the ecosystems are not lost
+        self.new_config = Event()
 
     @property
     def started(self) -> bool:
@@ -366,11 +368,10 @@ class ConfigWatchdog:
                 self.logger.info(
                     "Change in ecosystems configuration file detected. Updating it.")
                 await self._engine_config.load(ConfigType.ecosystems)
-            async with self.new_config:
-                self.new_config.notify_all()
-                # This unblocks the engine loop. It will then refresh
-                #  ecosystems, update sun times, ecosystem lighting hours
-                #  and send the data if it is connected.
+            # This unblocks the engine loop. It will then refresh ecosystems,
+            #  update sun times, ecosystem lighting hours and send the data if
+            #  it is connected.
+            self.new_config.set()
 
     async def _loop(self) -> None:
         sleep_period = self._engine_config.app_config.CONFIG_WATCHER_PERIOD / 1000
@@ -451,7 +452,7 @@ class EngineConfig(metaclass=SingletonMeta):
         return self.watchdog.started
 
     @property
-    def new_config(self) -> Condition:
+    def new_config(self) -> Event:
         return self.watchdog.new_config
 
     @property

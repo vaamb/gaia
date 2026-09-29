@@ -410,8 +410,10 @@ class Engine(metaclass=SingletonMeta):
 
     async def _loop(self) -> None:
         while True:
-            async with self.config.new_config:
-                await self.config.new_config.wait()
+            await self.config.new_config.wait()
+            # Clear before refreshing so that changes made during the refresh
+            #  trigger a new one
+            self.config.new_config.clear()
             if self.running:
                 try:
                     await self.refresh_ecosystems(send_info=True)
@@ -428,8 +430,7 @@ class Engine(metaclass=SingletonMeta):
                 break
 
     async def _notify_loop(self) -> None:
-        async with self.config.new_config:
-            self.config.new_config.notify_all()
+        self.config.new_config.set()
         [await sleep(0) for _ in range(42)]
 
     """
