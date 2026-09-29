@@ -643,11 +643,6 @@ class Engine(metaclass=SingletonMeta):
             ],
         )
 
-    async def initialize_ecosystems(self) -> None:
-        to_initialize = self.get_ecosystems_needed() - set(self.ecosystems.keys())
-        for ecosystem_uid in to_initialize:
-            await self._add_ecosystem_no_raise(ecosystem_uid)
-
     async def refresh_ecosystems(self, send_info: bool = True):
         """Starts and stops the Ecosystem based on the 'ecosystem.cfg' file.
 
@@ -673,7 +668,9 @@ class Engine(metaclass=SingletonMeta):
         # Initialize the ecosystems found in the config file but not yet initialized
         self.logger.debug(
             "Looking for ecosystems present in the config file but not yet initialized.")
-        await self.initialize_ecosystems()
+        to_initialize = self.get_ecosystems_needed() - set(self.ecosystems.keys())
+        for ecosystem_uid in to_initialize:
+            await self._add_ecosystem_no_raise(ecosystem_uid)
 
         # Start the ecosystems which are expected to run and are not running
         self.logger.debug(
@@ -682,10 +679,7 @@ class Engine(metaclass=SingletonMeta):
         # Ecosystems that failed to initialize are not mounted, skip them
         to_start = (expected_to_run & self.ecosystems.keys()) - already_started
         for ecosystem_uid in to_start:
-            try:
-                await self.start_ecosystem(ecosystem_uid)
-            except Exception as e:
-                self._log_ecosystem_error("starting", ecosystem_uid, e)
+            await self._start_ecosystem_no_raise(ecosystem_uid)
 
         # Refresh the ecosystems that were already running and did not stop
         self.logger.debug(
@@ -763,7 +757,9 @@ class Engine(metaclass=SingletonMeta):
         if self.plugins_needed:
             await self.start_plugins()
         # Initialize the ecosystems
-        await self.initialize_ecosystems()
+        to_initialize = self.get_ecosystems_needed() - set(self.ecosystems.keys())
+        for ecosystem_uid in to_initialize:
+            await self._add_ecosystem_no_raise(ecosystem_uid)
         # Start the engine thread
         self.task = asyncio.create_task(self._loop(), name="engine-loop")
         await sleep(0)  # Allow _loop() to start
