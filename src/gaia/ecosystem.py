@@ -452,7 +452,9 @@ class Ecosystem:
         :return: The initialized Hardware instance.
         :raises ValueError: If the hardware is already mounted.
         """
-        if hardware_uid in self.hardware:
+        # Use `self._hardware` not to have spurious warnings from
+        #  `self._check_hardware_is_up_to_date()`
+        if hardware_uid in self._hardware:
             error_msg = f"Hardware {hardware_uid} is already mounted."
             self.logger.error(error_msg)
             raise ValueError(error_msg)
@@ -467,7 +469,7 @@ class Ecosystem:
         try:
             hardware: Hardware = await Hardware.initialize(hardware_config, self.uid)
             self.logger.debug(f"Hardware {hardware.name} has been set up.")
-            self.hardware[hardware.uid] = hardware
+            self._hardware[hardware.uid] = hardware
             return hardware
         except Exception as e:
             uid = hardware_config.uid
@@ -497,19 +499,21 @@ class Ecosystem:
         :param hardware_uid: The UID of the hardware to dismount.
         :raises HardwareNotFound: If the hardware is not currently mounted.
         """
-        if not self.hardware.get(hardware_uid):
+        # Use `self._hardware` not to have spurious warnings from
+        #  `self._check_hardware_is_up_to_date()`
+        if hardware_uid not in self._hardware:
             error_msg = f"Hardware '{hardware_uid}' not found."
             self.logger.error(error_msg)
             raise HardwareNotFound(error_msg)
 
-        hardware = self.hardware[hardware_uid]
+        hardware = self._hardware[hardware_uid]
         await hardware.terminate()
         # If the hardware is an actuator, reset actuator handlers using it
         if isinstance(hardware, ActuatorMixin):
             for actuator_handler in self.actuator_hub.actuator_handlers.values():
                 if hardware in actuator_handler.get_linked_actuators():
                     actuator_handler.reset_cached_actuators()
-        del self.hardware[hardware_uid]
+        del self._hardware[hardware_uid]
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
     async def initialize_hardware(self) -> None:
@@ -548,7 +552,7 @@ class Ecosystem:
                 # Hardware was removed from config, go to next
                 continue
             # /!\ Do not hold a reference to hardware or its reference count will never reach 0
-            current = gv.to_anonymous(self.hardware[hardware_uid].dict_repr(), "uid")
+            current = gv.to_anonymous(self._hardware[hardware_uid].dict_repr(), "uid")
             # When virtualization is enabled, the mounted hardware's model gets
             # a "virtual" prefix (cf. `add_hardware`) that the config doesn't have
             if (
@@ -581,7 +585,7 @@ class Ecosystem:
 
         Called when the ecosystem stops to release hardware resources.
         """
-        # Use `self._hardware` not to have warnings from
+        # Use `self._hardware` not to have spurious warnings from
         #  `self._check_hardware_is_up_to_date()`
         for hardware_uid in [*self._hardware.keys()]:
             hardware = self._hardware[hardware_uid]
