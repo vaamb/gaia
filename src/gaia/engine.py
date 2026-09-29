@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Event, sleep, Task
+from copy import deepcopy
 from enum import Enum
 import logging
 import logging.config
@@ -15,7 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
 
-from gaia.config.from_files import CacheType, EngineConfig
+from gaia.config.from_files import CacheType, EcosystemConfigDict, EngineConfig
 from gaia.ecosystem import Ecosystem
 from gaia.hardware.abc import WebSocketAddressMixin
 from gaia.utils import humanize_list, SingletonMeta
@@ -57,7 +58,7 @@ class Engine(metaclass=SingletonMeta):
         self.logger: logging.Logger = logging.getLogger("gaia.engine")
         self.logger.info("Initializing Gaia.")
         self._ecosystems: dict[str, Ecosystem] = {}
-        self._failing_ecosystems: set[str] = set()
+        self._failing_ecosystems: dict[str, EcosystemConfigDict] = {}
         self._uid: str = self.config.app_config.ENGINE_UID
         self._virtual_world: VirtualWorld | None = None
         self._scheduler: AsyncIOScheduler = AsyncIOScheduler()
@@ -534,7 +535,7 @@ class Engine(metaclass=SingletonMeta):
             f"ERROR msg: `{error.__class__.__name__}: {error}`.",
             exc_info=error,
         )
-    
+
     def get_ecosystem(self, ecosystem_uid: str) -> Ecosystem:
         """Get the required Ecosystem
 
@@ -550,7 +551,7 @@ class Engine(metaclass=SingletonMeta):
             ecosystem_uid for ecosystem_uid in self.config.ecosystems_uid
             #if self.config.ecosystems_config_dict[ecosystem_uid]["status"]
         }
-        return ecosystem_needed - self._failing_ecosystems
+        return ecosystem_needed - self._failing_ecosystems.keys()
 
     async def add_ecosystem(self, ecosystem_uid: str) -> Ecosystem:
         """Create an Ecosystem and link it to the Engine.
@@ -573,7 +574,8 @@ class Engine(metaclass=SingletonMeta):
             await self.add_ecosystem(ecosystem_uid)
         except Exception as e:
             self._log_ecosystem_error("setting up", ecosystem_uid, e)
-            self._failing_ecosystems.add(ecosystem_uid)
+            self._failing_ecosystems[ecosystem_uid] = \
+                deepcopy(self.config.ecosystems_config_dict[ecosystem_uid])
 
     async def start_ecosystem(self, ecosystem_uid: str) -> None:
         """Start an Ecosystem.
@@ -595,7 +597,8 @@ class Engine(metaclass=SingletonMeta):
             await self.start_ecosystem(ecosystem_uid)
         except Exception as e:
             self._log_ecosystem_error("starting", ecosystem_uid, e)
-            self._failing_ecosystems.add(ecosystem_uid)
+            self._failing_ecosystems[ecosystem_uid] = \
+                deepcopy(self.config.ecosystems_config_dict[ecosystem_uid])
 
     async def stop_ecosystem(self, ecosystem_uid: str) -> None:
         """Stop an Ecosystem.
@@ -614,7 +617,8 @@ class Engine(metaclass=SingletonMeta):
             await self.stop_ecosystem(ecosystem_uid)
         except Exception as e:
             self._log_ecosystem_error("stopping", ecosystem_uid, e)
-            self._failing_ecosystems.add(ecosystem_uid)
+            self._failing_ecosystems[ecosystem_uid] = \
+                deepcopy(self.config.ecosystems_config_dict[ecosystem_uid])
 
     async def remove_ecosystem(self, ecosystem_uid: str) -> None:
         """Terminate an Ecosystem and remove it from Engine's memory.
@@ -650,6 +654,11 @@ class Engine(metaclass=SingletonMeta):
                           Ouranos if possible.
         """
         self.logger.info("Refreshing the ecosystems ...")
+        # Give failing ecosystems a new chance if their config changed and
+        #  forget those that have been removed from the config
+        for ecosystem_uid, failed_config in [*self._failing_ecosystems.items()]:
+            if self.config.ecosystems_config_dict.get(ecosystem_uid) != failed_config:
+                del self._failing_ecosystems[ecosystem_uid]
         expected_to_run = set(self.config.get_ecosystems_expected_to_run())
 
         # First stop the ecosystems not expected to run
