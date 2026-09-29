@@ -239,6 +239,28 @@ class TestEngine:
         await engine.stop()
         await engine.terminate()
 
+    @pytest.mark.timeout(10)
+    async def test_loop_catches_config_change_during_refresh(self, engine: Engine):
+        await engine.start()
+
+        calls = 0
+
+        async def refresh_ecosystems(*args, **kwargs) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                # Simulate the watchdog detecting a change during the refresh
+                engine.config.new_config.set()
+            await yield_control()
+
+        with patch.object(engine, "refresh_ecosystems", side_effect=refresh_ecosystems):
+            await engine._notify_loop()
+            await yield_control()
+        assert calls == 2
+
+        await engine.stop()
+        await engine.terminate()
+
     async def test_ecosystem_managements(
             self,
             engine: Engine,

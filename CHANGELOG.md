@@ -31,6 +31,8 @@
   if an ecosystem fails to stop. Ecosystems that failed to initialize are logged as errors
   and, as failing hardware already was, given a new chance once their config changes rather
   than being ignored until restart (#495)
+- Config file changes detected while the engine was refreshing the ecosystems were ignored
+  until the next change (#497)
 - The `Pictures` subroutine now checks its camera dependencies when computing whether it
   is manageable, as `Health` already did, so a missing `camera` extra disables it with a
   clear warning instead of failing later in the picture loop (#478)
