@@ -501,7 +501,7 @@ class Ecosystem:
         """
         # Use `self._hardware` not to have spurious warnings from
         #  `self._check_hardware_is_up_to_date()`
-        if not hardware_uid in self._hardware:
+        if hardware_uid not in self._hardware:
             error_msg = f"Hardware '{hardware_uid}' not found."
             self.logger.error(error_msg)
             raise HardwareNotFound(error_msg)
