@@ -274,6 +274,62 @@ class TestEngine:
         with pytest.raises(ValueError, match=r"Ecosystem .* is not linked to this engine"):
             await engine.start_ecosystem(test_data.ecosystem_uid)
 
+    async def test_failing_ecosystems(
+            self,
+            engine: Engine,
+            ecosystem_config: EcosystemConfig,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        # /!\ Ecosystem need a runnable subroutine in order to start
+        ecosystem_config.set_management("light", True)
+        ecosystem_config.status = True
+
+        # An ecosystem failing to initialize should not make the refresh fail,
+        #  even if it is expected to run
+        with patch("gaia.engine.Ecosystem.initialize", side_effect=RuntimeError("Oops")):
+            await engine.refresh_ecosystems(send_info=False)
+        assert "Encountered an error while setting up ecosystem" in caplog.text
+        assert test_data.ecosystem_uid in engine._failing_ecosystems
+        assert test_data.ecosystem_uid not in engine.ecosystems
+
+        # It should not be retried as long as its config is unchanged
+        await engine.refresh_ecosystems(send_info=False)
+        assert test_data.ecosystem_uid not in engine.ecosystems
+
+        # Once its config changed, it should be given a new chance
+        ecosystem_config.name = "Fixed ecosystem"
+        await engine.refresh_ecosystems(send_info=False)
+        assert test_data.ecosystem_uid not in engine._failing_ecosystems
+        assert test_data.ecosystem_uid in engine.ecosystems_started
+
+        await engine.stop_ecosystem(test_data.ecosystem_uid)
+
+    async def test_stop_with_failing_ecosystem(
+            self,
+            engine: Engine,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        await engine.start()
+        # `start()` reloads the configs, modify them afterward
+        ecosystem_config = engine.config.get_ecosystem_config(test_data.ecosystem_uid)
+        # /!\ Ecosystem need a runnable subroutine in order to start
+        ecosystem_config.set_management("light", True)
+        ecosystem_config.status = True
+
+        await engine.refresh_ecosystems(send_info=False)
+        assert test_data.ecosystem_uid in engine.ecosystems_started
+
+        # The engine should still stop, even if an ecosystem fails to
+        with patch("gaia.engine.Ecosystem.stop", side_effect=RuntimeError("Oops")):
+            await engine.stop()
+        assert "Encountered an error while stopping ecosystem" in caplog.text
+        assert engine.stopped
+        # Stopping twice should raise a RuntimeError
+        with pytest.raises(RuntimeError, match="Cannot stop a non-started engine"):
+            await engine.stop()
+
+        await engine.stop_ecosystem(test_data.ecosystem_uid)
+
     async def test_refresh_ecosystems_lighting_hours(
             self,
             engine: Engine,

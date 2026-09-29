@@ -25,6 +25,12 @@
   `~/.profile` and systemd untouched (#476)
 
 ### Fixed
+- An ecosystem failing to set up, start, stop or refresh no longer aborts the engine's
+  management of the other ecosystems: the failure is logged and the engine moves on to the
+  next one. `Engine.stop()` now completes (stopping the watchdog and saving the configs) even
+  if an ecosystem fails to stop. Ecosystems that failed to initialize are logged as errors
+  and, as failing hardware already was, given a new chance once their config changes rather
+  than being ignored until restart (#495)
 - The `Pictures` subroutine now checks its camera dependencies when computing whether it
   is manageable, as `Health` already did, so a missing `camera` extra disables it with a
   clear warning instead of failing later in the picture loop (#478)

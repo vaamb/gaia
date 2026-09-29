@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Event, sleep, Task
+from copy import deepcopy
 from enum import Enum
 import logging
 import logging.config
@@ -15,7 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
 
-from gaia.config.from_files import CacheType, EngineConfig
+from gaia.config.from_files import CacheType, EcosystemConfigDict, EngineConfig
 from gaia.ecosystem import Ecosystem
 from gaia.hardware.abc import WebSocketAddressMixin
 from gaia.utils import humanize_list, SingletonMeta
@@ -57,7 +58,7 @@ class Engine(metaclass=SingletonMeta):
         self.logger: logging.Logger = logging.getLogger("gaia.engine")
         self.logger.info("Initializing Gaia.")
         self._ecosystems: dict[str, Ecosystem] = {}
-        self._failing_ecosystems: set[str] = set()
+        self._failing_ecosystems: dict[str, EcosystemConfigDict] = {}
         self._uid: str = self.config.app_config.ENGINE_UID
         self._virtual_world: VirtualWorld | None = None
         self._scheduler: AsyncIOScheduler = AsyncIOScheduler()
@@ -522,6 +523,19 @@ class Engine(metaclass=SingletonMeta):
     # ---------------------------------------------------------------------------
     #   Ecosystem managements
     # ---------------------------------------------------------------------------
+    def _log_ecosystem_error(
+            self,
+            action: str,
+            ecosystem_uid: str,
+            error: Exception,
+    ) -> None:
+        self.logger.error(
+            f"Encountered an error while {action} ecosystem "
+            f"'{self.config.get_ecosystem_name(ecosystem_uid)}'. "
+            f"ERROR msg: `{error.__class__.__name__}: {error}`.",
+            exc_info=error,
+        )
+
     def get_ecosystem(self, ecosystem_uid: str) -> Ecosystem:
         """Get the required Ecosystem
 
@@ -537,7 +551,7 @@ class Engine(metaclass=SingletonMeta):
             ecosystem_uid for ecosystem_uid in self.config.ecosystems_uid
             #if self.config.ecosystems_config_dict[ecosystem_uid]["status"]
         }
-        return ecosystem_needed - self._failing_ecosystems
+        return ecosystem_needed - self._failing_ecosystems.keys()
 
     async def add_ecosystem(self, ecosystem_uid: str) -> Ecosystem:
         """Create an Ecosystem and link it to the Engine.
@@ -559,11 +573,9 @@ class Engine(metaclass=SingletonMeta):
         try:
             await self.add_ecosystem(ecosystem_uid)
         except Exception as e:
-            self.logger.debug(
-                f"Couldn't add ecosystem '{ecosystem_uid}' to engine.",
-                exc_info=e,
-            )
-            self._failing_ecosystems.add(ecosystem_uid)
+            self._log_ecosystem_error("setting up", ecosystem_uid, e)
+            self._failing_ecosystems[ecosystem_uid] = \
+                deepcopy(self.config.ecosystems_config_dict[ecosystem_uid])
 
     async def start_ecosystem(self, ecosystem_uid: str) -> None:
         """Start an Ecosystem.
@@ -577,6 +589,17 @@ class Engine(metaclass=SingletonMeta):
         self.logger.debug(f"Starting ecosystem {ecosystem_uid}.")
         await ecosystem.start()
 
+    async def _start_ecosystem_no_raise(
+            self,
+            ecosystem_uid: str,
+    ) -> None:
+        try:
+            await self.start_ecosystem(ecosystem_uid)
+        except Exception as e:
+            self._log_ecosystem_error("starting", ecosystem_uid, e)
+            self._failing_ecosystems[ecosystem_uid] = \
+                deepcopy(self.config.ecosystems_config_dict[ecosystem_uid])
+
     async def stop_ecosystem(self, ecosystem_uid: str) -> None:
         """Stop an Ecosystem.
 
@@ -588,6 +611,14 @@ class Engine(metaclass=SingletonMeta):
 
         await ecosystem.stop()
         self.logger.info(f"Ecosystem {ecosystem_uid} has been stopped")
+
+    async def _stop_ecosystem_no_raise(self, ecosystem_uid: str) -> None:
+        try:
+            await self.stop_ecosystem(ecosystem_uid)
+        except Exception as e:
+            self._log_ecosystem_error("stopping", ecosystem_uid, e)
+            self._failing_ecosystems[ecosystem_uid] = \
+                deepcopy(self.config.ecosystems_config_dict[ecosystem_uid])
 
     async def remove_ecosystem(self, ecosystem_uid: str) -> None:
         """Terminate an Ecosystem and remove it from Engine's memory.
@@ -601,6 +632,12 @@ class Engine(metaclass=SingletonMeta):
         await ecosystem.terminate()
         del self.ecosystems[ecosystem.uid], ecosystem
         self.logger.info(f"Ecosystem {ecosystem_uid} has been dismounted")
+
+    async def _remove_ecosystem_no_raise(self, ecosystem_uid: str) -> None:
+        try:
+            await self.remove_ecosystem(ecosystem_uid)
+        except Exception as e:
+            self._log_ecosystem_error("removing", ecosystem_uid, e)
 
     def _humanize_eco_set(self, ecosystem_uid_set: set[str]) -> str:
         return humanize_list(
@@ -622,41 +659,53 @@ class Engine(metaclass=SingletonMeta):
                           Ouranos if possible.
         """
         self.logger.info("Refreshing the ecosystems ...")
+        # Give failing ecosystems a new chance if their config changed and
+        #  forget those that have been removed from the config
+        for ecosystem_uid, failed_config in [*self._failing_ecosystems.items()]:
+            if self.config.ecosystems_config_dict.get(ecosystem_uid) != failed_config:
+                del self._failing_ecosystems[ecosystem_uid]
         expected_to_run = set(self.config.get_ecosystems_expected_to_run())
 
         # First stop the ecosystems not expected to run
         self.logger.debug("Looking for ecosystems not expected to be running.")
         to_stop = self.ecosystems_started - expected_to_run
         for ecosystem_uid in to_stop:
-            await self.stop_ecosystem(ecosystem_uid)
+            await self._stop_ecosystem_no_raise(ecosystem_uid)
 
         # Then, delete the ecosystems which are no longer in the config file
         self.logger.debug(
             "Looking for ecosystems that are no longer in the config file.")
         to_delete = set(self.ecosystems.keys()) - set(self.config.ecosystems_uid)
         for ecosystem_uid in to_delete:
-            await self.remove_ecosystem(ecosystem_uid)
+            await self._remove_ecosystem_no_raise(ecosystem_uid)
 
         # Initialize the ecosystems found in the config file but not yet initialized
         self.logger.debug(
             "Looking for ecosystems present in the config file but not yet initialized.")
-        await self.initialize_ecosystems()
+        to_initialize = self.get_ecosystems_needed() - set(self.ecosystems.keys())
+        for ecosystem_uid in to_initialize:
+            await self._add_ecosystem_no_raise(ecosystem_uid)
 
         # Start the ecosystems which are expected to run and are not running
         self.logger.debug(
             "Looking for ecosystems expected to be running but not yet started.")
         already_started = self.ecosystems_started
-        to_start = expected_to_run - self.ecosystems_started
+        # Ecosystems that failed to initialize are not mounted, skip them
+        to_start = (expected_to_run & self.ecosystems.keys()) - already_started
         for ecosystem_uid in to_start:
-            await self.start_ecosystem(ecosystem_uid)
+            await self._start_ecosystem_no_raise(ecosystem_uid)
 
         # Refresh the ecosystems that were already running and did not stop
         self.logger.debug(
             "Looking for already running ecosystems that need to continue to run.")
         for ecosystem_uid in already_started:
-            await self.ecosystems[ecosystem_uid].refresh_hardware()
-            await self.ecosystems[ecosystem_uid].refresh_subroutines()
-            await self.ecosystems[ecosystem_uid].refresh_lighting_hours(send_info=False)
+            ecosystem = self.ecosystems[ecosystem_uid]
+            try:
+                await ecosystem.refresh_hardware()
+                await ecosystem.refresh_subroutines()
+                await ecosystem.refresh_lighting_hours(send_info=False)
+            except Exception as e:
+                self._log_ecosystem_error("refreshing", ecosystem_uid, e)
         # self.refresh_ecosystems_lighting_hours()  # done by Ecosystem during their startup
 
         if send_info:
@@ -664,7 +713,9 @@ class Engine(metaclass=SingletonMeta):
 
     async def terminate_ecosystems(self) -> None:
         for ecosystem_uid in [*self.ecosystems.keys()]:
-            await self.remove_ecosystem(ecosystem_uid)
+            await self._remove_ecosystem_no_raise(ecosystem_uid)
+        # Give failing ecosystems a chance to start on the next start
+        self._failing_ecosystems.clear()
 
     async def refresh_ecosystems_lighting_hours(self, send_info: bool = True) -> None:
         """Refresh all the Ecosystems lighting hours
@@ -773,15 +824,16 @@ class Engine(metaclass=SingletonMeta):
         self._stop_event.set()
         # Send a config signal so the loop unlocks and stops
         await self._notify_loop()
-        self.task.cancel()
-        try:
-            await self.task
-        except asyncio.CancelledError:
-            pass
-        self.task = None
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self.task = None
         # Stop ecosystems
         for ecosystem_uid in [*self.ecosystems_started]:
-            await self.stop_ecosystem(ecosystem_uid)
+            await self._stop_ecosystem_no_raise(ecosystem_uid)
         # Stop watchdog (EngineConfig.started checks if watchdog task exists)
         if self.config.started:
             self.config.stop_watchdog()
