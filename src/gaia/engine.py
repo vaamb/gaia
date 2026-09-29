@@ -821,12 +821,13 @@ class Engine(metaclass=SingletonMeta):
         self._stop_event.set()
         # Send a config signal so the loop unlocks and stops
         await self._notify_loop()
-        self.task.cancel()
-        try:
-            await self.task
-        except asyncio.CancelledError:
-            pass
-        self.task = None
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self.task = None
         # Stop ecosystems
         for ecosystem_uid in [*self.ecosystems_started]:
             await self._stop_ecosystem_no_raise(ecosystem_uid)
