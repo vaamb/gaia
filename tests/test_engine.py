@@ -216,6 +216,17 @@ class TestEngine:
 
         await wait_for(task, 1.0)  # Allow to shut down
 
+    async def test_terminate_after_failed_start(self, engine: Engine):
+        with patch.object(
+                engine, "initialize_ecosystems", side_effect=RuntimeError("Oops")):
+            with pytest.raises(RuntimeError, match="Oops"):
+                await engine.start()
+        assert not engine.started
+        assert engine.config.started
+
+        await engine.terminate()
+        assert not engine.config.started
+
     @pytest.mark.timeout(10)
     async def test_loop_survives_refresh_error(
             self,
