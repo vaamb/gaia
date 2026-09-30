@@ -348,12 +348,9 @@ class Engine(metaclass=SingletonMeta):
             )
         self.logger.info("Initialising the plugins.")
         # Database
-        if self.config.app_config.USE_DATABASE:
+        if self.use_db:
             await self.init_database()
-        if (
-            self.config.app_config.COMMUNICATE_WITH_OURANOS
-            and self.config.app_config.AGGREGATOR_COMMUNICATION_URL
-        ):
+        if self.use_message_broker:
             await self.init_message_broker()
         self.plugins_initialized = True
 
