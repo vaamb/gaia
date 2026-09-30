@@ -117,6 +117,9 @@ class Engine(metaclass=SingletonMeta):
         # Stop background tasks (scheduler.running is an APScheduler property)
         if self.scheduler.running:
             self.stop_background_tasks()
+        # Stop the watchdog, left running if `start()` failed after starting it
+        if self.config.started:
+            self.config.stop_watchdog()
         # Reset references
         WebSocketAddressMixin._websocket_manager = None
         self._db = None

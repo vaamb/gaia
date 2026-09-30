@@ -33,6 +33,8 @@
   than being ignored until restart (#495)
 - Config file changes detected while the engine was refreshing the ecosystems were ignored
   until the next change (#497)
+- `Engine.terminate()` now stops the config files watchdog, which kept running when
+  `Engine.start()` failed after starting it (#499)
 - The `Pictures` subroutine now checks its camera dependencies when computing whether it
   is manageable, as `Health` already did, so a missing `camera` extra disables it with a
   clear warning instead of failing later in the picture loop (#478)
