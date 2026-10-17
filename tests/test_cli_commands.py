@@ -1,9 +1,12 @@
+from pathlib import Path
 from unittest.mock import patch
 
 from click.testing import CliRunner
 
 from gaia.config.from_files import EngineConfig
-from gaia.helpers import validate_configs
+from gaia.hardware import get_hardware_specs
+from gaia.cli.commands import dump_hardware_specs, validate_configs
+from gaia.utils import json
 
 
 def test_validate_configs_checks_requirements_by_default(engine_config: EngineConfig):
@@ -33,3 +36,12 @@ def test_validate_configs_skips_requirements_when_flag_set(engine_config: Engine
     assert result.exit_code == 0
     mock_load.assert_awaited()
     mock_check.assert_not_awaited()
+
+
+def test_dump_hardware_specs(tmp_path: Path):
+    file_path = tmp_path / "hardware_specs.json"
+    result = CliRunner().invoke(
+        dump_hardware_specs, [str(file_path)], catch_exceptions=False)
+
+    assert result.exit_code == 0
+    assert json.loads(file_path.read_text()) == get_hardware_specs()

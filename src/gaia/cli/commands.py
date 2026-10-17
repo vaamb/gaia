@@ -5,6 +5,8 @@ import click
 
 from gaia.config._utils import handlers, logging_config
 from gaia.config.from_files import ConfigType, EngineConfig
+from gaia.hardware import get_hardware_specs
+from gaia.utils import json
 
 
 def _patch_logging(verbose: bool = False):
@@ -135,3 +137,13 @@ async def _generate_default_configs(ecosystem: bool = True, private: bool = True
 def generate_default_configs(ecosystem: bool = True, private: bool = True) -> None:
     """Create default configuration files."""
     asyncio.run(_generate_default_configs(ecosystem, private))
+
+
+@click.command()
+@click.argument(
+    "file_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+)
+def dump_hardware_specs(file_path: Path) -> None:
+    with open(file_path, "w") as file:
+        file.write(json.dumps(get_hardware_specs()))

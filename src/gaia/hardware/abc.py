@@ -700,9 +700,13 @@ class HardwareTypeHint(ABC):
 class HardwareAddressMixin(HardwareTypeHint):
     """Marker base for hardware address-protocol mixins."""
 
+    interface: ClassVar[str]
+
 
 class gpioAddressMixin(HardwareAddressMixin):
     """Protocol mixin for GPIO-addressed hardware. Expects `self.address: GPIOAddress`."""
+
+    interface = "GPIO"
 
     IN = 0
     OUT = 1
@@ -766,6 +770,8 @@ class gpioAddressMixin(HardwareAddressMixin):
 class i2cAddressMixin(HardwareAddressMixin):
     """Protocol mixin for I2C-addressed hardware. Expects `self.address: I2CAddress`."""
 
+    interface = "I2C"
+
     default_address: ClassVar[int | None] = None
 
     if t.TYPE_CHECKING:
@@ -800,6 +806,8 @@ class i2cAddressMixin(HardwareAddressMixin):
 
 class OneWireAddressMixin(HardwareAddressMixin):
     """Protocol mixin for 1-Wire-addressed hardware. Expects `self.address: OneWireAddress`."""
+
+    interface = "OneWire"
 
     if t.TYPE_CHECKING:
         address: OneWireAddress
@@ -840,6 +848,8 @@ class OneWireAddressMixin(HardwareAddressMixin):
 class PiCameraAddressMixin(HardwareAddressMixin):
     """Protocol mixin for PiCamera hardware."""
 
+    interface = "PiCamera"
+
     if t.TYPE_CHECKING:
         address: PiCameraAddress
 
@@ -853,6 +863,9 @@ class PiCameraAddressMixin(HardwareAddressMixin):
 
 class WebSocketAddressMixin(HardwareAddressMixin):
     """Protocol mixin for WebSocket-addressed hardware. Expects Hardware attributes."""
+
+    interface = "WebSocket"
+    
     _websocket_manager: WebSocketHardwareManager | None = None
 
     if t.TYPE_CHECKING:
@@ -1033,9 +1046,14 @@ class WebSocketAddressMixin(HardwareAddressMixin):
 class HardwareTypeMixin(HardwareTypeHint):
     """Marker base for hardware type mixins (Actuator, Sensor, Camera)."""
 
+    capability: ClassVar[str]
+
 
 class ActuatorMixin(HardwareTypeMixin):
     """Base mixin for actuator-type hardware."""
+
+    capability = "actuator"
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if self.type not in gv.HardwareType.actuator:
@@ -1044,6 +1062,9 @@ class ActuatorMixin(HardwareTypeMixin):
 
 class SwitchMixin(ActuatorMixin):
     """Mixin for switch actuators."""
+
+    capability = "switch"
+
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.turn_off()
@@ -1068,6 +1089,9 @@ class SwitchMixin(ActuatorMixin):
 
 class DimmerMixin(ActuatorMixin):
     """Mixin for dimmer actuators."""
+
+    capability = "dimmer"
+
     async def _on_initialize(self) -> None:
         await super()._on_initialize()
         success = await self.set_pwm_level(0)
@@ -1093,6 +1117,8 @@ class DimmableSwitchMixin(DimmerMixin, SwitchMixin):
 
 class SensorMixin(HardwareTypeMixin):
     """Mixin for sensor-type hardware."""
+
+    capability = "sensor"
 
     measures_available: ClassVar[dict[Measure, Unit | None] | EllipsisType | None] = None
 
@@ -1169,6 +1195,9 @@ class LightSensorMixin(SensorMixin):
 
 class CameraMixin(HardwareTypeMixin):
     """Mixin for camera-type hardware."""
+
+    capability = "camera"
+
     def __init__(self, *args, **kwargs) -> None:
         check_dependencies("camera")
         super().__init__(*args, **kwargs)

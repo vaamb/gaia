@@ -11,7 +11,7 @@ import gaia_validators as gv
 
 from gaia import Engine
 from gaia.exceptions import HardwareNotFound
-from gaia.hardware import hardware_models
+from gaia.hardware import get_hardware_specs, hardware_models
 from gaia.hardware.multiplexers import Multiplexer, TCA9548A
 from gaia.hardware.abc import (
     _MetaHardware, Address, CameraMixin, DimmerMixin, gpioAddressMixin, GPIOAddress,
@@ -242,6 +242,20 @@ async def test_i2c_address_injection(virtual_ecosystem: VirtualEcosystem):
         hardware = await Hardware.initialize(hardware_cfg, ecosystem_uid)
         assert hardware.address.main not in ("default", "def", 0x0)
         assert hardware.address.multiplexer_address != 0x0
+
+
+def test_hardware_specs():
+    specs = {spec["name"]: spec for spec in get_hardware_specs()}
+
+    # Capabilities are gathered along the MRO, so composite mixins report all
+    #  of them, including the ones from intermediate mixins
+    assert specs["gpioDimmable"] == {
+        "name": "gpioDimmable",
+        "interface": "GPIO",
+        "capabilities": ["actuator", "dimmer", "switch"],
+    }
+    assert specs["DS18B20"]["interface"] == "OneWire"
+    assert specs["PiCamera"]["capabilities"] == ["camera"]
 
 
 class TestMultiplexer:
