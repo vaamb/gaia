@@ -77,6 +77,7 @@ class Unit(Enum):
     celsius_degree = "°C"
     lux = "lux"
     gram_per_cubic_m = "g.m-3"
+    ppb = "ppb"
     ppm = "ppm"
     rel_humidity = "% humidity"
     RWC = "RWC"
