@@ -329,18 +329,20 @@ class TestWebsocketHardware:
         await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
         return websocket
 
-    async def test_manager(self, caplog: pytest.LogCaptureFixture):
-        manager = WebSocketHardwareManager()
-
+    async def test_manager(
+            self,
+            websocket_manager: WebSocketHardwareManager,
+            caplog: pytest.LogCaptureFixture,
+    ):
         # Make sure the manager start and can handle connections
-        await manager.start()
+        await websocket_manager.start()
         websocket = await connect(WEBSOCKET_URL)
         await websocket.send("test")
         await yield_control()  # Allow for WebSocketHardwareManager background loop to spin
         assert "Device test is trying to connect" in caplog.text
 
         # Stop manager
-        await manager.stop()
+        await websocket_manager.stop()
         # Make sure the connection is closed ...
         with pytest.raises(ConnectionClosed):
             await websocket.send("test")
@@ -350,29 +352,28 @@ class TestWebsocketHardware:
             await connect(WEBSOCKET_URL)
 
         # Make sure the manager can handle new connections once restarted
-        await manager.start()
+        await websocket_manager.start()
         await connect(WEBSOCKET_URL)
 
         # And that it can be stopped again
-        await manager.stop()
+        await websocket_manager.stop()
 
-    async def test_manager_errors(self):
-        manager = WebSocketHardwareManager()
-
+    async def test_manager_errors(self, websocket_manager: WebSocketHardwareManager):
         # Stop before start
         with pytest.raises(RuntimeError, match="not currently running"):
-            await manager.stop()
+            await websocket_manager.stop()
 
         # Start twice
-        await manager.start()
+        await websocket_manager.start()
         with pytest.raises(RuntimeError, match="already running"):
-            await manager.start()
+            await websocket_manager.start()
 
-        await manager.stop()
-
-    async def test_unregistered_device_rejected(self, caplog: pytest.LogCaptureFixture):
-        manager = WebSocketHardwareManager()
-        await manager.start()
+    async def test_unregistered_device_rejected(
+            self,
+            websocket_manager: WebSocketHardwareManager,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        await websocket_manager.start()
 
         websocket = await connect(WEBSOCKET_URL)
         await websocket.send("unknown_uid")
@@ -383,13 +384,14 @@ class TestWebsocketHardware:
         with pytest.raises(ConnectionClosed):
             await websocket.recv()
 
-        await manager.stop()
-
-    async def test_wrong_ip_device_rejected(self, caplog: pytest.LogCaptureFixture):
+    async def test_wrong_ip_device_rejected(
+            self,
+            websocket_manager: WebSocketHardwareManager,
+            caplog: pytest.LogCaptureFixture,
+    ):
         fake_uid = "fake_uid_wrong_ip"
-        manager = WebSocketHardwareManager()
-        await manager.register_hardware(fake_uid, "192.168.1.1")
-        await manager.start()
+        await websocket_manager.register_hardware(fake_uid, "192.168.1.1")
+        await websocket_manager.start()
 
         websocket = await connect(WEBSOCKET_URL)
         await websocket.send(fake_uid)
@@ -400,7 +402,6 @@ class TestWebsocketHardware:
         with pytest.raises(ConnectionClosed):
             await websocket.recv()
 
-        await manager.stop()
 
     async def test_hardware(self, caplog: pytest.LogCaptureFixture):
         hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})

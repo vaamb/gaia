@@ -16,7 +16,7 @@ from gaia.config import BaseConfig, EcosystemConfig, EngineConfig, GaiaConfigHel
 from gaia.ecosystem import Ecosystem
 from gaia.engine import Engine
 from gaia.events import Events
-from gaia.hardware.abc import _MetaHardware
+from gaia.hardware.abc import _MetaHardware, WebSocketHardwareManager
 from gaia.utils import get_yaml, SingletonMeta
 from gaia.virtual import VirtualWorld, VirtualEcosystem
 
@@ -209,6 +209,18 @@ async def light_handler(ecosystem: Ecosystem) -> AsyncYieldFixture[ActuatorHandl
     light_handler.deactivate()
 
     del pid
+
+
+@pytest_asyncio.fixture(scope="function")
+async def websocket_manager() -> AsyncYieldFixture[WebSocketHardwareManager]:
+    manager = WebSocketHardwareManager()
+
+    try:
+        yield manager
+    finally:
+        # A manager left running keeps serving and hangs the test
+        if manager.is_running:
+            await manager.stop()
 
 
 @pytest.fixture(scope="module")
