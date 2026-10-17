@@ -74,5 +74,14 @@ version = {attr = "gaia.__version__"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+timeout = 30
+filterwarnings = [
+    "error::pytest.PytestWarning",
+    "error::RuntimeWarning",
+]
+
 [tool.ruff.lint]
 ignore = ["E402", "F401"]

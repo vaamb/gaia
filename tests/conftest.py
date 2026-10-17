@@ -1,5 +1,6 @@
 from asyncio import Event
 from copy import deepcopy
+import gc
 import os
 import shutil
 import tempfile
@@ -34,6 +35,7 @@ AsyncYieldFixture = AsyncGenerator[T, None]
 def temp_dir() -> YieldFixture[str]:
     yaml = get_yaml()
     temp_dir = tempfile.mkdtemp(prefix="gaia-")
+    os.mkdir(os.path.join(temp_dir, ".cache"))
     ecosystem_info = get_ecosystem_info()
     with open(os.path.join(temp_dir, "ecosystems.cfg"), "w") as file:
         yaml.dump(ecosystem_info, file)
@@ -103,9 +105,13 @@ async def engine_config(
         # renew them so they can be awaited in the next test's event loop
         engine_config_master.watchdog.new_config = Event()
         engine_config_master.watchdog._stop_event = Event()
-        if engine_config_master.cache_dir.iterdir():
-            shutil.rmtree(engine_config_master.cache_dir)
-            engine_config_master.app_config._paths.pop("CACHE_DIR")
+        # Empty the cache dir but keep it: removing it would make the next test
+        #  recreate it, with a warning
+        for path in engine_config_master.cache_dir.iterdir():
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -128,6 +134,10 @@ async def engine(
         # Since python 3.13, it sometimes takes more time to perform garbage
         # collection and reclaim the unreferenced hardware
         await yield_control()
+        if _MetaHardware.instances:
+            # Some hardware may only be held by a reference cycle, waiting for
+            #  the cyclic garbage collector
+            gc.collect()
         not_cleared = [_ for _ in _MetaHardware.instances]
         _MetaHardware.instances.clear()
         if not_cleared:

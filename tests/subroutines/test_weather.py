@@ -37,7 +37,7 @@ class TestWeatherSubroutine:
         await ecosystem.refresh_hardware()
         assert not weather_subroutine.manageable
 
-    def test_hardware_needed(self, weather_subroutine: Weather):
+    async def test_hardware_needed(self, weather_subroutine: Weather):
         uids = weather_subroutine.get_hardware_needed_uid()
         assert uids == {test_data.humidifier_uid}
 

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from math import isclose
 from time import monotonic
 from typing import cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import uuid
 
 from pydantic import ValidationError
@@ -535,6 +535,7 @@ class TestUpload:
             mock_session,
             events_handler: Events,
             ecosystem: Ecosystem,
+            caplog: pytest.LogCaptureFixture,
     ):
         # Setup test data
         test_token = "test_token_123"
@@ -543,7 +544,10 @@ class TestUpload:
         # Mock the response
         mock_response = AsyncMock()
         mock_response.json.return_value = {"status": "success"}
-        mock_session.return_value.__aenter__.return_value.post.return_value.__aenter__.return_value = mock_response
+        # `session.post()` is used as an async context manager, not awaited
+        session = mock_session.return_value.__aenter__.return_value
+        session.post = MagicMock()
+        session.post.return_value.__aenter__.return_value = mock_response
 
         # Enable camera and take a picture
         pictures_subroutine = ecosystem.get_subroutine("pictures")
@@ -557,3 +561,5 @@ class TestUpload:
 
         # Verify the request was made with the correct token
         assert mock_session.call_args[1]["headers"]["token"] == test_token
+        assert "Image sent" in caplog.text
+        assert "error while uploading image" not in caplog.text
