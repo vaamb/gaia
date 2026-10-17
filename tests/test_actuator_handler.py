@@ -29,7 +29,7 @@ class TestTimer:
             nonlocal x
             x = True
 
-        countdown = 0.25
+        countdown = 0.05
         timer = Timer(set_to_true, countdown)
         assert math.isclose(timer.time_left(), countdown, abs_tol=0.01)
 
@@ -95,33 +95,33 @@ class TestActuatorHandler:
         assert light_handler.countdown is None
 
         # Test setup countdown
-        timer = 1.0
+        timer = 0.40
         async with light_handler.update_status_transaction():
             await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=timer)
         assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
         # Test setup countdown
-        increase = 0.50
-        timer += increase  # remaining ~ 1.50 sec
+        increase = 0.20
+        timer += increase  # remaining ~ 0.60 sec
         async with light_handler.update_status_transaction():
             light_handler.increase_countdown(increase)
         assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
         # Test decrease countdown
-        decrease = 0.75
-        timer -= decrease  # remaining ~ 0.75 sec
+        decrease = 0.30
+        timer -= decrease  # remaining ~ 0.30 sec
         async with light_handler.update_status_transaction():
             light_handler.decrease_countdown(decrease)
         assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
         # Test sleep, remaining above 0
-        decrease = 0.15
-        timer -= decrease  # remaining ~ 0.60 sec
+        decrease = 0.05
+        timer -= decrease  # remaining ~ 0.25 sec
         await sleep(decrease)
         assert math.isclose(light_handler.countdown, timer, abs_tol=0.015)
 
         # Test sleep, remaining under 0
-        decrease = 0.65
+        decrease = 0.30
         timer -= decrease  # remaining ~ -0.05 sec
         assert timer < 0
         await sleep(decrease)

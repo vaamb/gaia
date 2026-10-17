@@ -375,7 +375,7 @@ class TestOnEvent:
         handler = ecosystem.actuator_hub.get_handler(actuator_name)
         mode = handler.mode
         current_state = handler.status
-        countdown = 0.5
+        countdown = 0.1
 
         payload_mode = gv.ActuatorModePayload.on
         turn_actuator_payload = gv.TurnActuatorPayloadDict(**{

@@ -101,7 +101,7 @@ class TestWeatherSubroutine:
         job = weather_subroutine._create_job_func(
             job_name="test_job",
             actuator_handler=actuator_handler,
-            duration=0.25,
+            duration=0.05,
             level=30.0
         )
         assert callable(job)
@@ -116,7 +116,7 @@ class TestWeatherSubroutine:
         assert actuator_handler.status is True
         assert actuator_handler.level == 30.0
 
-        await asyncio.sleep(0.30)
+        await asyncio.sleep(0.10)
 
         # The timer should be removed
         assert "test_job" not in weather_subroutine._timers
