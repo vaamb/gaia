@@ -1,5 +1,3 @@
-import typing as t
-
 from gaia.hardware.abc import (
     Actuator, ActuatorMixin, DimmerMixin, SwitchMixin)
 from gaia.hardware.actuators.GPIO import gpioDimmable, gpioDimmer, gpioSwitch

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing as t
 import warnings
 
 from gaia.hardware.abc import HardwareTypeHint

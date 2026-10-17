@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, TypedDict
 
 from gaia.hardware.abc import Hardware
 from gaia.hardware.actuators import actuator_models
@@ -22,3 +22,39 @@ hardware_models: dict[str, Type[Hardware]] = {
     **camera_models,
     **sensor_models,
 }
+
+
+class HardwareSpec(TypedDict):
+    name: str
+    interface: str
+    capabilities: list[str]
+
+
+def get_hardware_specs() -> list[HardwareSpec]:
+    def get_interface(hardware_cls: type[Hardware]) -> str:
+        interface = [
+            base.__dict__["interface"]
+            for base in hardware_cls.__mro__
+            if "interface" in base.__dict__
+        ]
+        assert len(interface) == 1, hardware_cls.__name__
+        return interface[0]
+
+    def get_capabilities(hardware_cls: type[Hardware]) -> list[str]:
+        capabilities = [
+            base.__dict__["capability"]
+            for base in hardware_cls.__mro__
+            if "capability" in base.__dict__
+        ]
+        assert len(capabilities) >= 1, hardware_cls.__name__
+        return sorted(capabilities)
+
+    return [
+        {
+            "name": name,
+            "interface": get_interface(hardware),
+            "capabilities": get_capabilities(hardware),
+        }
+        for name, hardware in hardware_models.items()
+        if not name.startswith("virtual")
+    ]
