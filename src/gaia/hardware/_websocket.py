@@ -19,6 +19,7 @@ class WebSocketHardwareManager:
         self._password: str = password
         self._registered_hardware: dict[str, str | None] = {}
         self.device_connections: dict[str, ServerConnection] = {}
+        self._new_connection_events: dict[str, Event] = {}
         self._running_task: Task | None = None
         self._started_event: Event = Event()
         self._stop_event: Event = Event()
@@ -45,11 +46,13 @@ class WebSocketHardwareManager:
 
     async def register_hardware(self, hardware_uid: str, remote_ip: str | None) -> None:
         self._registered_hardware[hardware_uid] = remote_ip
+        self._new_connection_events.setdefault(hardware_uid, Event())
 
     async def unregister_hardware(self, hardware_uid: str) -> None:
         if hardware_uid in self.device_connections:
             await self.device_connections[hardware_uid].close()
         self._registered_hardware.pop(hardware_uid, None)
+        self._new_connection_events.pop(hardware_uid, None)
 
     @property
     def registered_hardware(self) -> int:
@@ -116,7 +119,15 @@ class WebSocketHardwareManager:
             return
         # Store the connection for later retrieval
         self.logger.debug(f"Device {device_uid} connected")
+        previous_connection = self.device_connections.get(device_uid)
         self.device_connections[device_uid] = connection
+        self._new_connection_events[device_uid].set()
+        if previous_connection is not None:
+            # The device reconnected before its previous connection was detected
+            #  as closed (e.g. after a reboot): drop it so that the listening
+            #  loop switches to the new one
+            self.logger.debug(f"Closing the previous connection of device {device_uid}")
+            await previous_connection.close()
         # Keep the connection open and remove it from the dictionary when it is closed
         try:
             done, pending = await asyncio.wait(
@@ -132,7 +143,22 @@ class WebSocketHardwareManager:
             pass
         finally:
             self.logger.debug(f"Device {device_uid} disconnected")
-            self.device_connections.pop(device_uid, None)
+            # Only remove this connection, the device might already have reconnected
+            if self.device_connections.get(device_uid) is connection:
+                self.device_connections.pop(device_uid)
+
+    async def wait_for_connection(self, device_uid: str) -> ServerConnection:
+        """Wait for the device to (re)connect and return the new connection."""
+        if device_uid not in self._registered_hardware:
+            raise ConnectionError(f"Hardware {device_uid} was never registered")
+        new_connection = self._new_connection_events[device_uid]
+        while True:
+            await new_connection.wait()
+            new_connection.clear()
+            connection = self.device_connections.get(device_uid)
+            # The device might have disconnected before we could pick it up
+            if connection is not None:
+                return connection
 
     def get_connection(self, device_uid: str) -> ServerConnection | None:
         if device_uid not in self._registered_hardware:
