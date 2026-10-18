@@ -210,9 +210,9 @@ class TestEcosystem:
         await ecosystem.turn_actuator("light", gv.ActuatorModePayload.automatic)
         assert actuator_handler.mode is gv.ActuatorMode.automatic
 
-        await ecosystem.turn_actuator("light", gv.ActuatorModePayload.on, countdown=0.25)
+        await ecosystem.turn_actuator("light", gv.ActuatorModePayload.on, countdown=0.05)
         assert actuator_handler.mode is gv.ActuatorMode.automatic
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.1)
         assert actuator_handler.status
         assert actuator_handler.mode is gv.ActuatorMode.manual
 

@@ -427,7 +427,8 @@ class Events(AsyncEventHandler):
     async def send_initialization_data(self) -> None:
         await self.send_ecosystems_info()
         self.logger.info("Initial ecosystems info sent.")
-        await sleep(1.0)  # Allow Ouranos to handle all the initialization data
+        # Allow Ouranos to handle all the initialization data
+        await sleep(self.engine.config.app_config.INITIALIZATION_DATA_DELAY)
         await self.emit("initialization_data_sent")
 
     @validate_payload(RootModel[list | None])

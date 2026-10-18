@@ -53,6 +53,7 @@ def testing_cfg(temp_dir) -> None:
         ENGINE_UID = engine_uid
         AGGREGATOR_COMMUNICATION_URL = "memory:///"
         CONFIG_WATCHER_PERIOD = 100
+        INITIALIZATION_DATA_DELAY = 0.0
 
         @property
         def SQLALCHEMY_DATABASE_URI(self):

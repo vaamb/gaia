@@ -44,6 +44,7 @@ class BaseConfig:
 
     HEALTH_LOGGING_TIME = "00h00"
     CONFIG_WATCHER_PERIOD = 500  # in ms
+    INITIALIZATION_DATA_DELAY = 1.0  # in s, lets Ouranos handle the initialization data
     CLIMATE_LOOP_PERIOD = 10.0  # in s, rem: should be a multiple of SENSORS_LOOP_PERIOD
     LIGHT_LOOP_PERIOD = 0.5  # in s
     PICTURE_TAKING_PERIOD = 20.0  # in seconds
