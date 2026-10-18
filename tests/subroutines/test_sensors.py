@@ -9,6 +9,7 @@ from gaia.subroutines import Sensors
 from gaia.subroutines.sensors import ParameterLimits
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 sensors_dict = {test_data.sensor_uid: test_data.sensor_info}
@@ -27,7 +28,7 @@ def _make_cache(*records: tuple[str, float]) -> gv.SensorsDataDict:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": sensors_dict}], indirect=True)
+@with_hardware(sensors_dict)
 class TestSensorsSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, sensors_subroutine: Sensors):
         assert sensors_subroutine.manageable
@@ -113,7 +114,7 @@ class TestGetAlarm:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": sensors_dict}], indirect=True)
+@with_hardware(sensors_dict)
 class TestAddSensorWarnings:
     async def test_unmonitored_measure_are_ignored(self, sensors_subroutine: Sensors):
         sensors_subroutine.config.set_climate_parameter(

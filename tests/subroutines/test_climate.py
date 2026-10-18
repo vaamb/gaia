@@ -9,6 +9,7 @@ from gaia.subroutines.sensors import Sensors
 from gaia.subroutines.climate import Climate
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 climate_dict = {
@@ -20,7 +21,7 @@ climate_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": climate_dict}], indirect=True)
+@with_hardware(climate_dict)
 class TestClimateSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, climate_subroutine: Climate):
         # Save config

@@ -19,6 +19,7 @@ from gaia.database.models import ActuatorBuffer, SensorBuffer
 from gaia.events import Events, validate_payload
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 hardware_dict = {
@@ -205,7 +206,7 @@ class TestOnEvent:
 
         assert "Registration refused: contract mismatch." in caplog.text
 
-    @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+    @with_hardware(hardware_dict)
     async def test_on_registration_ack(
             self,
             engine_config: EngineConfig,
@@ -359,7 +360,7 @@ class TestOnEvent:
 
         assert "Non-received info: base_info" in caplog.text
 
-    @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+    @with_hardware(hardware_dict)
     async def test_on_turn_actuator(
             self,
             events_handler: Events,
@@ -495,7 +496,7 @@ class TestSendEvent:
             async for _ in remaining_actuators_data:
                 assert False
 
-    @pytest.mark.parametrize("ecosystem_config", [{"hardware": camera_dict}], indirect=True)
+    @with_hardware(camera_dict)
     async def test_send_picture_arrays(self, events_handler: Events, ecosystem: Ecosystem):
         pictures_subroutine = ecosystem.get_subroutine("pictures")
         pictures_subroutine.config.set_management("camera", True)
@@ -527,7 +528,7 @@ class TestUpload:
 
         assert "No camera token found, cannot send picture arrays" in caplog.text
 
-    @pytest.mark.parametrize("ecosystem_config", [{"hardware": camera_dict}], indirect=True)
+    @with_hardware(camera_dict)
     @patch("aiohttp.ClientSession")
     async def test_upload_picture_arrays(
             self,

@@ -12,6 +12,7 @@ from gaia.subroutines import subroutine_names
 from gaia.utils import get_yaml
 
 import tests.data as test_data
+from tests.utils import with_hardware
 
 
 hardware_dict = {
@@ -487,7 +488,7 @@ class TestEcosystemConfigWeather:
         assert weather_to_group.get((gv.WeatherParameter.rain, "decrease")) is None
 
 
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+@with_hardware(hardware_dict)
 class TestEcosystemConfigHardware:
     def test_create_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):

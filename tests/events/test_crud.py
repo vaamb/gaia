@@ -7,6 +7,7 @@ import gaia_validators as gv
 from gaia.events import Events
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 hardware_dict = {
@@ -677,7 +678,7 @@ class TestCRUDHardware:
         assert hardware.type == valid_hardware_info["type"]
         assert hardware.level == valid_hardware_info["level"]
 
-    @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+    @with_hardware(hardware_dict)
     async def test_update_failure(self, events_handler: Events):
         invalid_hardware_info = {
             "uid": "invalid_uid",
@@ -697,7 +698,7 @@ class TestCRUDHardware:
         assert result_msg["status"] == gv.Result.failure
         assert "No hardware with uid 'invalid_uid' found" in result_msg["message"]
 
-    @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+    @with_hardware(hardware_dict)
     async def test_update(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
         valid_hardware_info = {
             "uid": test_data.light_uid,
@@ -724,7 +725,7 @@ class TestCRUDHardware:
             assert hardware.address == valid_hardware_info["address"]
             assert hardware.model == valid_hardware_info["model"]
 
-    @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+    @with_hardware(hardware_dict)
     async def test_delete_failure(self, events_handler: Events):
         message = gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
@@ -739,7 +740,7 @@ class TestCRUDHardware:
         assert result_msg["status"] == gv.Result.failure
         assert "No hardware with uid 'invalid_uid' found" in result_msg["message"]
 
-    @pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+    @with_hardware(hardware_dict)
     async def test_delete(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
         message = gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
