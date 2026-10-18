@@ -155,8 +155,10 @@ Memory, not CPU, is the constraint on the Pi.
 - Assert on logs with `caplog.text`.
 - `"default"` in a test hardware address is a placeholder that will be switched 
   to a valid address at runtime, not an error.
-- Always `await manager.stop()` on a `WebSocketHardwareManager` in tests, or
-  the test hangs.
+- Use the `websocket_manager` fixture rather than instantiating
+  `WebSocketHardwareManager` in tests: a manager left running hangs the test.
+- Keep test runs warning-free: pytest and runtime warnings are errors
+  (`pyproject.toml`).
 
 ## Changelog & Versioning
 
