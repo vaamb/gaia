@@ -7,7 +7,7 @@ from math import floor
 from statistics import mean
 from time import monotonic
 import typing as t
-from typing import cast, Literal, Type
+from typing import cast, Literal, NamedTuple, Type
 
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -25,6 +25,12 @@ if t.TYPE_CHECKING:  # pragma: no cover
 
 class _SensorFuture(Task):
     hardware_uid: str
+
+
+class ParameterLimits(NamedTuple):
+    target: float
+    hysteresis: float
+    alarm: float
 
 
 class Sensors(SubroutineTemplate[Sensor]):
@@ -205,48 +211,60 @@ class Sensors(SubroutineTemplate[Sensor]):
         cache["average"] = average
         return cache
 
+    @staticmethod
+    def _get_alarm(
+            record: gv.SensorRecord, 
+            limits: ParameterLimits,
+    ) -> gv.SensorAlarm | None:
+        # Get the alarm direction and delta
+        direction: gv.Position
+        delta: float
+        limit_low: float = limits.target - limits.hysteresis
+        limit_high: float = limits.target + limits.hysteresis
+        if record.value < limit_low:
+            direction = gv.Position.under
+            delta = limit_low - record.value
+        elif record.value > limit_high:
+            direction = gv.Position.above
+            delta = record.value - limit_high
+        else:
+            return None
+        # Get the alarm "strength"
+        level: gv.WarningLevel
+        if delta < limits.alarm:
+            # The measure is over the hysteresis band but beneath the alarm
+            level = gv.WarningLevel.low
+        elif limits.alarm <= delta < limits.alarm + limits.hysteresis:
+            level = gv.WarningLevel.high
+        else:
+            level = gv.WarningLevel.critical
+        return gv.SensorAlarm(
+            sensor_uid=record.sensor_uid,
+            measure=record.measure,
+            position=direction,
+            delta=delta,
+            level=level,
+        )
+
     def _add_sensor_warnings(self, cache: gv.SensorsDataDict) -> gv.SensorsDataDict:
         # Get the target, the hysteresis and the alarm threshold
         pod: Literal["day", "night"] = "day" if self.config.is_day() else "night"
-        parameter_limits: dict[str, tuple[float, float, float]] = {
-            parameter: (values[pod], values["hysteresis"], values["alarm"])
+        parameter_limits: dict[str, ParameterLimits] = {
+            parameter.name: ParameterLimits(values[pod], values["hysteresis"], values["alarm"])
             for parameter, values in self.config.climate.items()
-            if values["alarm"]
+            if values["alarm"] is not None
         }
         # If no `parameter_limits`: stop
         if not parameter_limits:
             return cache
+
         sensor_warnings: list[gv.SensorAlarm] = []
         for record in cache["records"]:
             if record.measure not in parameter_limits:
                 continue
-            p_lim = parameter_limits[record.measure]
-            direction: gv.Position
-            delta: float
-            if record.value < p_lim[0] - p_lim[1]:
-                direction = gv.Position.under
-                delta = p_lim[0] - p_lim[1] - record.value
-            elif record.value > p_lim[0] + p_lim[1]:
-                direction = gv.Position.above
-                delta = p_lim[0] - p_lim[1] - record.value
-            else:
-                continue
-            level: gv.WarningLevel
-            if p_lim[2] < delta <= 1.5 * p_lim[2]:
-                level = gv.WarningLevel.moderate
-            elif 1.5 * p_lim[2] < delta <= 2.0 * p_lim[2]:
-                level = gv.WarningLevel.high
-            else:
-                level = gv.WarningLevel.critical
-            sensor_warnings.append(
-                gv.SensorAlarm(
-                    sensor_uid=record.sensor_uid,
-                    measure=record.measure,
-                    position=direction,
-                    delta=delta,
-                    level=level,
-                )
-            )
+            sensor_alarm = self._get_alarm(record, parameter_limits[record.measure])
+            if sensor_alarm is not None:
+                sensor_warnings.append(sensor_alarm)
         cache["alarms"] = sensor_warnings
         return cache
 
