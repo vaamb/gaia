@@ -15,7 +15,7 @@ from tests.utils import yield_control
 
 @pytest.mark.asyncio
 class TestEngine:
-    def test_singleton(self, engine: Engine, engine_config: EngineConfig):
+    async def test_singleton(self, engine: Engine, engine_config: EngineConfig):
         assert engine is Engine(engine_config)
 
     async def test_engine_dict(self, engine: Engine, engine_config: EngineConfig):

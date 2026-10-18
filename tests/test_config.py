@@ -24,7 +24,6 @@ hardware_dict = {
 # ---------------------------------------------------------------------------
 #   Test EngineConfig
 # ---------------------------------------------------------------------------
-@pytest.mark.asyncio
 class TestEngineConfig:
     def test_singleton(self, engine_config: EngineConfig):
         assert engine_config is EngineConfig()
@@ -41,6 +40,7 @@ class TestEngineConfig:
         with pytest.raises(ValueError):
             engine_config.delete_ecosystem("Already fading away")
 
+    @pytest.mark.asyncio
     async def test_save_and_load(self, engine_config: EngineConfig):
         ecosystems_cfg = engine_config.ecosystems_config
         private_config = engine_config.private_config
@@ -153,7 +153,6 @@ class TestWatchdog:
 # ---------------------------------------------------------------------------
 #   Test EcosystemConfig
 # ---------------------------------------------------------------------------
-@pytest.mark.asyncio
 class TestEcosystemConfigGeneral:
     def test_singleton(self, ecosystem_config: EcosystemConfig):
         assert ecosystem_config is EcosystemConfig(test_data.ecosystem_name)
