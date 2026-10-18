@@ -3,6 +3,8 @@ from __future__ import annotations
 from asyncio import sleep
 from typing import AsyncIterator, TypedDict
 
+import pytest
+
 from dispatcher import AsyncDispatcher
 
 
@@ -11,6 +13,17 @@ class EmitDict(TypedDict):
     data: dict | list | str | tuple | None
     room: str
     namespace: str
+
+
+def with_hardware(hardware_dict: dict) -> pytest.MarkDecorator:
+    """Parametrize the `ecosystem_config` fixture with the given hardware. The
+    test ID lists the hardware names."""
+    return pytest.mark.parametrize(
+        "ecosystem_config",
+        [{"hardware": hardware_dict}],
+        indirect=True,
+        ids=["+".join(info["name"] for info in hardware_dict.values())],
+    )
 
 
 async def yield_control(iterations: int = 10) -> None:

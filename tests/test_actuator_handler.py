@@ -12,7 +12,7 @@ from gaia.events import Events
 from gaia.hardware.abc import DimmableSwitchMixin
 
 import tests.data as test_data
-from tests.utils import yield_control
+from tests.utils import with_hardware, yield_control
 
 
 hardware_dict = {
@@ -38,7 +38,7 @@ class TestTimer:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+@with_hardware(hardware_dict)
 class TestActuatorHandler:
     async def test_linked_actuators(self, light_handler: ActuatorHandler):
         light: DimmableSwitchMixin = light_handler.ecosystem.hardware[test_data.light_uid]

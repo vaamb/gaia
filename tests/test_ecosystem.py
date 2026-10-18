@@ -11,6 +11,7 @@ from gaia.hardware.abc import _MetaHardware
 from gaia.hardware.camera import PiCamera
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 hardware_dict = {
@@ -21,7 +22,7 @@ hardware_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": hardware_dict}], indirect=True)
+@with_hardware(hardware_dict)
 class TestEcosystem:
     async def test_properties(
             self,

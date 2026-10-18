@@ -9,6 +9,7 @@ from gaia.actuator_handler import Timer
 from gaia.subroutines.weather import Weather
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 weather_dict = {
@@ -17,7 +18,7 @@ weather_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": weather_dict}], indirect=True)
+@with_hardware(weather_dict)
 class TestWeatherSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, weather_subroutine: Weather):
         assert weather_subroutine.manageable

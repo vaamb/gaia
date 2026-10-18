@@ -8,6 +8,7 @@ from gaia import Ecosystem
 from gaia.subroutines import Light, Sensors
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 light_dict = {
@@ -17,7 +18,7 @@ light_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": light_dict}], indirect=True)
+@with_hardware(light_dict)
 class TestLightSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, light_subroutine: Light):
         assert light_subroutine.manageable

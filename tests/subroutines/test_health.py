@@ -7,6 +7,7 @@ from gaia.hardware.abc import Measure
 from gaia.subroutines import Health, Light
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 health_dict = {
@@ -16,7 +17,7 @@ health_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": health_dict}], indirect=True)
+@with_hardware(health_dict)
 class TestHealthSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, health_subroutine: Health):
         camera_cfg = health_subroutine.config.hardware_dict[test_data.camera_uid].copy()

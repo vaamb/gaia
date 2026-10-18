@@ -4,6 +4,7 @@ from gaia import Ecosystem
 from gaia.subroutines import Pictures
 
 from tests import data as test_data
+from tests.utils import with_hardware
 
 
 pictures_dict = {
@@ -12,7 +13,7 @@ pictures_dict = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ecosystem_config", [{"hardware": pictures_dict}], indirect=True)
+@with_hardware(pictures_dict)
 class TestPictureSubroutine:
     async def test_manageable(
             self,
