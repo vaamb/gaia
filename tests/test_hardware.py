@@ -1,4 +1,4 @@
-from asyncio import create_task, sleep
+from asyncio import all_tasks, create_task, sleep, wait_for
 
 import math
 from typing import cast, Type
@@ -453,6 +453,61 @@ class TestWebsocketHardware:
         assert not hardware.connected
 
         await hardware.terminate()
+
+    async def test_reconnection_is_picked_up(self):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})
+        hardware = cast(WebSocketSwitch, await Hardware.initialize(hardware_cfg, ecosystem_uid))
+
+        websocket = await self._connect_device(hardware)
+        await websocket.close()
+        await yield_control()
+
+        # The listening loop must pick up the new connection right away, without
+        #  waiting for a polling period
+        websocket = await self._connect_device(hardware)
+        task = create_task(hardware._send_msg_and_wait("ping", timeout=0.1))
+        raw_response = await websocket.recv()
+        response = WebSocketMessage.model_validate_json(raw_response)
+        await websocket.send(
+            WebSocketMessage(uuid=response.uuid, data="pong").model_dump_json())
+        assert await task == "pong"
+
+        await hardware.terminate()
+
+    async def test_reconnection_replaces_previous_connection(self):
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})
+        hardware = cast(WebSocketSwitch, await Hardware.initialize(hardware_cfg, ecosystem_uid))
+
+        # The device reconnects before its previous connection was detected as
+        #  closed, e.g. after a reboot
+        old_websocket = await self._connect_device(hardware)
+        websocket = await self._connect_device(hardware)
+
+        # The previous connection is closed, without dropping the new one
+        await wait_for(old_websocket.wait_closed(), timeout=1)
+        await yield_control()
+        assert hardware.connected
+
+        # And responses are read from the new connection
+        task = create_task(hardware._send_msg_and_wait("ping", timeout=0.1))
+        raw_response = await websocket.recv()
+        response = WebSocketMessage.model_validate_json(raw_response)
+        await websocket.send(
+            WebSocketMessage(uuid=response.uuid, data="pong").model_dump_json())
+        assert await task == "pong"
+
+        await hardware.terminate()
+
+    async def test_terminate_leaves_no_pending_task(self):
+        tasks_before = all_tasks()
+        hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})
+        hardware = cast(WebSocketSwitch, await Hardware.initialize(hardware_cfg, ecosystem_uid))
+        await self._connect_device(hardware)
+
+        await hardware.terminate()
+        await yield_control()
+
+        assert all_tasks() <= tasks_before
 
     async def test_switch(self):
         hardware_cfg = gv.HardwareConfig(**{"uid": ws_switch_uid, **IO_dict[ws_switch_uid]})

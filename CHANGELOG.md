@@ -40,6 +40,9 @@
   clear warning instead of failing later in the picture loop (#478)
 - `copy_scripts` in the install and update scripts targeted `${OURANOS_DIR}`
   instead of `${GAIA_DIR}` (#476)
+- WebSocket hardware now picks up a (re)connecting device right away. It used to poll for
+  it, backing off up to 32 s, so a device coming back after an outage could stay unused for
+  that long (#505)
 
 ---
 

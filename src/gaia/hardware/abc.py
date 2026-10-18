@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, ABCMeta, abstractmethod
 import asyncio
-from asyncio import  Event, Future, sleep, Task
+from asyncio import  Future, sleep, Task
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -879,7 +879,6 @@ class WebSocketAddressMixin(HardwareAddressMixin):
         self._websocket_manager = WebSocketAddressMixin._websocket_manager
         self._requests: dict[UUID, Future] = {}
         self._task: Task | None = None
-        self._stop_event: Event = Event()
 
     @classmethod
     def validate_address(cls, address_str: str) -> WebSocketAddress:
@@ -939,21 +938,15 @@ class WebSocketAddressMixin(HardwareAddressMixin):
         return self._websocket_manager
 
     async def _connection_loop(self) -> None:
-        wait_time: int = 1
-        while not self._stop_event.is_set():
-            connection = self.websocket_manager.get_connection(self.uid)
-            if connection is not None:
-                wait_time = 1
-                try:
-                    await self._listening_loop(connection)
-                except ConnectionClosed:
-                    # The connection closed, try to reconnect
-                    pass
+        # Runs until `unregister()` cancels it
+        while True:
+            # Wait for the device to (re)connect
+            connection = await self.websocket_manager.wait_for_connection(self.uid)
             try:
-                await asyncio.wait_for(self._stop_event.wait(), wait_time)
-            except TimeoutError:
-                wait_time *= 2
-                wait_time = min(32, wait_time)
+                await self._listening_loop(connection)
+            except ConnectionClosed:
+                # The connection closed, wait for the device to reconnect
+                pass
 
     async def _listening_loop(self, connection: ServerConnection) -> None:
         async for msg in connection:
@@ -1015,8 +1008,9 @@ class WebSocketAddressMixin(HardwareAddressMixin):
             await self.websocket_manager.start()
         assert not isinstance(self.address.main, int)
         await self.websocket_manager.register_hardware(self.uid, self.address.main)
-        self._task = asyncio.create_task(self._connection_loop())
-        await sleep(0)  # Allow the task to start
+        if self._task is None:  # Don't orphan the loop if registered twice
+            self._task = asyncio.create_task(self._connection_loop())
+            await sleep(0)  # Allow the task to start
 
     async def unregister(self) -> None:
         try:
@@ -1025,7 +1019,6 @@ class WebSocketAddressMixin(HardwareAddressMixin):
             # The device is not connected
             pass
         await self.websocket_manager.unregister_hardware(self.uid)
-        self._stop_event.set()
         if self._task is not None:
             self._task.cancel()
             await sleep(0)  # Allow the task to be canceled
