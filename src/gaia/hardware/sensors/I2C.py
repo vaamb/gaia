@@ -77,7 +77,7 @@ class ENS160(i2cSensor):
     default_address = 0x53
     measures_available = {
         Measure.aqi: None,
-        Measure.eco2: Unit.ppb,
+        Measure.eco2: Unit.ppm,
         Measure.tvoc: Unit.ppb,
     }
 
