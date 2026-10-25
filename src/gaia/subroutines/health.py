@@ -152,20 +152,22 @@ class Health(SubroutineTemplate[Camera]):
             light_status = light_subroutine.actuator_handler.status
             self.logger.info("Turning on the light(s) to take a 'health' picture.")
             await light_subroutine.turn_light(gv.ActuatorModePayload.on)
-        # Get the pictures
-        images: dict[str, SerializableImage] = {}
-        for camera_uid, camera in self.hardware.items():
-            images[camera_uid] = await camera.get_image(size=self._picture_size)
-        # Turn the lights back to their previous state
-        if light_started:
-            self.logger.info("Turning back the light subroutine to its previous state.")
-            if light_mode is gv.ActuatorMode.automatic:
-                await light_subroutine.turn_light(gv.ActuatorModePayload.automatic)
-            else:
-                if light_status:
-                    await light_subroutine.turn_light(gv.ActuatorModePayload.on)
+        try:
+            # Get the pictures
+            images: dict[str, SerializableImage] = {}
+            for camera_uid, camera in self.hardware.items():
+                images[camera_uid] = await camera.get_image(size=self._picture_size)
+        finally:
+            # Turn the lights back to their previous state
+            if light_started:
+                self.logger.info("Turning back the light subroutine to its previous state.")
+                if light_mode is gv.ActuatorMode.automatic:
+                    await light_subroutine.turn_light(gv.ActuatorModePayload.automatic)
                 else:
-                    await light_subroutine.turn_light(gv.ActuatorModePayload.off)
+                    if light_status:
+                        await light_subroutine.turn_light(gv.ActuatorModePayload.on)
+                    else:
+                        await light_subroutine.turn_light(gv.ActuatorModePayload.off)
         # return the images
         return images
 
