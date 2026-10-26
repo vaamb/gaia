@@ -97,6 +97,37 @@ uv sync --all-packages --all-extras --no-extra test
 
 ---
 
+Extra packages
+--------------
+
+The master `pyproject.toml`, in the installation directory, declares every
+package installed in the virtual environment. It is generated once, at
+installation, and then belongs to the installation: the update script never
+overwrites it, and syncs the environment to it exactly. A package installed
+with `uv pip install` is therefore removed on the next update; declare it
+instead.
+
+Hardware drivers (e.g. the Adafruit CircuitPython packages) can be declared with
+`uv add` from the installation directory, or with `add_dependency`:
+
+```bash
+source "${GAIA_DIR}/scripts/utils/pyproject_helpers.sh"
+add_dependency gaia camera                             # add an extra to Gaia
+add_dependency adafruit-circuitpython-dht "" none      # straight from PyPI, no source entry
+
+cd "${GAIA_DIR}" && uv sync
+```
+
+`add_dependency <name> [extras] [source]` adds the package to `dependencies`
+and, unless `source` is `none`, its `[tool.uv.sources]` entry (`{ workspace =
+true }` by default), both above their anchor comment. It is idempotent and
+returns 1 with a message on stderr if the pyproject cannot be edited.
+
+To remove a package, delete or comment out its line in `dependencies` and run
+`uv sync` again.
+
+---
+
 Running
 -------
 
