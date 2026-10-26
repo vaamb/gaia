@@ -1,3 +1,4 @@
+from asyncio import sleep
 from datetime import datetime, timezone
 
 import pytest
@@ -5,15 +6,15 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem
-from gaia.subroutines import Sensors
+from gaia.subroutines import Sensors, sensors
 from gaia.subroutines.sensors import ParameterLimits
 
 from tests import data as test_data
 from tests.utils import with_hardware
 
 
-sensors_dict = {test_data.sensor_uid: test_data.sensor_info}
-
+sensor_dict = {test_data.sensor_uid: test_data.sensor_info}
+sensors_dict = {**sensor_dict, test_data.i2c_sensor_veml7700_uid: test_data.i2c_sensor_veml7700_info}
 
 def _make_cache(*records: tuple[str, float]) -> gv.SensorsDataDict:
     return {
@@ -28,7 +29,7 @@ def _make_cache(*records: tuple[str, float]) -> gv.SensorsDataDict:
 
 
 @pytest.mark.asyncio
-@with_hardware(sensors_dict)
+@with_hardware(sensor_dict)
 class TestSensorsSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, sensors_subroutine: Sensors):
         assert sensors_subroutine.manageable
@@ -75,6 +76,59 @@ class TestSensorsSubroutine:
         sensors_subroutine.disable()
 
 
+@pytest.mark.asyncio
+class TestSensorRecords:
+    @with_hardware(sensor_dict)
+    async def test_add_sensor_records(self, sensors_subroutine: Sensors):
+        cache = _make_cache()
+        cache = await sensors_subroutine._add_sensor_records(cache)
+        
+        assert len(cache["records"]) == len(test_data.sensor_info["measures"])
+
+    @with_hardware(sensor_dict)
+    async def test_add_sensor_records_too_slow(
+            self,
+            sensors_subroutine: Sensors,
+            monkeypatch: pytest.MonkeyPatch,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        async def slow_get_data():
+            await sleep(0.2)
+
+        sensor = sensors_subroutine.hardware[test_data.sensor_uid]
+        monkeypatch.setattr(sensor, "get_data", slow_get_data)
+        monkeypatch.setattr(sensors, "SLOW_SENSOR_TIMEOUT", 0.05)
+
+        cache = _make_cache()
+        cache = await sensors_subroutine._add_sensor_records(cache)
+
+        assert len(cache["records"]) == 0
+        assert "took too long" in caplog.text
+
+        slow_task = sensors_subroutine._slow_sensor_futures.pop()
+        slow_task.cancel()
+
+    @with_hardware(sensors_dict)
+    async def test_add_sensor_records_failing_hardware(
+            self, 
+            sensors_subroutine: Sensors, 
+            monkeypatch: pytest.MonkeyPatch,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        async def failing_get_data():
+            raise Exception
+
+        sensor = sensors_subroutine.hardware[test_data.sensor_uid]
+        monkeypatch.setattr(sensor, "get_data", failing_get_data)
+
+        cache = _make_cache()
+        cache = await sensors_subroutine._add_sensor_records(cache)
+
+        assert len(cache["records"]) ==  1  # Only the VEML measure was taken
+        assert cache["records"][0].sensor_uid == test_data.i2c_sensor_veml7700_uid
+        assert "failed to fetch data" in caplog.text
+
+
 class TestGetAlarm:
     # Hysteresis band is [19.0, 21.0], `high` from a delta of 2.0 (alarm),
     #  `critical` from a delta of 3.0 (alarm + hysteresis)
@@ -114,7 +168,7 @@ class TestGetAlarm:
 
 
 @pytest.mark.asyncio
-@with_hardware(sensors_dict)
+@with_hardware(sensor_dict)
 class TestAddSensorWarnings:
     async def test_unmonitored_measure_are_ignored(self, sensors_subroutine: Sensors):
         sensors_subroutine.config.set_climate_parameter(
