@@ -187,16 +187,82 @@ update_packages() {
         return 0
     fi
 
-    # Update pyproject.toml
-    "${GAIA_DIR}/lib/gaia/scripts/utils/gen_pyproject.sh" "${GAIA_DIR}" ||
-        die "Failed to update pyproject.toml"
+    cd "${GAIA_DIR}"
+
+    # Add the anchors to the master pyproject when upgrading from a version without them
+    if ! grep -q "# Add extra dependencies above this line" pyproject.toml; then
+        log INFO "Migrating the master pyproject.toml to the anchored format..."
+
+        # Extras and hardware packages are not recorded anywhere on disk: look them
+        # up in the environment before the exact `uv sync` below prunes them
+        local site_packages="${GAIA_DIR}/.venv/lib/python*/site-packages"
+        local gaia_extras=()
+        # Use `compgen -G` rather than `ls` for the globbing behavior and the easy-to-use return code
+        if compgen -G "${site_packages}/opencv_python*.dist-info" > /dev/null; then
+            gaia_extras+=("camera")
+        fi
+        if compgen -G "${site_packages}/sqlalchemy-*.dist-info" > /dev/null; then
+            gaia_extras+=("database")
+        fi
+        if compgen -G "${site_packages}/aio_pika-*.dist-info" > /dev/null; then
+            gaia_extras+=("dispatcher")
+        fi
+        local hardware_packages=()
+        local dist_info
+        for dist_info in $(compgen -G "${site_packages}/adafruit_circuitpython_*.dist-info"); do
+            # `adafruit_circuitpython_dht-4.0.10.dist-info` -> `adafruit-circuitpython-dht`
+            dist_info=$(basename "${dist_info}")
+            dist_info="${dist_info%%-*}"
+            hardware_packages+=("${dist_info//_/-}")
+        done
+
+        "${GAIA_DIR}/lib/gaia/scripts/utils/gen_pyproject.sh" "${GAIA_DIR}" ||
+            die "Failed to update pyproject.toml"
+
+        source "${GAIA_DIR}/lib/gaia/scripts/utils/pyproject_helpers.sh"
+
+        if [[ ${#gaia_extras[@]} -gt 0 ]]; then
+            local extras
+            extras=$(IFS=,; echo "${gaia_extras[*]}")
+            log INFO "Keeping Gaia's optional dependencies ('${extras}')"
+            add_dependency "gaia" "${extras}" ||
+                die "Failed to keep '${extras}' optional dependencies"
+        fi
+
+        local package_name
+        for package_name in "${hardware_packages[@]}"; do
+            log INFO "Keeping the ${package_name} hardware package"
+            add_dependency "${package_name}" "" none ||
+                die "Failed to declare ${package_name}"
+        done
+
+        # Other workspace members are recoverable: they are found in `lib/`
+        local pkg_path
+        for pkg_path in "${GAIA_DIR}/lib"/*/; do
+            package_name=$(basename "${pkg_path}")
+            if [[ "${package_name}" != "gaia" ]]; then
+                log INFO "Keeping the ${package_name} workspace package"
+                add_dependency "${package_name}" ||
+                    die "Failed to declare ${package_name}"
+            fi
+        done
+
+        log WARN "Only Gaia's extras, the Adafruit CircuitPython packages and the packages found in 'lib/' could be recovered."
+        log WARN "Any other manually installed package will be uninstalled. Add it back to ${GAIA_DIR}/pyproject.toml and run the update again to restore it."
+    fi
+
+    grep -q "# Add extra dependencies above this line" pyproject.toml ||
+        die "Anchor missing from pyproject.toml"
+
+    # Update the master pyproject version number
+    local gaia_version
+    gaia_version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' lib/gaia/src/gaia/__init__.py)
+    sed -i 's/^version = .*/version = "'"${gaia_version}"'"/' pyproject.toml
 
     # Update uv lock and sync packages
-    cd "${GAIA_DIR}"
     uv lock --upgrade ||
         die "Failed to update uv lock"
-    # use --inexact to keep packages not defined in pyproject.toml
-    uv sync --all-packages --inexact ||
+    uv sync ||
         die "Failed to update Python virtual environment"
 }
 

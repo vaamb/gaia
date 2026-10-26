@@ -268,7 +268,7 @@ setup_uv_and_sync() {
 
     # Sync virtual environment
     uv venv --python /usr/bin/python3 --system-site-packages
-    uv sync --all-packages ||
+    uv sync ||
         die "Failed to create Python virtual environment and sync it"
 }
 
