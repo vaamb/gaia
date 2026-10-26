@@ -13,8 +13,8 @@ from tests import data as test_data
 from tests.utils import with_hardware
 
 
-sensors_dict = {test_data.sensor_uid: test_data.sensor_info}
-
+sensor_dict = {test_data.sensor_uid: test_data.sensor_info}
+sensors_dict = {**sensor_dict, test_data.i2c_sensor_veml7700_uid: test_data.i2c_sensor_veml7700_info}
 
 def _make_cache(*records: tuple[str, float]) -> gv.SensorsDataDict:
     return {
@@ -29,7 +29,7 @@ def _make_cache(*records: tuple[str, float]) -> gv.SensorsDataDict:
 
 
 @pytest.mark.asyncio
-@with_hardware(sensors_dict)
+@with_hardware(sensor_dict)
 class TestSensorsSubroutine:
     async def test_manageable(self, ecosystem: Ecosystem, sensors_subroutine: Sensors):
         assert sensors_subroutine.manageable
@@ -77,7 +77,6 @@ class TestSensorsSubroutine:
 
 
 @pytest.mark.asyncio
-@with_hardware(sensors_dict)
 class TestSensorRecords:
     @classmethod
     def make_cache(cls) -> gv.SensorsDataDict:
@@ -86,14 +85,16 @@ class TestSensorRecords:
             "records": [],
             "average": [],
             "alarms": [],
-        }    
+        }
 
+    @with_hardware(sensor_dict)
     async def test_add_sensor_records(self, sensors_subroutine: Sensors):
         cache = self.make_cache()
         cache = await sensors_subroutine._add_sensor_records(cache)
         
         assert len(cache["records"]) == len(test_data.sensor_info["measures"])
 
+    @with_hardware(sensor_dict)
     async def test_add_sensor_records_too_slow(
         self,
         sensors_subroutine: Sensors,
@@ -113,6 +114,7 @@ class TestSensorRecords:
         assert len(cache["records"]) == 0
         assert "took too long" in caplog.text
 
+    @with_hardware(sensors_dict)
     async def test_add_sensor_records_failing_hardware(
             self, 
             sensors_subroutine: Sensors, 
@@ -127,8 +129,9 @@ class TestSensorRecords:
 
         cache = self.make_cache()
         cache = await sensors_subroutine._add_sensor_records(cache)
-        
-        assert len(cache["records"]) ==  0
+
+        assert len(cache["records"]) ==  1  # Only the VEML measure was taken
+        assert cache["records"][0].sensor_uid == test_data.i2c_sensor_veml7700_uid
         assert "failed to fetch data" in caplog.text
 
 
@@ -171,7 +174,7 @@ class TestGetAlarm:
 
 
 @pytest.mark.asyncio
-@with_hardware(sensors_dict)
+@with_hardware(sensor_dict)
 class TestAddSensorWarnings:
     async def test_unmonitored_measure_are_ignored(self, sensors_subroutine: Sensors):
         sensors_subroutine.config.set_climate_parameter(
