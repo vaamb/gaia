@@ -8,7 +8,7 @@ from typing import Any, Type
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import Camera, PiCameraAddressMixin
-from gaia.hardware.utils import is_raspi
+from gaia.hardware.utils import is_raspi, uv_pkg_msg
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -40,8 +40,8 @@ class PiCamera(PiCameraAddressMixin, Camera):
                 from picamera2 import Picamera2 as Picamera2Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "picamera package is required. Run "
-                    "`uv pip install picamera` in your virtual env."
+                    f"picamera package is required. "
+                    f"{uv_pkg_msg('picamera')}"
                 )
         else:
             from gaia.hardware.camera._devices._compatibility import Picamera2Device

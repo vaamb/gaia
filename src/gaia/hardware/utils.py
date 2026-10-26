@@ -35,3 +35,10 @@ def get_i2c() -> I2C:
         _i2c = busio.I2C(board.SCL, board.SDA)  # ty: ignore[invalid-assignment]
     assert _i2c is not None
     return _i2c
+
+
+def uv_pkg_msg(package_name: str, full: bool = True) -> str:
+    msg: str = f"`uv add {package_name}`"
+    if full:
+        msg = f"Run {msg} in your virtual environment."
+    return msg
