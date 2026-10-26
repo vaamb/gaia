@@ -8,7 +8,7 @@ from typing import Any, Type
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import Camera, PiCameraAddressMixin
-from gaia.hardware.utils import is_raspi, uv_pkg_msg
+from gaia.hardware.utils import is_raspi
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
