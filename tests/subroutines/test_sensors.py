@@ -1,3 +1,4 @@
+from asyncio import sleep
 from datetime import datetime, timezone
 
 import pytest
@@ -5,7 +6,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem
-from gaia.subroutines import Sensors
+from gaia.subroutines import Sensors, sensors
 from gaia.subroutines.sensors import ParameterLimits
 
 from tests import data as test_data
@@ -73,6 +74,62 @@ class TestSensorsSubroutine:
         await sensors_subroutine.stop()
 
         sensors_subroutine.disable()
+
+
+@pytest.mark.asyncio
+@with_hardware(sensors_dict)
+class TestSensorRecords:
+    @classmethod
+    def make_cache(cls) -> gv.SensorsDataDict:
+        return {
+            "timestamp": datetime.now(timezone.utc).replace(microsecond=0),
+            "records": [],
+            "average": [],
+            "alarms": [],
+        }    
+
+    async def test_add_sensor_records(self, sensors_subroutine: Sensors):
+        cache = self.make_cache()
+        cache = await sensors_subroutine._add_sensor_records(cache)
+        
+        assert len(cache["records"]) == len(test_data.sensor_info["measures"])
+
+    async def test_add_sensor_records_too_slow(
+        self,
+        sensors_subroutine: Sensors,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        async def slow_get_data():
+            await sleep(0.2)
+
+        sensor = sensors_subroutine.hardware[test_data.sensor_uid]
+        monkeypatch.setattr(sensor, "get_data", slow_get_data)
+        monkeypatch.setattr(sensors, "SLOW_SENSOR_TIMEOUT", 0.05)
+
+        cache = self.make_cache()
+        cache = await sensors_subroutine._add_sensor_records(cache)
+
+        assert len(cache["records"]) == 0
+        assert "took too long" in caplog.text
+
+    async def test_add_sensor_records_failing_hardware(
+            self, 
+            sensors_subroutine: Sensors, 
+            monkeypatch: pytest.MonkeyPatch,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        async def failing_get_data():
+            raise Exception
+
+        sensor = sensors_subroutine.hardware[test_data.sensor_uid]
+        monkeypatch.setattr(sensor, "get_data", failing_get_data)
+
+        cache = self.make_cache()
+        cache = await sensors_subroutine._add_sensor_records(cache)
+        
+        assert len(cache["records"]) ==  0
+        assert "failed to fetch data" in caplog.text
 
 
 class TestGetAlarm:
