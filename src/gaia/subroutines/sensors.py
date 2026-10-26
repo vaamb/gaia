@@ -23,6 +23,9 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.light import Light
 
 
+SLOW_SENSOR_TIMEOUT = 5.0
+
+
 class _SensorFuture(Task):
     hardware_uid: str
 
@@ -171,7 +174,8 @@ class Sensors(SubroutineTemplate[Sensor]):
         # Try to get data from sensors that took too long during last loop
         self._get_sensor_records_futures.extend(self._slow_sensor_futures)
         # Wait for 5 secs for sensors to get data. This allows GPIO sensors to fail once
-        done, pending = await asyncio.wait(self._get_sensor_records_futures, timeout=5)
+        done, pending = await asyncio.wait(
+            self._get_sensor_records_futures, timeout=SLOW_SENSOR_TIMEOUT)
         new_slow_futures = pending - self._slow_sensor_futures
         # Log the sensors that took too long
         for future in new_slow_futures:
@@ -180,15 +184,20 @@ class Sensors(SubroutineTemplate[Sensor]):
                 f"fetch data. Will try to gather data during next routine.")
         self._slow_sensor_futures = pending
         # Gather the data
-        sensors_reads: list[list[SensorRead]] = [future.result() for future in done]
-        for sensor_reads in sensors_reads:
+        for future in done:
+            if future.exception() is not None:
+                error = future.exception()
+                self.logger.error(
+                    f"Sensor with uid '{future.hardware_uid}' failed to fetch data. "
+                    f"ERROR msg: `{error.__class__.__name__}: {error}`.")
+                continue
             cache["records"].extend(
                 gv.SensorRecord(
                     sensor_read.sensor_uid,
                     sensor_read.measure,
                     sensor_read.value
                 )
-                for sensor_read in sensor_reads
+                for sensor_read in future.result()
                 if sensor_read.value is not None
             )
         return cache
