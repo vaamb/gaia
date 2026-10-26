@@ -109,6 +109,8 @@ class Light(SubroutineTemplate[Actuator]):
         self.reset_light_sensors()
         # Deactivate actuator handler
         async with self.actuator_handler.update_status_transaction(activation=True):
+            if self.actuator_handler.mode is gv.ActuatorMode.automatic:
+                await self.actuator_handler.reset()
             self.actuator_handler.deactivate()
         # Reset actuator handler and PID
         self._actuator_handler = None
