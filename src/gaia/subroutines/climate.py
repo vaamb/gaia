@@ -259,10 +259,8 @@ class Climate(SubroutineTemplate[Actuator]):
 
     async def _get_sensors_average(self) -> dict[str, float]:
         # Get the sensors average
-        prior_sensor_miss = self._sensor_miss
         sensors_subroutine: Sensors = self.ecosystem.get_subroutine("sensors")
         sensors_data = sensors_subroutine.sensors_data
-        sensors_average: dict[str, float]
 
         if isinstance(sensors_data, gv.Empty):
             self.logger.debug(
@@ -270,12 +268,12 @@ class Climate(SubroutineTemplate[Actuator]):
                 f"{MISSES_BEFORE_STOP - self._sensor_miss} times before "
                 f"stopping.")
             self._sensor_miss += 1
-            sensors_average = {}
-        else:
-            sensors_average = {
-                data.measure: data.value
-                for data in sensors_data.average
-            }
+            return {}
+
+        sensors_average: dict[str, float] = {
+            data.measure: data.value
+            for data in sensors_data.average
+        }
 
         # Make sure we have sensors data for all the regulated parameters
         missing_parameter: bool = False
@@ -290,9 +288,8 @@ class Climate(SubroutineTemplate[Actuator]):
                     f"adjusting its regulated parameters.")
         if missing_parameter:
             self._sensor_miss += 1
-
-        # Reset sensor miss counter if there wasn't any new miss
-        if self._sensor_miss == prior_sensor_miss:
+        else:
+            # Reset sensor miss counter if there wasn't any new miss
             self._sensor_miss = 0
 
         return sensors_average

@@ -198,6 +198,8 @@ class Light(SubroutineTemplate[Actuator]):
             future.cancel()
         results: list[float | None] = [future.result() for future in done]
         light_level: list[float] = [result for result in results if result is not None]
+        if len(light_level) == 0:
+            return 0.0  # Fallback value
         return mean(light_level)
 
     async def _update_pid(self) -> None:
