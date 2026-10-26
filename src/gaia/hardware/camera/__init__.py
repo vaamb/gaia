@@ -40,8 +40,8 @@ class PiCamera(PiCameraAddressMixin, Camera):
                 from picamera2 import Picamera2 as Picamera2Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    f"picamera package is required. "
-                    f"{uv_pkg_msg('picamera')}"
+                    "Picamera2 package is required. "
+                    "Run `sudo apt install python3-picamera2`"
                 )
         else:
             from gaia.hardware.camera._devices._compatibility import Picamera2Device
