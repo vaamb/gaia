@@ -173,7 +173,8 @@ class Sensors(SubroutineTemplate[Sensor]):
             self._get_sensor_records_futures.append(future)
         # Try to get data from sensors that took too long during last loop
         self._get_sensor_records_futures.extend(self._slow_sensor_futures)
-        # Wait for 5 secs for sensors to get data. This allows GPIO sensors to fail once
+        # Wait for 5 (`SLOW_SENSOR_TIMEOUT`) secs for sensors to get data.
+        #  This allows GPIO sensors to fail once
         done, pending = await asyncio.wait(
             self._get_sensor_records_futures, timeout=SLOW_SENSOR_TIMEOUT)
         new_slow_futures = pending - self._slow_sensor_futures

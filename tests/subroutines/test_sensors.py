@@ -78,28 +78,19 @@ class TestSensorsSubroutine:
 
 @pytest.mark.asyncio
 class TestSensorRecords:
-    @classmethod
-    def make_cache(cls) -> gv.SensorsDataDict:
-        return {
-            "timestamp": datetime.now(timezone.utc).replace(microsecond=0),
-            "records": [],
-            "average": [],
-            "alarms": [],
-        }
-
     @with_hardware(sensor_dict)
     async def test_add_sensor_records(self, sensors_subroutine: Sensors):
-        cache = self.make_cache()
+        cache = _make_cache()
         cache = await sensors_subroutine._add_sensor_records(cache)
         
         assert len(cache["records"]) == len(test_data.sensor_info["measures"])
 
     @with_hardware(sensor_dict)
     async def test_add_sensor_records_too_slow(
-        self,
-        sensors_subroutine: Sensors,
-        monkeypatch: pytest.MonkeyPatch,
-        caplog: pytest.LogCaptureFixture,
+            self,
+            sensors_subroutine: Sensors,
+            monkeypatch: pytest.MonkeyPatch,
+            caplog: pytest.LogCaptureFixture,
     ):
         async def slow_get_data():
             await sleep(0.2)
@@ -108,7 +99,7 @@ class TestSensorRecords:
         monkeypatch.setattr(sensor, "get_data", slow_get_data)
         monkeypatch.setattr(sensors, "SLOW_SENSOR_TIMEOUT", 0.05)
 
-        cache = self.make_cache()
+        cache = _make_cache()
         cache = await sensors_subroutine._add_sensor_records(cache)
 
         assert len(cache["records"]) == 0
@@ -130,7 +121,7 @@ class TestSensorRecords:
         sensor = sensors_subroutine.hardware[test_data.sensor_uid]
         monkeypatch.setattr(sensor, "get_data", failing_get_data)
 
-        cache = self.make_cache()
+        cache = _make_cache()
         cache = await sensors_subroutine._add_sensor_records(cache)
 
         assert len(cache["records"]) ==  1  # Only the VEML measure was taken
