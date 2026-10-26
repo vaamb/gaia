@@ -51,7 +51,7 @@ class AHT20(TempHumSensor, i2cSensor):
                 from adafruit_ahtx0 import AHTx0 as AHTx0Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    f"Adafruit aht0 package is required. "
+                    f"Adafruit ahtx0 package is required. "
                     f"{uv_pkg_msg('adafruit-circuitpython-ahtx0')}"
                 )
         else:
