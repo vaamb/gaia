@@ -9,7 +9,7 @@ from anyio.to_thread import run_sync
 from gaia.hardware.abc import (
     i2cAddressMixin, Measure, PlantLevelMixin, Sensor, SensorRead, Unit)
 from gaia.hardware.sensors.abc import LightSensorBase, TempHumSensor
-from gaia.hardware.utils import is_raspi
+from gaia.hardware.utils import is_raspi, uv_pkg_msg
 from gaia.utils import get_unit, temperature_converter
 
 
@@ -51,8 +51,8 @@ class AHT20(TempHumSensor, i2cSensor):
                 from adafruit_ahtx0 import AHTx0 as AHTx0Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit aht0 package is required. Run "
-                    "`uv pip install adafruit-circuitpython-ahtx0` in your virtual env."
+                    f"Adafruit aht0 package is required. "
+                    f"{uv_pkg_msg('adafruit-circuitpython-ahtx0')}"
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import AHTx0Device
@@ -99,8 +99,8 @@ class ENS160(i2cSensor):
                 from adafruit_ens160 import ENS160 as ENS160Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit ens160 package is required. Run "
-                    "`uv pip install adafruit-circuitpython-ens160` in your virtual env."
+                    f"Adafruit ens160 package is required. "
+                    f"{uv_pkg_msg('adafruit-circuitpython-ens160')}"
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import ENS160Device
@@ -195,8 +195,8 @@ class VEML7700(LightSensorBase, i2cSensor):
                 from adafruit_veml7700 import VEML7700 as VEML7700Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit veml7700 package is required. Run `uv pip install "
-                    "adafruit-circuitpython-veml7700` in your virtual env."
+                    f"Adafruit veml7700 package is required. "
+                    f"{uv_pkg_msg('adafruit-circuitpython-veml7700')}"
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import VEML7700Device
@@ -234,8 +234,8 @@ class VCNL4040(LightSensorBase, i2cSensor):
                 from adafruit_vcnl4040 import VCNL4040 as VCNL4040Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit vcnl4040 package is required. Run "
-                    "`uv pip install adafruit-circuitpython-vcnl4040` in your virtual env."
+                    f"Adafruit vcnl4040 package is required. "
+                    f"{uv_pkg_msg('adafruit-circuitpython-vcnl4040')}"
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import VCNL4040Device
@@ -273,8 +273,8 @@ class CapacitiveSensorMixin(i2cSensor):
                 from adafruit_seesaw.seesaw import Seesaw as SeesawDevice  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit seesaw package is required. Run "
-                    "`uv pip install adafruit-circuitpython-seesaw` in your virtual env."
+                    f"Adafruit seesaw package is required. "
+                    f"{uv_pkg_msg('adafruit-circuitpython-seesaw')}"
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import SeesawDevice

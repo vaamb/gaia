@@ -6,7 +6,7 @@ import typing as t
 from anyio.to_thread import run_sync
 
 from gaia.hardware.abc import Actuator, DimmerMixin, gpioAddressMixin, SwitchMixin
-from gaia.hardware.utils import is_raspi
+from gaia.hardware.utils import is_raspi, uv_pkg_msg
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -71,8 +71,8 @@ class gpioDimmer(DimmerMixin, gpioActuator):
                 import pwmio
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit blinka package is required. Run "
-                    "`uv pip install adafruit-blinka` in your virtual env."
+                    f"Adafruit blinka package is required. "
+                    f"{uv_pkg_msg('adafruit-blinka')}"
                 )
         else:
             from gaia.hardware._compatibility import pwmio

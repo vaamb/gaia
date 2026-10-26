@@ -6,7 +6,7 @@ from typing import Type
 
 from gaia.hardware.abc import gpioAddressMixin, Sensor
 from gaia.hardware.sensors.abc import TempHumSensor
-from gaia.hardware.utils import is_raspi
+from gaia.hardware.utils import is_raspi, uv_pkg_msg
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -65,9 +65,9 @@ class DHT11(DHTSensor):
                 from adafruit_dht import DHT11 as DHT11Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit dht package and libgpiod2 are required. Run "
-                    "`uv pip install adafruit-circuitpython-dht` in your "
-                    "virtual env and `sudo apt install libgpiod2`."
+                    f"libgpiod2 and adafruit dht package are required. "
+                    f"First, run `sudo apt install libgpiod2`, "
+                    f"then {uv_pkg_msg('adafruit-circuitpython-dht').lower()} "
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import DHT11Device
@@ -97,9 +97,9 @@ class DHT22(DHTSensor):
                 from adafruit_dht import DHT22 as DHT22Device  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit dht package and libgpiod2 are required. Run "
-                    "`uv pip install adafruit-circuitpython-dht` in your "
-                    "virtual env and `sudo apt install libgpiod2`."
+                    f"libgpiod2 and adafruit dht package are required. "
+                    f"First, run `sudo apt install libgpiod2`, "
+                    f"then {uv_pkg_msg('adafruit-circuitpython-dht').lower()} "
                 )
         else:
             from gaia.hardware.sensors._devices._compatibility import DHT22Device

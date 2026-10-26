@@ -17,10 +17,14 @@ name = "gaia-app"
 version = "0.11.0"
 description = "An app to manage greenhouses, terrariums and aquariums"
 requires-python = ">=3.11"
-dependencies = ["gaia"]
+dependencies = [
+    "gaia",
+    # Add extra dependencies above this line
+]
 
 [tool.uv.sources]
 gaia = { workspace = true }
+# Add extra sources above this line
 
 [tool.uv.workspace]
 members = ["lib/*"]

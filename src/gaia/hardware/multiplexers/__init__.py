@@ -8,7 +8,7 @@ from weakref import WeakValueDictionary
 import busio  # TODO: maybe use the compatibility module ?
 
 from gaia.exceptions import HardwareNotFound
-from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
+from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi, uv_pkg_msg
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
@@ -104,10 +104,10 @@ class TCA9548A(Multiplexer):
                 from adafruit_tca9548a import TCA9548A as TCA9548ADevice  # ty: ignore[unresolved-import]
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit tca9548a and busdevice packages are required. "
-                    "Run `uv pip install adafruit-circuitpython-tca9548a` and "
-                    "`uv pip install adafruit-circuitpython-busdevice` "
-                    "in your virtual env."
+                    f"Adafruit busdevice and tca9548a packages are required. "
+                    f"Run {uv_pkg_msg('adafruit-circuitpython-busdevice', False)} and "
+                    f"{uv_pkg_msg('adafruit-circuitpython-tca9548a', False)} "
+                    f"in your virtual environment."
                 )
         else:
             from gaia.hardware.multiplexers._devices._compatibility import TCA9548ADevice

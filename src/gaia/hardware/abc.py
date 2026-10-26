@@ -29,7 +29,7 @@ from gaia.dependencies import check_dependencies
 from gaia.exceptions import DeviceError, HardwareNotFound
 from gaia.hardware._websocket import WebSocketHardwareManager
 from gaia.hardware.multiplexers import Multiplexer
-from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi
+from gaia.hardware.utils import get_i2c, hardware_logger, is_raspi, uv_pkg_msg
 from gaia.utils import pin_bcm_to_board, pin_board_to_bcm, pin_translation
 
 
@@ -746,8 +746,8 @@ class gpioAddressMixin(HardwareAddressMixin):
                 from adafruit_blinka.microcontroller.bcm283x.pin import Pin
             except ImportError:
                 raise RuntimeError(
-                    "Adafruit blinka package is required. Run "
-                    "`uv pip install adafruit-blinka` in your virtual env."
+                    f"Adafruit blinka package is required. "
+                    f"{uv_pkg_msg('adafruit-blinka')}"
                 )
         else:
             from gaia.hardware._compatibility import Pin
