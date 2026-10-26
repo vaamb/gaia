@@ -114,6 +114,9 @@ class TestSensorRecords:
         assert len(cache["records"]) == 0
         assert "took too long" in caplog.text
 
+        slow_task = sensors_subroutine._slow_sensor_futures.pop()
+        slow_task.cancel()
+
     @with_hardware(sensors_dict)
     async def test_add_sensor_records_failing_hardware(
             self, 
