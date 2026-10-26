@@ -191,6 +191,8 @@ class Sensors(SubroutineTemplate[Sensor]):
                     f"Sensor with uid '{future.hardware_uid}' failed to fetch data. "
                     f"ERROR msg: `{error.__class__.__name__}: {error}`.")
                 continue
+            if future.cancelled():
+                continue
             cache["records"].extend(
                 gv.SensorRecord(
                     sensor_read.sensor_uid,
