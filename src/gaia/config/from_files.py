@@ -849,12 +849,11 @@ class EngineConfig(metaclass=SingletonMeta):
             **updating_values: Unpack[EcosystemBaseUpdateDict],
     ) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
-        name = updating_values.get("name")
-        if name and not gv.is_missing(name):
-            self.ecosystems_config_dict[ecosystem_ids.uid]["name"] = name
-        status = updating_values.get("status")
-        if status and not gv.is_missing(status):
-            self.ecosystems_config_dict[ecosystem_ids.uid]["status"] = status
+        info = remove_missing(updating_values)
+        if "name" in info:
+            self.ecosystems_config_dict[ecosystem_ids.uid]["name"] = info["name"]
+        if "status" in info:
+            self.ecosystems_config_dict[ecosystem_ids.uid]["status"] = info["status"]
 
     def delete_ecosystem(self, ecosystem_id: str) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
