@@ -251,6 +251,28 @@ class TestEngine:
         await engine.terminate()
 
     @pytest.mark.timeout(10)
+    async def test_loop_survives_config_change_while_paused(
+            self,
+            engine: Engine,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        await engine.start()
+        engine.pause()
+
+        # A config change while paused should not refresh the ecosystems ...
+        caplog.clear()
+        await engine._notify_loop()
+        assert "Refreshing the ecosystems ..." not in caplog.text
+        assert not engine.task.done()
+
+        # ... but the loop should still be alive to refresh them once resumed
+        await engine.resume()
+        assert "Refreshing the ecosystems ..." in caplog.text
+
+        await engine.stop()
+        await engine.terminate()
+
+    @pytest.mark.timeout(10)
     async def test_loop_catches_config_change_during_refresh(self, engine: Engine):
         await engine.start()
 

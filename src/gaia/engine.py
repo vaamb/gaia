@@ -414,6 +414,8 @@ class Engine(metaclass=SingletonMeta):
             # Clear before refreshing so that changes made during the refresh
             #  trigger a new one
             self.config.new_config.clear()
+            if self._stop_event.is_set():
+                break
             if self.running:
                 try:
                     await self.refresh_ecosystems(send_info=True)
