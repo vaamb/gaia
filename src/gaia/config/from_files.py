@@ -849,7 +849,7 @@ class EngineConfig(metaclass=SingletonMeta):
             **updating_values: Unpack[EcosystemBaseUpdateDict],
     ) -> None:
         ecosystem_ids = self.get_IDs(ecosystem_id)
-        info = remove_missing(updating_values)
+        info = remove_missing(updating_values)  # ty: ignore[invalid-argument-type]
         if "name" in info:
             self.ecosystems_config_dict[ecosystem_ids.uid]["name"] = info["name"]
         if "status" in info:
