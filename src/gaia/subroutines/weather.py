@@ -175,7 +175,8 @@ class Weather(SubroutineTemplate[Actuator]):
         if parameter not in self._jobs:
             raise ValueError(f"Job for weather parameter {parameter} does not exist")
         # Remove the job
-        self.ecosystem.engine.scheduler.remove_job(parameter)
+        identifier = f"{self.ecosystem.uid}-weather_routine-{parameter}"
+        self.ecosystem.engine.scheduler.remove_job(identifier)
         self._jobs.remove(parameter)
         # Remove the timer if it has been set
         if parameter in self._timers:

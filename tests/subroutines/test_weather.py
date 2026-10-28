@@ -131,19 +131,21 @@ class TestWeatherSubroutine:
     async def test_add_job(self, weather_subroutine: Weather):
         # Setup
         weather_subroutine._actuator_handlers = {}
-        await weather_subroutine._mount_actuator_handler("rain")
+        parameter = "rain"
+        await weather_subroutine._mount_actuator_handler(parameter)
 
         # Test adding job
-        await weather_subroutine._add_job("rain")
+        await weather_subroutine._add_job(parameter)
 
-        assert weather_subroutine.ecosystem.engine.scheduler.get_job("rain") is not None
-        assert weather_subroutine._jobs == {"rain"}
+        identifier = f"{weather_subroutine.ecosystem.uid}-weather_routine-{parameter}"
+        assert weather_subroutine.ecosystem.engine.scheduler.get_job(identifier) is not None
+        assert weather_subroutine._jobs == {parameter}
         # The job hasn't started so the timer should be empty
         assert weather_subroutine._timers == {}
 
         # Should raise if the job already exists
         with pytest.raises(ValueError):
-            await weather_subroutine._add_job("rain")
+            await weather_subroutine._add_job(parameter)
 
         # Test removing job
         await weather_subroutine._remove_job("rain")
