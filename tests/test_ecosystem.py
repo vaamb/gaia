@@ -182,6 +182,15 @@ class TestEcosystem:
         await ecosystem.refresh_hardware()
         assert set(ecosystem.hardware) == hardware
 
+    async def test_deactivate_hardware(self, ecosystem: Ecosystem):
+        old_cfg = ecosystem.hardware[test_data.light_uid].dict_repr()
+        assert old_cfg["active"] is True
+        
+        ecosystem.config.hardware_dict[test_data.light_uid]["active"] = False
+        await ecosystem.refresh_hardware()
+
+        assert test_data.light_uid not in ecosystem.hardware
+
     async def test_actuators_data(self, ecosystem: Ecosystem):
         actuator_states = ecosystem.actuator_hub.as_dict()
         assert len(actuator_states) == len(default_actuators.climate_to_group_mapping)
