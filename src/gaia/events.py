@@ -545,7 +545,10 @@ class Events(AsyncEventHandler):
             result = crud_function(**data["kwargs"])
             if inspect.isawaitable(result):
                 result = await result
-            await self.engine.config.save(ConfigType.ecosystems)
+            if target == "place":
+                await self.engine.config.save(ConfigType.private)
+            else:
+                await self.engine.config.save(ConfigType.ecosystems)
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while treating CRUD request "
