@@ -165,7 +165,7 @@ class Weather(SubroutineTemplate[Actuator]):
         self.ecosystem.engine.scheduler.add_job(
             func=self._create_job_func(
                 parameter, actuator_handler, weather_cfg.duration, weather_cfg.level),
-            id=parameter,
+            id=f"{self.ecosystem.uid}-weather_routine-{parameter}",
             name=f"Weather job for {parameter}",
             trigger=CronTrigger.from_crontab(weather_cfg.pattern),
         )
@@ -175,7 +175,8 @@ class Weather(SubroutineTemplate[Actuator]):
         if parameter not in self._jobs:
             raise ValueError(f"Job for weather parameter {parameter} does not exist")
         # Remove the job
-        self.ecosystem.engine.scheduler.remove_job(parameter)
+        identifier = f"{self.ecosystem.uid}-weather_routine-{parameter}"
+        self.ecosystem.engine.scheduler.remove_job(identifier)
         self._jobs.remove(parameter)
         # Remove the timer if it has been set
         if parameter in self._timers:
