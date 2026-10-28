@@ -541,15 +541,15 @@ class Ecosystem:
             if self.config.hardware_dict.get(hardware_uid) != failed_config:
                 del self._failing_hardware[hardware_uid]
         needed: set[str] = self.get_hardware_needed()
-        existing: set[str] = set()
+        existing: set[str] = set(self._hardware)
         stale: set[str] = set()
         # Use `self._hardware` not to have spurious warnings from
         #  `self._check_hardware_is_up_to_date()`
         for hardware_uid in self._hardware:
-            existing.add(hardware_uid)
             in_config = self.config.hardware_dict.get(hardware_uid)
-            if in_config is None:
-                # Hardware was removed from config, go to next
+            if in_config is None or not in_config["active"]:
+                # Hardware was removed from config or isn't activated so won't be
+                # in `needed`, go to next
                 continue
             # /!\ Do not hold a reference to hardware or its reference count will never reach 0
             current = gv.to_anonymous(self._hardware[hardware_uid].dict_repr(), "uid")
