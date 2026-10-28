@@ -34,8 +34,9 @@ class TestEngineConfig:
             assert cfg_path.exists()
             assert cfg_path.is_file()
 
-    def test_ecosystem_config_creation_deletion(self, engine_config: EngineConfig):
+    def test_ecosystem_config_creation_update_deletion(self, engine_config: EngineConfig):
         engine_config.create_ecosystem("Already fading away")
+        engine_config.update_ecosystem_base_info("Already fading away", status=True)
         engine_config.delete_ecosystem("Already fading away")
         with pytest.raises(ValueError):
             engine_config.delete_ecosystem("Already fading away")
