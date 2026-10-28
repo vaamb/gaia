@@ -165,7 +165,7 @@ class Weather(SubroutineTemplate[Actuator]):
         self.ecosystem.engine.scheduler.add_job(
             func=self._create_job_func(
                 parameter, actuator_handler, weather_cfg.duration, weather_cfg.level),
-            id=parameter,
+            id=f"{self.ecosystem.uid}-weather_routine-{parameter}",
             name=f"Weather job for {parameter}",
             trigger=CronTrigger.from_crontab(weather_cfg.pattern),
         )
