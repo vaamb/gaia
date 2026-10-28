@@ -656,6 +656,7 @@ class Hardware(metaclass=_MetaHardware):
         return gv.HardwareConfig(
             uid=self._uid,
             name=self._name,
+            active=self._active,
             address=self.address_repr,
             type=self._type,
             level=self._level,
