@@ -312,13 +312,14 @@ class ActuatorHandler:
         assert actuator_direction in (Direction.decrease, Direction.increase)
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
-        eco_name = self.ecosystem.name.replace(" ", "_")
-        self.logger = logging.getLogger(
-            f"gaia.engine.{eco_name}.actuators.{self.group}")
         # Actuators info
         self.type: gv.HardwareType = actuator_type
         self.direction: Direction = actuator_direction
         self.group: str = actuator_group or self.type.name
+        # Logger
+        eco_name = self.ecosystem.name.replace(" ", "_")
+        self.logger = logging.getLogger(
+            f"gaia.engine.{eco_name}.actuators.{self.group}")
         # Internal state
         self._active: int = 0
         self._status: bool = False
