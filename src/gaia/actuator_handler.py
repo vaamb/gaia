@@ -38,6 +38,12 @@ pid_values: dict[gv.ClimateParameter, PIDParameters] = {
 }
 
 
+# Delays (in seconds) between two attempts to bring the actuators state in sync
+#  with their handler's
+RETRY_DELAY_MIN: float = 5.0
+RETRY_DELAY_MAX: float = 300.0
+
+
 class Direction(enum.IntFlag):
     none = 0
     decrease = 1
@@ -275,9 +281,13 @@ class ActuatorHandler:
         "_any_status_change",
         "_last_expected_level",
         "_level",
+        "_level_synced",
         "_mode",
+        "_retry_delay",
+        "_retry_timer",
         "_sending_data_task",
         "_status",
+        "_status_synced",
         "_timer",
         "_update_lock",
         "_updating",
@@ -302,24 +312,34 @@ class ActuatorHandler:
         assert actuator_direction in (Direction.decrease, Direction.increase)
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
+        # Actuators info
         self.type: gv.HardwareType = actuator_type
         self.direction: Direction = actuator_direction
         self.group: str = actuator_group or self.type.name
-        self.associated_pid: HystericalPID | None = associated_pid
+        # Logger
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
             f"gaia.engine.{eco_name}.actuators.{self.group}")
+        # Internal state
         self._active: int = 0
         self._status: bool = False
         self._level: float = 0.0
-        self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
-        self._timer: Timer | None = None
-        self._actuators: list[Actuator] | None = None
         self._last_expected_level: float = 0.0
+        self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
+        # Linked actuators, PIDs and tasks
+        self._timer: Timer | None = None
+        self.associated_pid: HystericalPID | None = associated_pid
+        self._actuators: list[Actuator] | None = None
+        # State update management
         self._update_lock: Lock = Lock()
         self._updating: bool = False
         self._any_status_change: bool = False
         self._sending_data_task: Task | None = None
+        # Actuators sync management
+        self._status_synced: bool = True  # Whet
+        self._level_synced: bool = True
+        self._retry_timer: Timer | None = None
+        self._retry_delay: float = RETRY_DELAY_MIN
 
     def __repr__(self) -> str:  # pragma: no cover
         uid = self.actuator_hub.ecosystem.uid
@@ -339,6 +359,9 @@ class ActuatorHandler:
 
     def reset_cached_actuators(self) -> None:
         self._actuators = None
+        # The linked actuators changed or are being terminated, the next status
+        #  or level update will retry if still needed
+        self._cancel_retry()
         if self.associated_pid is not None:
             self.associated_pid.reset_direction()
 
@@ -449,15 +472,18 @@ class ActuatorHandler:
 
     async def set_status(self, value: bool) -> bool:
         self._check_update_status_transaction()
-        if self._status == value:
+        status_change = self._status != value
+        if not status_change and self._status_synced:
             # No need to update
             return True
         success = await self._set_status(value)
-        self._any_status_change = True
+        if status_change:
+            self._any_status_change = True
         return success
 
     async def _set_status(self, value: bool) -> bool:
         self._status = value
+        self._status_synced = False
         actuators_linked = self.get_linked_actuators()
         if not actuators_linked:
             raise RuntimeError(
@@ -479,7 +505,11 @@ class ActuatorHandler:
             self.logger.warning(
                 f"Could not set all status to '{value}'. The following actuators "
                 f"failed: {', '.join(ids)}")
+            self._schedule_retry()
             return False
+        self._status_synced = True
+        if self.synced:
+            self._cancel_retry()
         self.logger.debug(
             f"{self.group.capitalize()} has been turned "
             f"{'on' if self.status else 'off'}.")
@@ -497,14 +527,18 @@ class ActuatorHandler:
 
     async def set_level(self, pwm_level: float) -> bool:
         self._check_update_status_transaction()
-        if self._level == pwm_level:
+        level_change = self._level != pwm_level
+        if not level_change and self._level_synced:
+            # No need to update
             return True
         success = await self._set_level(pwm_level)
-        #self._any_status_change = True
+        #if level_change:
+        #    self._any_status_change = True
         return success
 
     async def _set_level(self, pwm_level: float) -> bool:
         self._level = pwm_level
+        self._level_synced = False
         failed: list[tuple[str, str]] = []
         for actuator in self.get_linked_actuators():
             if isinstance(actuator, DimmerMixin):
@@ -516,10 +550,59 @@ class ActuatorHandler:
             self.logger.warning(
                 f"Could not set all the PWM level to '{pwm_level}'. The following actuators "
                 f"failed: {', '.join(ids)}")
+            self._schedule_retry()
             return False
+        self._level_synced = True
+        if self.synced:
+            self._cancel_retry()
         self.logger.debug(
             f"{self.group.capitalize()}'s PWM level has been set to {pwm_level}%.")
         return True
+
+    @property
+    def synced(self) -> bool:
+        return self._status_synced and self._level_synced
+
+    def _schedule_retry(self) -> None:
+        if self._retry_timer is not None:
+            # A retry is already pending, it will use the latest status and level
+            return
+        self.logger.info(
+            f"Retrying to update {self.group} actuators in {self._retry_delay} "
+            f"seconds.")
+        self._retry_timer = Timer(self._retry_sync, self._retry_delay)
+        # Use an exponential backoff
+        self._retry_delay = min(self._retry_delay * 2, RETRY_DELAY_MAX)
+
+    def _cancel_retry(self) -> None:
+        if self._retry_timer is not None:
+            self._retry_timer.cancel()
+        self._retry_timer = None
+        # Reset the retry delay
+        self._retry_delay = RETRY_DELAY_MIN
+
+    async def _retry_sync(self) -> None:
+        # Detach the timer
+        self._retry_timer = None
+        try:
+            # Don't use `update_status_transaction()`as the status did not
+            #  change
+            async with self._update_lock:
+                if not self._status_synced:
+                    await self._set_status(self._status)
+                if not self._level_synced:
+                    await self._set_level(self._level)
+        except Exception as e:
+            self.logger.error(
+                f"Encountered an error while retrying to update {self.group} "
+                f"actuators. ERROR msg: `{e.__class__.__name__}: {e}`."
+            )
+            self._schedule_retry()
+        else:
+            if self.synced:
+                self.logger.info(
+                    f"All {self.group.capitalize()} actuators are synced to the "
+                    f"expected status.")
 
     @property
     def countdown(self) -> float | None:
