@@ -279,7 +279,7 @@ class Climate(SubroutineTemplate[Actuator]):
         missing_parameter: bool = False
         for climate_parameter in self.regulated_parameters:
             measure = self._get_measure_for_parameter(climate_parameter)
-            if not sensors_average.get(measure, False):
+            if measure not in sensors_average:
                 missing_parameter = True
                 self.logger.debug(
                     f"No sensor data found for {climate_parameter}, climate "
