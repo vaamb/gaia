@@ -90,6 +90,38 @@ class TestActuatorHandler:
         assert light_handler.level == 0
         assert (await light.get_pwm_level()) == 0.0
 
+    async def test_failed_status_retry(
+            self,
+            light_handler: ActuatorHandler,
+            monkeypatch: pytest.MonkeyPatch,
+    ):
+        light: DimmableSwitchMixin = light_handler.ecosystem.hardware[test_data.light_uid]
+
+        async def failing_turn_on() -> bool:
+            return False
+
+        monkeypatch.setattr(light, "turn_on", failing_turn_on)
+        light_handler._retry_delay = 0.05
+
+        # The handler status is the expected one, but the actuator isn't sync
+        async with light_handler.update_status_transaction():
+            success = await light_handler.set_status(True)
+        assert not success
+        assert light_handler.status is True
+        assert not light_handler.synced
+        assert (await light.get_status()) is False
+
+        # Setting the same status is tried again rather than skipped
+        async with light_handler.update_status_transaction():
+            success = await light_handler.set_status(True)
+        assert not success
+
+        # Once the hardware is back, its status automatically sync with its handler
+        monkeypatch.undo()
+        await sleep(0.1)
+        assert light_handler.synced
+        assert (await light.get_status()) is True
+
     async def test_handler_timer_modification(self, light_handler: ActuatorHandler):
         # Test default countdown
         assert light_handler.countdown is None
