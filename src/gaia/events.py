@@ -542,13 +542,15 @@ class Events(AsyncEventHandler):
         # Treat the CRUD request
         try:
             crud_function = self._get_crud_function(action, target, ecosystem_uid)
-            result = crud_function(**data["kwargs"])
-            if inspect.isawaitable(result):
-                result = await result
-            if target == "place":
-                await self.engine.config.save(ConfigType.private)
-            else:
-                await self.engine.config.save(ConfigType.ecosystems)
+            async with self.engine.config.config_files_lock:
+                result = crud_function(**data["kwargs"])
+                if inspect.isawaitable(result):
+                    await result
+                if target == "place":
+                    await self.engine.config._dump_private_config()
+                else:
+                    await self.engine.config._dump_ecosystems_config()
+
         except Exception as e:
             self.logger.error(
                 f"Encountered an error while treating CRUD request "

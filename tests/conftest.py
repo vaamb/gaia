@@ -1,4 +1,4 @@
-from asyncio import Event
+from asyncio import Event, Lock
 from copy import deepcopy
 import gc
 import os
@@ -95,8 +95,14 @@ async def engine_config(
         yield engine_config_master
     finally:
         engine_config_master._app_config = app_config
-        engine_config_master._ecosystems_config_dict = ecosystem_config
-        engine_config_master._private_config = private_config
+        if engine_config_master._ecosystems_config_dict != ecosystem_config:
+            engine_config_master._ecosystems_config_dict = ecosystem_config
+            async with engine_config_master.config_files_lock:
+                await engine_config_master._dump_ecosystems_config()
+        if engine_config_master._private_config != private_config:
+            engine_config_master._private_config = private_config
+            async with engine_config_master.config_files_lock:
+                await engine_config_master._dump_private_config()
         engine_config_master._chaos_memory = {}
         engine_config_master._sun_times = {}
         if engine_config_master.started:
@@ -105,6 +111,7 @@ async def engine_config(
         # renew them so they can be awaited in the next test's event loop
         engine_config_master.watchdog.new_config = Event()
         engine_config_master.watchdog._stop_event = Event()
+        engine_config_master._config_files_lock = Lock()
         # Empty the cache dir but keep it: removing it would make the next test
         #  recreate it, with a warning
         for path in engine_config_master.cache_dir.iterdir():
