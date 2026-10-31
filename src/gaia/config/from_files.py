@@ -693,8 +693,6 @@ class EngineConfig(metaclass=SingletonMeta):
         await _dump_json(self._chaos_memory, chaos_path)
 
     async def save(self, cfg_type: ConfigType | CacheType) -> None:
-        if self.app_config.TESTING:
-            return
         match cfg_type:
             case ConfigType.ecosystems:
                 async with self.config_files_lock:
