@@ -295,7 +295,7 @@ def get_ecosystem_info(
             "environment": {
                 "chaos": {
                     "frequency": 0,
-                    "duration": 0,
+                    "duration": 1,
                     "intensity": 0.0,
                 },
                 "nycthemeral_cycle": {

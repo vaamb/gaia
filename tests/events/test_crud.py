@@ -268,7 +268,7 @@ class TestCRUDChaos:
     ):
         frequency = 10
         duration = 5
-        intensity = 1.10
+        intensity = 0.10
         message = gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,

@@ -51,6 +51,12 @@ NORTHERN_SUMMER_END_MONTH = 9
 
 
 # ---------------------------------------------------------------------------
+#   Errors
+# ---------------------------------------------------------------------------
+class OutdatedData(RuntimeError): ...
+
+
+# ---------------------------------------------------------------------------
 #   Enums
 # ---------------------------------------------------------------------------
 class ConfigType(Enum):
@@ -1638,10 +1644,20 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def chaos_time_window(self) -> gv.TimeWindowDict:
-        #chaos_memory = self.general.get_chaos_memory(self.uid)
-        #if chaos_memory["last_update"] < date.today():
-        #    await self._update_chaos_time_window()
+        chaos_memory = self.general.get_chaos_memory(self.uid)
+        if chaos_memory["last_update"] < date.today():
+            self.logger.warning("Chaos time window is outdated.")
+            raise OutdatedData("Run `update_chaos_time_window()`")
         return self.general.get_chaos_memory(self.uid)["time_window"]
+
+    def _set_chaos_time_window(
+            self,
+            beginning: datetime | None,
+            end: datetime | None,
+    ) -> None:
+        self._engine_config.chaos_memory[self.uid] = ChaosMemoryValidator(
+            time_window={"beginning": beginning, "end": end},
+        ).model_dump()
 
     async def update_chaos_time_window(self) -> None:
         """Update the chaos time window if it hasn't been updated today.
@@ -1650,35 +1666,41 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         configured frequency.
         """
         self.logger.info("Updating chaos time window.")
-        if self.general.get_chaos_memory(self.uid)["last_update"] < date.today():
-            await self._update_chaos_time_window()
-        else:
+        if self.general.get_chaos_memory(self.uid)["last_update"] >= date.today():
             self.logger.debug("Chaos time window is already up to date.")
-
-    async def _update_chaos_time_window(self) -> None:
-        beginning = self.chaos_time_window["beginning"]
-        end = self.chaos_time_window["end"]
-        if beginning and end:
-            if not (beginning <= datetime.now(timezone.utc) <= end):  # End of chaos period
-                beginning = None
-                end = None
-        else:
-            if self.chaos_config.frequency:
-                chaos_probability = random.randint(1, self.chaos_config.frequency)
-            else:
-                chaos_probability = 0
-            if chaos_probability == 1:
-                today = datetime.now(timezone.utc).replace(
-                    hour=14, minute=0, second=0, microsecond=0)
-                beginning = today
-                end = today + timedelta(days=self.chaos_config.duration)
-        self._engine_config.chaos_memory[self.uid] = {
-            "time_window": {
-                "beginning": beginning,
-                "end": end,
-            },
-            "last_update": date.today()
-        }
+            return
+        # If no frequency is given, chaos is not wanted
+        if not self.chaos_config.frequency:
+            self._set_chaos_time_window(None, None)
+            await self.general.save(CacheType.chaos)
+            return
+        chaos_memory = self.general.get_chaos_memory(self.uid)
+        beginning = chaos_memory["time_window"]["beginning"]
+        end = chaos_memory["time_window"]["end"]
+        # If we're in the middle of a scheduled chaos time window
+        if (
+                beginning and end
+                and beginning <= datetime.now(timezone.utc) <= end
+        ):
+            # Simply update the time window "last_update"
+            self._set_chaos_time_window(beginning, end)
+            await self.general.save(CacheType.chaos)
+            return
+        # Otherwise, we are in a peaceful time window ...
+        beginning = None
+        end = None
+        # ... roll the dice to see if a chaos time window is going to be scheduled
+        # The probability of a chaos time window = 1/frequency
+        chaos_probability = random.randint(1, self.chaos_config.frequency)
+        if chaos_probability == 1:
+            midnight = datetime.now()
+            midnight = midnight.replace(hour=0, minute=0, second=0, microsecond=0)
+            beginning = midnight.astimezone(timezone.utc)
+            # Make sure the end is before the next CRON update so 2 chaotic days
+            #  can follow each others if frequency = 1
+            end = midnight + timedelta(days=self.chaos_config.duration, seconds=-1)
+            end = end.astimezone(timezone.utc)
+        self._set_chaos_time_window(beginning, end)
         await self.general.save(CacheType.chaos)
 
     def get_chaos_factor(self, now: datetime | None = None) -> float:
@@ -1687,25 +1709,38 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Returns a sinusoidal factor that peaks at the middle of the chaos period.
 
         :param now: The current time, defaults to now in UTC.
-        :return: A float from 1.0 (no chaos) to chaos intensity (peak chaos).
+        :return: A float from 1.0 (no chaos) to 1 + chaos intensity (peak chaos).
         """
-        beginning = self.chaos_time_window["beginning"]
-        end = self.chaos_time_window["end"]
+        try:
+            time_window = self.chaos_time_window
+        except OutdatedData:
+            return 1.0
+        beginning = time_window["beginning"]
+        end = time_window["end"]
         if beginning is None or end is None:
             return 1.0
         now = now or datetime.now(timezone.utc)
         chaos_duration = (end - beginning).total_seconds() // 60
         chaos_start_to_now = (now - beginning).total_seconds() // 60
         chaos_fraction = chaos_start_to_now / chaos_duration
+        if not 0.0 <= chaos_fraction <= 1.0:
+            return 1.0
         chaos_radian = chaos_fraction * pi
-        return (sin(chaos_radian) * (self.chaos_config.intensity - 1.0)) + 1.0
+        return (sin(chaos_radian) * self.chaos_config.intensity) + 1.0
 
     @property
     def chaos_parameters(self) -> gv.ChaosParameters:
+        try:
+            time_window = self.chaos_time_window
+        except OutdatedData:
+            time_window = {
+                "beginning": None,
+                "end": None,
+            }
         # Valid ignore: implicit conversion from dict to model by pydantic
         return gv.ChaosParameters(**{  # ty: ignore[invalid-argument-type]
             **self.environment["chaos"],
-            "time_window": self.chaos_time_window,
+            "time_window": time_window,
         })
 
     # ---------------------------------------------------------------------------
