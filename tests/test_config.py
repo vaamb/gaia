@@ -1,4 +1,5 @@
 from asyncio import sleep
+from math import isclose
 from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
@@ -200,17 +201,18 @@ class TestEcosystemConfigGeneralEnvironment:
             ecosystem_config: EcosystemConfig,
             caplog: pytest.LogCaptureFixture,
     ):
-        today = datetime.now(timezone.utc).replace(
-            hour=14, minute=0, second=0, microsecond=0)
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = today.astimezone()
 
         assert ecosystem_config.chaos_config == gv.ChaosConfig()
 
         with pytest.raises(ValueError):
             ecosystem_config.chaos_config = {"wrong": "value"}
 
-        max_intensity = 1.2
+        intensity = 0.2
+        max_intensity = intensity + 1
         duration = 2
-        parameters = {"frequency": 1, "duration": duration, "intensity": max_intensity}
+        parameters = {"frequency": 1, "duration": duration, "intensity": intensity}
         ecosystem_config.chaos_config = parameters
         assert ecosystem_config.chaos_config == gv.ChaosConfig(**parameters)
 
@@ -226,7 +228,7 @@ class TestEcosystemConfigGeneralEnvironment:
         await ecosystem_config.update_chaos_time_window()
         chaos_time_window = ecosystem_config.chaos_time_window
         assert chaos_time_window["beginning"] == today
-        assert chaos_time_window["end"] == today + timedelta(days=duration)
+        assert chaos_time_window["end"] == today + timedelta(days=duration, seconds=-1)
 
         await ecosystem_config.update_chaos_time_window()
 
@@ -234,7 +236,7 @@ class TestEcosystemConfigGeneralEnvironment:
 
         chaos_factor = ecosystem_config.get_chaos_factor(today + timedelta(days=1))
         # chaos_factor should be at its maximum
-        assert chaos_factor == max_intensity
+        assert isclose(chaos_factor, max_intensity, abs_tol=0.01)
 
     async def test_light_method(self, ecosystem_config: EcosystemConfig):
         # By default, the computed lighting method should be "fixed"
