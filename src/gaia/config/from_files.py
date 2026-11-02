@@ -1729,10 +1729,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @property
     def chaos_parameters(self) -> gv.ChaosParameters:
+        try:
+            time_window = self.chaos_time_window
+        except OutdatedData:
+            time_window = {
+                "beginning": None,
+                "end": None,
+            }
         # Valid ignore: implicit conversion from dict to model by pydantic
         return gv.ChaosParameters(**{  # ty: ignore[invalid-argument-type]
             **self.environment["chaos"],
-            "time_window": self.chaos_time_window,
+            "time_window": time_window,
         })
 
     # ---------------------------------------------------------------------------
