@@ -1,6 +1,7 @@
 from asyncio import sleep
 from math import isclose
 from datetime import date, datetime, time, timedelta, timezone
+import random
 
 import pytest
 
@@ -237,6 +238,42 @@ class TestEcosystemConfigGeneralEnvironment:
         chaos_factor = ecosystem_config.get_chaos_factor(today + timedelta(days=1))
         # chaos_factor should be at its maximum
         assert isclose(chaos_factor, max_intensity, abs_tol=0.01)
+
+    async def test_chaos_daily_update(
+            self,
+            ecosystem_config: EcosystemConfig,
+            monkeypatch: pytest.MonkeyPatch,
+    ):
+        # The daily update must refresh `last_update` even when it leaves the
+        #  time window unchanged, otherwise the time window is seen as outdated
+        uid = ecosystem_config.uid
+
+        async def update_from_yesterday() -> gv.TimeWindow:
+            chaos_memory = ecosystem_config.general.get_chaos_memory(uid)
+            chaos_memory["last_update"] = date.today() - timedelta(days=1)
+            await ecosystem_config.update_chaos_time_window()
+            chaos_memory = ecosystem_config.general.get_chaos_memory(uid)
+            assert chaos_memory["last_update"] == date.today()
+            # Would raise `OutdatedData` if `last_update` was not refreshed
+            return ecosystem_config.chaos_parameters.time_window
+
+        # No chaos configured
+        assert ecosystem_config.chaos_config.frequency == 0
+        time_window = await update_from_yesterday()
+        assert time_window.beginning is None
+
+        # Chaos configured, but the dice roll fails
+        ecosystem_config.chaos_config = {"frequency": 10, "duration": 2, "intensity": 0.2}
+        monkeypatch.setattr(random, "randint", lambda a, b: 2)
+        time_window = await update_from_yesterday()
+        assert time_window.beginning is None
+
+        # The dice roll succeeds and a chaos time window starts ...
+        monkeypatch.setattr(random, "randint", lambda a, b: 1)
+        time_window = await update_from_yesterday()
+        assert time_window.beginning is not None
+        # ... and is kept unchanged the next day
+        assert await update_from_yesterday() == time_window
 
     async def test_light_method(self, ecosystem_config: EcosystemConfig):
         # By default, the computed lighting method should be "fixed"
