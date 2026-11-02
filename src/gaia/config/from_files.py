@@ -1693,12 +1693,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # The probability of a chaos time window = 1/frequency
         chaos_probability = random.randint(1, self.chaos_config.frequency)
         if chaos_probability == 1:
-            beginning = datetime.now()
-            beginning = beginning.replace(hour=0, minute=0, second=0, microsecond=0)
-            beginning = beginning.astimezone(timezone.utc)
+            midnight = datetime.now()
+            midnight = midnight.replace(hour=0, minute=0, second=0, microsecond=0)
+            beginning = midnight.astimezone(timezone.utc)
             # Make sure the end is before the next CRON update so 2 chaotic days
             #  can follow each others if frequency = 1
-            end = beginning + timedelta(days=self.chaos_config.duration, seconds=-1)
+            end = midnight + timedelta(days=self.chaos_config.duration, seconds=-1)
+            end = end.astimezone(timezone.utc)
         self._set_chaos_time_window(beginning, end)
         await self.general.save(CacheType.chaos)
 
