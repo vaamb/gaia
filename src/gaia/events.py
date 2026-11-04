@@ -72,7 +72,7 @@ payload_classes_dict: dict[PayloadName, Type[gv.EcosystemPayload]] = {
 
 
 class CrudLinks(NamedTuple):
-    func_or_attr_name: str
+    func_name: str
     payload_name: PayloadName
 
 
@@ -108,9 +108,9 @@ crud_links_dict: dict[CrudEventName, CrudLinks] = {
     "update_place": CrudLinks("update_place", "places_list"),
     "delete_place": CrudLinks("delete_place", "places_list"),
     # Ecosystem properties update
-    "update_management": CrudLinks("managements", "management"),
+    "update_management": CrudLinks("set_managements", "management"),
     # Environment parameter creation, deletion and update
-    "update_chaos_config": CrudLinks("chaos_config", "chaos_parameters"),
+    "update_chaos_config": CrudLinks("set_chaos_config", "chaos_parameters"),
     "update_nycthemeral_config": CrudLinks("set_nycthemeral_cycle", "nycthemeral_info"),
     "create_climate_parameter": CrudLinks(
         "set_climate_parameter", "climate"),
@@ -482,64 +482,68 @@ class Events(AsyncEventHandler):
     # ---------------------------------------------------------------------------
     #   Events for CRUD requests
     # ---------------------------------------------------------------------------
+    @staticmethod
+    def _get_crud_links(action: str, target: str) -> CrudLinks:
+        event_name = cast(CrudEventName, f"{action}_{target}")
+        crud_links = crud_links_dict.get(event_name)
+        if crud_links is None:
+            raise ValueError(
+                f"{action.capitalize()} {target} is not available for this "
+                f"engine.")
+        return crud_links
+
     def _get_crud_function(
             self,
-            action: gv.CrudAction,
+            action: str,
             target: str,
             ecosystem_uid: str | None = None,
     ) -> Callable:
         if target in ("ecosystem", "place"):
-            base_obj = self.engine.config
+            targeted_config = self.engine.config
+            # TODO: make sure Ouranos doesn't send `ecosystem_uid` and bump contract version
+            #if ecosystem_uid is not None:
+            #    raise ValueError(
+            #        f"{action.capitalize()} {target} requires the "
+            #        f"'ecosystem_uid' field to be `None`.")
         else:
             if ecosystem_uid is None:
                 raise ValueError(
-                    f"{action.name.capitalize()} {target} requires the "
+                    f"{action.capitalize()} {target} requires the "
                     f"'ecosystem_uid' field to be set.")
             if ecosystem_uid not in self.engine.ecosystems:
                 raise ValueError(
                     f"Ecosystem with uid '{ecosystem_uid}' is not one of the "
                     f"started ecosystems.")
-            base_obj = self.engine.config.get_ecosystem_config(ecosystem_uid)
+            targeted_config = self.engine.config.get_ecosystem_config(ecosystem_uid)
 
-        event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
+        crud_links = self._get_crud_links(action, target)
+        return getattr(targeted_config, crud_links.func_name)
 
-        crud_link = crud_links_dict.get(event_name)
-        if crud_link is None:
-            raise ValueError(
-                f"{action.name.capitalize()} {target} is not possible for this "
-                f"engine.")
-
-        if target in ("management", "chaos_config"):
-            # Need to update a setter
-            def attr_setter(**value: dict) -> None:
-                setattr(base_obj, crud_link.func_or_attr_name, value)
-
-            return attr_setter
-        else:
-            return getattr(base_obj, crud_link.func_or_attr_name)
+    def _get_crud_payload_name(self, action: str, target: str) -> PayloadName:
+        crud_links = self._get_crud_links(action, target)
+        return crud_links.payload_name
 
     @validate_payload(gv.CrudPayload)
     async def on_crud(self, data: gv.CrudPayloadDict) -> None:
         # Verify it is the intended recipient
-        engine_uid = data["routing"]["engine_uid"]
+        crud_uuid: UUID = data["uuid"]
+        routing = data["routing"]
+        engine_uid = routing["engine_uid"]
         if engine_uid != self.engine.uid:
             self.logger.warning(
-                f"Received a CRUD request intended to engine '{engine_uid}'.")
+                f"Received the CRUD request '{crud_uuid}' intended to engine "
+                f"'{engine_uid}'.")
             return
-
-        # Extract CRUD request data
-        crud_uuid: UUID = data["uuid"]
-        action: gv.CrudAction = data["action"]
-        target: str = data["target"]
-        ecosystem_uid: str | None
-        if target in ("ecosystem", "place"):
-            ecosystem_uid = None
-        else:
-            ecosystem_uid = data["routing"]["ecosystem_uid"]
-        event_name: CrudEventName = cast(CrudEventName, f"{action.name}_{target}")
         self.logger.info(f"Received CRUD request '{crud_uuid}' from Ouranos.")
 
-        # Treat the CRUD request
+        # Extract CRUD request data
+        action_enum: gv.CrudAction = data["action"]
+        action: str = action_enum.name
+        target = data["target"]
+        ecosystem_uid = routing["ecosystem_uid"]
+        # TODO: make sure Ouranos doesn't send `ecosystem_uid` and bump contract version
+        if target in ("ecosystem", "place"):
+            ecosystem_uid = None
         try:
             crud_function = self._get_crud_function(action, target, ecosystem_uid)
             async with self.engine.config.config_files_lock:
@@ -576,9 +580,9 @@ class Events(AsyncEventHandler):
 
         # Send back the updated info
         await self.engine.refresh_ecosystems(send_info=False)
-        crud_link = crud_links_dict[event_name]
+        payload_name = self._get_crud_payload_name(action, target)
         await self.send_payload(
-            payload_name=crud_link.payload_name, ecosystem_uids=ecosystem_uid)
+            payload_name=payload_name, ecosystem_uids=ecosystem_uid)
 
     # ---------------------------------------------------------------------------
     #   Events for buffered data

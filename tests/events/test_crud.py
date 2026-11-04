@@ -44,7 +44,7 @@ class TestCRUDGeneral:
 
         await events_handler.on_crud(message)
 
-        assert "Received a CRUD request intended to engine" in caplog.text
+        assert f"Received the CRUD request '{message['uuid']}' intended to engine" in caplog.text
 
     async def test_missing_ecosystem_uid(
             self,
