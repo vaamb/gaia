@@ -35,7 +35,7 @@ class TestCRUDGeneral:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": "wrong_uid", "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.create,
             target="hardware",
@@ -51,7 +51,7 @@ class TestCRUDGeneral:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid},
             action=gv.CrudAction.create,
             target="hardware",
@@ -67,7 +67,7 @@ class TestCRUDGeneral:
         assert error_msg in emitted_msg["message"]
 
     async def test_routing_success(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.create,
             target="ecosystem",
@@ -86,7 +86,7 @@ class TestCRUDEcosystem:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.create,
             target="ecosystem",
@@ -107,7 +107,7 @@ class TestCRUDEcosystem:
         ]
 
     async def test_update_failure(self, events_handler: Events):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid},
             action=gv.CrudAction.update,
             target="ecosystem",
@@ -122,7 +122,7 @@ class TestCRUDEcosystem:
 
     async def test_update(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
         new_name = "NewName"
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid},
             action=gv.CrudAction.update,
             target="ecosystem",
@@ -138,7 +138,7 @@ class TestCRUDEcosystem:
         assert ecosystem_config["name"] == new_name
 
     async def test_delete_failure(self, events_handler: Events):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid},
             action=gv.CrudAction.delete,
             target="ecosystem",
@@ -152,7 +152,7 @@ class TestCRUDEcosystem:
         assert "Ecosystem with id 'does_not_exists' not found" in result_msg["message"]
 
     async def test_delete(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="ecosystem",
@@ -171,7 +171,7 @@ class TestCRUDEcosystem:
 @pytest.mark.asyncio
 class TestCRUDPlace:
     async def test_create(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.create,
             target="place",
@@ -190,7 +190,7 @@ class TestCRUDPlace:
         assert coordinates.latitude == 0
 
     async def test_update_failure(self, events_handler: Events):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid},
             action=gv.CrudAction.update,
             target="place",
@@ -206,7 +206,7 @@ class TestCRUDPlace:
     async def test_update(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
         events_handler.engine.config.set_place("home", (0, 0))
 
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid},
             action=gv.CrudAction.update,
             target="place",
@@ -225,7 +225,7 @@ class TestCRUDPlace:
         assert coordinates.longitude == 2
 
     async def test_delete_failure(self, events_handler: Events):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="place",
@@ -241,7 +241,7 @@ class TestCRUDPlace:
     async def test_delete(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
         events_handler.engine.config.set_place("home", (0, 0))
 
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="place",
@@ -269,7 +269,7 @@ class TestCRUDChaos:
         frequency = 10
         duration = 5
         intensity = 0.10
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="chaos_config",
@@ -301,7 +301,7 @@ class TestCRUDNychthemeralConfig:
         target = "home"
         day = time(8, 42)
         night = time(21, 0)
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="nycthemeral_config",
@@ -335,7 +335,7 @@ class TestCRUDManagement:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="management",
@@ -362,7 +362,7 @@ class TestCRUDClimateParameter:
         day = 10.0
         night = 15.0
         hysteresis = 0.0
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.create,
             target="climate_parameter",
@@ -396,7 +396,7 @@ class TestCRUDClimateParameter:
         day = 100000.0
         night = 0.0
         hysteresis = None
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="climate_parameter",
@@ -430,7 +430,7 @@ class TestCRUDClimateParameter:
         day = 10.0
         night = 15.0
         hysteresis = 0.0
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="climate_parameter",
@@ -464,7 +464,7 @@ class TestCRUDClimateParameter:
 
     async def test_delete_failure(self, events_handler: Events):
         parameter = gv.ClimateParameter.light
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="climate_parameter",
@@ -490,7 +490,7 @@ class TestCRUDClimateParameter:
             hysteresis=10000,
         )
 
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="climate_parameter",
@@ -518,7 +518,7 @@ class TestCRUDWeatherEvent:
         pattern = "0 7 * * *"
         duration = 30.0
 
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.create,
             target="weather_event",
@@ -551,7 +551,7 @@ class TestCRUDWeatherEvent:
         pattern = "0 7 * * *"
         duration = 30.0
 
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="weather_event",
@@ -577,7 +577,7 @@ class TestCRUDWeatherEvent:
         pattern = "0 7 * * *"
         duration = 30.0
 
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="weather_event",
@@ -607,7 +607,7 @@ class TestCRUDWeatherEvent:
 
     async def test_delete_failure(self, events_handler: Events):
         parameter = gv.WeatherParameter.fog
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="weather_event",
@@ -632,7 +632,7 @@ class TestCRUDWeatherEvent:
             duration=30.0,
         )
 
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="weather_event",
@@ -658,7 +658,7 @@ class TestCRUDHardware:
             "model": "gpioSwitch",
             "address": "GPIO_11",  # Use a free address
         }
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.create,
             target="hardware",
@@ -685,7 +685,7 @@ class TestCRUDHardware:
             "model": "gpioSwitch",
             "address": "GPIO_11",  # Use a free address
         }
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="hardware",
@@ -705,7 +705,7 @@ class TestCRUDHardware:
             "model": "gpioSwitch",
             "address": "GPIO_11",  # Use a free address
         }
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.update,
             target="hardware",
@@ -727,7 +727,7 @@ class TestCRUDHardware:
 
     @with_hardware(hardware_dict)
     async def test_delete_failure(self, events_handler: Events):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="hardware",
@@ -742,7 +742,7 @@ class TestCRUDHardware:
 
     @with_hardware(hardware_dict)
     async def test_delete(self, events_handler: Events, caplog: pytest.LogCaptureFixture):
-        message = gv.CrudPayloadDict = gv.CrudPayload(
+        message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
             target="hardware",
