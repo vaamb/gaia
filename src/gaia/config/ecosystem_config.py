@@ -163,9 +163,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def managements(self) -> gv.ManagementConfigDict:
         return self._config_dict["management"]
 
-    @managements.setter
-    def managements(self, value: gv.ManagementConfigDict) -> None:
-        self._config_dict["management"] = gv.ManagementConfig(**value).model_dump()
+    def set_managements(self, **value: Unpack[gv.ManagementConfigDict]) -> None:
+        """Set managements in the dict format
+
+        :param value: The management config values with all the entries provided.
+        """
+        try:
+            validated_values = gv.ManagementConfig(**value).model_dump()
+        except pydantic.ValidationError as e:  # pragma: no cover
+            raise ValueError(
+                f"Invalid management parameters provided. "
+                f"ERROR msg(s): `{format_pydantic_error(e)}`."
+            )
+        self._config_dict["management"] = validated_values
 
     @property
     def management_flag(self) -> int:
@@ -596,15 +606,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def chaos_config(self) -> gv.ChaosConfig:
         return gv.ChaosConfig(**self.environment["chaos"])
 
-    @chaos_config.setter
-    def chaos_config(self, values: gv.ChaosConfigDict) -> None:
+    def set_chaos_config(self, **value: Unpack[gv.ChaosConfigDict]) -> None:
         """Set chaos parameter
 
-        :param values: A dict with the entries 'frequency': int,
-                       'duration': int and 'intensity': float.
+        :param value: The chaos config values with the entries 'frequency': int,
+                      'duration': int and 'intensity': float.
         """
         try:
-            validated_values = gv.ChaosConfig(**values).model_dump()
+            validated_values = gv.ChaosConfig(**value).model_dump()
         except pydantic.ValidationError as e:  # pragma: no cover
             raise ValueError(
                 f"Invalid chaos parameters provided. "

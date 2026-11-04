@@ -208,13 +208,13 @@ class TestEcosystemConfigGeneralEnvironment:
         assert ecosystem_config.chaos_config == gv.ChaosConfig()
 
         with pytest.raises(ValueError):
-            ecosystem_config.chaos_config = {"wrong": "value"}
+            ecosystem_config.set_chaos_config(wrong="value")
 
         intensity = 0.2
         max_intensity = intensity + 1
         duration = 2
         parameters = {"frequency": 1, "duration": duration, "intensity": intensity}
-        ecosystem_config.chaos_config = parameters
+        ecosystem_config.set_chaos_config(**parameters)
         assert ecosystem_config.chaos_config == gv.ChaosConfig(**parameters)
 
         # By default, the newly created cfg has empty chaos time window
@@ -263,7 +263,7 @@ class TestEcosystemConfigGeneralEnvironment:
         assert time_window.beginning is None
 
         # Chaos configured, but the dice roll fails
-        ecosystem_config.chaos_config = {"frequency": 10, "duration": 2, "intensity": 0.2}
+        ecosystem_config.set_chaos_config(frequency=10, duration=2, intensity=0.2)
         monkeypatch.setattr(random, "randint", lambda a, b: 2)
         time_window = await update_from_yesterday()
         assert time_window.beginning is None
