@@ -4,7 +4,7 @@ from pydantic import Field, RootModel
 
 import gaia_validators as gv
 
-from gaia.config import from_files
+from gaia.config.models import EcosystemConfigValidator as _EcosystemConfigValidator
 from gaia.subroutines.template import SubroutineTemplate
 
 
@@ -23,7 +23,7 @@ class PatchedManagementConfig(gv.ManagementConfig):
     dummy: bool = False
 
 
-class EcosystemConfigValidator(from_files.EcosystemConfigValidator):
+class EcosystemConfigValidator(_EcosystemConfigValidator):
     management: gv.ManagementConfig = Field(default_factory=gv.ManagementConfig)
 
 

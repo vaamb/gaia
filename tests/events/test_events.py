@@ -14,7 +14,7 @@ from sqlalchemy import delete
 import gaia_validators as gv
 
 from gaia import Ecosystem, EngineConfig
-from gaia.config.from_files import PrivateConfigValidator
+from gaia.config.models import PrivateConfigValidator
 from gaia.database.models import ActuatorBuffer, SensorBuffer
 from gaia.events import Events, validate_payload
 

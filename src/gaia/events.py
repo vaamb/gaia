@@ -21,7 +21,7 @@ from dispatcher import AsyncEventHandler
 import gaia_validators as gv
 
 from gaia import Ecosystem, Engine
-from gaia.config.from_files import ConfigType
+from gaia.config import ConfigType
 from gaia.ecosystem import _EcosystemPayloads
 from gaia.utils import humanize_list, local_ip_address
 

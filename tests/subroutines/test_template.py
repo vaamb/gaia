@@ -5,7 +5,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem
-from gaia.config import from_files
+from gaia.config import engine_config
 from gaia import subroutines
 from gaia.subroutines import subroutine_dict
 
@@ -29,7 +29,7 @@ class TestSubroutineTemplate:
 
         # Patch config RootEcosystemsConfigValidator
         monkeypatch.setattr(
-            from_files, "RootEcosystemsConfigValidator",
+            engine_config, "RootEcosystemsConfigValidator",
             PatchedRootEcosystemsConfigValidator)
 
         # Patch subroutine dict and names
