@@ -10,7 +10,7 @@ from gaia.hardware.abc import Actuator, Camera, Sensor
 
 
 if t.TYPE_CHECKING:  # pragma: no cover
-    from gaia.config.from_files import EcosystemConfig
+    from gaia.config import EcosystemConfig
     from gaia.ecosystem import Ecosystem
 
 

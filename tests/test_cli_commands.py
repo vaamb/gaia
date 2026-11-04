@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from gaia.config.from_files import EngineConfig
+from gaia.config import EngineConfig
 from gaia.hardware import get_hardware_specs
 from gaia.cli.commands import dump_hardware_specs, validate_configs
 from gaia.utils import json

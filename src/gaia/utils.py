@@ -335,7 +335,7 @@ def temperature_converter(
 
 
 def get_unit(measure: str, default: str) -> str:
-    from gaia.config.from_files import EngineConfig
+    from gaia.config import EngineConfig
 
     return EngineConfig().units.get(measure, default)
 

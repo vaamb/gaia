@@ -4,7 +4,7 @@ from pathlib import Path
 import click
 
 from gaia.config._utils import handlers, logging_config
-from gaia.config.from_files import ConfigType, EngineConfig
+from gaia.config import ConfigType, EngineConfig
 from gaia.hardware import get_hardware_specs
 from gaia.utils import json
 

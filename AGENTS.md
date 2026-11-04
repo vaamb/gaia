@@ -46,8 +46,9 @@ Engine (singleton)                 engine.py
     ├── ActuatorHub                actuator_handler.py  - ActuatorHandlers + HystericalPIDs
     └── VirtualEcosystem           virtual.py           - physics simulation when virtualized
 
-EngineConfig (singleton)           config/from_files.py - ecosystems.cfg + private.cfg, watched
-└── EcosystemConfig[]              config/from_files.py - per-ecosystem view, one instance per ecosystem UID
+EngineConfig (singleton)           config/engine_config.py    - ecosystems.cfg + private.cfg, watched
+└── EcosystemConfig[]              config/ecosystem_config.py - per-ecosystem view, one instance per ecosystem UID
+                                   config/models.py           - config file models, enums and errors
 
 Both Engine and Ecosystem can access their associated config object
 

@@ -8,7 +8,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia.config import ConfigType, EcosystemConfig, EngineConfig
-from gaia.config.from_files import ConfigValidationError
+from gaia.config.models import ConfigValidationError
 from gaia.exceptions import HardwareNotFound, PlantNotFound, UndefinedParameter
 from gaia.subroutines import subroutine_names
 from gaia.utils import get_yaml

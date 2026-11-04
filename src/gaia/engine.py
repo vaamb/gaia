@@ -16,7 +16,8 @@ from apscheduler.triggers.cron import CronTrigger
 
 import gaia_validators as gv
 
-from gaia.config.from_files import CacheType, EcosystemConfigDict, EngineConfig
+from gaia.config import CacheType, EngineConfig
+from gaia.config.models import EcosystemConfigDict
 from gaia.ecosystem import Ecosystem
 from gaia.hardware.abc import WebSocketAddressMixin
 from gaia.utils import humanize_list, SingletonMeta
