@@ -362,6 +362,44 @@ class TestEcosystemConfigGeneralEnvironment:
             day_length = (to_dt(sun_times.sunset) - to_dt(sun_times.sunrise)) % timedelta(days=1)
             assert abs((to_dt(span.night) - to_dt(span.day)) - day_length) < timedelta(minutes=5)
 
+    @pytest.mark.parametrize("latitude", [80.0, 70.0], ids=["no_twilight", "civil_twilight"])
+    async def test_lighting_during_polar_night(
+            self,
+            engine_config: EngineConfig,
+            ecosystem_config: EcosystemConfig,
+            monkeypatch: pytest.MonkeyPatch,
+            latitude: float,
+    ):
+        # Compute the sun times as if we were at the winter solstice
+        class WinterSolstice(date):
+            @classmethod
+            def today(cls):
+                return cls(2018, 12, 21)
+
+        monkeypatch.setattr("gaia.config.engine_config.date", WinterSolstice)
+        monkeypatch.setattr(
+            "gaia.config.engine_config.get_sun_times",
+            lambda coordinates: get_sun_times(coordinates, WinterSolstice.today()),
+        )
+        # A "home" on the meridian of the time zone the tests run in
+        coordinates = gv.Coordinates(latitude, engine_config.local_longitude)
+        engine_config.home_coordinates = coordinates
+        engine_config.set_place("a_real_place", coordinates)
+        assert get_sun_times(coordinates, WinterSolstice.today()).sunrise is None
+
+        # The sun never rises: the lights should be on for the whole day wanted
+        await ecosystem_config.set_nycthemeral_span_hours({"day": "8h00", "night": "20h00"})
+        await ecosystem_config.set_lighting_method(gv.LightingMethod.elongate)
+        assert ecosystem_config.lighting_method == gv.LightingMethod.elongate
+        for hour in range(24):
+            assert ecosystem_config.is_lighting_needed(time(hour, 30)) is (8 <= hour < 20)
+
+        # A place mimicked during its polar night has no day
+        await ecosystem_config.set_nycthemeral_span_target("a_real_place")
+        await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
+        for hour in range(24):
+            assert not ecosystem_config.is_day(time(hour))
+
     async def test_sun_times_follow_coordinates(self, engine_config: EngineConfig):
         engine_config.home_coordinates = (50.85, 4.35)
         engine_config.set_place("a_real_place", (-33.9, 151.2))

@@ -718,14 +718,20 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"polar {day_night}). Replacing values to allow coherent "
                 f"lighting."
             )
-            midnight = datetime.combine(today, time(hour=0))
             msec = timedelta(milliseconds=1)
             if day_night == "day":
+                # Polar day
+                midnight = datetime.combine(today, time(hour=0))
                 sun_times["sunrise"] = midnight.time()  # Sunrise
                 sun_times["sunset"] = (midnight - msec).time()  # Sunset
             else:
-                sun_times["sunrise"] = midnight.time()  # Sunrise
-                sun_times["sunset"] = (midnight + msec).time()  # Sunset
+                # Polar night. Center its start and stop around polar noon, so
+                #  morning and evening elongations still work
+                solar_noon = sun_times["solar_noon"]
+                assert solar_noon is not None  # Always computable
+                noon = datetime.combine(today, solar_noon)
+                sun_times["sunrise"] = noon.time()  # Sunrise
+                sun_times["sunset"] = (noon + msec).time()  # Sunset
         return sun_times
 
     @property
