@@ -595,7 +595,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             #  should have been computed
             assert hours.morning_end is not None
             assert hours.evening_start is not None
-            # Is time between lightning hours
+            # The aim of `elongate` is to supplement natural lighting before
+            # sunrise and after the sunset. It shouldn't cross midnight. Just
+            # test if time is between the lightning hours
             if (
                 hours.morning_start <= now <= hours.morning_end
                 or hours.evening_start <= now <= hours.evening_end
