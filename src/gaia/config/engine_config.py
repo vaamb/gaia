@@ -44,6 +44,8 @@ else:
 
 NORTHERN_SUMMER_START_MONTH = 3
 NORTHERN_SUMMER_END_MONTH = 9
+SECONDS_PER_HOUR = 60 * 60
+DEGREES_PER_HOUR = 360 / 24  # 360 degrees in 24h
 
 
 class ChecksumTracker:
@@ -164,7 +166,7 @@ class EngineConfig(metaclass=SingletonMeta):
         configure_logging(self.app_config)
         self._ecosystems_config_dict: dict[str, EcosystemConfigDict] = {}
         self._private_config: PrivateConfigDict = PrivateConfigValidator().model_dump()
-        self._sun_times: dict[str, SunTimesCacheData] = {}
+        self._sun_times: dict[gv.Coordinates, SunTimesCacheData] = {}
         self._chaos_memory: dict[str, ChaosMemory] = {}
         # Watchdog threading securities
         self._checksum_tracker = ChecksumTracker()
@@ -726,16 +728,42 @@ class EngineConfig(metaclass=SingletonMeta):
                 sun_times["sunset"] = (midnight + msec).time()  # Sunset
         return sun_times
 
+    @property
+    def local_longitude(self) -> float:
+        """The longitude of "home" or, if not set, the one of the meridian of
+        the machine's time zone."""
+        home = self.get_place(DEFAULT_PLACE)
+        if home is not None:
+            return home.longitude
+        now = datetime.now().astimezone()
+        utc_offset = now.utcoffset()
+        # `now` is timezone-aware so offset shouldn't be None
+        assert utc_offset is not None  
+        standard_offset = utc_offset - (now.dst() or timedelta(0))
+        longitude = standard_offset.total_seconds() / SECONDS_PER_HOUR * DEGREES_PER_HOUR
+        # Time zones go from UTC-12 to UTC+14, keep the longitude in [-180, 180[
+        return (longitude + 180.0) % 360.0 - 180.0
+
     def get_sun_times(self, place: str) -> gv.SunTimesDict | None:
+        """Get the sun times `place` would have if it was at the local longitude.
+
+        This gives the day length of `place`, which only depends on its
+        latitude and the date, centered on the local solar noon rather than on
+        the one of `place`.
+        For "home", these are its actual sun times.
+        """
         coord = self.get_place(place)
         if coord is None:
             return None
-        sun_times_cache = self._sun_times.get(place)
+        local_coord = gv.Coordinates(coord.latitude, self.local_longitude)
+        # Cache using the coordinates as key. This automatically invalidates the
+        #  cache when a `place` is modified
+        sun_times_cache = self._sun_times.get(local_coord)
         today = date.today()
         if sun_times_cache is not None and sun_times_cache["last_update"] >= today:
             return sun_times_cache["data"]
-        sun_times = self._compute_sun_times(place, coord)
-        self._sun_times[place] = SunTimesCacheData(
+        sun_times = self._compute_sun_times(place, local_coord)
+        self._sun_times[local_coord] = SunTimesCacheData(
             last_update=today,
             data=sun_times,
         )
@@ -747,27 +775,13 @@ class EngineConfig(metaclass=SingletonMeta):
 
     def refresh_sun_times(self) -> None:
         self.logger.info("Updating sun times.")
-        places = set(self._sun_times.keys())
         self._sun_times.clear()
-        places_ok: set[str] = set()
-        places_failed: set[str] = set()
-        places.update(self.places.keys())
-        for place in places:
-            sun_times = self.get_sun_times(place)
-            if sun_times:
-                places_ok.add(place)
-            else:
-                places_failed.add(place)
-        if places_ok:
+        for place in self.places:
+            self.get_sun_times(place)
+        if self.places:
             self.logger.info(
                 f"Sun times of the following targets have been refreshed: "
-                f"{humanize_list(list(places_ok))}."
-            )
-        if places_failed:
-            self.logger.warning(
-                f"Failed to refresh the sun times of the following targets: "
-                f"{humanize_list(list(places_failed))}. Some functionalities "
-                f"might not work as expected."
+                f"{humanize_list(list(self.places))}."
             )
 
     @property
