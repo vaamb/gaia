@@ -54,7 +54,6 @@ class _EcosystemPayloads:
 
     @property
     def nycthemeral_info(self) -> gv.NycthemeralCycleInfo:
-        # Valid ignore
         return gv.NycthemeralCycleInfo(
             **self.config.nycthemeral_cycle,
             **self.config.lighting_hours.model_dump(),
@@ -757,7 +756,7 @@ class Ecosystem:
 
     async def set_lighting_method(
             self,
-            value: gv.LightMethod,
+            value: gv.LightingMethod,
     ) -> None:
         await self.config.set_lighting_method(value)
 
