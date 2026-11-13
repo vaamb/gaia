@@ -281,11 +281,18 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid time parameters provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
-        await self.set_nycthemeral_span_target(validated_value["target"], False)
-        await self.set_nycthemeral_span_method(validated_value["span"], False)
-        await self.set_nycthemeral_span_hours({
-            "day": validated_value["day"], "night": validated_value["night"]}, False)
-        await self.set_lighting_method(validated_value["lighting"], False)
+        # Store a copy of the current config if the new one is later rejected
+        previous = self.nycthemeral_cycle.copy()
+        try:
+            await self.set_nycthemeral_span_target(validated_value["target"], False)
+            await self.set_nycthemeral_span_hours({
+                "day": validated_value["day"], "night": validated_value["night"]}, False)
+            await self.set_lighting_method(validated_value["lighting"], False)
+        except ValueError:
+            # The previous config was valid, no need to validate it again
+            self.nycthemeral_cycle.update(previous)
+            self.reset_nycthemeral_caches()
+            raise
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours()
 
