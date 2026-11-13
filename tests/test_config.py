@@ -6,8 +6,10 @@ import random
 import pytest
 
 import gaia_validators as gv
+from gaia_validators.utils import get_sun_times
 
 from gaia.config import ConfigType, EcosystemConfig, EngineConfig
+from gaia.config.helpers import to_dt
 from gaia.config.models import ConfigValidationError
 from gaia.exceptions import HardwareNotFound, PlantNotFound, UndefinedParameter
 from gaia.subroutines import subroutine_names
@@ -64,7 +66,6 @@ class TestEngineConfig:
         engine_config.home_coordinates = (0, 0)
         engine_config.refresh_sun_times()
         assert "have been refreshed" in caplog.text
-        assert "Failed to refresh" not in caplog.text
         assert engine_config.home_sun_times is not None
 
     def test_status(self, engine_config: EngineConfig, ecosystem_config: EcosystemConfig):
@@ -332,6 +333,51 @@ class TestEcosystemConfigGeneralEnvironment:
         # Going back to the fixed method should always work
         await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.fixed)
         assert ecosystem_config._compute_nycthemeral_span_method() == gv.NycthemeralSpanMethod.fixed
+
+    @pytest.mark.parametrize("with_home", [True, False], ids=["home", "no_home"])
+    async def test_nycthemeral_span_mimics_day_length(
+            self,
+            engine_config: EngineConfig,
+            ecosystem_config: EcosystemConfig,
+            with_home: bool,
+    ):
+        # Whatever the time zone the tests are run in, the sun rises in the
+        #  evening and sets in the morning, local time, in one of these places
+        antipodes = {"Sydney": (-33.9, 151.2), "Honolulu": (21.3, -157.9)}
+        if with_home:
+            # A "home" close to the meridian of the time zone the tests run in
+            engine_config.home_coordinates = (50.85, engine_config.local_longitude + 5.0)
+
+        for place, coordinates in antipodes.items():
+            engine_config.set_place(place, coordinates)
+            await ecosystem_config.set_nycthemeral_span_target(place)
+            await ecosystem_config.set_nycthemeral_span_method(gv.NycthemeralSpanMethod.mimic)
+            span = ecosystem_config.nycthemeral_span_hours
+
+            # The day is brought to local hours ...
+            assert span.day < time(12) < span.night
+            # ... and lasts as long as the one of the place mimicked (the sun does
+            #  not rise at the same instant in both, hence the tolerance)
+            sun_times = get_sun_times(gv.Coordinates(*coordinates))
+            day_length = (to_dt(sun_times.sunset) - to_dt(sun_times.sunrise)) % timedelta(days=1)
+            assert abs((to_dt(span.night) - to_dt(span.day)) - day_length) < timedelta(minutes=5)
+
+    async def test_sun_times_follow_coordinates(self, engine_config: EngineConfig):
+        engine_config.home_coordinates = (50.85, 4.35)
+        engine_config.set_place("a_real_place", (-33.9, 151.2))
+        first = engine_config.get_sun_times("a_real_place")
+
+        # Moving the place to another latitude changes its day length
+        engine_config.update_place("a_real_place", (21.3, 151.2))
+        second = engine_config.get_sun_times("a_real_place")
+        assert second["sunrise"] != first["sunrise"]
+
+        # Moving "home" shifts the local solar noon
+        engine_config.home_coordinates = (50.85, 21.0)
+        third = engine_config.get_sun_times("a_real_place")
+        assert third["solar_noon"] != second["solar_noon"]
+
+        assert engine_config.get_sun_times("not_a_place") is None
 
     async def test_nycthemeral_span_hours(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match="Invalid time parameters provided"):

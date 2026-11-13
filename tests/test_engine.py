@@ -392,9 +392,6 @@ class TestEngine:
     ):
         # Simply dispatches work to `EngineConfig` and `Ecosystem`, methods are
         #  tested there
-        engine.config._sun_times = {
-            "home": {"last_update": date.today(), "data": test_data.sun_times}
-        }
         await engine.refresh_ecosystems_lighting_hours()
         assert "Refreshing ecosystems lighting hours" in caplog.text
 
