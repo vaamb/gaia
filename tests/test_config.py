@@ -350,6 +350,22 @@ class TestEcosystemConfigGeneralEnvironment:
         assert ecosystem_config.nycthemeral_span_hours.day == time(8, 42)
         assert ecosystem_config.nycthemeral_span_hours.night == time(21, 00)
 
+    async def test_nycthemeral_cycle_is_all_or_nothing(
+            self,
+            ecosystem_config: EcosystemConfig,
+    ):
+        before = ecosystem_config.nycthemeral_cycle.copy()
+        lighting_hours_before = ecosystem_config.lighting_hours
+
+        # "day" and "night" are valid, but "elongate" is refused as "home" has
+        #  no coordinates: none of the new values should be kept
+        with pytest.raises(ValueError):
+            await ecosystem_config.set_nycthemeral_cycle(
+                span="fixed", lighting="elongate", target=None, day="5h00", night="23h00")
+
+        assert ecosystem_config.nycthemeral_cycle == before
+        assert ecosystem_config.lighting_hours == lighting_hours_before
+
     async def test_day(self, ecosystem_config: EcosystemConfig):
         ecosystem_config._nycthemeral_span_method = gv.NycthemeralSpanMethod.fixed
         ecosystem_config._nycthemeral_span_hours = gv.NycthemeralSpanConfig(
