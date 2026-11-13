@@ -335,22 +335,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param method: The lighting or nycthemeral span method to validate.
         :param ecosystem_dict: The ecosystem configuration dictionary.
         :param places_dict: Dictionary of available places with coordinates.
-        :raises ValidationError: If the method requires a target that is not
-                                 available or configured.
+        :raises ConfigValidationError: If the method requires a target that is
+                                       not available or configured.
         """
-        if method == 0:  # Fixed, no target needed
-            return
+        if method in (gv.LightingMethod.fixed, gv.NycthemeralSpanMethod.fixed):
+            return  # No target needed
         # Try to get the target
         target: str | None
-        if method == gv.LightingMethod.elongate:
+        if method is gv.LightingMethod.elongate:
             target = DEFAULT_PLACE
-        elif method == gv.NycthemeralSpanMethod.mimic:
+        elif method is gv.NycthemeralSpanMethod.mimic:
             nyct_cfg: gv.NycthemeralCycleConfigDict = \
                 ecosystem_dict["environment"]["nycthemeral_cycle"]
             target = nyct_cfg.get("target")
             if target is None:
                 raise ConfigValidationError(
-                    "Nycthemeral span method method cannot be 'mimic' as no "
+                    "Nycthemeral span method cannot be 'mimic' as no "
                     "target is specified in the ecosystems configuration file."
                 )
         else:  # pragma: no cover
