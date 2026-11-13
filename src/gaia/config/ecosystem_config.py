@@ -422,7 +422,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.validate_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
-        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
+        self.reset_nycthemeral_caches()
         if refresh:
             await self.refresh_lighting_hours()
 
@@ -468,7 +468,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
         self.environment["nycthemeral_cycle"].update(validated_value)
-        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
+        self.reset_nycthemeral_caches()
         if refresh:
             await self.refresh_lighting_hours()
 
@@ -510,7 +510,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.validate_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
-        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
+        self.reset_nycthemeral_caches()
         if refresh:
             await self.refresh_lighting_hours()
 
