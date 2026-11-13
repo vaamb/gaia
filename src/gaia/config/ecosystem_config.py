@@ -424,6 +424,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             target = self.nycthemeral_span_target
             # With mimic as a span method, target should not be None
             assert target is not None
+            # Mimic the day length of the target, as if it was under the same
+            # longitude as `home`
             sun_times = self.general.get_sun_times(target)
             if sun_times is not None:
                 assert sun_times["sunrise"] is not None
