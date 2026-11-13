@@ -173,6 +173,8 @@ async def ecosystem_config(
 
     ecosystem_config = engine_config.get_ecosystem_config(ecosystem_uid)
     ecosystem_config._config_dict = ecosystem_dict
+    # The instance is reused between tests, drop what it cached from the last one
+    ecosystem_config.reset_caches()
 
     caplog.clear()
 

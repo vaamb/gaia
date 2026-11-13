@@ -281,11 +281,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid time parameters provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
-        await self.set_nycthemeral_span_target(validated_value["target"], False)
-        await self.set_nycthemeral_span_method(validated_value["span"], False)
-        await self.set_nycthemeral_span_hours({
-            "day": validated_value["day"], "night": validated_value["night"]}, False)
-        await self.set_lighting_method(validated_value["lighting"], False)
+        # Store a copy of the current config if the new one is later rejected
+        previous = self.nycthemeral_cycle.copy()
+        try:
+            await self.set_nycthemeral_span_target(validated_value["target"], False)
+            await self.set_nycthemeral_span_method(validated_value["span"], False)
+            await self.set_nycthemeral_span_hours({
+                "day": validated_value["day"], "night": validated_value["night"]}, False)
+            await self.set_lighting_method(validated_value["lighting"], False)
+        except ValueError:
+            # The previous config was valid, no need to validate it again
+            self.nycthemeral_cycle.update(previous)
+            self.reset_nycthemeral_caches()
+            raise
         # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
         await self.refresh_lighting_hours()
 
@@ -415,7 +423,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.validate_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
-        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
+        self.reset_nycthemeral_caches()
         if refresh:
             await self.refresh_lighting_hours()
 
@@ -463,7 +471,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
         self.environment["nycthemeral_cycle"].update(validated_value)
-        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
+        self.reset_nycthemeral_caches()
         if refresh:
             await self.refresh_lighting_hours()
 
@@ -505,7 +513,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.validate_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
-        # self.reset_nycthemeral_caches()  # Done in refresh_lighting_hours()
+        self.reset_nycthemeral_caches()
         if refresh:
             await self.refresh_lighting_hours()
 
@@ -590,7 +598,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             #  should have been computed
             assert hours.morning_end is not None
             assert hours.evening_start is not None
-            # Is time between lightning hours
+            # The aim of `elongate` is to supplement natural lighting before
+            # sunrise and after the sunset. It shouldn't cross midnight. Just
+            # test if time is between the lightning hours
             if (
                 hours.morning_start <= now <= hours.morning_end
                 or hours.evening_start <= now <= hours.evening_end
