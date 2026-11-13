@@ -417,7 +417,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         :param method: Either 'fixed' or 'mimic' to follow a target location.
         :param refresh: Whether to refresh the lighting hours.
-        :raises ValidationError: If the method requires unavailable configuration.
+        :raises ConfigValidationError: If the method requires unavailable configuration.
         """
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
         self.validate_nycthemeral_method(
@@ -470,7 +470,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid time parameters provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
-        self.environment["nycthemeral_cycle"].update(validated_value)
+        self.nycthemeral_cycle.update(validated_value)
         self.reset_nycthemeral_caches()
         if refresh:
             await self.refresh_lighting_hours()
@@ -593,7 +593,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def is_lighting_needed(self, now: time | None = None) -> bool:
         now = now or datetime.now().time()
         hours = self.lighting_hours
-        if self.lighting_method == gv.LightMethod.elongate:
+        if self.lighting_method == gv.LightingMethod.elongate:
             # If `lighting_method` is `elongate`, `morning_end` and `evening_start`
             #  should have been computed
             assert hours.morning_end is not None
