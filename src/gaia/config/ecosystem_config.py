@@ -285,6 +285,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         previous = self.nycthemeral_cycle.copy()
         try:
             await self.set_nycthemeral_span_target(validated_value["target"], False)
+            await self.set_nycthemeral_span_method(validated_value["span"], False)
             await self.set_nycthemeral_span_hours({
                 "day": validated_value["day"], "night": validated_value["night"]}, False)
             await self.set_lighting_method(validated_value["lighting"], False)
