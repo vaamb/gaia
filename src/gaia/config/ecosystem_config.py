@@ -14,8 +14,9 @@ import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
 
 from gaia.config import default_actuators
-from gaia.config.default_actuators import Direction, EnvironmentDirection, EnvironmentParameter
+from gaia.config.default_actuators import ClimateDirection, Direction, EnvironmentDirection
 from gaia.config.helpers import format_pydantic_error, remove_missing, to_dt
+from gaia.config.migration import ClimateParameter,EnvironmentParameter, WeatherParameter
 from gaia.config.models import (
     AnonymousHardwareConfigDictInput, CacheType, ChaosMemoryValidator, ConfigType,
     ConfigValidationError, DEFAULT_PLACE, EcosystemConfigDict, EnvironmentConfigDict,
@@ -47,7 +48,7 @@ class ScaledClimateTarget(NamedTuple):
 
 
 DEFAULT_LIGHT_CLIMATE_CFG = gv.ClimateConfig(**{  # ty: ignore[invalid-argument-type]
-    "parameter": gv.ClimateParameter.light,
+    "parameter": gv.ClimateParameter.light.name,
     "day": 250_000,
     "night": -30_000,
     "hysteresis": 0.0,
@@ -810,7 +811,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     #      Climate parameters
     # ---------------------------------------------------------------------------
     @property
-    def climate(self) -> dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]:
+    def climate(self) -> dict[ClimateParameter, gv.AnonymousClimateConfigDict]:
         """
         Returns the climate config for the ecosystem
         """
@@ -820,14 +821,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.environment["climate"] = {}
             return self.environment["climate"]
 
-    def has_climate_parameter(self, parameter: str | gv.ClimateParameter) -> bool:
+    def has_climate_parameter(self, parameter: ClimateParameter) -> bool:
         """Check if a climate parameter is configured for this ecosystem."""
-        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         return parameter in self.climate
 
     def get_climate_parameter(
             self,
-            parameter: str | gv.ClimateParameter,
+            parameter: ClimateParameter,
     ) -> gv.ClimateConfig:
         """Get the configuration for a specific climate parameter.
 
@@ -835,7 +835,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :return: The climate configuration for the parameter.
         :raises UndefinedParameter: If the parameter is not configured.
         """
-        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             data = self.climate[parameter]
         except KeyError:
@@ -848,7 +847,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def set_climate_parameter(
             self,
-            parameter: str | gv.ClimateParameter,
+            parameter: ClimateParameter,
             **value: Unpack[gv.AnonymousClimateConfigDict],
     ) -> None:
         """Set or create a climate parameter configuration.
@@ -857,7 +856,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param value: The climate configuration values.
         :raises ValueError: If the provided values are invalid.
         """
-        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             validated_value = gv.AnonymousClimateConfig(**value).model_dump()
         except pydantic.ValidationError as e:
@@ -869,7 +867,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def update_climate_parameter(
             self,
-            parameter: str | gv.ClimateParameter,
+            parameter: ClimateParameter,
             **value: Unpack[gv.AnonymousClimateConfigDict],
     ) -> None:
         """Update an existing climate parameter configuration.
@@ -878,7 +876,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param value: The climate configuration values to update.
         :raises UndefinedParameter: If the parameter does not exist.
         """
-        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         if not self.climate.get(parameter):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
@@ -890,14 +887,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def delete_climate_parameter(
             self,
-            parameter: str | gv.ClimateParameter,
+            parameter: ClimateParameter,
     ) -> None:
         """Delete a climate parameter from the configuration.
 
         :param parameter: The climate parameter name or enum.
         :raises UndefinedParameter: If the parameter does not exist.
         """
-        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         try:
             del self.climate[parameter]
         except KeyError:
@@ -907,11 +903,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_scaled_climate_target(
             self,
-            parameter: str | gv.ClimateParameter,
+            parameter: ClimateParameter,
     ) -> ScaledClimateTarget:
-        parameter = safe_enum_from_name(gv.ClimateParameter, parameter)
         if (
-                parameter is gv.ClimateParameter.light
+                parameter == gv.ClimateParameter.light.name
                 and not self.has_climate_parameter(parameter)
         ):
             # Unconfigured light runs on/off by default: a large positive day
@@ -926,25 +921,23 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     #      Weather parameters
     # ---------------------------------------------------------------------------
     @property
-    def weather(self) -> dict[gv.WeatherParameter, gv.AnonymousWeatherConfigDict]:
+    def weather(self) -> dict[WeatherParameter, gv.AnonymousWeatherConfigDict]:
         """
         Returns the weather config for the ecosystem
         """
         return self.environment["weather"]
 
-    def has_weather_parameter(self, parameter: str | gv.WeatherParameter) -> bool:
+    def has_weather_parameter(self, parameter: WeatherParameter) -> bool:
         """Check if a weather parameter is configured for this ecosystem."""
-        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         return parameter in self.weather
 
-    def get_weather_parameter(self, parameter: str | gv.WeatherParameter) -> gv.WeatherConfig:
+    def get_weather_parameter(self, parameter: WeatherParameter) -> gv.WeatherConfig:
         """Get the configuration for a specific weather parameter.
 
         :param parameter: The weather parameter name or enum.
         :return: The weather configuration for the parameter.
         :raises UndefinedParameter: If the parameter is not configured.
         """
-        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         try:
             data = self.weather[parameter]
         except KeyError:
@@ -957,7 +950,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def set_weather_parameter(
             self,
-            parameter: str | gv.WeatherParameter,
+            parameter: WeatherParameter,
             **value: Unpack[gv.AnonymousWeatherConfigDict],
     ) -> None:
         """Set or create a weather parameter configuration.
@@ -966,7 +959,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param value: The weather configuration values.
         :raises ValueError: If the provided values are invalid.
         """
-        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         try:
             validated_value = gv.AnonymousWeatherConfig(**value).model_dump()
         except pydantic.ValidationError as e:
@@ -978,7 +970,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def update_weather_parameter(
             self,
-            parameter: str | gv.WeatherParameter,
+            parameter: WeatherParameter,
             **value: Unpack[gv.AnonymousWeatherConfigDict],
     ) -> None:
         """Update an existing weather parameter configuration.
@@ -987,7 +979,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :param value: The weather configuration values to update.
         :raises UndefinedParameter: If the parameter does not exist.
         """
-        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         if not self.weather.get(parameter):
             raise UndefinedParameter(
                 f"No weather parameter {parameter} was found for ecosystem "
@@ -999,14 +990,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def delete_weather_parameter(
             self,
-            parameter: str | gv.WeatherParameter,
+            parameter: WeatherParameter,
     ) -> None:
         """Delete a weather parameter from the configuration.
 
         :param parameter: The weather parameter name or enum.
         :raises UndefinedParameter: If the parameter does not exist.
         """
-        parameter = safe_enum_from_name(gv.WeatherParameter, parameter)
         try:
             del self.weather[parameter]
         except KeyError:
@@ -1018,7 +1008,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     # ---------------------------------------------------------------------------
     #   Actuator couples
     # ---------------------------------------------------------------------------
-    def get_climate_direction_to_group(self) -> dict[tuple[gv.ClimateParameter, Direction], str]:
+    def get_climate_direction_to_group(self) -> dict[ClimateDirection, str]:
         """Get actuator couples for all climate parameters.
 
         Merges default actuator couples with those defined in climate config.
@@ -1038,7 +1028,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Valid ignore: ty can't narrow str | None through the comprehension if filter
         return {**default, **update}  # ty: ignore[invalid-return-type]
 
-    def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
+    def get_weather_direction_to_group(self) -> dict[tuple[WeatherParameter, Direction], str]:
         """Get actuator couples for all weather parameters."""
         default = default_actuators.weather_to_group_mapping
         update = {

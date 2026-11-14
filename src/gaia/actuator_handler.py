@@ -16,6 +16,7 @@ from weakref import WeakValueDictionary
 import gaia_validators as gv
 
 from gaia.config import default_actuators
+from gaia.config.migration import ClimateParameter
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
 
@@ -30,11 +31,11 @@ class PIDParameters(NamedTuple):
     Kd: float
 
 
-pid_values: dict[gv.ClimateParameter, PIDParameters] = {
-    gv.ClimateParameter.temperature: PIDParameters(5.0, 0.5, 0.1),
-    gv.ClimateParameter.humidity: PIDParameters(2.0, 0.5, 1.0),
-    gv.ClimateParameter.light: PIDParameters(0.001, 0.0, 0.0),
-    gv.ClimateParameter.wind: PIDParameters(1.0, 0.0, 0.0),
+pid_values: dict[ClimateParameter, PIDParameters] = {
+    gv.ClimateParameter.temperature.name: PIDParameters(5.0, 0.5, 0.1),
+    gv.ClimateParameter.humidity.name: PIDParameters(2.0, 0.5, 1.0),
+    gv.ClimateParameter.light.name: PIDParameters(0.001, 0.0, 0.0),
+    gv.ClimateParameter.wind.name: PIDParameters(1.0, 0.0, 0.0),
 }
 
 
@@ -56,7 +57,7 @@ class HystericalPID:
     def __init__(
             self,
             actuator_hub: ActuatorHub,
-            climate_parameter: gv.ClimateParameter,
+            climate_parameter: ClimateParameter,
             target: float = 0.0,
             hysteresis: float = 0.0,
             Kp: float = 1.0,
@@ -68,7 +69,7 @@ class HystericalPID:
             used_regularly: bool = True,
     ) -> None:
         self.actuator_hub: ActuatorHub = actuator_hub
-        self.climate_parameter: gv.ClimateParameter = climate_parameter
+        self.climate_parameter: ClimateParameter = climate_parameter
         self.target: float = target
         self.hysteresis: float = hysteresis
         self.Kp: float = Kp
@@ -149,16 +150,16 @@ class HystericalPID:
         if self.actuator_hub.logger.level <= logging.DEBUG:
             if output > 0.0 and not self.direction & Direction.increase:
                 self.actuator_hub.logger.debug(
-                    f"PID output for {self.climate_parameter.name} is > 0 but no "
-                    f"actuator able to increase {self.climate_parameter.name} "
-                    f"has been detected. {self.climate_parameter.name.capitalize()} "
+                    f"PID output for {self.climate_parameter} is > 0 but no "
+                    f"actuator able to increase {self.climate_parameter} "
+                    f"has been detected. {self.climate_parameter.capitalize()} "
                     f"may remain under the targeted value."
                 )
             if output < 0.0 and not self.direction & Direction.decrease:
                 self.actuator_hub.logger.debug(
-                    f"PID output for {self.climate_parameter.name} is < 0 but no "
-                    f"actuator able to decrease {self.climate_parameter.name} "
-                    f"has been detected. {self.climate_parameter.name.capitalize()} "
+                    f"PID output for {self.climate_parameter} is < 0 but no "
+                    f"actuator able to decrease {self.climate_parameter} "
+                    f"has been detected. {self.climate_parameter.capitalize()} "
                     f"may remain above the targeted value."
                 )
         return output
@@ -794,7 +795,7 @@ class ActuatorHub:
         self.ecosystem: Ecosystem = ecosystem
         self.logger = logging.getLogger(
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
-        self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
+        self._pids: WeakValueDictionary[ClimateParameter, HystericalPID] = \
             WeakValueDictionary()
         self._actuator_handlers: WeakValueDictionary[str, ActuatorHandler] = \
             WeakValueDictionary()
@@ -804,23 +805,24 @@ class ActuatorHub:
         return self._actuator_handlers
 
     @property
-    def pids(self) -> WeakValueDictionary[gv.ClimateParameter, HystericalPID]:
+    def pids(self) -> WeakValueDictionary[ClimateParameter, HystericalPID]:
         return self._pids
 
     def get_pid(
             self,
-            climate_parameter: gv.ClimateParameter,
+            climate_parameter: ClimateParameter,
     ) -> HystericalPID:
-        climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
         try:
             return self._pids[climate_parameter]
         except KeyError:
+            # TODO: add a way to inject PID parameters from the config
+            pid_params = pid_values.get(climate_parameter) or PIDParameters(5.0, 0.5, 0.1)
             pid = HystericalPID(
                 self,
                 climate_parameter,
-                Kp=pid_values[climate_parameter].Kp,
-                Ki=pid_values[climate_parameter].Ki,
-                Kd=pid_values[climate_parameter].Kd,
+                Kp=pid_params.Kp,
+                Ki=pid_params.Ki,
+                Kd=pid_params.Kd,
                 minimum_output=-100.0,
                 maximum_output=100.0,
             )
@@ -843,10 +845,10 @@ class ActuatorHub:
     def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
         group_to_parameter = self.ecosystem.config.get_group_to_parameter()
         parameter = group_to_parameter[actuator_group]
-        if isinstance(parameter, gv.WeatherParameter):
+        if parameter in self.ecosystem.config.weather:
             # Weather parameters don't have PIDs attached to them
             return None
-        elif isinstance(parameter, gv.ClimateParameter):
+        elif parameter in (*self.ecosystem.config.climate.keys(), "light"):
             if parameter not in self.pids:
                 raise RuntimeError(
                     f"Trying to get an undefined PID for the actuator group "

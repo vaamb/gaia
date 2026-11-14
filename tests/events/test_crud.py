@@ -384,7 +384,7 @@ class TestCRUDClimateParameter:
 
         for data in verified.data:
             # Some other parameters were already present in the config
-            if data.parameter.name in test_data.climate_dict:
+            if data.parameter in test_data.climate_dict:
                 continue
             assert data.parameter == parameter
             assert data.day == day
@@ -453,7 +453,7 @@ class TestCRUDClimateParameter:
         found = False
         for data in verified.data:
             # Some other parameters were already present in the config
-            if data.parameter.name in test_data.climate_dict:
+            if data.parameter in test_data.climate_dict:
                 continue
             found = True
             assert data.parameter == parameter

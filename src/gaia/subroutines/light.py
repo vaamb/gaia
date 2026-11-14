@@ -134,7 +134,7 @@ class Light(SubroutineTemplate[Actuator]):
     """Routine specific methods"""
     def _get_actuator_group(self) -> str:
         climate_to_group = self.config.get_climate_direction_to_group()
-        return climate_to_group[(gv.ClimateParameter.light, "increase")]
+        return climate_to_group[(gv.ClimateParameter.light.name, "increase")]
 
     def get_actuator_handler(self) -> ActuatorHandler:
         actuator_group: str = self._get_actuator_group()
@@ -148,7 +148,7 @@ class Light(SubroutineTemplate[Actuator]):
         return self._actuator_handler
 
     def get_pid(self) -> HystericalPID:
-        return self.ecosystem.actuator_hub.get_pid(gv.ClimateParameter.light)
+        return self.ecosystem.actuator_hub.get_pid(gv.ClimateParameter.light.name)
 
     @property
     def pid(self) -> HystericalPID:
@@ -206,7 +206,7 @@ class Light(SubroutineTemplate[Actuator]):
 
     async def _update_pid(self) -> None:
         pid: HystericalPID = self.get_pid()
-        scaled_target = self.config.get_scaled_climate_target(gv.ClimateParameter.light)
+        scaled_target = self.config.get_scaled_climate_target(gv.ClimateParameter.light.name)
         target = scaled_target.day if self.config.is_lighting_needed() else scaled_target.night
         hysteresis = scaled_target.hysteresis
         pid.target = target

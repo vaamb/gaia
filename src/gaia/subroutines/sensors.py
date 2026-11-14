@@ -262,7 +262,7 @@ class Sensors(SubroutineTemplate[Sensor]):
         # Get the target, the hysteresis and the alarm threshold
         pod: Literal["day", "night"] = "day" if self.config.is_day() else "night"
         parameter_limits: dict[str, ParameterLimits] = {
-            parameter.name: ParameterLimits(values[pod], values["hysteresis"], values["alarm"])
+            parameter: ParameterLimits(values[pod], values["hysteresis"], values["alarm"])
             for parameter, values in self.config.climate.items()
             if values["alarm"] is not None
         }
