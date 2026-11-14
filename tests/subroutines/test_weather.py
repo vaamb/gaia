@@ -88,6 +88,24 @@ class TestWeatherSubroutine:
         with pytest.raises(ValueError):
             await weather_subroutine._unmount_actuator_handler("rain")
 
+    async def test_default_actuator_group(
+            self,
+            ecosystem: Ecosystem,
+            weather_subroutine: Weather,
+    ):
+        # Without a linked actuator, the default actuator group ("rainer"), not
+        #  the name of the weather parameter ("rain"), should be used
+        ecosystem.config.update_weather_parameter("rain", linked_actuator=None)
+
+        assert weather_subroutine.compute_expected_actuators() == {"rain": "rainer"}
+        assert weather_subroutine.get_actuator_group_for_parameter("rain") == "rainer"
+
+        weather_subroutine._actuator_handlers = {}
+        await weather_subroutine._mount_actuator_handler("rain")
+        assert weather_subroutine.actuator_handlers["rain"].group == "rainer"
+
+        await weather_subroutine._unmount_actuator_handler("rain")
+
     async def test_create_job(self, weather_subroutine: Weather):
         # Setup
         weather_subroutine._actuator_handlers = {}

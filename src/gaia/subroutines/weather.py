@@ -88,8 +88,8 @@ class Weather(SubroutineTemplate[Actuator]):
         The keys are the weather events and the values are the associated actuator
         groups"""
         rv: dict[gv.WeatherParameter, str] = {}
-        for weather_event, weather_cfg in self.config.weather.items():
-            actuator_group = weather_cfg.get("linked_actuator", None) or weather_event
+        for weather_event in self.config.weather:
+            actuator_group = self.get_actuator_group_for_parameter(weather_event)
             # Make sure the actuator group is available
             if self.ecosystem.get_hardware_group_uids(actuator_group):
                 rv[weather_event] = actuator_group
@@ -198,5 +198,7 @@ class Weather(SubroutineTemplate[Actuator]):
         return self._actuator_handlers
 
     def get_actuator_group_for_parameter(self, parameter: str) -> str:
-        weather_cfg = self.ecosystem.config.get_weather_parameter(parameter)
-        return weather_cfg.linked_actuator or weather_cfg.parameter
+        # Raises `UndefinedParameter` if the weather parameter is not configured
+        weather_cfg = self.config.get_weather_parameter(parameter)
+        weather_to_group = self.config.get_weather_direction_to_group()
+        return weather_to_group[(weather_cfg.parameter, "increase")]
