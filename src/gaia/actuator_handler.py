@@ -15,6 +15,7 @@ from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
+from gaia.exceptions import HardwareNotFound
 from gaia.config import default_actuators
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
@@ -792,6 +793,7 @@ class ActuatorHandler:
 class ActuatorHub:
     def __init__(self, ecosystem: "Ecosystem") -> None:
         self.ecosystem: Ecosystem = ecosystem
+        self.config = ecosystem.config
         self.logger = logging.getLogger(
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
@@ -837,28 +839,34 @@ class ActuatorHub:
             return gv.HardwareType.actuator
 
     def _get_actuator_direction(self, actuator_group: str) -> Direction:
-        group_to_direction = self.ecosystem.config.get_group_to_direction()
-        direction_name = group_to_direction[actuator_group]
-        return Direction[direction_name]
+        climate_direction = self.config.get_group_to_climate_direction(actuator_group)
+        if climate_direction is not None:
+            return Direction[climate_direction[1]]
+        weather_direction = self.config.get_group_to_weather_direction(actuator_group)
+        if weather_direction:
+            # Weather parameter only act on "increase" actuators
+            return Direction.increase
+        raise HardwareNotFound(
+            f"{actuator_group} does not manage any climate or weather parameter."
+        )
 
     def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
-        group_to_parameter = self.ecosystem.config.get_group_to_parameter()
-        parameter = group_to_parameter[actuator_group]
-        if parameter in self.ecosystem.config.weather:
-            # Weather parameters don't have PIDs attached to them
-            return None
-        elif parameter in (*self.ecosystem.config.climate.keys(), "light"):
-            if parameter not in self.pids:
-                raise RuntimeError(
-                    f"Trying to get an undefined PID for the actuator group "
-                    f"'{actuator_group}'"
+        climate_direction = self.config.get_group_to_climate_direction(actuator_group)
+        if climate_direction is None:
+            if not self.config.get_group_to_weather_direction(actuator_group):
+                raise ValueError(
+                    f"Actuator group '{actuator_group}' has no environment parameter "
+                    f"attached to it."
                 )
-            return self.get_pid(parameter)
-        else:
-            raise ValueError(
-                f"Actuator group '{actuator_group}' has no environment parameter "
-                f"attached to it."
+            # Only climate parameters have PIDs attached to them
+            return None
+        parameter = climate_direction[0]
+        if parameter not in self.pids:
+            raise RuntimeError(
+                f"Trying to get an undefined PID for the actuator group "
+                f"'{actuator_group}'"
             )
+        return self.get_pid(parameter)
 
     def get_handler(
             self,
@@ -867,7 +875,7 @@ class ActuatorHub:
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
             actuator_group = cast(str, actuator_group.name)
-        if actuator_group not in self.ecosystem.config.get_group_to_parameter():
+        if actuator_group not in self.ecosystem.config.get_valid_actuator_groups():
             raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
         try:
             return self._actuator_handlers[actuator_group]

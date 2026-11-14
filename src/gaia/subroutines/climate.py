@@ -130,7 +130,7 @@ class Climate(SubroutineTemplate[Actuator]):
         return self._actuator_handlers
 
     def get_actuator_group_for_parameter(self, climate_direction: ClimateDirection) -> str:
-        return self.ecosystem.config.get_environment_direction_to_group()[climate_direction]
+        return self.ecosystem.config.get_climate_direction_to_group()[climate_direction]
 
     async def _mount_actuator_handler(self, climate_direction: ClimateDirection) -> None:
         if climate_direction in self.actuator_handlers:

@@ -15,7 +15,7 @@ import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
 
 from gaia.config import default_actuators
-from gaia.config.default_actuators import ClimateDirection, Direction, EnvironmentDirection
+from gaia.config.default_actuators import ClimateDirection, Direction, WeatherDirection
 from gaia.config.helpers import (
     closest_parameter_hint, format_pydantic_error, remove_missing, to_dt)
 from gaia.config.models import (
@@ -1046,6 +1046,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Valid ignore: ty can't narrow str | None through the comprehension if filter
         return {**default_actuators.climate_to_group_mapping, **update}  # ty: ignore[invalid-return-type]
 
+    def get_group_to_climate_direction(self, actuator_group: str) -> ClimateDirection | None:
+        """Get the climate parameter and direction an actuator group serves.
+
+        An actuator group can serve a climate and weather roles at the same time
+        (`fan` for `cooler` and `air_purity`): the climate role is returned,
+        as it is the one that needs a direction and a PID.
+
+        :param actuator_group: The name of the actuator group.
+        :return: The climate parameter and direction, or None if the group only
+                 serves weather parameters or is unknown.
+        """
+        for climate_direction, group in self.get_climate_direction_to_group().items():
+            if group == actuator_group:
+                return climate_direction
+        return None
+
     def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
         """Get actuator couples for all weather parameters."""
         update = {
@@ -1056,28 +1072,30 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         return {**default_actuators.weather_to_group_mapping, **update}
 
-    def get_environment_direction_to_group(self) -> dict[EnvironmentDirection, str]:
-        """Get all actuator couples (climate and weather combined)."""
-        # Valid ignore: tuple[A, C] | tuple[B, C] is an valid tuple[A | B, C]
-        return self.get_climate_direction_to_group() | self.get_weather_direction_to_group()  # ty: ignore[invalid-return-type]
+    def get_group_to_weather_direction(self, actuator_group: str) -> list[ClimateDirection]:
+        """Get the climate parameter and direction an actuator group serves.
 
-    def get_group_to_parameter(self) -> dict[str, gv.EnvironmentParameter]:
-        """Get a mapping from actuator group names to their parameters."""
-        return {
-            actuator_group: environment_direction[0]
-            for environment_direction, actuator_group in self.get_environment_direction_to_group().items()
-        }
+        An actuator group can serve a climate and weather roles at the same time
+        (`fan` for `cooler` and `air_purity`): the climate role is returned,
+        as it is the one that needs a direction and a PID.
 
-    def get_group_to_direction(self) -> dict[str, Literal["increase", "decrease"]]:
-        """Get a mapping from actuator group names to their direction."""
-        return {
-            actuator_group: environment_direction[1]
-            for environment_direction, actuator_group in self.get_environment_direction_to_group().items()
-        }
+        :param actuator_group: The name of the actuator group.
+        :return: The climate parameter and direction, or None if the group only
+                 serves weather parameters or is unknown.
+        """
+        rv = []
+        for weather_direction, group in self.get_weather_direction_to_group().items():
+            if group == actuator_group:
+                rv.append(weather_direction)
+        return rv
 
     def get_valid_actuator_groups(self) -> set[str]:
         """Get the set of valid actuator group names for this ecosystem."""
-        return set(self.get_environment_direction_to_group().values())
+        return {
+            *self.get_climate_direction_to_group().values(),
+            *self.get_weather_direction_to_group().values(),
+        }
+
 
     # ---------------------------------------------------------------------------
     #   Hardware parameters

@@ -531,7 +531,7 @@ class TestEcosystemConfigGeneralEnvironment:
 
 class TestEcosystemConfigActuators:
     def test_actuator_couples(self, ecosystem_config: EcosystemConfig):
-        actuators_mapping = ecosystem_config.get_environment_direction_to_group()
+        actuators_mapping = ecosystem_config.get_climate_direction_to_group()
 
         # Test with a parameter that has an actuator override
         assert actuators_mapping[("humidity", "increase")] == "fogger"
