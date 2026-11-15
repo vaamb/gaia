@@ -16,7 +16,8 @@ from gaia_validators import safe_enum_from_name
 
 from gaia.config import default_actuators
 from gaia.config.default_actuators import ClimateDirection, Direction, EnvironmentDirection
-from gaia.config.helpers import format_pydantic_error, remove_missing, to_dt
+from gaia.config.helpers import (
+    closest_parameter_hint, format_pydantic_error, remove_missing, to_dt)
 from gaia.config.models import (
     AnonymousHardwareConfigDictInput, CacheType, ChaosMemoryValidator, ConfigType,
     ConfigValidationError, DEFAULT_PLACE, EcosystemConfigDict, EnvironmentConfigDict,
@@ -846,6 +847,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
+                f"{closest_parameter_hint(parameter, self.climate.keys())}"
             )
         else:
             return gv.ClimateConfig(parameter=parameter, **data)
@@ -887,6 +889,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
+                f"{closest_parameter_hint(parameter, self.climate.keys())}"
             )
         current_value: gv.AnonymousClimateConfigDict = self.climate[parameter].copy()
         current_value.update(**remove_missing(value))  # ty: ignore[invalid-argument-type]
@@ -907,7 +910,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         except KeyError:
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
-                f"'{self.name}' in ecosystems configuration file")
+                f"'{self.name}' in ecosystems configuration file"
+                f"{closest_parameter_hint(parameter, self.climate.keys())}"
+            )
 
     def get_scaled_climate_target(
             self,
@@ -952,6 +957,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No weather parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
+                f"{closest_parameter_hint(parameter, self.weather.keys())}"
             )
         else:
             return gv.WeatherConfig(parameter=parameter, **data)
@@ -993,6 +999,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise UndefinedParameter(
                 f"No weather parameter {parameter} was found for ecosystem "
                 f"'{self.name}' in ecosystems configuration file."
+                f"{closest_parameter_hint(parameter, self.weather.keys())}"
             )
         current_value: gv.AnonymousWeatherConfigDict = self.weather[parameter].copy()
         current_value.update(**remove_missing(value))  # ty: ignore[invalid-argument-type]
@@ -1013,7 +1020,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         except KeyError:
             raise UndefinedParameter(
                 f"No weather parameter {parameter} was found for ecosystem "
-                f"'{self.name}' in ecosystems configuration file"
+                f"'{self.name}' in ecosystems configuration file."
+                f"{closest_parameter_hint(parameter, self.weather.keys())}"
             )
 
     # ---------------------------------------------------------------------------
@@ -1025,7 +1033,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         Merges default actuator couples with those defined in climate config.
         """
         directions: tuple[Direction, Direction] = ("increase", "decrease")
-        default = default_actuators.climate_to_group_mapping
         update = {
             (climate_parameter, direction): climate_cfg["linked_actuators"][direction]
             for direction in directions
@@ -1037,18 +1044,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         }
 
         # Valid ignore: ty can't narrow str | None through the comprehension if filter
-        return {**default, **update}  # ty: ignore[invalid-return-type]
+        return {**default_actuators.climate_to_group_mapping, **update}  # ty: ignore[invalid-return-type]
 
     def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
         """Get actuator couples for all weather parameters."""
-        default = default_actuators.weather_to_group_mapping
         update = {
             (weather_parameter, cast(Direction, "increase")): weather_cfg["linked_actuator"]
             for weather_parameter, weather_cfg in self.weather.items()
             if weather_cfg["linked_actuator"] is not None
         }
 
-        return {**default, **update}
+        return {**default_actuators.weather_to_group_mapping, **update}
 
     def get_environment_direction_to_group(self) -> dict[EnvironmentDirection, str]:
         """Get all actuator couples (climate and weather combined)."""
