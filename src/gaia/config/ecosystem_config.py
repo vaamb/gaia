@@ -1155,7 +1155,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         return {**default_actuators.weather_to_group_mapping, **update}
 
-    def get_group_to_weather_direction(self, actuator_group: str) -> list[ClimateDirection]:
+    def get_group_to_weather_direction(self, actuator_group: str) -> list[WeatherDirection] | None:
         """Get the climate parameter and direction an actuator group serves.
 
         An actuator group can serve a climate and weather roles at the same time
@@ -1163,14 +1163,16 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         as it is the one that needs a direction and a PID.
 
         :param actuator_group: The name of the actuator group.
-        :return: The climate parameter and direction, or None if the group only
-                 serves weather parameters or is unknown.
+        :return: A list of weather parameter and direction, or None if the group
+                 only serves weather parameters or is unknown.
         """
         rv = []
         for weather_direction, group in self.get_weather_direction_to_group().items():
             if group == actuator_group:
                 rv.append(weather_direction)
-        return rv
+        if rv:
+            return rv
+        return None
 
     def get_valid_actuator_groups(self) -> set[str]:
         """Get the set of valid actuator group names for this ecosystem."""
