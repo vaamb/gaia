@@ -534,12 +534,12 @@ class TestEcosystemConfigActuators:
         actuators_mapping = ecosystem_config.get_environment_direction_to_group()
 
         # Test with a parameter that has an actuator override
-        assert actuators_mapping[(gv.ClimateParameter.humidity, "increase")] == "fogger"
-        assert actuators_mapping[(gv.ClimateParameter.humidity, "decrease")] == "dehumidifier"
+        assert actuators_mapping[("humidity", "increase")] == "fogger"
+        assert actuators_mapping[("humidity", "decrease")] == "dehumidifier"
 
         # Test with a parameter that uses default actuators
-        assert actuators_mapping[(gv.ClimateParameter.wind, "increase")] == "fan"
-        assert actuators_mapping.get((gv.ClimateParameter.wind, "decrease")) is None
+        assert actuators_mapping[("wind", "increase")] == "fan"
+        assert actuators_mapping.get(("wind", "decrease")) is None
 
     def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
         valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()
@@ -556,7 +556,7 @@ class TestEcosystemConfigClimate:
     def test_get_climate_parameter(self, ecosystem_config: EcosystemConfig):
         result = ecosystem_config.get_climate_parameter("temperature")
         assert result == gv.ClimateConfig(
-            parameter=gv.ClimateParameter.temperature, **test_data.temperature_cfg)
+            parameter="temperature", **test_data.temperature_cfg)
 
     def test_get_climate_parameter_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(UndefinedParameter):
@@ -574,7 +574,7 @@ class TestEcosystemConfigClimate:
         ecosystem_config.set_climate_parameter("light", **param_cfg)
 
         result = ecosystem_config.get_climate_parameter("light")
-        assert result == gv.ClimateConfig(parameter=gv.ClimateParameter.light, **param_cfg)
+        assert result == gv.ClimateConfig(parameter="light", **param_cfg)
 
     def test_update_climate_parameter(self, ecosystem_config: EcosystemConfig):
         # Partial update: only day changes, rest stays the same
@@ -609,8 +609,7 @@ class TestEcosystemConfigClimate:
 class TestEcosystemConfigWeather:
     def test_get_weather_parameter(self, ecosystem_config: EcosystemConfig):
         result = ecosystem_config.get_weather_parameter("rain")
-        assert result == gv.WeatherConfig(
-            parameter=gv.WeatherParameter.rain, **test_data.rain_cfg)
+        assert result == gv.WeatherConfig(parameter="rain", **test_data.rain_cfg)
 
     def test_get_weather_parameter_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(UndefinedParameter):
@@ -629,7 +628,7 @@ class TestEcosystemConfigWeather:
         ecosystem_config.set_weather_parameter("fog", **param_cfg)
 
         result = ecosystem_config.get_weather_parameter("fog")
-        assert result == gv.WeatherConfig(parameter=gv.WeatherParameter.fog, **param_cfg)
+        assert result == gv.WeatherConfig(parameter="fog", **param_cfg)
 
     def test_update_weather_parameter(self, ecosystem_config: EcosystemConfig):
         # Partial update: only duration changes, rest stays the same
@@ -652,8 +651,8 @@ class TestEcosystemConfigWeather:
 
     def test_get_weather_actuators(self, ecosystem_config: EcosystemConfig):
         weather_to_group = ecosystem_config.get_weather_direction_to_group()
-        assert weather_to_group.get((gv.WeatherParameter.rain, "increase")) == "rainer"
-        assert weather_to_group.get((gv.WeatherParameter.rain, "decrease")) is None
+        assert weather_to_group.get(("rain", "increase")) == "rainer"
+        assert weather_to_group.get(("rain", "decrease")) is None
 
 
 @with_hardware(hardware_dict)

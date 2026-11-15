@@ -32,10 +32,10 @@ class PIDParameters(NamedTuple):
 
 
 pid_values: dict[ClimateParameter, PIDParameters] = {
-    gv.ClimateParameter.temperature.name: PIDParameters(5.0, 0.5, 0.1),
-    gv.ClimateParameter.humidity.name: PIDParameters(2.0, 0.5, 1.0),
-    gv.ClimateParameter.light.name: PIDParameters(0.001, 0.0, 0.0),
-    gv.ClimateParameter.wind.name: PIDParameters(1.0, 0.0, 0.0),
+    "temperature": PIDParameters(5.0, 0.5, 0.1),
+    "humidity": PIDParameters(2.0, 0.5, 1.0),
+    "light": PIDParameters(0.001, 0.0, 0.0),
+    "wind": PIDParameters(1.0, 0.0, 0.0),
 }
 
 

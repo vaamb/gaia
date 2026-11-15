@@ -294,19 +294,19 @@ class TestOnEvent:
         assert payload["event"] == "climate"
         assert get_uid(payload) == test_data.ecosystem_uid
         data = get_data(payload)
-        temperature = get_climate_cfg(data, gv.ClimateParameter.temperature)
-        assert temperature == {**test_data.temperature_cfg, "parameter": gv.ClimateParameter.temperature}
-        humidity = get_climate_cfg(data, gv.ClimateParameter.humidity)
-        assert humidity == {**test_data.humidity_cfg, "parameter": gv.ClimateParameter.humidity}
-        wind = get_climate_cfg(data, gv.ClimateParameter.wind)
-        assert wind == {**test_data.wind_cfg, "parameter": gv.ClimateParameter.wind}
+        temperature = get_climate_cfg(data, "temperature")
+        assert temperature == {**test_data.temperature_cfg, "parameter": "temperature"}
+        humidity = get_climate_cfg(data, "humidity")
+        assert humidity == {**test_data.humidity_cfg, "parameter": "humidity"}
+        wind = get_climate_cfg(data, "wind")
+        assert wind == {**test_data.wind_cfg, "parameter": "wind"}
 
         """Weather payload"""
         payload = responses.popleft()
         assert payload["event"] == "weather"
         assert get_uid(payload) == test_data.ecosystem_uid
         data = get_data(payload)
-        assert data[0] == {**test_data.rain_cfg, "parameter": gv.WeatherParameter.rain}
+        assert data[0] == {**test_data.rain_cfg, "parameter": "rain"}
 
         """Hardware payload"""
         payload = responses.popleft()

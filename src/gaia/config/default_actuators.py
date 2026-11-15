@@ -12,18 +12,18 @@ WeatherDirection: TypeAlias = tuple[WeatherParameter, Literal["increase"]]
 
 # Default actuator groups name for the climate parameters
 climate_to_group_mapping: dict[ClimateDirection, str] = {
-    (gv.ClimateParameter.temperature.name, "increase"): str(gv.HardwareType.heater.name),
-    (gv.ClimateParameter.temperature.name, "decrease"): str(gv.HardwareType.cooler.name),
-    (gv.ClimateParameter.humidity.name, "increase"): str(gv.HardwareType.humidifier.name),
-    (gv.ClimateParameter.humidity.name, "decrease"): str(gv.HardwareType.dehumidifier.name),
-    (gv.ClimateParameter.light.name, "increase"): str(gv.HardwareType.light.name),
-    (gv.ClimateParameter.wind.name, "increase"): str(gv.HardwareType.fan.name),
+    ("temperature", "increase"): str(gv.HardwareType.heater.name),
+    ("temperature", "decrease"): str(gv.HardwareType.cooler.name),
+    ("humidity", "increase"): str(gv.HardwareType.humidifier.name),
+    ("humidity", "decrease"): str(gv.HardwareType.dehumidifier.name),
+    ("light", "increase"): str(gv.HardwareType.light.name),
+    ("wind", "increase"): str(gv.HardwareType.fan.name),
 }
 
 
 # Default actuator groups name for the weather parameters
 weather_to_group_mapping: dict[WeatherDirection, str] = {
-    (gv.WeatherParameter.rain.name, "increase"): "rainer",
-    (gv.WeatherParameter.fog.name, "increase"): "fogger",
-    (gv.WeatherParameter.wind_gust.name, "increase"): "fan",
+    ("rain", "increase"): "rainer",
+    ("fog", "increase"): "fogger",
+    ("wind_gust", "increase"): "fan",
 }

@@ -48,7 +48,7 @@ class ScaledClimateTarget(NamedTuple):
 
 
 DEFAULT_LIGHT_CLIMATE_CFG = gv.ClimateConfig(**{  # ty: ignore[invalid-argument-type]
-    "parameter": gv.ClimateParameter.light.name,
+    "parameter": "light",
     "day": 250_000,
     "night": -30_000,
     "hysteresis": 0.0,
@@ -905,10 +905,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             parameter: ClimateParameter,
     ) -> ScaledClimateTarget:
-        if (
-                parameter == gv.ClimateParameter.light.name
-                and not self.has_climate_parameter(parameter)
-        ):
+        if parameter == "light" and not self.has_climate_parameter("light"):
             # Unconfigured light runs on/off by default: a large positive day
             # value forces the PID fully on, a negative night value forces it fully off.
             cfg = DEFAULT_LIGHT_CLIMATE_CFG

@@ -3,6 +3,7 @@ from unittest.mock import patch
 import pytest
 
 import gaia_validators as gv
+from gaia_validators import models as gv_models
 
 from gaia import Ecosystem
 from gaia.config import engine_config
@@ -24,8 +25,9 @@ class TestSubroutineTemplate:
     @pytest.fixture(autouse=True)
     def _patch_dummy_subroutine(self, monkeypatch: pytest.MonkeyPatch):
         # Patch gv management related objects
-        monkeypatch.setattr(gv, "ManagementFlags", PatchedManagementFlags)
-        monkeypatch.setattr(gv, "ManagementConfig", PatchedManagementConfig)
+        for module in (gv, gv_models):
+            monkeypatch.setattr(module, "ManagementFlags", PatchedManagementFlags)
+            monkeypatch.setattr(module, "ManagementConfig", PatchedManagementConfig)
 
         # Patch config RootEcosystemsConfigValidator
         monkeypatch.setattr(
@@ -38,10 +40,6 @@ class TestSubroutineTemplate:
         monkeypatch.setattr(subroutines, "subroutine_names", patched_subroutine_names)
 
         yield
-
-    async def get_patched_subroutine(self, ecosystem: Ecosystem):
-        ...
-
 
     async def test_subroutine_dict_sync(self):
         # Ensure `subroutine_dict` key and values stay consistent
