@@ -16,7 +16,6 @@ from gaia_validators import safe_enum_from_name
 from gaia.config import default_actuators
 from gaia.config.default_actuators import ClimateDirection, Direction, EnvironmentDirection
 from gaia.config.helpers import format_pydantic_error, remove_missing, to_dt
-from gaia.config.migration import ClimateParameter,EnvironmentParameter, WeatherParameter
 from gaia.config.models import (
     AnonymousHardwareConfigDictInput, CacheType, ChaosMemoryValidator, ConfigType,
     ConfigValidationError, DEFAULT_PLACE, EcosystemConfigDict, EnvironmentConfigDict,
@@ -811,7 +810,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     #      Climate parameters
     # ---------------------------------------------------------------------------
     @property
-    def climate(self) -> dict[ClimateParameter, gv.AnonymousClimateConfigDict]:
+    def climate(self) -> dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]:
         """
         Returns the climate config for the ecosystem
         """
@@ -821,13 +820,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.environment["climate"] = {}
             return self.environment["climate"]
 
-    def has_climate_parameter(self, parameter: ClimateParameter) -> bool:
+    def has_climate_parameter(self, parameter: gv.ClimateParameter) -> bool:
         """Check if a climate parameter is configured for this ecosystem."""
         return parameter in self.climate
 
     def get_climate_parameter(
             self,
-            parameter: ClimateParameter,
+            parameter: gv.ClimateParameter,
     ) -> gv.ClimateConfig:
         """Get the configuration for a specific climate parameter.
 
@@ -847,7 +846,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def set_climate_parameter(
             self,
-            parameter: ClimateParameter,
+            parameter: gv.ClimateParameter,
             **value: Unpack[gv.AnonymousClimateConfigDict],
     ) -> None:
         """Set or create a climate parameter configuration.
@@ -867,7 +866,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def update_climate_parameter(
             self,
-            parameter: ClimateParameter,
+            parameter: gv.ClimateParameter,
             **value: Unpack[gv.AnonymousClimateConfigDict],
     ) -> None:
         """Update an existing climate parameter configuration.
@@ -887,7 +886,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def delete_climate_parameter(
             self,
-            parameter: ClimateParameter,
+            parameter: gv.ClimateParameter,
     ) -> None:
         """Delete a climate parameter from the configuration.
 
@@ -903,7 +902,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_scaled_climate_target(
             self,
-            parameter: ClimateParameter,
+            parameter: gv.ClimateParameter,
     ) -> ScaledClimateTarget:
         if parameter == "light" and not self.has_climate_parameter("light"):
             # Unconfigured light runs on/off by default: a large positive day
@@ -918,17 +917,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     #      Weather parameters
     # ---------------------------------------------------------------------------
     @property
-    def weather(self) -> dict[WeatherParameter, gv.AnonymousWeatherConfigDict]:
+    def weather(self) -> dict[gv.WeatherParameter, gv.AnonymousWeatherConfigDict]:
         """
         Returns the weather config for the ecosystem
         """
         return self.environment["weather"]
 
-    def has_weather_parameter(self, parameter: WeatherParameter) -> bool:
+    def has_weather_parameter(self, parameter: gv.WeatherParameter) -> bool:
         """Check if a weather parameter is configured for this ecosystem."""
         return parameter in self.weather
 
-    def get_weather_parameter(self, parameter: WeatherParameter) -> gv.WeatherConfig:
+    def get_weather_parameter(self, parameter: gv.WeatherParameter) -> gv.WeatherConfig:
         """Get the configuration for a specific weather parameter.
 
         :param parameter: The weather parameter name or enum.
@@ -947,7 +946,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def set_weather_parameter(
             self,
-            parameter: WeatherParameter,
+            parameter: gv.WeatherParameter,
             **value: Unpack[gv.AnonymousWeatherConfigDict],
     ) -> None:
         """Set or create a weather parameter configuration.
@@ -967,7 +966,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def update_weather_parameter(
             self,
-            parameter: WeatherParameter,
+            parameter: gv.WeatherParameter,
             **value: Unpack[gv.AnonymousWeatherConfigDict],
     ) -> None:
         """Update an existing weather parameter configuration.
@@ -987,7 +986,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def delete_weather_parameter(
             self,
-            parameter: WeatherParameter,
+            parameter: gv.WeatherParameter,
     ) -> None:
         """Delete a weather parameter from the configuration.
 
@@ -1025,7 +1024,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Valid ignore: ty can't narrow str | None through the comprehension if filter
         return {**default, **update}  # ty: ignore[invalid-return-type]
 
-    def get_weather_direction_to_group(self) -> dict[tuple[WeatherParameter, Direction], str]:
+    def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
         """Get actuator couples for all weather parameters."""
         default = default_actuators.weather_to_group_mapping
         update = {
@@ -1041,7 +1040,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Valid ignore: tuple[A, C] | tuple[B, C] is an valid tuple[A | B, C]
         return self.get_climate_direction_to_group() | self.get_weather_direction_to_group()  # ty: ignore[invalid-return-type]
 
-    def get_group_to_parameter(self) -> dict[str, EnvironmentParameter]:
+    def get_group_to_parameter(self) -> dict[str, gv.EnvironmentParameter]:
         """Get a mapping from actuator group names to their parameters."""
         return {
             actuator_group: environment_direction[0]

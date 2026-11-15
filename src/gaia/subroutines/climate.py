@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from time import monotonic
 import typing as t
-from typing import Literal, Type, TypeAlias
+from typing import Type
 
 import gaia_validators as gv
 
 from gaia.actuator_handler import HystericalPID
 from gaia.config.default_actuators import Direction, ClimateDirection
-from gaia.config.migration import ClimateParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Actuator
 from gaia.subroutines.template import SubroutineTemplate
@@ -31,7 +30,7 @@ class Climate(SubroutineTemplate[Actuator]):
         loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
         self._actuator_handlers: dict[ClimateDirection, ActuatorHandler] | None = None
-        self._pids: dict[ClimateParameter, HystericalPID] | None = None
+        self._pids: dict[gv.ClimateParameter, HystericalPID] | None = None
         self._sensor_miss: int = 0
 
     """SubroutineTemplate methods"""
@@ -159,11 +158,11 @@ class Climate(SubroutineTemplate[Actuator]):
             actuator_handler.deactivate()
         del self.actuator_handlers[climate_direction]
 
-    def get_pid(self, climate_parameter: ClimateParameter) -> HystericalPID:
+    def get_pid(self, climate_parameter: gv.ClimateParameter) -> HystericalPID:
         return self.ecosystem.actuator_hub.get_pid(climate_parameter)
 
     @property
-    def pids(self) -> dict[ClimateParameter, HystericalPID]:
+    def pids(self) -> dict[gv.ClimateParameter, HystericalPID]:
         if self._pids is None:
             raise ValueError(
                 "pids is not defined in non-started Climate subroutine")
@@ -184,7 +183,7 @@ class Climate(SubroutineTemplate[Actuator]):
             return {}
 
         # Check if climate parameters are available in the config file
-        regulated_parameters: list[ClimateParameter] = [
+        regulated_parameters: list[gv.ClimateParameter] = [
             climate_parameter for climate_parameter in self.config.climate.keys()
             if climate_parameter != "light"
         ]
@@ -226,7 +225,7 @@ class Climate(SubroutineTemplate[Actuator]):
         return rv
 
     @property
-    def regulated_parameters(self) -> list[ClimateParameter]:
+    def regulated_parameters(self) -> list[gv.ClimateParameter]:
         if not self.started:
             return []
         expected_actuators = self.compute_expected_actuators()
@@ -245,7 +244,7 @@ class Climate(SubroutineTemplate[Actuator]):
             return True
         return False
 
-    def _get_measure_for_parameter(self, parameter: ClimateParameter) -> str:
+    def _get_measure_for_parameter(self, parameter: gv.ClimateParameter) -> str:
         climate_cfg = self.config.get_climate_parameter(parameter)
         return (
             climate_cfg.linked_measure
@@ -291,7 +290,7 @@ class Climate(SubroutineTemplate[Actuator]):
 
     def _update_pid(
             self,
-            climate_parameter: ClimateParameter,
+            climate_parameter: gv.ClimateParameter,
             sensors_average: dict[str, float],
     ) -> None:
         pid: HystericalPID = self.pids[climate_parameter]

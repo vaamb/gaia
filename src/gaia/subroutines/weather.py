@@ -6,7 +6,6 @@ from apscheduler.triggers.cron import CronTrigger
 import gaia_validators as gv
 
 from gaia.actuator_handler import ActuatorHandler, Timer
-from gaia.config.migration import WeatherParameter
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Actuator
 from gaia.subroutines.template import SubroutineTemplate
@@ -83,12 +82,12 @@ class Weather(SubroutineTemplate[Actuator]):
             await self._add_job(job)
 
     """Routine specific methods"""
-    def compute_expected_actuators(self) -> dict[WeatherParameter, str]:
+    def compute_expected_actuators(self) -> dict[gv.WeatherParameter, str]:
         """Return the actuator groups that should be mounted for the weather events
 
         The keys are the weather events and the values are the associated actuator
         groups"""
-        rv: dict[WeatherParameter, str] = {}
+        rv: dict[gv.WeatherParameter, str] = {}
         for weather_event in self.config.weather:
             actuator_group = self.get_actuator_group_for_parameter(weather_event)
             # Make sure the actuator group is available

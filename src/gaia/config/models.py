@@ -8,8 +8,6 @@ from pydantic import Field, field_validator, model_serializer, RootModel
 
 import gaia_validators as gv
 
-from gaia.config.migration import ClimateParameter, WeatherParameter
-
 
 DEFAULT_PLACE = "home"
 
@@ -75,17 +73,17 @@ class EnvironmentConfigValidator(gv.BaseModel):
     chaos: gv.ChaosConfig = Field(default_factory=gv.ChaosConfig)
     nycthemeral_cycle: gv.NycthemeralCycleConfig = Field(
         default_factory=gv.NycthemeralCycleConfig, validation_alias="sky")
-    climate: dict[ClimateParameter, gv.AnonymousClimateConfig] = \
+    climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfig] = \
         Field(default_factory=dict)
-    weather: dict[WeatherParameter, gv.AnonymousWeatherConfig] = \
+    weather: dict[gv.WeatherParameter, gv.AnonymousWeatherConfig] = \
         Field(default_factory=dict)
 
 
 class EnvironmentConfigDict(TypedDict):
     chaos: gv.ChaosConfigDict
     nycthemeral_cycle: gv.NycthemeralCycleConfigDict
-    climate: dict[ClimateParameter, gv.AnonymousClimateConfigDict]
-    weather: dict[WeatherParameter, gv.AnonymousWeatherConfigDict]
+    climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
+    weather: dict[gv.WeatherParameter, gv.AnonymousWeatherConfigDict]
 
 
 class EcosystemConfigValidator(gv.BaseModel):
@@ -113,7 +111,7 @@ class RootEcosystemsConfigValidator(RootModel):
 
 # Custom models to shorten climate, hardware and plants configs when dumping to YAML
 class RootClimateValidator(RootModel):
-    root: dict[ClimateParameter, gv.AnonymousClimateConfig]
+    root: dict[gv.ClimateParameter, gv.AnonymousClimateConfig]
 
 
 class _SerializableMeasure(gv.Measure):

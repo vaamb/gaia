@@ -16,7 +16,6 @@ from weakref import WeakValueDictionary
 import gaia_validators as gv
 
 from gaia.config import default_actuators
-from gaia.config.migration import ClimateParameter
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
 
@@ -31,7 +30,7 @@ class PIDParameters(NamedTuple):
     Kd: float
 
 
-pid_values: dict[ClimateParameter, PIDParameters] = {
+pid_values: dict[gv.ClimateParameter, PIDParameters] = {
     "temperature": PIDParameters(5.0, 0.5, 0.1),
     "humidity": PIDParameters(2.0, 0.5, 1.0),
     "light": PIDParameters(0.001, 0.0, 0.0),
@@ -57,7 +56,7 @@ class HystericalPID:
     def __init__(
             self,
             actuator_hub: ActuatorHub,
-            climate_parameter: ClimateParameter,
+            climate_parameter: gv.ClimateParameter,
             target: float = 0.0,
             hysteresis: float = 0.0,
             Kp: float = 1.0,
@@ -69,7 +68,7 @@ class HystericalPID:
             used_regularly: bool = True,
     ) -> None:
         self.actuator_hub: ActuatorHub = actuator_hub
-        self.climate_parameter: ClimateParameter = climate_parameter
+        self.climate_parameter: gv.ClimateParameter = climate_parameter
         self.target: float = target
         self.hysteresis: float = hysteresis
         self.Kp: float = Kp
@@ -795,7 +794,7 @@ class ActuatorHub:
         self.ecosystem: Ecosystem = ecosystem
         self.logger = logging.getLogger(
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
-        self._pids: WeakValueDictionary[ClimateParameter, HystericalPID] = \
+        self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
             WeakValueDictionary()
         self._actuator_handlers: WeakValueDictionary[str, ActuatorHandler] = \
             WeakValueDictionary()
@@ -805,12 +804,12 @@ class ActuatorHub:
         return self._actuator_handlers
 
     @property
-    def pids(self) -> WeakValueDictionary[ClimateParameter, HystericalPID]:
+    def pids(self) -> WeakValueDictionary[gv.ClimateParameter, HystericalPID]:
         return self._pids
 
     def get_pid(
             self,
-            climate_parameter: ClimateParameter,
+            climate_parameter: gv.ClimateParameter,
     ) -> HystericalPID:
         try:
             return self._pids[climate_parameter]

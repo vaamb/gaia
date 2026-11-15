@@ -2,13 +2,11 @@ from typing import Literal, TypeAlias
 
 import gaia_validators as gv
 
-from gaia.config.migration import ClimateParameter, EnvironmentParameter, WeatherParameter
-
 
 Direction = Literal["increase", "decrease"]
-EnvironmentDirection: TypeAlias = tuple[EnvironmentParameter, Direction]
-ClimateDirection: TypeAlias = tuple[ClimateParameter, Direction]
-WeatherDirection: TypeAlias = tuple[WeatherParameter, Literal["increase"]]
+EnvironmentDirection: TypeAlias = tuple[gv.EnvironmentParameter, Direction]
+ClimateDirection: TypeAlias = tuple[gv.ClimateParameter, Direction]
+WeatherDirection: TypeAlias = tuple[gv.WeatherParameter, Literal["increase"]]
 
 # Default actuator groups name for the climate parameters
 climate_to_group_mapping: dict[ClimateDirection, str] = {
