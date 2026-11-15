@@ -9,6 +9,7 @@ from typing import cast, Collection, Literal, NamedTuple, TYPE_CHECKING
 from weakref import WeakValueDictionary
 
 import pydantic
+from pydantic import TypeAdapter
 
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
@@ -52,6 +53,9 @@ DEFAULT_LIGHT_CLIMATE_CFG = gv.ClimateConfig(**{  # ty: ignore[invalid-argument-
     "night": -30_000,
     "hysteresis": 0.0,
 })
+
+
+parameter_adapter = TypeAdapter(gv.EnvironmentParameter)
 
 
 class _MetaEcosystemConfig(type):
@@ -822,6 +826,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def has_climate_parameter(self, parameter: gv.ClimateParameter) -> bool:
         """Check if a climate parameter is configured for this ecosystem."""
+        parameter = parameter_adapter.validate_python(parameter)
         return parameter in self.climate
 
     def get_climate_parameter(
@@ -830,10 +835,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> gv.ClimateConfig:
         """Get the configuration for a specific climate parameter.
 
-        :param parameter: The climate parameter name or enum.
+        :param parameter: The climate parameter name.
         :return: The climate configuration for the parameter.
         :raises UndefinedParameter: If the parameter is not configured.
         """
+        parameter = parameter_adapter.validate_python(parameter)
         try:
             data = self.climate[parameter]
         except KeyError:
@@ -851,10 +857,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Set or create a climate parameter configuration.
 
-        :param parameter: The climate parameter name or enum.
+        :param parameter: The climate parameter name.
         :param value: The climate configuration values.
         :raises ValueError: If the provided values are invalid.
         """
+        parameter = parameter_adapter.validate_python(parameter)
         try:
             validated_value = gv.AnonymousClimateConfig(**value).model_dump()
         except pydantic.ValidationError as e:
@@ -871,10 +878,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Update an existing climate parameter configuration.
 
-        :param parameter: The climate parameter name or enum.
+        :param parameter: The climate parameter name.
         :param value: The climate configuration values to update.
         :raises UndefinedParameter: If the parameter does not exist.
         """
+        parameter = parameter_adapter.validate_python(parameter)
         if not self.climate.get(parameter):
             raise UndefinedParameter(
                 f"No climate parameter {parameter} was found for ecosystem "
@@ -890,9 +898,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Delete a climate parameter from the configuration.
 
-        :param parameter: The climate parameter name or enum.
+        :param parameter: The climate parameter name.
         :raises UndefinedParameter: If the parameter does not exist.
         """
+        parameter = parameter_adapter.validate_python(parameter)
         try:
             del self.climate[parameter]
         except KeyError:
@@ -904,6 +913,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self,
             parameter: gv.ClimateParameter,
     ) -> ScaledClimateTarget:
+        parameter = parameter_adapter.validate_python(parameter)
         if parameter == "light" and not self.has_climate_parameter("light"):
             # Unconfigured light runs on/off by default: a large positive day
             # value forces the PID fully on, a negative night value forces it fully off.
@@ -925,15 +935,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def has_weather_parameter(self, parameter: gv.WeatherParameter) -> bool:
         """Check if a weather parameter is configured for this ecosystem."""
+        parameter = parameter_adapter.validate_python(parameter)
         return parameter in self.weather
 
     def get_weather_parameter(self, parameter: gv.WeatherParameter) -> gv.WeatherConfig:
         """Get the configuration for a specific weather parameter.
 
-        :param parameter: The weather parameter name or enum.
+        :param parameter: The weather parameter name.
         :return: The weather configuration for the parameter.
         :raises UndefinedParameter: If the parameter is not configured.
         """
+        parameter = parameter_adapter.validate_python(parameter)
         try:
             data = self.weather[parameter]
         except KeyError:
@@ -951,10 +963,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Set or create a weather parameter configuration.
 
-        :param parameter: The weather parameter name or enum.
+        :param parameter: The weather parameter name.
         :param value: The weather configuration values.
         :raises ValueError: If the provided values are invalid.
         """
+        parameter = parameter_adapter.validate_python(parameter)
         try:
             validated_value = gv.AnonymousWeatherConfig(**value).model_dump()
         except pydantic.ValidationError as e:
@@ -971,10 +984,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Update an existing weather parameter configuration.
 
-        :param parameter: The weather parameter name or enum.
+        :param parameter: The weather parameter name.
         :param value: The weather configuration values to update.
         :raises UndefinedParameter: If the parameter does not exist.
         """
+        parameter = parameter_adapter.validate_python(parameter)
         if not self.weather.get(parameter):
             raise UndefinedParameter(
                 f"No weather parameter {parameter} was found for ecosystem "
@@ -990,9 +1004,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Delete a weather parameter from the configuration.
 
-        :param parameter: The weather parameter name or enum.
+        :param parameter: The weather parameter name.
         :raises UndefinedParameter: If the parameter does not exist.
         """
+        parameter = parameter_adapter.validate_python(parameter)
         try:
             del self.weather[parameter]
         except KeyError:
