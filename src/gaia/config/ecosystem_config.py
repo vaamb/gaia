@@ -26,7 +26,7 @@ from gaia.exceptions import HardwareNotFound, PlantNotFound, UndefinedParameter
 from gaia.hardware import hardware_models, Hardware
 from gaia.hardware.multiplexers import multiplexer_models
 from gaia.subroutines import subroutine_dict
-from gaia.utils import create_uid, is_time_between
+from gaia.utils import create_uid, humanize_list, is_time_between
 
 if sys.version_info < (3, 12):
     from typing_extensions import Unpack
@@ -1027,7 +1027,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     # ---------------------------------------------------------------------------
     #   Actuator couples
     # ---------------------------------------------------------------------------
-    def get_climate_direction_to_group(self) -> dict[ClimateDirection, str]:
+    @staticmethod
+    def _compute_climate_direction_to_group(
+            climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
+    ) -> dict[ClimateDirection, str]:
         """Get actuator couples for all climate parameters.
 
         Merges default actuator couples with those defined in climate config.
@@ -1036,7 +1039,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         update = {
             (climate_parameter, direction): climate_cfg["linked_actuators"][direction]
             for direction in directions
-            for climate_parameter, climate_cfg in self.climate.items()
+            for climate_parameter, climate_cfg in climate.items()
             if (
                 climate_cfg["linked_actuators"] is not None
                 and climate_cfg["linked_actuators"][direction] is not None
@@ -1045,6 +1048,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         # Valid ignore: ty can't narrow str | None through the comprehension if filter
         return {**default_actuators.climate_to_group_mapping, **update}  # ty: ignore[invalid-return-type]
+
+    def get_climate_direction_to_group(self) -> dict[ClimateDirection, str]:
+        """Get actuator couples for all climate parameters.
+
+        Merges default actuator couples with those defined in climate config.
+        """
+        return self._compute_climate_direction_to_group(self.climate)
 
     def get_group_to_climate_direction(self, actuator_group: str) -> ClimateDirection | None:
         """Get the climate parameter and direction an actuator group serves.
@@ -1061,6 +1071,68 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if group == actuator_group:
                 return climate_direction
         return None
+
+    @staticmethod
+    def validate_climate_groups(
+        climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
+        hardware: dict[str, gv.AnonymousHardwareConfigDict],
+    ) -> None:
+        """Check that an actuator group acts on at most one climate role.
+
+        A climate role is a climate parameter and its direction, such as
+        `temperature` / `decrease`. Two roles driving the same actuators would
+        have two PIDs fight over them, so an actuator group can only be linked
+        to a single climate role.
+        Weather parameters don't have these limitations: a weather event
+        overrides the climate role of its actuator group while it lasts (a few
+        minutes in theory).
+
+        :param climate: The validated climate config of the ecosystem.
+        :param hardware: The validated hardware config of the ecosystem.
+        :raises ConfigValidationError: If a group or a hardware has two climate
+                                       roles.
+        """
+        group_to_climate_direction: dict[str, list[ClimateDirection]] = {}
+        in_use = {*climate.keys(), "light"}
+        errors: list[str] = []
+        climate_to_group = EcosystemConfig._compute_climate_direction_to_group(climate)
+        # First mark the climate actions regulated by each actuator group ...
+        for climate_direction, actuator_group in climate_to_group.items():
+            if climate_direction[0] not in in_use:
+                # The climate action is not regulated (it's a default one)
+                continue
+            if actuator_group not in group_to_climate_direction:
+                group_to_climate_direction[actuator_group] = [climate_direction]
+            else:
+                group_to_climate_direction[actuator_group].append(climate_direction)
+        # ... then flag actuator groups regulating more than one climate action
+        for actuator_group, climate_directions in group_to_climate_direction.items():
+            if len(climate_directions) > 1:
+                msgs = [
+                    f"'{climate_direction[0]}' ({climate_direction[1]})"
+                    for climate_direction in climate_directions
+                ]
+                errors.append(
+                    f"Actuator group '{actuator_group}' is linked to "
+                    f"{humanize_list(msgs)}."
+                )
+        # Make sure hardware don't have multiple groups linked to climate actions
+        for hardware_uid, hardware_cfg in hardware.items():
+            climate_groups = sorted(
+                group for group in hardware_cfg["groups"]
+                if group in group_to_climate_direction
+            )
+            if len(climate_groups) > 1:
+                errors.append(
+                    f"Hardware '{hardware_cfg['name']}' ({hardware_uid}) belongs "
+                    f"to more than one actuator group linked to a climate "
+                    f"parameter: {', '.join(climate_groups)}."
+                )
+        if errors:
+            raise ConfigValidationError(
+                f"An actuator can only serve one climate parameter and direction. "
+                f"{' '.join(errors)}"
+            )
 
     def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
         """Get actuator couples for all weather parameters."""
