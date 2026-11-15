@@ -485,7 +485,6 @@ class EngineConfig(metaclass=SingletonMeta):
                         f"Requirements for multiplexer `{multiplexer_cls.__name__}`"
                         f" in ecosystem {ecosystem_name} are met.")
 
-
     async def initialize_configs(self) -> None:
         # This steps needs to remain separate and explicits as it loads files
         # Private configs need to be loaded first so we can check nycthemeral

@@ -5,7 +5,7 @@ import logging
 from math import pi, sin
 import random
 import sys
-from typing import cast, Collection, Literal, NamedTuple, TYPE_CHECKING
+from typing import cast, Collection, NamedTuple, TYPE_CHECKING
 from weakref import WeakValueDictionary
 
 import pydantic
@@ -215,9 +215,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             try:
                 cls.check_hardware_address(hardware_dict["address"], addresses_used)
             except ValueError as e:
-                errors.append(f"hardware '{hardware_dict['name']}': {e}")
+                errors.append(f"Hardware '{hardware_dict['name']}': {e}")
             finally:
                 addresses_used.append(hardware_dict["address"])
+        try:
+            cls.check_climate_groups(
+                ecosystem_cfg["environment"]["climate"], ecosystem_cfg["hardware"])
+        except ValueError as e:
+            errors.append(str(e))
         # Check nycthemeral config (warnings)
         nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
         for method in (nycthemeral_cfg["span"], nycthemeral_cfg["lighting"]):
@@ -871,6 +876,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid climate parameters provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
+        # Make sure the new climate parameter isn't acted upon by more than a
+        #  single actuator group
+        self.check_climate_groups(
+            {**self.climate, parameter: validated_value},
+            self.hardware_dict,
+        )
         self.climate[parameter] = validated_value
 
     def update_climate_parameter(
@@ -1073,9 +1084,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return None
 
     @staticmethod
-    def validate_climate_groups(
-        climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
-        hardware: dict[str, gv.AnonymousHardwareConfigDict],
+    def check_climate_groups(
+        climate_cfg: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
+        hardware_cfg: dict[str, gv.AnonymousHardwareConfigDict],
     ) -> None:
         """Check that an actuator group acts on at most one climate role.
 
@@ -1087,15 +1098,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         overrides the climate role of its actuator group while it lasts (a few
         minutes in theory).
 
-        :param climate: The validated climate config of the ecosystem.
-        :param hardware: The validated hardware config of the ecosystem.
+        :param climate_cfg: The validated climate config of the ecosystem.
+        :param hardware_cfg: The validated hardware config of the ecosystem.
         :raises ConfigValidationError: If a group or a hardware has two climate
                                        roles.
         """
         group_to_climate_direction: dict[str, list[ClimateDirection]] = {}
-        in_use = {*climate.keys(), "light"}
+        in_use = {*climate_cfg.keys(), "light"}
         errors: list[str] = []
-        climate_to_group = EcosystemConfig._compute_climate_direction_to_group(climate)
+        climate_to_group = EcosystemConfig._compute_climate_direction_to_group(climate_cfg)
         # First mark the climate actions regulated by each actuator group ...
         for climate_direction, actuator_group in climate_to_group.items():
             if climate_direction[0] not in in_use:
@@ -1117,7 +1128,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"{humanize_list(msgs)}."
                 )
         # Make sure hardware don't have multiple groups linked to climate actions
-        for hardware_uid, hardware_cfg in hardware.items():
+        for hardware_uid, hardware_cfg in hardware_cfg.items():
             climate_groups = sorted(
                 group for group in hardware_cfg["groups"]
                 if group in group_to_climate_direction
@@ -1315,7 +1326,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         hardware_dict = self.validate_hardware_dict(hardware_dict)
         self.check_hardware_address(hardware_dict["address"], self._used_addresses())
         uid = hardware_dict["uid"]
-        self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
+        anonymous_hardware_dict = gv.to_anonymous(hardware_dict, "uid")
+        self.check_climate_groups(
+            self.climate,
+            {**self.hardware_dict, uid: anonymous_hardware_dict},
+        )
+        self.hardware_dict[uid] = anonymous_hardware_dict
 
     def update_hardware(
             self,
@@ -1345,7 +1361,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
         self.check_hardware_address(hardware_dict["address"], used_addresses)
-        self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
+        anonymous_hardware_dict = gv.to_anonymous(hardware_dict, "uid")
+        self.check_climate_groups(
+            self.climate,
+            {**self.hardware_dict, uid: anonymous_hardware_dict},
+        )
+        self.hardware_dict[uid] = anonymous_hardware_dict
 
     def delete_hardware(self, uid: str) -> None:
         """

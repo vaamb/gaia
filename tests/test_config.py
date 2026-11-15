@@ -700,7 +700,7 @@ class TestEcosystemConfigHardware:
         invalid_dict["hardware"][test_data.humidifier_uid]["address"] = sensor_address
         issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
         assert len(issues.errors) == 1
-        assert re.search(r"hardware 'VirtualHumidifier'.*already used", issues.errors[0])
+        assert re.search(r"Hardware 'VirtualHumidifier'.*already used", issues.errors[0])
 
     def test_create_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):
