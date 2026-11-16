@@ -160,10 +160,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """Normalize a raw, structurally valid, ecosystem config dict.
 
         Used at load time, before any `EcosystemConfig` instance exists, to
-        normalize the config to the form Gaia works with. Each hardware dict
-        is replaced by the result of `validate_hardware_dict()`, so its
-        address is expanded to its normalized form: 'BOARD_7' becomes 'GPIO_4',
-        a 'default' I2C address becomes the address of the model ...
+        normalize the config to the form Gaia works with:
+
+        - Each hardware dict is replaced by the result of
+          `validate_hardware_dict()`, so its address is expanded to its
+          normalized form: 'BOARD_7' becomes 'GPIO_4', a 'default' I2C address
+          becomes the address of the model ...
+        - A climate parameter without linked actuators gets the default ones,
+          so they can be seen, changed or disabled from the config file.
 
         This step will also report unsupported models and invalid address.
 
@@ -176,6 +180,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                                        one error message per invalid hardware
                                        in `args`.
         """
+        # Normalize hardware dicts
         errors: list[str] = []
         for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
             try:
@@ -185,6 +190,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 errors.append(f"hardware '{hardware_dict['name']}': {e}")
             else:
                 ecosystem_cfg["hardware"][hardware_uid] = gv.to_anonymous(validated, "uid")
+        # Normalize climate dicts
+        for parameter, climate_cfg in ecosystem_cfg["environment"]["climate"].items():
+            if climate_cfg.get("linked_actuators") is None:
+                climate_cfg["linked_actuators"] = \
+                    cls.get_default_linked_actuator(parameter)
         if errors:
             raise ConfigValidationError(*errors)
         return ecosystem_cfg
@@ -864,6 +874,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Set or create a climate parameter configuration.
 
+        If `linked_actuators` is missing or None, the default linked actuators
+        of the parameter are used.
+
         :param parameter: The climate parameter name.
         :param value: The climate configuration values.
         :raises ValueError: If the provided values are invalid.
@@ -876,6 +889,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid climate parameters provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
+        if validated_value["linked_actuators"] is None:
+            validated_value["linked_actuators"] = \
+                self.get_default_linked_actuator(parameter)
         # Make sure the new climate parameter isn't acted upon by more than a
         #  single actuator group
         self.check_climate_groups(
@@ -1038,6 +1054,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     # ---------------------------------------------------------------------------
     #   Actuator couples
     # ---------------------------------------------------------------------------
+    @staticmethod
+    def get_default_linked_actuator(
+            parameter: gv.ClimateParameter,
+    ) -> gv.ActuatorCoupleDict:
+        """Get the default actuator groups linked to a climate parameter.
+
+        :param parameter: The climate parameter name.
+        :return: The default actuator group of each direction, None when the
+                 parameter has no default actuator group for this direction.
+        """
+        defaults = default_actuators.climate_to_group_mapping
+        return {
+            "increase": defaults.get((parameter, "increase")),
+            "decrease": defaults.get((parameter, "decrease")),
+        }
+
     @staticmethod
     def _compute_climate_direction_to_group(
             climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
