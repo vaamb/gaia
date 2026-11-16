@@ -196,9 +196,7 @@ class TestClimateSubroutine:
             ("humidity", "increase"),  # "fogger"
         }
 
-        assert set(climate_subroutine.pids) == {
-            "temperature", "humidity", "wind",
-        }
+        assert set(climate_subroutine.pids) == {"temperature", "humidity"}
 
         await climate_subroutine.routine()
 

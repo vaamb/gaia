@@ -64,19 +64,14 @@ class Climate(SubroutineTemplate[Actuator]):
         self.logger.info(
             f"Starting the climate loop. It will run every "
             f"{self._loop_period:.1f} s.")
+        climate_directions = self.compute_expected_actuators().keys()
         # Mount PID controllers
-        # TODO: mount PID controllers only if required
+        climate_parameters = set(cd[0] for cd in climate_directions)
         self._pids = {}
-        for climate_parameter in self.config.climate.keys():
-            # Light is a special climate parameter that doesn't require any sensor
-            if climate_parameter == "light":
-                continue
-            pid = self.get_pid(climate_parameter)
-            pid.reset()
-            self.pids[climate_parameter] = pid
+        for climate_parameter in climate_parameters:
+            self._add_pid(climate_parameter)
         # Mount required actuator handlers
         self._actuator_handlers = {}
-        climate_directions = self.compute_expected_actuators()
         for climate_direction in climate_directions:
             await self._mount_actuator_handler(climate_direction)
 
@@ -84,8 +79,10 @@ class Climate(SubroutineTemplate[Actuator]):
         # Deactivate activated actuator handlers
         for climate_direction in [*self.actuator_handlers.keys()]:
             await self._unmount_actuator_handler(climate_direction)
-        # Reset actuator handlers and PIDs
         self._actuator_handlers = None
+        # Remove PIDs
+        for climate_parameter in [*self.pids.keys()]:
+            self._remove_pid(climate_parameter)
         self._pids = None
 
     def get_hardware_needed_uid(self) -> set[str]:
@@ -96,19 +93,26 @@ class Climate(SubroutineTemplate[Actuator]):
         return hardware_needed
 
     async def _refresh(self) -> None:
-        # Make sure PIDs are in sync with actuator handlers
+        climate_directions = self.compute_expected_actuators().keys()
         assert self._pids is not None
+        pids_expected: set[gv.ClimateParameter] = set(cd[0] for cd in climate_directions)
+        pids_mounted: set[gv.ClimateParameter] = set(self.pids)
+        # Activate PIDs that are needed before actuators handlers using them are 
+        #  mounted
+        for parameter in pids_expected - pids_mounted:
+            self._add_pid(parameter)
         # Activate, deactivate and reset actuator handlers if required
-        currently_expected: set[ClimateDirection] = set(self.compute_expected_actuators())
-        currently_mounted: set[ClimateDirection] = set(self.actuator_handlers.keys())
-        for climate_direction in currently_expected - currently_mounted:
+        handlers_expected: set[ClimateDirection] = set(climate_directions)
+        handlers_mounted: set[ClimateDirection] = set(self.actuator_handlers.keys())
+        for climate_direction in handlers_expected - handlers_mounted:
             await self._mount_actuator_handler(climate_direction)
-        for climate_direction in currently_mounted - currently_expected:
+        for climate_direction in handlers_mounted - handlers_expected:
             await self._unmount_actuator_handler(climate_direction)
-        # Reset actuator handlers
         for actuator_handler in self.actuator_handlers.values():
             actuator_handler.reset_cached_actuators()
-        # Reset PIDs
+        # Deactivate PIDs not needed anymore and reset them
+        for parameter in pids_mounted - pids_expected:
+            self._remove_pid(parameter)
         for pid in self.pids.values():
             pid.reset()
 
@@ -158,6 +162,14 @@ class Climate(SubroutineTemplate[Actuator]):
             actuator_handler.deactivate()
         del self.actuator_handlers[climate_direction]
 
+    def _add_pid(self, climate_parameter: gv.ClimateParameter) -> None:
+        pid = self.get_pid(climate_parameter)
+        pid.reset()
+        self.pids[climate_parameter] = pid
+
+    def _remove_pid(self, climate_parameter: gv.ClimateParameter) -> None:
+        del self.pids[climate_parameter]
+    
     def get_pid(self, climate_parameter: gv.ClimateParameter) -> HystericalPID:
         return self.ecosystem.actuator_hub.get_pid(climate_parameter)
 
@@ -170,7 +182,7 @@ class Climate(SubroutineTemplate[Actuator]):
 
     # Climate parameters and actuators management
     def compute_expected_actuators(self) -> dict[ClimateDirection, str]:
-        """Return the actuator groups that should be mounted for the weather events
+        """Return the actuator groups that should be mounted for the climate events
 
         The result is a dictionary where the keys are a tuple of the climate
         parameters and the associated direction, and the values are the
@@ -319,7 +331,7 @@ class Climate(SubroutineTemplate[Actuator]):
         if self._check_misses():
             await self.stop()
             return
-        for climate_parameter in self.regulated_parameters:
+        for climate_parameter in self.pids.keys():
             self._update_pid(climate_parameter, sensors_average)
         for actuator_handler in self.actuator_handlers.values():
             async with actuator_handler.update_status_transaction():
