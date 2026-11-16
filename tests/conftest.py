@@ -168,7 +168,7 @@ async def ecosystem_config(
     hardware_dict = param.get("hardware")
     plants_dict = param.get("plants")
     ecosystems_dict = get_ecosystem_info(hardware_dict, plants_dict)
-    ecosystems_dict = engine_config._validate_ecosystem_dict(ecosystems_dict)
+    ecosystems_dict = engine_config._validate_ecosystems_dict(ecosystems_dict)
     ecosystem_dict = ecosystems_dict[ecosystem_uid]
 
     ecosystem_config = engine_config.get_ecosystem_config(ecosystem_uid)

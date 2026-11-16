@@ -8,14 +8,13 @@ from json.decoder import JSONDecodeError
 import logging
 from pathlib import Path
 import sys
-from typing import Type
+from typing import Collection, Type
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
 import pydantic
 
 import gaia_validators as gv
-from gaia_validators import safe_enum_from_name
 from gaia_validators.utils import get_sun_times
 
 from gaia.config._utils import configure_logging, GaiaConfig, GaiaConfigHelper
@@ -229,80 +228,58 @@ class EngineConfig(metaclass=SingletonMeta):
                 "`async with engine_config.config_files_lock:` block"
             )
 
-    def _log_nycthemeral_method_issues(
-            self,
-            method: gv.LightingMethod | gv.NycthemeralSpanMethod,
-            ecosystem_cfg: EcosystemConfigDict,
-    ) -> None:
-        """Validate method and log warning if it will fall back to 'fixed'."""
-        try:
-            EcosystemConfig.validate_nycthemeral_method(
-                method, ecosystem_cfg, self.private_config["places"])
-        except ConfigValidationError as e:
-            method_name = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
-            ecosystem_name = ecosystem_cfg["name"]
-            self.logger.warning(
-                f"{method_name} method cannot be set to '{method.name}' for "
-                f"ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-
     @staticmethod
-    def _validate_ecosystem_dict(
-            ecosystem_dict: dict[str, EcosystemConfigDict],
+    def _validate_ecosystems_dict(
+            ecosystems_dict: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
-        return validate_from_root_model(ecosystem_dict, RootEcosystemsConfigValidator)
+        return validate_from_root_model(ecosystems_dict, RootEcosystemsConfigValidator)
 
-    def _validate_ecosystems_logic(
-            self, ecosystem_configs: dict[str, EcosystemConfigDict],
+    def _normalize_ecosystems_configs(
+            self,
+            ecosystem_configs: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
-        unfixable_error: bool = False
+        valid: bool = True
         for ecosystem_uid, ecosystem_cfg in ecosystem_configs.items():
-            ecosystem_cfg: EcosystemConfigDict
-            ecosystem_name: str = ecosystem_cfg["name"]
-            # Check hardware config
-            self.logger.debug(
-                f"Checking hardware config for ecosystem {ecosystem_name}.")
-            addresses_used: list[str] = []
-            for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
-                hardware_name: str = hardware_dict["name"]
-                self.logger.debug(
-                    f"Checking hardware config for hardware {hardware_name} in "
-                    f"ecosystem {ecosystem_name}.")
-                try:
-                    EcosystemConfig.validate_hardware_dict(
-                        gv.to_identified(hardware_dict, {"uid": hardware_uid}),
-                        addresses_used=addresses_used,
-                    )
-                except ValueError as e:
+            try:
+                normalized = EcosystemConfig.normalize_config_dict(ecosystem_cfg)
+            except ConfigValidationError as e:
+                for error in e.args:
                     self.logger.error(
-                        f"Could not validate hardware config for hardware {hardware_name} "
-                        f"in ecosystem {ecosystem_name}. ERROR msg(s): `{e}`.")
-                    unfixable_error = True
-                else:
-                    self.logger.debug(
-                        f"Hardware config for {hardware_name} in ecosystem "
-                        f"{ecosystem_name} has been validated.")
-                finally:
-                    addresses_used.append(hardware_dict["address"])
-
-            # Check nycthemeral config
-            self.logger.debug(
-                f"Checking nycthemeral config for ecosystem {ecosystem_name}.")
-            nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
-
-            span_method = safe_enum_from_name(gv.NycthemeralSpanMethod, nycthemeral_cfg["span"])
-            self._log_nycthemeral_method_issues(span_method, ecosystem_cfg)
-
-            lighting_method = safe_enum_from_name(gv.LightingMethod, nycthemeral_cfg["lighting"])
-            self._log_nycthemeral_method_issues(lighting_method, ecosystem_cfg)
-
-        if unfixable_error:
+                        f"Invalid config for ecosystem {ecosystem_cfg['name']}: "
+                        f"{error}")
+                valid = False
+            else:
+                ecosystem_configs[ecosystem_uid] = normalized
+        if not valid:
             raise ConfigValidationError(
-                "Could not validate ecosystems config. Check the log for more "
-                "details."
+                "Could not normalize ecosystems config. Check the log for more details."
             )
         return ecosystem_configs
+
+    def _check_ecosystems_logic(
+            self,
+            ecosystem_configs: dict[str, EcosystemConfigDict],
+            places: Collection[str],
+    ) -> None:
+        valid: bool = True
+        for ecosystem_cfg in ecosystem_configs.values():
+            issues = EcosystemConfig.check_config_logic(ecosystem_cfg, places)
+            for error in issues.errors:
+                # Error msgs already ends with a `.`
+                self.logger.error(
+                    f"Invalid config for ecosystem {ecosystem_cfg['name']}: "
+                    f"{error}")
+                valid = False
+            for warning in issues.warnings:
+                # Warning msgs already ends with a `.`
+                self.logger.warning(
+                    f"Unsound config for ecosystem {ecosystem_cfg['name']} (the "
+                    f"ecosystem will run with degraded capabilities): {warning}")
+        if not valid:
+            raise ConfigValidationError(
+                "Could not validate ecosystems config logic. Check the log for "
+                "more details."
+            )
 
     async def _load_ecosystems_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
@@ -313,17 +290,19 @@ class EngineConfig(metaclass=SingletonMeta):
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
-            validated = self._validate_ecosystem_dict(unvalidated)
+            validated = self._validate_ecosystems_dict(unvalidated)
         except pydantic.ValidationError as e:  # pragma: no cover
             self.logger.error(
                 f"Could not load ecosystems configuration file. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
             raise e
-        # Validate the data logic
-        validated = self._validate_ecosystems_logic(validated)
+        # Normalize the dicts
+        normalized = self._normalize_ecosystems_configs(validated)
+        # Check the data logic
+        self._check_ecosystems_logic(normalized, self.private_config["places"])
         # Set the ecosystems config dict
-        self._ecosystems_config_dict = validated
+        self._ecosystems_config_dict = normalized
         # Update the checksum
         await self._checksum_tracker.update(config_path, checksum)
         # Reset ecosystems caches
@@ -470,7 +449,7 @@ class EngineConfig(metaclass=SingletonMeta):
             for hardware_dict in ecosystem_cfg["hardware"].values():
                 hardware_name: str = hardware_dict["name"]
                 # The `ecosystem_configs` dict should have gone through
-                #  `_validate_ecosystems_logic()` by now, so the following should
+                #  `_check_ecosystems_logic()` by now, so the following should
                 #  never fail
                 hardware_cls = Hardware.get_model_subclass(hardware_dict["model"])
                 self.logger.debug(
@@ -492,7 +471,7 @@ class EngineConfig(metaclass=SingletonMeta):
             # Check multiplexer requirements
             for multiplexer_model in multiplexer_models:
                 # The `ecosystem_configs` dict should have gone through
-                #  `_validate_ecosystems_logic()` by now, so the following should
+                #  `_check_ecosystems_logic()` by now, so the following should
                 #  never fail
                 multiplexer_cls = Multiplexer.get_model_subclass(multiplexer_model)
                 try:
@@ -744,7 +723,7 @@ class EngineConfig(metaclass=SingletonMeta):
         now = datetime.now().astimezone()
         utc_offset = now.utcoffset()
         # `now` is timezone-aware so offset shouldn't be None
-        assert utc_offset is not None  
+        assert utc_offset is not None
         standard_offset = utc_offset - (now.dst() or timedelta(0))
         longitude = standard_offset.total_seconds() / SECONDS_PER_HOUR * DEGREES_PER_HOUR
         # Time zones go from UTC-12 to UTC+14, keep the longitude in [-180, 180[

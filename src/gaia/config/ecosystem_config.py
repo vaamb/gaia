@@ -5,7 +5,7 @@ import logging
 from math import pi, sin
 import random
 import sys
-from typing import cast, Literal, NamedTuple, TYPE_CHECKING
+from typing import cast, Collection, Literal, NamedTuple, TYPE_CHECKING
 from weakref import WeakValueDictionary
 
 import pydantic
@@ -33,6 +33,11 @@ else:
 
 if TYPE_CHECKING:
     from gaia.config.engine_config import EngineConfig
+
+
+class ConfigIssues(NamedTuple):
+    errors: list  # The ecosystem is invalid and cannot start
+    warnings: list  # The ecosystem will use fallback values
 
 
 class ScaledClimateTarget(NamedTuple):
@@ -141,6 +146,81 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def save(self) -> None:
         """Persist the ecosystem configuration to the ecosystems.cfg file."""
         await self._engine_config.save(ConfigType.ecosystems)
+
+    @classmethod
+    def normalize_config_dict(
+            cls,
+            ecosystem_cfg: EcosystemConfigDict,
+    ) -> EcosystemConfigDict:
+        """Normalize a raw, structurally valid, ecosystem config dict.
+
+        Used at load time, before any `EcosystemConfig` instance exists, to
+        normalize the config to the form Gaia works with. Each hardware dict
+        is replaced by the result of `validate_hardware_dict()`, so its
+        address is expanded to its normalized form: 'BOARD_7' becomes 'GPIO_4',
+        a 'default' I2C address becomes the address of the model ...
+
+        This step will also report unsupported models and invalid address.
+
+        Note: the dict is modified in place and returned. If an error is
+        raised, the valid hardware dicts have already been normalized.
+
+        :param ecosystem_cfg: The ecosystem configuration dict to normalize.
+        :return: The same ecosystem configuration dict, normalized.
+        :raises ConfigValidationError: If some hardware dicts are invalid, with
+                                       one error message per invalid hardware
+                                       in `args`.
+        """
+        errors: list[str] = []
+        for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+            try:
+                validated = cls.validate_hardware_dict(
+                    gv.to_identified(hardware_dict, {"uid": hardware_uid}))
+            except ValueError as e:
+                errors.append(f"hardware '{hardware_dict['name']}': {e}")
+            else:
+                ecosystem_cfg["hardware"][hardware_uid] = gv.to_anonymous(validated, "uid")
+        if errors:
+            raise ConfigValidationError(*errors)
+        return ecosystem_cfg
+
+    @classmethod
+    def check_config_logic(
+            cls,
+            ecosystem_cfg: EcosystemConfigDict,
+            places: Collection[str],
+    ) -> ConfigIssues:
+        """Check the logic of a structurally valid, and normalized, ecosystem
+        config dict.
+
+        Used at load time, before any `EcosystemConfig` instance exists, to
+        catch hardware and climate role errors that the structural validation
+        cannot see. Soft issues, such as a nycthemeral method falling back to
+        'fixed', are caught as warnings.
+
+        :param ecosystem_cfg: The ecosystem configuration dict to check.
+        :param places: Collection of available places with their coordinates.
+        :return: A named tuple with error and warning messages.
+        """
+        warnings: list[str] = []
+        errors: list[str] = []
+        # Check hardware dicts (errors)
+        addresses_used: list[str] = []
+        for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+            try:
+                cls.check_hardware_address(hardware_dict["address"], addresses_used)
+            except ValueError as e:
+                errors.append(f"hardware '{hardware_dict['name']}': {e}")
+            finally:
+                addresses_used.append(hardware_dict["address"])
+        # Check nycthemeral config (warnings)
+        nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
+        for method in (nycthemeral_cfg["span"], nycthemeral_cfg["lighting"]):
+            try:
+                cls.check_nycthemeral_method(method, ecosystem_cfg, places)
+            except ConfigValidationError as e:
+                warnings.append(f"{e} Will fall back to 'fixed'.")
+        return ConfigIssues(errors, warnings)
 
     def reset_nycthemeral_caches(self) -> None:
         """Clear cached nycthemeral span and lighting values.
@@ -325,16 +405,16 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             await self.refresh_lighting_hours()
 
     @staticmethod
-    def validate_nycthemeral_method(
+    def check_nycthemeral_method(
             method: gv.LightingMethod | gv.NycthemeralSpanMethod,
             ecosystem_dict: EcosystemConfigDict,
-            places_dict: dict[str, gv.Coordinates],
+            places: Collection[str],
     ) -> None:
         """Validate that a nycthemeral or lighting method can be used.
 
         :param method: The lighting or nycthemeral span method to validate.
         :param ecosystem_dict: The ecosystem configuration dictionary.
-        :param places_dict: Dictionary of available places with coordinates.
+        :param places: Dictionary of available places with coordinates.
         :raises ConfigValidationError: If the method requires a target that is
                                        not available or configured.
         """
@@ -361,34 +441,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         m = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
         # Verify we have the target's coordinates
-        place = places_dict.get(target, None)
-        if place is None:
+        if target not in places:
             raise ConfigValidationError(
                 f"{m} method cannot be '{method.name}' as the coordinates of "
                 f"'{target}' are not provided in the private configuration file."
             )
         # Assume the sun times can be computed
 
-    def _log_nycthemeral_method_issues(
-            self,
-            method: gv.LightingMethod | gv.NycthemeralSpanMethod,
-    ) -> None:
-        """Validate method and log warning if it will fall back to 'fixed'."""
-        try:
-            self.validate_nycthemeral_method(
-                method, self._config_dict, self.general.private_config["places"])
-        except ConfigValidationError as e:
-            method_name = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
-            self.logger.warning(
-                f"{method_name} method cannot be set to '{method.name}'. Will "
-                f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-
     def _compute_nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
         span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
             gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
         # Log any incompatibilities with the nycthemeral span method chosen
-        self._log_nycthemeral_method_issues(span_method)
+        try:
+            self.check_nycthemeral_method(
+                span_method, self._config_dict, self.general.private_config["places"])
+        except ConfigValidationError as e:
+            self.logger.warning(f"{e} Will fall back to 'fixed'.")
         # If using fixed method, no check required
         if span_method == gv.NycthemeralSpanMethod.fixed:
             return gv.NycthemeralSpanMethod.fixed
@@ -420,7 +488,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :raises ConfigValidationError: If the method requires unavailable configuration.
         """
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
-        self.validate_nycthemeral_method(
+        self.check_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
         self.reset_nycthemeral_caches()
@@ -487,7 +555,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         lighting_method: gv.LightingMethod = safe_enum_from_name(
             gv.LightingMethod, self.nycthemeral_cycle["lighting"])
         # Log any incompatibilities with the lighting method chosen
-        self._log_nycthemeral_method_issues(lighting_method)
+        try:
+            self.check_nycthemeral_method(
+                lighting_method, self._config_dict, self.general.private_config["places"])
+        except ConfigValidationError as e:
+            self.logger.warning(f"{e} Will fall back to 'fixed'.")
         # If using fixed method, no check is required
         if lighting_method == gv.LightingMethod.fixed:
             return gv.LightingMethod.fixed
@@ -510,7 +582,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             refresh: bool = True,
     ) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
-        self.validate_nycthemeral_method(
+        self.check_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
         self.reset_nycthemeral_caches()
@@ -1053,17 +1125,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     @staticmethod
     def validate_hardware_dict(
             hardware_dict: gv.HardwareConfigDict | HardwareConfigDictInput,
-            addresses_used: list,
     ) -> gv.HardwareConfigDict:
         """Validate a hardware configuration dictionary.
 
-        Note: This method modifies hardware_dict in place, updating the
-        'address' field with the resolved address.
-
         :param hardware_dict: The hardware configuration to validate.
-        :param addresses_used: List of addresses already in use.
-        :return: The validated (and possibly modified) hardware dict.
-        :raises ValueError: If validation fails or address is already used.
+        :return: A new validated and normalized hardware dict.
+        :raises ValueError: If validation fails.
         """
         try:
             # Valid ignore: implicit conversion from dict to model by pydantic
@@ -1084,8 +1151,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Replace default address with the actual address
         validated_config = hardware_config.model_dump()
         validated_config["address"] = str(address)
-        if str(address) in addresses_used:
-            raise ValueError(f"Address '{address}' already used.")
         multiplexer_model = hardware_config.multiplexer_model
         if (
                 multiplexer_model
@@ -1095,6 +1160,20 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Multiplexer model '{multiplexer_model}' is not supported."
             )
         return validated_config
+
+    @staticmethod
+    def check_hardware_address(
+            validated_address: str,
+            addresses_used: Collection[str],
+    ) -> None:
+        """Check that a hardware address is not already used.
+
+        :param validated_address: The already validated hardware address.
+        :param addresses_used: Collection of validated addresses already in use.
+        :raises ConfigValidationError: If the address is already used.
+        """
+        if validated_address in addresses_used:
+            raise ConfigValidationError(f"Address '{validated_address}' already used.")
 
     def create_new_hardware(
             self,
@@ -1136,7 +1215,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             plants=plants,
             multiplexer_model=multiplexer_model,
         )
-        hardware_dict = self.validate_hardware_dict(hardware_dict, self._used_addresses())
+        hardware_dict = self.validate_hardware_dict(hardware_dict)
+        self.check_hardware_address(hardware_dict["address"], self._used_addresses())
         uid = hardware_dict["uid"]
         self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
 
@@ -1163,10 +1243,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # with existing hardware
         hardware_dict["uid"] = "__validation__"
         hardware_dict.update(**remove_missing(updating_values))  # ty: ignore[invalid-argument-type]
+        hardware_dict = self.validate_hardware_dict(hardware_dict)
         # Don't check address if not trying to update it. To do so, do not pass any address
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
-        hardware_dict = self.validate_hardware_dict(hardware_dict, used_addresses)
+        self.check_hardware_address(hardware_dict["address"], used_addresses)
         self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
 
     def delete_hardware(self, uid: str) -> None:

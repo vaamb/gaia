@@ -18,6 +18,16 @@
 - `cv2` and `numpy` are no longer imported at startup when no camera is configured.
   `import gaia` plus the engine, subroutines and hardware drops from ~83 MB to ~47 MB
   RSS (#478)
+- Loading `ecosystems.cfg` now goes through three named steps: `validate_*` for the
+  structure (pydantic), `normalize_*` to bring the config to the form Gaia works with, then
+  `check_*` for the logic. `EcosystemConfig.validate_nycthemeral_method()` is renamed
+  `check_nycthemeral_method()`, and `validate_hardware_dict()` no longer takes
+  `addresses_used`: the address conflict check moved to the new
+  `EcosystemConfig.check_hardware_address()`. New `EcosystemConfig.normalize_config_dict()`
+  and `check_config_logic()` run the last two steps on a raw ecosystem dict (#533)
+- Hardware addresses are now stored in their normalized form once `ecosystems.cfg` is
+  loaded (`BOARD_7` becomes `GPIO_4`, a `default` I2C address becomes the address of the
+  model), and are written that way at the next save (#533)
 
 ### Development
 - Sandbox script (`scripts/utils/sandbox.sh`) to run the install and update
@@ -43,6 +53,9 @@
 - WebSocket hardware now picks up a (re)connecting device right away. It used to poll for
   it, backing off up to 32 s, so a device coming back after an outage could stay unused for
   that long (#505)
+- Two hardware using the same pin under different names (`BOARD_7` and `GPIO_4`) are now
+  refused when loading `ecosystems.cfg`, whatever their order in the file. Addresses used
+  to be compared as written, so the conflict could go unnoticed (#532)
 
 ---
 
