@@ -15,7 +15,6 @@ from anyio.to_thread import run_sync
 import pydantic
 
 import gaia_validators as gv
-from gaia_validators import safe_enum_from_name
 from gaia_validators.utils import get_sun_times
 
 from gaia.config._utils import configure_logging, GaiaConfig, GaiaConfigHelper
@@ -229,24 +228,6 @@ class EngineConfig(metaclass=SingletonMeta):
                 "`async with engine_config.config_files_lock:` block"
             )
 
-    def _log_nycthemeral_method_issues(
-            self,
-            method: gv.LightingMethod | gv.NycthemeralSpanMethod,
-            ecosystem_cfg: EcosystemConfigDict,
-    ) -> None:
-        """Validate method and log warning if it will fall back to 'fixed'."""
-        try:
-            EcosystemConfig.check_nycthemeral_method(
-                method, ecosystem_cfg, self.private_config["places"])
-        except ConfigValidationError as e:
-            method_name = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
-            ecosystem_name = ecosystem_cfg["name"]
-            self.logger.warning(
-                f"{method_name} method cannot be set to '{method.name}' for "
-                f"ecosystem {ecosystem_name}. Will fall back to 'fixed'. "
-                f"ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-
     @staticmethod
     def _validate_ecosystems_dict(
             ecosystems_dict: dict[str, EcosystemConfigDict],
@@ -256,53 +237,27 @@ class EngineConfig(metaclass=SingletonMeta):
     def _check_ecosystems_logic(
             self,
             ecosystem_configs: dict[str, EcosystemConfigDict],
-    ) -> dict[str, EcosystemConfigDict]:
-        unfixable_error: bool = False
-        for ecosystem_uid, ecosystem_cfg in ecosystem_configs.items():
-            ecosystem_cfg: EcosystemConfigDict
-            ecosystem_name: str = ecosystem_cfg["name"]
-            # Check hardware config
-            self.logger.debug(
-                f"Checking hardware config for ecosystem {ecosystem_name}.")
-            addresses_used: list[str] = []
-            for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
-                hardware_name: str = hardware_dict["name"]
-                self.logger.debug(
-                    f"Checking hardware config for hardware {hardware_name} in "
-                    f"ecosystem {ecosystem_name}.")
-                try:
-                    validated = EcosystemConfig.validate_hardware_dict(
-                        gv.to_identified(hardware_dict, {"uid": hardware_uid}))
-                    EcosystemConfig.check_hardware_address(validated["address"], addresses_used)
-                except ValueError as e:
-                    self.logger.error(
-                        f"Could not validate hardware config for hardware {hardware_name} "
-                        f"in ecosystem {ecosystem_name}. ERROR msg(s): `{e}`.")
-                    unfixable_error = True
-                else:
-                    self.logger.debug(
-                        f"Hardware config for {hardware_name} in ecosystem "
-                        f"{ecosystem_name} has been validated.")
-                finally:
-                    addresses_used.append(hardware_dict["address"])
-
-            # Check nycthemeral config
-            self.logger.debug(
-                f"Checking nycthemeral config for ecosystem {ecosystem_name}.")
-            nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
-
-            span_method = safe_enum_from_name(gv.NycthemeralSpanMethod, nycthemeral_cfg["span"])
-            self._log_nycthemeral_method_issues(span_method, ecosystem_cfg)
-
-            lighting_method = safe_enum_from_name(gv.LightingMethod, nycthemeral_cfg["lighting"])
-            self._log_nycthemeral_method_issues(lighting_method, ecosystem_cfg)
-
-        if unfixable_error:
+            places_dict: dict[str, gv.Coordinates],
+    ) -> None:
+        valid: bool = True
+        for ecosystem_cfg in ecosystem_configs.values():
+            issues = EcosystemConfig.check_config_logic(ecosystem_cfg, places_dict)
+            for error in issues.errors:
+                # Error msgs already ends with a `.`
+                self.logger.error(
+                    f"Invalid config for ecosystem {ecosystem_cfg['name']}: "
+                    f"{error}")
+                valid = False
+            for warning in issues.warnings:
+                # Warning msgs already ends with a `.`
+                self.logger.warning(
+                    f"Unsound config for ecosystem {ecosystem_cfg['name']} (the "
+                    f"ecosystem will run with degraded capabilities): {warning}")
+        if not valid:
             raise ConfigValidationError(
                 "Could not validate ecosystems config. Check the log for more "
                 "details."
             )
-        return ecosystem_configs
 
     async def _load_ecosystems_config(self) -> None:
         # /!\ must be used with the config_files_lock acquired
@@ -320,10 +275,8 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
             raise e
-        # Validate the data logic
-        validated = self._check_ecosystems_logic(validated)
-        # Set the ecosystems config dict
-        self._ecosystems_config_dict = validated
+        # Check the data logic
+        self._check_ecosystems_logic(validated, self.private_config["places"])
         # Update the checksum
         await self._checksum_tracker.update(config_path, checksum)
         # Reset ecosystems caches

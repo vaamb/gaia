@@ -35,6 +35,11 @@ if TYPE_CHECKING:
     from gaia.config.engine_config import EngineConfig
 
 
+class ConfigIssues(NamedTuple):
+    errors: list  # The ecosystem is invalid and cannot start
+    warnings: list  # The ecosystem will use fallback values
+
+
 class ScaledClimateTarget(NamedTuple):
     day: float
     night: float
@@ -141,6 +146,46 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     async def save(self) -> None:
         """Persist the ecosystem configuration to the ecosystems.cfg file."""
         await self._engine_config.save(ConfigType.ecosystems)
+
+    @classmethod
+    def check_config_logic(
+            cls,
+            ecosystem_cfg: EcosystemConfigDict,
+            places_dict: dict[str, gv.Coordinates],
+    ) -> ConfigIssues:
+        """Check the logic of a raw, structurally valid, ecosystem config dict.
+
+        Used at load time, before any `EcosystemConfig` instance exists, to
+        catch hardware and climate role errors that the structural validation
+        cannot see. Soft issues, such as a nycthemeral method falling back to
+        'fixed', are caught as warnings.
+
+        :param ecosystem_cfg: The ecosystem configuration dict to check.
+        :param places_dict: Dictionary of available places with their coordinates.
+        :return: A named tuple with error and warning messages.
+        """
+        warnings: list[str] = []
+        errors: list[str] = []
+        # Check hardware dicts (errors)
+        addresses_used: list[str] = []
+        for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+            try:
+                validated = cls.validate_hardware_dict(
+                    gv.to_identified(hardware_dict, {"uid": hardware_uid}))
+                cls.check_hardware_address(validated["address"], addresses_used)
+            except ValueError as e:
+                errors.append(f"hardware '{hardware_dict['name']}': {e}")
+                addresses_used.append(hardware_dict["address"])
+            else:
+                addresses_used.append(validated["address"])
+        # Check nycthemeral config (warnings)
+        nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
+        for method in (nycthemeral_cfg["span"], nycthemeral_cfg["lighting"]):
+            try:
+                cls.check_nycthemeral_method(method, ecosystem_cfg, places_dict)
+            except ConfigValidationError as e:
+                warnings.append(f"{e} Will fall back to 'fixed'.")
+        return ConfigIssues(errors, warnings)
 
     def reset_nycthemeral_caches(self) -> None:
         """Clear cached nycthemeral span and lighting values.
@@ -361,34 +406,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         m = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
         # Verify we have the target's coordinates
-        place = places_dict.get(target, None)
-        if place is None:
+        if target not in places_dict:
             raise ConfigValidationError(
                 f"{m} method cannot be '{method.name}' as the coordinates of "
                 f"'{target}' are not provided in the private configuration file."
             )
         # Assume the sun times can be computed
 
-    def _log_nycthemeral_method_issues(
-            self,
-            method: gv.LightingMethod | gv.NycthemeralSpanMethod,
-    ) -> None:
-        """Validate method and log warning if it will fall back to 'fixed'."""
-        try:
-            self.check_nycthemeral_method(
-                method, self._config_dict, self.general.private_config["places"])
-        except ConfigValidationError as e:
-            method_name = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
-            self.logger.warning(
-                f"{method_name} method cannot be set to '{method.name}'. Will "
-                f"fall back to 'fixed'. ERROR msg: `{e.__class__.__name__}: {e}`"
-            )
-
     def _compute_nycthemeral_span_method(self) -> gv.NycthemeralSpanMethod:
         span_method: gv.NycthemeralSpanMethod = safe_enum_from_name(
             gv.NycthemeralSpanMethod, self.nycthemeral_cycle["span"])
         # Log any incompatibilities with the nycthemeral span method chosen
-        self._log_nycthemeral_method_issues(span_method)
+        try:
+            self.check_nycthemeral_method(
+                span_method, self._config_dict, self.general.private_config["places"])
+        except ConfigValidationError as e:
+            self.logger.warning(f"{e} Will fall back to 'fixed'.")
         # If using fixed method, no check required
         if span_method == gv.NycthemeralSpanMethod.fixed:
             return gv.NycthemeralSpanMethod.fixed
@@ -487,7 +520,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         lighting_method: gv.LightingMethod = safe_enum_from_name(
             gv.LightingMethod, self.nycthemeral_cycle["lighting"])
         # Log any incompatibilities with the lighting method chosen
-        self._log_nycthemeral_method_issues(lighting_method)
+        try:
+            self.check_nycthemeral_method(
+                lighting_method, self._config_dict, self.general.private_config["places"])
+        except ConfigValidationError as e:
+            self.logger.warning(f"{e} Will fall back to 'fixed'.")
         # If using fixed method, no check is required
         if lighting_method == gv.LightingMethod.fixed:
             return gv.LightingMethod.fixed
@@ -1056,11 +1093,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> gv.HardwareConfigDict:
         """Validate a hardware configuration dictionary.
 
-        Note: This method modifies hardware_dict in place, updating the
-        'address' field with the resolved address.
-
         :param hardware_dict: The hardware configuration to validate.
-        :return: The validated (and possibly modified) hardware dict.
+        :return: A new validated and normalized hardware dict.
         :raises ValueError: If validation fails.
         """
         try:
