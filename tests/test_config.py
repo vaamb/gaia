@@ -702,6 +702,17 @@ class TestEcosystemConfigHardware:
         assert len(issues.errors) == 1
         assert re.search(r"Hardware 'VirtualHumidifier'.*already used", issues.errors[0])
 
+        # Climate roles are checked too. 'fogger' would increase both humidity
+        #  (from default parameters) and temperature
+        invalid_dict = deepcopy(valid_dict)
+        invalid_dict["environment"]["climate"]["temperature"]["linked_actuators"] = {
+            "increase": "fogger",
+            "decrease": "cooler",
+        }
+        issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
+        assert len(issues.errors) == 1
+        assert re.search(r"Actuator group 'fogger' is linked .*and.*", issues.errors[0])
+
     def test_create_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):
             ecosystem_config.create_new_hardware(**test_data.sensor_info)
