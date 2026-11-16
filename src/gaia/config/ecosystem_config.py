@@ -325,7 +325,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             await self.refresh_lighting_hours()
 
     @staticmethod
-    def validate_nycthemeral_method(
+    def check_nycthemeral_method(
             method: gv.LightingMethod | gv.NycthemeralSpanMethod,
             ecosystem_dict: EcosystemConfigDict,
             places_dict: dict[str, gv.Coordinates],
@@ -375,7 +375,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Validate method and log warning if it will fall back to 'fixed'."""
         try:
-            self.validate_nycthemeral_method(
+            self.check_nycthemeral_method(
                 method, self._config_dict, self.general.private_config["places"])
         except ConfigValidationError as e:
             method_name = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
@@ -420,7 +420,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :raises ConfigValidationError: If the method requires unavailable configuration.
         """
         method = safe_enum_from_name(gv.NycthemeralSpanMethod, method)
-        self.validate_nycthemeral_method(
+        self.check_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["span"] = method
         self.reset_nycthemeral_caches()
@@ -510,7 +510,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             refresh: bool = True,
     ) -> None:
         method = safe_enum_from_name(gv.LightingMethod, method)
-        self.validate_nycthemeral_method(
+        self.check_nycthemeral_method(
             method, self._config_dict, self.general.private_config["places"])
         self.nycthemeral_cycle["lighting"] = method
         self.reset_nycthemeral_caches()

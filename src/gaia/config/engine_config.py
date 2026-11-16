@@ -236,7 +236,7 @@ class EngineConfig(metaclass=SingletonMeta):
     ) -> None:
         """Validate method and log warning if it will fall back to 'fixed'."""
         try:
-            EcosystemConfig.validate_nycthemeral_method(
+            EcosystemConfig.check_nycthemeral_method(
                 method, ecosystem_cfg, self.private_config["places"])
         except ConfigValidationError as e:
             method_name = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
@@ -248,13 +248,14 @@ class EngineConfig(metaclass=SingletonMeta):
             )
 
     @staticmethod
-    def _validate_ecosystem_dict(
-            ecosystem_dict: dict[str, EcosystemConfigDict],
+    def _validate_ecosystems_dict(
+            ecosystems_dict: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
-        return validate_from_root_model(ecosystem_dict, RootEcosystemsConfigValidator)
+        return validate_from_root_model(ecosystems_dict, RootEcosystemsConfigValidator)
 
-    def _validate_ecosystems_logic(
-            self, ecosystem_configs: dict[str, EcosystemConfigDict],
+    def _check_ecosystems_logic(
+            self,
+            ecosystem_configs: dict[str, EcosystemConfigDict],
     ) -> dict[str, EcosystemConfigDict]:
         unfixable_error: bool = False
         for ecosystem_uid, ecosystem_cfg in ecosystem_configs.items():
@@ -313,7 +314,7 @@ class EngineConfig(metaclass=SingletonMeta):
         checksum = await self._checksum_tracker.compute(config_path)
         # Validate the data structure
         try:
-            validated = self._validate_ecosystem_dict(unvalidated)
+            validated = self._validate_ecosystems_dict(unvalidated)
         except pydantic.ValidationError as e:  # pragma: no cover
             self.logger.error(
                 f"Could not load ecosystems configuration file. "
@@ -321,7 +322,7 @@ class EngineConfig(metaclass=SingletonMeta):
             )
             raise e
         # Validate the data logic
-        validated = self._validate_ecosystems_logic(validated)
+        validated = self._check_ecosystems_logic(validated)
         # Set the ecosystems config dict
         self._ecosystems_config_dict = validated
         # Update the checksum
@@ -470,7 +471,7 @@ class EngineConfig(metaclass=SingletonMeta):
             for hardware_dict in ecosystem_cfg["hardware"].values():
                 hardware_name: str = hardware_dict["name"]
                 # The `ecosystem_configs` dict should have gone through
-                #  `_validate_ecosystems_logic()` by now, so the following should
+                #  `_check_ecosystems_logic()` by now, so the following should
                 #  never fail
                 hardware_cls = Hardware.get_model_subclass(hardware_dict["model"])
                 self.logger.debug(
@@ -492,7 +493,7 @@ class EngineConfig(metaclass=SingletonMeta):
             # Check multiplexer requirements
             for multiplexer_model in multiplexer_models:
                 # The `ecosystem_configs` dict should have gone through
-                #  `_validate_ecosystems_logic()` by now, so the following should
+                #  `_check_ecosystems_logic()` by now, so the following should
                 #  never fail
                 multiplexer_cls = Multiplexer.get_model_subclass(multiplexer_model)
                 try:
@@ -744,7 +745,7 @@ class EngineConfig(metaclass=SingletonMeta):
         now = datetime.now().astimezone()
         utc_offset = now.utcoffset()
         # `now` is timezone-aware so offset shouldn't be None
-        assert utc_offset is not None  
+        assert utc_offset is not None
         standard_offset = utc_offset - (now.dst() or timedelta(0))
         longitude = standard_offset.total_seconds() / SECONDS_PER_HOUR * DEGREES_PER_HOUR
         # Time zones go from UTC-12 to UTC+14, keep the longitude in [-180, 180[
