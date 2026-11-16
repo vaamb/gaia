@@ -188,7 +188,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def check_config_logic(
             cls,
             ecosystem_cfg: EcosystemConfigDict,
-            places_dict: dict[str, gv.Coordinates],
+            places: Collection[str],
     ) -> ConfigIssues:
         """Check the logic of a structurally valid, and normalized, ecosystem
         config dict.
@@ -199,7 +199,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         'fixed', are caught as warnings.
 
         :param ecosystem_cfg: The ecosystem configuration dict to check.
-        :param places_dict: Dictionary of available places with their coordinates.
+        :param places: Collection of available places with their coordinates.
         :return: A named tuple with error and warning messages.
         """
         warnings: list[str] = []
@@ -217,7 +217,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
         for method in (nycthemeral_cfg["span"], nycthemeral_cfg["lighting"]):
             try:
-                cls.check_nycthemeral_method(method, ecosystem_cfg, places_dict)
+                cls.check_nycthemeral_method(method, ecosystem_cfg, places)
             except ConfigValidationError as e:
                 warnings.append(f"{e} Will fall back to 'fixed'.")
         return ConfigIssues(errors, warnings)
@@ -408,13 +408,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     def check_nycthemeral_method(
             method: gv.LightingMethod | gv.NycthemeralSpanMethod,
             ecosystem_dict: EcosystemConfigDict,
-            places_dict: dict[str, gv.Coordinates],
+            places: Collection[str],
     ) -> None:
         """Validate that a nycthemeral or lighting method can be used.
 
         :param method: The lighting or nycthemeral span method to validate.
         :param ecosystem_dict: The ecosystem configuration dictionary.
-        :param places_dict: Dictionary of available places with coordinates.
+        :param places: Dictionary of available places with coordinates.
         :raises ConfigValidationError: If the method requires a target that is
                                        not available or configured.
         """
@@ -441,7 +441,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         m = "Lighting" if isinstance(method, gv.LightingMethod) else "Nycthemeral span"
         # Verify we have the target's coordinates
-        if target not in places_dict:
+        if target not in places:
             raise ConfigValidationError(
                 f"{m} method cannot be '{method.name}' as the coordinates of "
                 f"'{target}' are not provided in the private configuration file."

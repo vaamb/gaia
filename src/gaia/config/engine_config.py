@@ -8,7 +8,7 @@ from json.decoder import JSONDecodeError
 import logging
 from pathlib import Path
 import sys
-from typing import Type
+from typing import Collection, Type
 from weakref import WeakValueDictionary
 
 from anyio.to_thread import run_sync
@@ -259,11 +259,11 @@ class EngineConfig(metaclass=SingletonMeta):
     def _check_ecosystems_logic(
             self,
             ecosystem_configs: dict[str, EcosystemConfigDict],
-            places_dict: dict[str, gv.Coordinates],
+            places: Collection[str],
     ) -> None:
         valid: bool = True
         for ecosystem_cfg in ecosystem_configs.values():
-            issues = EcosystemConfig.check_config_logic(ecosystem_cfg, places_dict)
+            issues = EcosystemConfig.check_config_logic(ecosystem_cfg, places)
             for error in issues.errors:
                 # Error msgs already ends with a `.`
                 self.logger.error(
