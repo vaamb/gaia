@@ -1070,32 +1070,43 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "decrease": defaults.get((parameter, "decrease")),
         }
 
-    @staticmethod
+    @classmethod
     def _compute_climate_direction_to_group(
+            cls,
             climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict]
     ) -> dict[ClimateDirection, str]:
         """Get actuator couples for all climate parameters.
 
-        Merges default actuator couples with those defined in climate config.
+        A direction set to None has no actuator group, and a parameter that
+        is not configured has none at all.
+
+        `light` is the exception: the `Light` subroutine can work without any
+        climate config, so it should always have an actuator group, the default
+        one if none other is configured.
         """
         directions: tuple[Direction, Direction] = ("increase", "decrease")
-        update = {
-            (climate_parameter, direction): climate_cfg["linked_actuators"][direction]
-            for direction in directions
-            for climate_parameter, climate_cfg in climate.items()
-            if (
-                climate_cfg["linked_actuators"] is not None
-                and climate_cfg["linked_actuators"][direction] is not None
-            )
-        }
-
-        # Valid ignore: ty can't narrow str | None through the comprehension if filter
-        return {**default_actuators.climate_to_group_mapping, **update}  # ty: ignore[invalid-return-type]
+        rv: dict[ClimateDirection, str] = {}
+        for parameter, climate_cfg in climate.items():
+            linked_actuators = climate_cfg.get("linked_actuators")
+            if linked_actuators is None:
+                # The climate config has not been normalized (yet)
+                linked_actuators = cls.get_default_linked_actuator(parameter)
+            for direction in directions:
+                actuator_group = linked_actuators[direction]
+                if actuator_group is not None:
+                    rv[(parameter, direction)] = actuator_group
+        # Light can be used without a customized climate config and so needs a
+        #  default actuator group
+        light_direction: ClimateDirection = ("light", "increase")
+        if light_direction not in rv:
+            rv[light_direction] = default_actuators.climate_to_group_mapping[light_direction]
+        return rv
 
     def get_climate_direction_to_group(self) -> dict[ClimateDirection, str]:
         """Get actuator couples for all climate parameters.
 
-        Merges default actuator couples with those defined in climate config.
+        The linked actuators of the configured climate parameters, plus the
+        actuator group of `light`, which is always in use.
         """
         return self._compute_climate_direction_to_group(self.climate)
 
@@ -1115,10 +1126,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 return climate_direction
         return None
 
-    @staticmethod
+    @classmethod
     def check_climate_groups(
-        climate_cfg: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
-        hardware_cfg: dict[str, gv.AnonymousHardwareConfigDict],
+            cls,
+            climate_cfg: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
+            hardware_cfg: dict[str, gv.AnonymousHardwareConfigDict],
     ) -> None:
         """Check that an actuator group acts on at most one climate role.
 
@@ -1136,14 +1148,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                                        roles.
         """
         group_to_climate_direction: dict[str, list[ClimateDirection]] = {}
-        in_use = {*climate_cfg.keys(), "light"}
         errors: list[str] = []
-        climate_to_group = EcosystemConfig._compute_climate_direction_to_group(climate_cfg)
+        climate_to_group = cls._compute_climate_direction_to_group(climate_cfg)
         # First mark the climate actions regulated by each actuator group ...
         for climate_direction, actuator_group in climate_to_group.items():
-            if climate_direction[0] not in in_use:
-                # The climate action is not regulated (it's a default one)
-                continue
             if actuator_group not in group_to_climate_direction:
                 group_to_climate_direction[actuator_group] = [climate_direction]
             else:
@@ -1208,6 +1216,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     def get_valid_actuator_groups(self) -> set[str]:
         """Get the set of valid actuator group names for this ecosystem."""
+        # TODO: If "free" actuators are ever added, add them here too
         return {
             *self.get_climate_direction_to_group().values(),
             *self.get_weather_direction_to_group().values(),

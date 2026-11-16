@@ -349,11 +349,14 @@ class VirtualEcosystem:
         out_temp, out_hum, out_light = self.virtual_world.get_measures()
 
         def get_output(
-                actuator_group: str,
+                actuator_group: str | None,
                 base_output: float,
                 correction_factor: float = 1.0,
         ) -> float:
             output = 0.0
+            if actuator_group is None:
+                # No actuator group is linked to this climate direction
+                return output
             for actuator_uid in self.get_actuators_uid_for_group(actuator_group):
                 if self.get_actuator_status(actuator_uid):
                     level = get_corrected_level(actuator_uid)
@@ -373,9 +376,9 @@ class VirtualEcosystem:
         heat_quantity = self._heat_quantity
         heat_loss = self.heat_loss_coef * d_sec * d_temp
         heat_quantity -= heat_loss
-        temp_inc_group = actuators_mapping[("temperature", "increase")]
+        temp_inc_group = actuators_mapping.get(("temperature", "increase"))
         heat_quantity += get_output(temp_inc_group, self._max_heater_output, 1.00)
-        temp_dec_group = actuators_mapping[("temperature", "decrease")]
+        temp_dec_group = actuators_mapping.get(("temperature", "decrease"))
         heat_quantity -= get_output(temp_dec_group, self._max_heater_output, 0.60)
         self._heat_quantity = heat_quantity
 
@@ -384,15 +387,15 @@ class VirtualEcosystem:
         humidity_quantity = self._humidity_quantity
         humidity_loss = d_hum * d_sec / 10000  # Pretty much a random factor
         humidity_quantity -= humidity_loss
-        hum_inc_group = actuators_mapping[("humidity", "increase")]
+        hum_inc_group = actuators_mapping.get(("humidity", "increase"))
         humidity_quantity += get_output(hum_inc_group, self._max_humidifier_output, 1.00)
-        hum_dec_group = actuators_mapping[("humidity", "decrease")]
+        hum_dec_group = actuators_mapping.get(("humidity", "decrease"))
         humidity_quantity -= get_output(hum_dec_group, self._max_humidifier_output, 0.50)
         self._humidity_quantity = humidity_quantity
 
         # Light calculation
         self._light = out_light
-        light_inc_group = actuators_mapping[("light", "increase")]
+        light_inc_group = actuators_mapping.get(("light", "increase"))
         self._light += get_output(light_inc_group, self._max_light_output, 1/d_sec)
 
         # Update
