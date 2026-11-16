@@ -148,12 +148,50 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         await self._engine_config.save(ConfigType.ecosystems)
 
     @classmethod
+    def normalize_config_dict(
+            cls,
+            ecosystem_cfg: EcosystemConfigDict,
+    ) -> EcosystemConfigDict:
+        """Normalize a raw, structurally valid, ecosystem config dict.
+
+        Used at load time, before any `EcosystemConfig` instance exists, to
+        normalize the config to the form Gaia works with. Each hardware dict
+        is replaced by the result of `validate_hardware_dict()`, so its
+        address is expanded to its normalized form: 'BOARD_7' becomes 'GPIO_4',
+        a 'default' I2C address becomes the address of the model ...
+
+        This step will also report unsupported models and invalid address.
+
+        Note: the dict is modified in place and returned. If an error is
+        raised, the valid hardware dicts have already been normalized.
+
+        :param ecosystem_cfg: The ecosystem configuration dict to normalize.
+        :return: The same ecosystem configuration dict, normalized.
+        :raises ConfigValidationError: If some hardware dicts are invalid, with
+                                       one error message per invalid hardware
+                                       in `args`.
+        """
+        errors: list[str] = []
+        for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+            try:
+                validated = cls.validate_hardware_dict(
+                    gv.to_identified(hardware_dict, {"uid": hardware_uid}))
+            except ValueError as e:
+                errors.append(f"hardware '{hardware_dict['name']}': {e}")
+            else:
+                ecosystem_cfg["hardware"][hardware_uid] = gv.to_anonymous(validated, "uid")
+        if errors:
+            raise ConfigValidationError(*errors)
+        return ecosystem_cfg
+
+    @classmethod
     def check_config_logic(
             cls,
             ecosystem_cfg: EcosystemConfigDict,
             places_dict: dict[str, gv.Coordinates],
     ) -> ConfigIssues:
-        """Check the logic of a raw, structurally valid, ecosystem config dict.
+        """Check the logic of a structurally valid, and normalized, ecosystem
+        config dict.
 
         Used at load time, before any `EcosystemConfig` instance exists, to
         catch hardware and climate role errors that the structural validation
@@ -170,14 +208,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         addresses_used: list[str] = []
         for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
             try:
-                validated = cls.validate_hardware_dict(
-                    gv.to_identified(hardware_dict, {"uid": hardware_uid}))
-                cls.check_hardware_address(validated["address"], addresses_used)
+                cls.check_hardware_address(hardware_dict["address"], addresses_used)
             except ValueError as e:
                 errors.append(f"hardware '{hardware_dict['name']}': {e}")
+            finally:
                 addresses_used.append(hardware_dict["address"])
-            else:
-                addresses_used.append(validated["address"])
         # Check nycthemeral config (warnings)
         nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
         for method in (nycthemeral_cfg["span"], nycthemeral_cfg["lighting"]):

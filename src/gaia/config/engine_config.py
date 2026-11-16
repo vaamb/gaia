@@ -234,6 +234,28 @@ class EngineConfig(metaclass=SingletonMeta):
     ) -> dict[str, EcosystemConfigDict]:
         return validate_from_root_model(ecosystems_dict, RootEcosystemsConfigValidator)
 
+    def _normalize_ecosystems_configs(
+            self,
+            ecosystem_configs: dict[str, EcosystemConfigDict],
+    ) -> dict[str, EcosystemConfigDict]:
+        valid: bool = True
+        for ecosystem_uid, ecosystem_cfg in ecosystem_configs.items():
+            try:
+                normalized = EcosystemConfig.normalize_config_dict(ecosystem_cfg)
+            except ConfigValidationError as e:
+                for error in e.args:
+                    self.logger.error(
+                        f"Invalid config for ecosystem {ecosystem_cfg['name']}: "
+                        f"{error}")
+                valid = False
+            else:
+                ecosystem_configs[ecosystem_uid] = normalized
+        if not valid:
+            raise ConfigValidationError(
+                "Could not normalize ecosystems config. Check the log for more details."
+            )
+        return ecosystem_configs
+
     def _check_ecosystems_logic(
             self,
             ecosystem_configs: dict[str, EcosystemConfigDict],
@@ -255,8 +277,8 @@ class EngineConfig(metaclass=SingletonMeta):
                     f"ecosystem will run with degraded capabilities): {warning}")
         if not valid:
             raise ConfigValidationError(
-                "Could not validate ecosystems config. Check the log for more "
-                "details."
+                "Could not validate ecosystems config logic. Check the log for "
+                "more details."
             )
 
     async def _load_ecosystems_config(self) -> None:
@@ -275,8 +297,12 @@ class EngineConfig(metaclass=SingletonMeta):
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
             raise e
+        # Normalize the dicts
+        normalized = self._normalize_ecosystems_configs(validated)
         # Check the data logic
-        self._check_ecosystems_logic(validated, self.private_config["places"])
+        self._check_ecosystems_logic(normalized, self.private_config["places"])
+        # Set the ecosystems config dict
+        self._ecosystems_config_dict = normalized
         # Update the checksum
         await self._checksum_tracker.update(config_path, checksum)
         # Reset ecosystems caches
