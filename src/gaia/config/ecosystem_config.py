@@ -5,7 +5,7 @@ import logging
 from math import pi, sin
 import random
 import sys
-from typing import cast, Literal, NamedTuple, TYPE_CHECKING
+from typing import cast, Collection, Literal, NamedTuple, TYPE_CHECKING
 from weakref import WeakValueDictionary
 
 import pydantic
@@ -1053,7 +1053,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     @staticmethod
     def validate_hardware_dict(
             hardware_dict: gv.HardwareConfigDict | HardwareConfigDictInput,
-            addresses_used: list,
     ) -> gv.HardwareConfigDict:
         """Validate a hardware configuration dictionary.
 
@@ -1061,9 +1060,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         'address' field with the resolved address.
 
         :param hardware_dict: The hardware configuration to validate.
-        :param addresses_used: List of addresses already in use.
         :return: The validated (and possibly modified) hardware dict.
-        :raises ValueError: If validation fails or address is already used.
+        :raises ValueError: If validation fails.
         """
         try:
             # Valid ignore: implicit conversion from dict to model by pydantic
@@ -1084,8 +1082,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # Replace default address with the actual address
         validated_config = hardware_config.model_dump()
         validated_config["address"] = str(address)
-        if str(address) in addresses_used:
-            raise ValueError(f"Address '{address}' already used.")
         multiplexer_model = hardware_config.multiplexer_model
         if (
                 multiplexer_model
@@ -1095,6 +1091,20 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Multiplexer model '{multiplexer_model}' is not supported."
             )
         return validated_config
+
+    @staticmethod
+    def check_hardware_address(
+            validated_address: str,
+            addresses_used: Collection[str],
+    ) -> None:
+        """Check that a hardware address is not already used.
+
+        :param validated_address: The already validated hardware address.
+        :param addresses_used: Collection of validated addresses already in use.
+        :raises ConfigValidationError: If the address is already used.
+        """
+        if validated_address in addresses_used:
+            raise ConfigValidationError(f"Address '{validated_address}' already used.")
 
     def create_new_hardware(
             self,
@@ -1136,7 +1146,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             plants=plants,
             multiplexer_model=multiplexer_model,
         )
-        hardware_dict = self.validate_hardware_dict(hardware_dict, self._used_addresses())
+        hardware_dict = self.validate_hardware_dict(hardware_dict)
+        self.check_hardware_address(hardware_dict["address"], self._used_addresses())
         uid = hardware_dict["uid"]
         self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
 
@@ -1163,10 +1174,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         # with existing hardware
         hardware_dict["uid"] = "__validation__"
         hardware_dict.update(**remove_missing(updating_values))  # ty: ignore[invalid-argument-type]
+        hardware_dict = self.validate_hardware_dict(hardware_dict)
         # Don't check address if not trying to update it. To do so, do not pass any address
         # against which to check
         used_addresses = self._used_addresses() if "address" in updating_values else []
-        hardware_dict = self.validate_hardware_dict(hardware_dict, used_addresses)
+        self.check_hardware_address(hardware_dict["address"], used_addresses)
         self.hardware_dict[uid] = gv.to_anonymous(hardware_dict, "uid")
 
     def delete_hardware(self, uid: str) -> None:

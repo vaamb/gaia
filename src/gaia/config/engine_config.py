@@ -271,10 +271,9 @@ class EngineConfig(metaclass=SingletonMeta):
                     f"Checking hardware config for hardware {hardware_name} in "
                     f"ecosystem {ecosystem_name}.")
                 try:
-                    EcosystemConfig.validate_hardware_dict(
-                        gv.to_identified(hardware_dict, {"uid": hardware_uid}),
-                        addresses_used=addresses_used,
-                    )
+                    validated = EcosystemConfig.validate_hardware_dict(
+                        gv.to_identified(hardware_dict, {"uid": hardware_uid}))
+                    EcosystemConfig.check_hardware_address(validated["address"], addresses_used)
                 except ValueError as e:
                     self.logger.error(
                         f"Could not validate hardware config for hardware {hardware_name} "
