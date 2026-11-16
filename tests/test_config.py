@@ -1,7 +1,9 @@
 from asyncio import sleep
+from copy import deepcopy
 from math import isclose
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 import random
+import re
 
 import pytest
 
@@ -656,6 +658,51 @@ class TestEcosystemConfigWeather:
 
 @with_hardware(hardware_dict)
 class TestEcosystemConfigHardware:
+    def test_normalize_config_dict(self, ecosystem_config: EcosystemConfig):
+        raw_dict = deepcopy(ecosystem_config._config_dict)
+        raw_dict["hardware"][test_data.humidifier_uid]["address"] = "BOARD_7"
+        raw_dict["hardware"][test_data.i2c_sensor_veml7700_uid] = \
+            deepcopy(test_data.i2c_sensor_veml7700_info)  # Uses "I2C_default"
+        expected_keys = set(raw_dict)
+        expected_hardware_keys = set(raw_dict["hardware"][test_data.humidifier_uid])
+
+        normalized = EcosystemConfig.normalize_config_dict(raw_dict)
+
+        # Addresses are written in their canonical form
+        hardware = normalized["hardware"]
+        assert hardware[test_data.humidifier_uid]["address"] == "GPIO_4"
+        assert hardware[test_data.i2c_sensor_veml7700_uid]["address"] == "I2C_0x10"
+        # Nothing is added to the ecosystem dict nor to the hardware dicts
+        assert set(normalized) == expected_keys
+        assert set(hardware[test_data.humidifier_uid]) == expected_hardware_keys
+
+    def test_normalize_config_dict_fail(self, ecosystem_config: EcosystemConfig):
+        invalid_dict = deepcopy(ecosystem_config._config_dict)
+        invalid_dict["hardware"][test_data.sensor_uid]["model"] = "Invalid"
+        invalid_dict["hardware"][test_data.humidifier_uid]["address"] = "GPIO_Invalid"
+
+        # Each invalid hardware gets its own error message
+        with pytest.raises(ConfigValidationError) as exc_info:
+            EcosystemConfig.normalize_config_dict(invalid_dict)
+        errors = exc_info.value.args
+        assert len(errors) == 2
+        assert re.search(r"hardware 'VirtualGPIOSensor'.*model is not supported", errors[0])
+        assert "hardware 'VirtualHumidifier'" in errors[1]
+
+    def test_check_config_logic(self, ecosystem_config: EcosystemConfig):
+        places_dict = ecosystem_config.general.private_config["places"]
+        valid_dict = deepcopy(ecosystem_config._config_dict)
+        issues = EcosystemConfig.check_config_logic(valid_dict, places_dict)
+        assert issues.warnings == issues.errors == []
+
+        # Each invalid hardware is reported, the others are still checked
+        invalid_dict = deepcopy(valid_dict)
+        sensor_address = invalid_dict["hardware"][test_data.sensor_uid]["address"]
+        invalid_dict["hardware"][test_data.humidifier_uid]["address"] = sensor_address
+        issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
+        assert len(issues.errors) == 1
+        assert re.search(r"hardware 'VirtualHumidifier'.*already used", issues.errors[0])
+
     def test_create_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):
             ecosystem_config.create_new_hardware(**test_data.sensor_info)
