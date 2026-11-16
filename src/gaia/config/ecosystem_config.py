@@ -1128,14 +1128,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                     f"{humanize_list(msgs)}."
                 )
         # Make sure hardware don't have multiple groups linked to climate actions
-        for hardware_uid, hardware_cfg in hardware_cfg.items():
+        for hardware_uid, hardware in hardware_cfg.items():
             climate_groups = sorted(
-                group for group in hardware_cfg["groups"]
+                group for group in hardware["groups"]
                 if group in group_to_climate_direction
             )
             if len(climate_groups) > 1:
                 errors.append(
-                    f"Hardware '{hardware_cfg['name']}' ({hardware_uid}) belongs "
+                    f"Hardware '{hardware['name']}' ({hardware_uid}) belongs "
                     f"to more than one actuator group linked to a climate "
                     f"parameter: {', '.join(climate_groups)}."
                 )
@@ -1145,9 +1145,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"{' '.join(errors)}"
             )
 
-    def get_weather_direction_to_group(self) -> dict[tuple[gv.WeatherParameter, Direction], str]:
+    def get_weather_direction_to_group(self) -> dict[WeatherDirection, str]:
         """Get actuator couples for all weather parameters."""
-        update = {
+        update: dict[WeatherDirection, str] = {   # ty: ignore[invalid-assignment]
             (weather_parameter, cast(Direction, "increase")): weather_cfg["linked_actuator"]
             for weather_parameter, weather_cfg in self.weather.items()
             if weather_cfg["linked_actuator"] is not None
@@ -1166,7 +1166,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :return: A list of weather parameter and direction, or None if the group
                  only serves weather parameters or is unknown.
         """
-        rv = []
+        rv: list[WeatherDirection] = []
         for weather_direction, group in self.get_weather_direction_to_group().items():
             if group == actuator_group:
                 rv.append(weather_direction)
@@ -1243,7 +1243,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :raises ValueError: If validation fails.
         """
         try:
-            # Valid ignore: implicit conversion from dict to model by pydantic
             hardware_config = gv.HardwareConfig(**hardware_dict)
         except pydantic.ValidationError as e:
             raise ValueError(
