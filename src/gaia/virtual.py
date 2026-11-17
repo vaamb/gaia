@@ -224,7 +224,6 @@ class VirtualEcosystem:
         self._start_time: float | None = None
         self._last_update: float | None = None
 
-        self._get_actuator_mapping = self.ecosystem.config.get_climate_direction_to_group
         self._actuators: dict[HardwareUid, ActuatorState] = {}
 
         # Add the virtual ecosystem to the registry
@@ -369,7 +368,7 @@ class VirtualEcosystem:
                 level = 100.0
             return level
 
-        actuators_mapping = self._get_actuator_mapping()
+        actuators_mapping = self.ecosystem.config.climate_direction_to_group
 
         # Heat quantity calculation
         d_temp = self.temperature - out_temp

@@ -130,7 +130,7 @@ class Climate(SubroutineTemplate[Actuator]):
         return self._actuator_handlers
 
     def get_actuator_group_for_parameter(self, climate_direction: ClimateDirection) -> str:
-        return self.ecosystem.config.get_climate_direction_to_group()[climate_direction]
+        return self.ecosystem.config.climate_direction_to_group[climate_direction]
 
     async def _mount_actuator_handler(self, climate_direction: ClimateDirection) -> None:
         if climate_direction in self.actuator_handlers:
@@ -209,7 +209,7 @@ class Climate(SubroutineTemplate[Actuator]):
 
         # Check if there are actuator groups available and map them with climate parameters
         rv: dict[ClimateDirection, str] = {}
-        climate_to_group = self.config.get_climate_direction_to_group()
+        climate_to_group = self.config.climate_direction_to_group
         for climate_param in regulated_parameters:
             for direction in ("increase", "decrease"):
                 direction: Direction
@@ -245,7 +245,7 @@ class Climate(SubroutineTemplate[Actuator]):
         return False
 
     def _get_measure_for_parameter(self, parameter: gv.ClimateParameter) -> str:
-        climate_cfg = self.config.get_climate_parameter(parameter)
+        climate_cfg = self.config.get_climate_config(parameter)
         return (
             climate_cfg.linked_measure
             if climate_cfg.linked_measure else parameter

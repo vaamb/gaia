@@ -88,7 +88,7 @@ class Weather(SubroutineTemplate[Actuator]):
         The keys are the weather events and the values are the associated actuator
         groups"""
         rv: dict[gv.WeatherParameter, str] = {}
-        weather_to_group = self.config.get_weather_direction_to_group()
+        weather_to_group = self.config.weather_direction_to_group
         for weather_event in self.config.weather:
             actuator_group = weather_to_group.get((weather_event, "increase"))
             if actuator_group is None:
@@ -163,7 +163,7 @@ class Weather(SubroutineTemplate[Actuator]):
     async def _add_job(self, parameter: str) ->  None:
         if parameter in self._jobs:
             raise ValueError(f"Job for weather parameter {parameter} already exists")
-        weather_cfg = self.ecosystem.config.get_weather_parameter(parameter)
+        weather_cfg = self.ecosystem.config.get_weather_config(parameter)
         # Should raise if the actuator handler is not mounted
         actuator_handler = self.actuator_handlers[parameter]
         # Add the job
@@ -205,8 +205,8 @@ class Weather(SubroutineTemplate[Actuator]):
 
     def get_actuator_group_for_parameter(self, parameter: str) -> str:
         # Raises `UndefinedParameter` if the weather parameter is not configured
-        weather_cfg = self.config.get_weather_parameter(parameter)
-        weather_to_group = self.config.get_weather_direction_to_group()
+        weather_cfg = self.config.get_weather_config(parameter)
+        weather_to_group = self.config.weather_direction_to_group
         try:
             return weather_to_group[(weather_cfg.parameter, "increase")]
         except KeyError:

@@ -44,7 +44,7 @@ class TestVirtualEcosystem:
     ):
         # Setup humidity actuator
         climate_parameter = "humidity"
-        actuators_mapping = ecosystem.config.get_climate_direction_to_group()
+        actuators_mapping = ecosystem.config.climate_direction_to_group
         group = actuators_mapping[(climate_parameter, "increase")]
         # Climate actuators need PIDs to work
         pid = ecosystem.actuator_hub.get_pid(climate_parameter)

@@ -865,7 +865,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         parameter = parameter_adapter.validate_python(parameter)
         return parameter in self.climate
 
-    def get_climate_parameter(
+    def get_climate_config(
             self,
             parameter: gv.ClimateParameter,
     ) -> gv.ClimateConfig:
@@ -1044,7 +1044,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             # value forces the PID fully on, a negative night value forces it fully off.
             cfg = DEFAULT_LIGHT_CLIMATE_CFG
         else:
-            cfg = self.get_climate_parameter(parameter)
+            cfg = self.get_climate_config(parameter)
         chaos = self.get_chaos_factor()
         return ScaledClimateTarget(cfg.day * chaos, cfg.night * chaos, cfg.hysteresis * chaos)
 
@@ -1063,7 +1063,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         parameter = parameter_adapter.validate_python(parameter)
         return parameter in self.weather
 
-    def get_weather_parameter(self, parameter: gv.WeatherParameter) -> gv.WeatherConfig:
+    def get_weather_config(self, parameter: gv.WeatherParameter) -> gv.WeatherConfig:
         """Get the configuration for a specific weather parameter.
 
         :param parameter: The weather parameter name.
@@ -1157,8 +1157,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """Get the set of valid actuator group names for this ecosystem."""
         # TODO: If "free" actuators are ever added, add them here too
         return {
-            *self.get_climate_direction_to_group().values(),
-            *self.get_weather_direction_to_group().values(),
+            *self.climate_direction_to_group.values(),
+            *self.weather_direction_to_group.values(),
         }
 
     # ---------------------------------------------------------------------------
@@ -1212,15 +1212,16 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             rv[light_direction] = default_actuators.climate_to_group_mapping[light_direction]
         return rv
 
-    def get_climate_direction_to_group(self) -> dict[ClimateDirection, str]:
-        """Get actuator couples for all climate parameters.
+    @property
+    def climate_direction_to_group(self) -> dict[ClimateDirection, str]:
+        """Actuator couples for all climate parameters.
 
         The linked actuators of the configured climate parameters, plus the
         actuator group of `light`, which is always in use.
         """
         return self._compute_climate_direction_to_group(self.climate)
 
-    def get_group_to_climate_direction(self, actuator_group: str) -> ClimateDirection | None:
+    def get_climate_direction(self, actuator_group: str) -> ClimateDirection | None:
         """Get the climate parameter and direction an actuator group serves.
 
         An actuator group can serve a climate and weather roles at the same time
@@ -1231,7 +1232,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :return: The climate parameter and direction, or None if the group only
                  serves weather parameters or is unknown.
         """
-        for climate_direction, group in self.get_climate_direction_to_group().items():
+        for climate_direction, group in self.climate_direction_to_group.items():
             if group == actuator_group:
                 return climate_direction
         return None
@@ -1355,8 +1356,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         return default_actuators.weather_to_group_mapping.get((parameter, "increase"))
 
-    def get_weather_direction_to_group(self) -> dict[WeatherDirection, str]:
-        """Get the actuator group of all weather parameters.
+    @property
+    def weather_direction_to_group(self) -> dict[WeatherDirection, str]:
+        """Actuator group of all weather parameters.
 
         A weather parameter without linked actuator has no actuator group, and
         a parameter that is not configured has none either.
@@ -1371,24 +1373,22 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 rv[(parameter, "increase")] = actuator_group
         return rv
 
-    def get_group_to_weather_direction(self, actuator_group: str) -> list[WeatherDirection] | None:
-        """Get the climate parameter and direction an actuator group serves.
+    def get_weather_directions(self, actuator_group: str) -> list[WeatherDirection]:
+        """Get the weather parameters and direction an actuator group serves.
 
-        An actuator group can serve a climate and weather roles at the same time
-        (`fan` for `cooler` and `air_purity`): the climate role is returned,
-        as it is the one that needs a direction and a PID.
+        Unlike climate roles, an actuator group can serve several weather
+        roles (a `fogger` used for both `fog` and `rain`), as weather events
+        are short and don't need a PID.
 
         :param actuator_group: The name of the actuator group.
-        :return: A list of weather parameter and direction, or None if the group
-                 only serves weather parameters or is unknown.
+        :return: The weather parameters and direction, or an empty list if the
+                 group serves no weather parameter or is unknown.
         """
-        rv: list[WeatherDirection] = []
-        for weather_direction, group in self.get_weather_direction_to_group().items():
-            if group == actuator_group:
-                rv.append(weather_direction)
-        if rv:
-            return rv
-        return None
+        return [
+            weather_direction
+            for weather_direction, group in self.weather_direction_to_group.items()
+            if group == actuator_group
+        ]
 
     # ---------------------------------------------------------------------------
     #   Hardware parameters
