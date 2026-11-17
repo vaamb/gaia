@@ -529,6 +529,7 @@ class TestEcosystemConfigGeneralEnvironment:
         assert not ecosystem_config.is_lighting_needed(now)
 
 
+@with_hardware(hardware_dict)  # Climate parameters need a sensor measuring them
 class TestEcosystemConfigActuators:
     def test_actuator_couples(self, ecosystem_config: EcosystemConfig):
         actuators_mapping = ecosystem_config.get_climate_direction_to_group()
@@ -580,6 +581,7 @@ class TestEcosystemConfigActuators:
         }
 
 
+@with_hardware(hardware_dict)  # Climate parameters need a sensor measuring them
 class TestEcosystemConfigClimate:
     def test_get_climate_parameter(self, ecosystem_config: EcosystemConfig):
         result = ecosystem_config.get_climate_parameter("temperature")
@@ -617,6 +619,50 @@ class TestEcosystemConfigClimate:
             "light", linked_actuators=linked_actuators, **param_cfg)
         result = ecosystem_config.get_climate_parameter("light")
         assert result.linked_actuators.model_dump() == linked_actuators
+
+    def test_check_climate_parameter(self, ecosystem_config: EcosystemConfig):
+        hardware_cfg = ecosystem_config.hardware_dict
+        climate_cfg: gv.AnonymousClimateConfigDict = deepcopy(test_data.temperature_cfg)
+        check = EcosystemConfig.check_climate_sensors
+
+        # A sensor of the ecosystem measures the parameter
+        check("temperature", climate_cfg, hardware_cfg)
+
+        # `light` is managed by the `Light` subroutine, which can work without a sensor
+        check("light", climate_cfg, hardware_cfg)
+        check("light", climate_cfg, {})
+
+        # Without sensor, nothing can be regulated ...
+        with pytest.raises(ConfigValidationError, match=r"No sensor measures 'temperature'"):
+            check("temperature", climate_cfg, {})
+
+        # ... and a sensor without configured measures uses the default ones from its model
+        sensor_cfg: gv.AnonymousHardwareConfigDict = deepcopy(hardware_cfg[test_data.sensor_uid])
+        sensor_cfg["measures"] = []
+        check("temperature", climate_cfg, {test_data.sensor_uid: sensor_cfg})
+
+        # A non-default parameter is usable if it provides a sensed "linked_measure"
+        check("air_temperature", {**climate_cfg, "linked_measure": "temperature"}, hardware_cfg)
+
+        with pytest.raises(ConfigValidationError, match=r"No sensor measures 'ph'"):
+            check("water_ph", {**climate_cfg, "linked_measure": "ph"}, hardware_cfg)
+
+        # A typo is not sensed by any sensor, and gets a hint
+        with pytest.raises(
+                ConfigValidationError,
+                match=r"No sensor measures 'temprature'.*Did you mean 'temperature'\?",
+        ):
+            check("temprature", climate_cfg, hardware_cfg)
+
+    def test_set_climate_parameter_not_sensed(self, ecosystem_config: EcosystemConfig):
+        climate_before = deepcopy(ecosystem_config.climate)
+
+        with pytest.raises(ValueError, match=r"Did you mean 'temperature'\?"):
+            ecosystem_config.set_climate_parameter(
+                "temprature", day=25.0, night=20.0, hysteresis=1.0)
+
+        # A refused parameter is not stored
+        assert ecosystem_config.climate == climate_before
 
     def test_update_climate_parameter(self, ecosystem_config: EcosystemConfig):
         # Partial update: only day changes, rest stays the same
@@ -817,7 +863,12 @@ class TestEcosystemConfigHardware:
         places_dict = ecosystem_config.general.private_config["places"]
         valid_dict = deepcopy(ecosystem_config._config_dict)
         issues = EcosystemConfig.check_config_logic(valid_dict, places_dict)
-        assert issues.warnings == issues.errors == []
+        assert issues.errors == []
+        # No sensor measures "wind": the parameter is kept but reported
+        assert issues.warnings == [
+            "No sensor measures 'wind', needed by the climate parameter 'wind'. "
+            "It will not be regulated."
+        ]
 
         # Each invalid hardware is reported, the others are still checked
         invalid_dict = deepcopy(valid_dict)
