@@ -229,26 +229,26 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         errors: list[str] = []
         # Check hardware dicts (errors)
         addresses_used: list[str] = []
-        for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+        for hardware_uid, hardware_cfg in ecosystem_cfg["hardware"].items():
             try:
-                cls.check_hardware_address(hardware_dict["address"], addresses_used)
+                cls.check_hardware_address(hardware_cfg["address"], addresses_used)
             except ValueError as e:
-                errors.append(f"Hardware '{hardware_dict['name']}': {e}")
+                errors.append(f"Hardware '{hardware_cfg['name']}': {e}")
             finally:
-                addresses_used.append(hardware_dict["address"])
+                addresses_used.append(hardware_cfg["address"])
         # Check climate roles (errors)
         climate = ecosystem_cfg["environment"]["climate"]
         try:
             cls.check_climate_groups(climate)
         except ConfigValidationError as e:
             errors.append(str(e))
-        for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+        for hardware_uid, hardware_cfg in ecosystem_cfg["hardware"].items():
             try:
-                cls.check_hardware_groups(hardware_uid, hardware_dict, climate)
+                cls.check_hardware_groups(hardware_uid, hardware_cfg, climate)
             except ConfigValidationError as e:
                 errors.append(str(e))
         # Check climate parameters (warnings)
-        for parameter, climate_cfg in ecosystem_cfg["environment"]["climate"].items():
+        for parameter, climate_cfg in climate.items():
             try:
                 cls.check_climate_sensors(parameter, climate_cfg, ecosystem_cfg["hardware"])
             except ConfigValidationError as e:
@@ -928,11 +928,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if group is not None
         }
         errors: list[str] = []
-        for hardware_uid, hardware_dict in self.hardware_dict.items():
-            if linked_groups.isdisjoint(hardware_dict["groups"]):
+        for hardware_uid, hardware_cfg in self.hardware_dict.items():
+            if linked_groups.isdisjoint(hardware_cfg["groups"]):
                 continue
             try:
-                self.check_hardware_groups(hardware_uid, hardware_dict, new_climate)
+                self.check_hardware_groups(hardware_uid, hardware_cfg, new_climate)
             except ConfigValidationError as e:
                 errors.append(str(e))
         if errors:
@@ -982,19 +982,19 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
     @staticmethod
     def _get_sensed_measures(
-            hardware_cfg: dict[str, gv.AnonymousHardwareConfigDict],
+            hardware: dict[str, gv.AnonymousHardwareConfigDict],
     ) -> set[str]:
-        """Get the measures taken by the sensors of a hardware config.
+        """Get the measures taken by the sensors of an ecosystem.
 
         A sensor without any measure configured takes all the measures its
         model provides.
         """
         rv: set[str] = set()
-        for hardware in hardware_cfg.values():
-            hardware_cls = hardware_models.get(hardware["model"])
+        for hardware_cfg in hardware.values():
+            hardware_cls = hardware_models.get(hardware_cfg["model"])
             if hardware_cls is None or not issubclass(hardware_cls, SensorMixin):
                 continue
-            measures = hardware.get("measures")
+            measures = hardware_cfg.get("measures")
             if measures:
                 rv.update(measure["name"].lower() for measure in measures)
             elif isinstance(hardware_cls.measures_available, dict):
@@ -1006,7 +1006,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             cls,
             parameter: gv.ClimateParameter,
             climate_cfg: gv.AnonymousClimateConfigDict,
-            hardware_cfg: dict[str, gv.AnonymousHardwareConfigDict],
+            hardware: dict[str, gv.AnonymousHardwareConfigDict],
     ) -> None:
         """Check that the ecosystem can "measure" a climate parameter.
 
@@ -1018,14 +1018,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         :param parameter: The climate parameter name.
         :param climate_cfg: The validated climate config of the parameter.
-        :param hardware_cfg: The validated hardware config of the ecosystem.
+        :param hardware: The validated hardware config of the ecosystem.
         :raises ConfigValidationError: If no sensor takes the measure of the
                                        parameter.
         """
         if parameter == "light":
             return
         measure = climate_cfg.get("linked_measure") or parameter
-        sensed_measures = cls._get_sensed_measures(hardware_cfg)
+        sensed_measures = cls._get_sensed_measures(hardware)
         if measure in sensed_measures:
             return
         choices = {*default_actuators.DEFAULT_CLIMATE_PARAMETERS, *sensed_measures}
