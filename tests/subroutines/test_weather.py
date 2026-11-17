@@ -106,6 +106,27 @@ class TestWeatherSubroutine:
 
         await weather_subroutine._unmount_actuator_handler("rain")
 
+    async def test_parameter_without_actuator_group(
+            self,
+            ecosystem: Ecosystem,
+            weather_subroutine: Weather,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        # A free-form weather parameter has no default actuator group: without
+        #  a linked actuator it is skipped rather than failing the subroutine
+        ecosystem.config.set_weather_parameter(
+            "storm", pattern="0 * * * *", duration=10, level=100.0)
+
+        with caplog.at_level("DEBUG"):
+            assert weather_subroutine.compute_expected_actuators() == {"rain": "rainer"}
+        assert "'storm' has no linked actuator" in caplog.text
+        assert weather_subroutine.manageable
+
+        with pytest.raises(ValueError, match="'storm' has no linked actuator"):
+            weather_subroutine.get_actuator_group_for_parameter("storm")
+
+        ecosystem.config.delete_weather_parameter("storm")
+
     async def test_create_job(self, weather_subroutine: Weather):
         # Setup
         weather_subroutine._actuator_handlers = {}

@@ -168,6 +168,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
           becomes the address of the model ...
         - A climate parameter without linked actuators gets the default ones,
           so they can be seen, changed or disabled from the config file.
+        - A weather parameter without linked actuator gets the default one,
+          if it has one.
 
         This step will also report unsupported models and invalid address.
 
@@ -195,6 +197,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if climate_cfg.get("linked_actuators") is None:
                 climate_cfg["linked_actuators"] = \
                     cls.get_default_linked_actuator(parameter)
+        # Normalize weather dicts
+        for parameter, weather_cfg in ecosystem_cfg["environment"]["weather"].items():
+            if weather_cfg.get("linked_actuator") is None:
+                weather_cfg["linked_actuator"] = \
+                    cls.get_default_weather_linked_actuator(parameter)
         if errors:
             raise ConfigValidationError(*errors)
         return ecosystem_cfg
@@ -996,6 +1003,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     ) -> None:
         """Set or create a weather parameter configuration.
 
+        If `linked_actuator` is missing or None, the default linked actuator
+        of the parameter, if any, is used.
+
         :param parameter: The weather parameter name.
         :param value: The weather configuration values.
         :raises ValueError: If the provided values are invalid.
@@ -1008,6 +1018,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"Invalid weather config provided. "
                 f"ERROR msg(s): `{format_pydantic_error(e)}`."
             )
+        if validated_value["linked_actuator"] is None:
+            validated_value["linked_actuator"] = \
+                self.get_default_weather_linked_actuator(parameter)
         self.weather[parameter] = validated_value
 
     def update_weather_parameter(
@@ -1069,6 +1082,18 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "increase": defaults.get((parameter, "increase")),
             "decrease": defaults.get((parameter, "decrease")),
         }
+
+    @staticmethod
+    def get_default_weather_linked_actuator(
+            parameter: gv.WeatherParameter,
+    ) -> str | None:
+        """Get the default actuator group linked to a weather parameter.
+
+        :param parameter: The weather parameter name.
+        :return: The default actuator group, None when the parameter has no
+                 default actuator group.
+        """
+        return default_actuators.weather_to_group_mapping.get((parameter, "increase"))
 
     @classmethod
     def _compute_climate_direction_to_group(
@@ -1186,14 +1211,20 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
 
     def get_weather_direction_to_group(self) -> dict[WeatherDirection, str]:
-        """Get actuator couples for all weather parameters."""
-        update: dict[WeatherDirection, str] = {   # ty: ignore[invalid-assignment]
-            (weather_parameter, cast(Direction, "increase")): weather_cfg["linked_actuator"]
-            for weather_parameter, weather_cfg in self.weather.items()
-            if weather_cfg["linked_actuator"] is not None
-        }
+        """Get the actuator group of all weather parameters.
 
-        return {**default_actuators.weather_to_group_mapping, **update}
+        A weather parameter without linked actuator has no actuator group, and
+        a parameter that is not configured has none either.
+        """
+        rv: dict[WeatherDirection, str] = {}
+        for parameter, weather_cfg in self.weather.items():
+            actuator_group = weather_cfg.get("linked_actuator")
+            if actuator_group is None:
+                # The weather config has not been normalized (yet)
+                actuator_group = self.get_default_weather_linked_actuator(parameter)
+            if actuator_group is not None:
+                rv[(parameter, "increase")] = actuator_group
+        return rv
 
     def get_group_to_weather_direction(self, actuator_group: str) -> list[WeatherDirection] | None:
         """Get the climate parameter and direction an actuator group serves.

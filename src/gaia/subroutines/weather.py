@@ -88,8 +88,14 @@ class Weather(SubroutineTemplate[Actuator]):
         The keys are the weather events and the values are the associated actuator
         groups"""
         rv: dict[gv.WeatherParameter, str] = {}
+        weather_to_group = self.config.get_weather_direction_to_group()
         for weather_event in self.config.weather:
-            actuator_group = self.get_actuator_group_for_parameter(weather_event)
+            actuator_group = weather_to_group.get((weather_event, "increase"))
+            if actuator_group is None:
+                self.logger.debug(
+                    f"Weather parameter '{weather_event}' has no linked "
+                    f"actuator, it will not be managed.")
+                continue
             # Make sure the actuator group is available
             if self.ecosystem.get_hardware_group_uids(actuator_group):
                 rv[weather_event] = actuator_group
@@ -201,4 +207,9 @@ class Weather(SubroutineTemplate[Actuator]):
         # Raises `UndefinedParameter` if the weather parameter is not configured
         weather_cfg = self.config.get_weather_parameter(parameter)
         weather_to_group = self.config.get_weather_direction_to_group()
-        return weather_to_group[(weather_cfg.parameter, "increase")]
+        try:
+            return weather_to_group[(weather_cfg.parameter, "increase")]
+        except KeyError:
+            raise ValueError(
+                f"Weather parameter '{parameter}' has no linked actuator."
+            )

@@ -672,6 +672,27 @@ class TestEcosystemConfigWeather:
         result = ecosystem_config.get_weather_parameter("fog")
         assert result == gv.WeatherConfig(parameter="fog", **param_cfg)
 
+    def test_set_weather_parameter_default_linked_actuator(
+            self,
+            ecosystem_config: EcosystemConfig,
+    ):
+        param_cfg = {"pattern": "0 6 * * *", "duration": 60, "level": 50.0}
+
+        # Without a linked actuator, the default one is written in the config ...
+        ecosystem_config.set_weather_parameter("fog", **param_cfg)
+        assert ecosystem_config.weather["fog"]["linked_actuator"] == "fogger"
+
+        ecosystem_config.set_weather_parameter("wind_gust", linked_actuator=None, **param_cfg)
+        assert ecosystem_config.weather["wind_gust"]["linked_actuator"] == "fan"
+
+        # ... a given one is kept ...
+        ecosystem_config.update_weather_parameter("fog", linked_actuator="mister")
+        assert ecosystem_config.weather["fog"]["linked_actuator"] == "mister"
+
+        # ... and a parameter without default actuator group stays without any
+        ecosystem_config.set_weather_parameter("storm", **param_cfg)
+        assert ecosystem_config.weather["storm"]["linked_actuator"] is None
+
     def test_update_weather_parameter(self, ecosystem_config: EcosystemConfig):
         # Partial update: only duration changes, rest stays the same
         ecosystem_config.update_weather_parameter("rain", duration=60)
@@ -695,6 +716,35 @@ class TestEcosystemConfigWeather:
         weather_to_group = ecosystem_config.get_weather_direction_to_group()
         assert weather_to_group.get(("rain", "increase")) == "rainer"
         assert weather_to_group.get(("rain", "decrease")) is None
+
+    def test_get_weather_actuators_only_configured(
+            self,
+            ecosystem_config: EcosystemConfig,
+    ):
+        # Only the configured weather parameters have an actuator group: the
+        #  default groups of "fog" and "wind_gust" are not in use
+        assert ecosystem_config.get_weather_direction_to_group() == {
+            ("rain", "increase"): "rainer",
+        }
+
+        ecosystem_config.set_weather_parameter("fog", **test_data.rain_cfg)
+        assert ecosystem_config.get_weather_direction_to_group() == {
+            ("rain", "increase"): "rainer",
+            ("fog", "increase"): "rainer",
+        }
+
+        # A config that has not been normalized falls back on the default group
+        ecosystem_config.weather["fog"]["linked_actuator"] = None
+        weather_to_group = ecosystem_config.get_weather_direction_to_group()
+        assert weather_to_group[("fog", "increase")] == "fogger"
+
+        # A parameter without linked actuator nor default group has no actuator group
+        ecosystem_config.set_weather_parameter(
+            "storm", **{**test_data.rain_cfg, "linked_actuator": None})
+        assert ("storm", "increase") not in ecosystem_config.get_weather_direction_to_group()
+
+        ecosystem_config.delete_weather_parameter("fog")
+        assert ("fog", "increase") not in ecosystem_config.get_weather_direction_to_group()
 
 
 @with_hardware(hardware_dict)
@@ -735,6 +785,20 @@ class TestEcosystemConfigHardware:
         #  unlink all the actuators
         assert climate["wind"]["linked_actuators"] == {"increase": None, "decrease": None}
         assert climate["humidity"]["linked_actuators"] == humidity_linked_actuators
+
+    def test_normalize_config_dict_linked_actuator(self, ecosystem_config: EcosystemConfig):
+        raw_dict = deepcopy(ecosystem_config._config_dict)
+        weather = raw_dict["environment"]["weather"]
+        weather["rain"]["linked_actuator"] = None
+        weather["fog"] = {**test_data.rain_cfg, "linked_actuator": "mister"}
+        weather["storm"] = {**test_data.rain_cfg, "linked_actuator": None}
+
+        weather = EcosystemConfig.normalize_config_dict(raw_dict)["environment"]["weather"]
+
+        # Only a missing linked actuator is replaced by the default one, if any
+        assert weather["rain"]["linked_actuator"] == "rainer"
+        assert weather["fog"]["linked_actuator"] == "mister"
+        assert weather["storm"]["linked_actuator"] is None
 
     def test_normalize_config_dict_fail(self, ecosystem_config: EcosystemConfig):
         invalid_dict = deepcopy(ecosystem_config._config_dict)
