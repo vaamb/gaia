@@ -236,11 +236,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 errors.append(f"Hardware '{hardware_dict['name']}': {e}")
             finally:
                 addresses_used.append(hardware_dict["address"])
+        # Check climate roles (errors)
+        climate = ecosystem_cfg["environment"]["climate"]
         try:
-            cls.check_climate_groups(
-                ecosystem_cfg["environment"]["climate"], ecosystem_cfg["hardware"])
-        except ValueError as e:
+            cls.check_climate_groups(climate)
+        except ConfigValidationError as e:
             errors.append(str(e))
+        for hardware_uid, hardware_dict in ecosystem_cfg["hardware"].items():
+            try:
+                cls.check_hardware_groups(hardware_uid, hardware_dict, climate)
+            except ConfigValidationError as e:
+                errors.append(str(e))
         # Check climate parameters (warnings)
         for parameter, climate_cfg in ecosystem_cfg["environment"]["climate"].items():
             try:
@@ -911,12 +917,26 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 self.get_default_linked_actuator(parameter)
         # Make sure the ecosystem can measure the new climate parameter
         self.check_climate_sensors(parameter, validated_value, self.hardware_dict)
-        # Make sure the new climate parameter isn't acted upon by more than a
-        #  single actuator group
-        self.check_climate_groups(
-            {**self.climate, parameter: validated_value},
-            self.hardware_dict,
-        )
+        # Make sure the new climate parameter's actuators have no other
+        #  climate role, neither through their group ...
+        self.check_climate_actuators(parameter, validated_value, self.climate)
+        # ... nor through another group of their hardware. Only the hardware in
+        #  the parameter's linked groups can gain a conflict
+        new_climate = {**self.climate, parameter: validated_value}
+        linked_groups = {
+            group for group in validated_value["linked_actuators"].values()
+            if group is not None
+        }
+        errors: list[str] = []
+        for hardware_uid, hardware_dict in self.hardware_dict.items():
+            if linked_groups.isdisjoint(hardware_dict["groups"]):
+                continue
+            try:
+                self.check_hardware_groups(hardware_uid, hardware_dict, new_climate)
+            except ConfigValidationError as e:
+                errors.append(str(e))
+        if errors:
+            raise ConfigValidationError(" ".join(errors))
         self.climate[parameter] = validated_value
 
     def update_climate_parameter(
@@ -1218,12 +1238,30 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return None
 
     @classmethod
+    def _compute_group_to_climate_directions(
+            cls,
+            climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
+    ) -> dict[str, list[ClimateDirection]]:
+        """Get the climate roles served by each actuator group."""
+        rv: dict[str, list[ClimateDirection]] = {}
+        climate_to_group = cls._compute_climate_direction_to_group(climate)
+        for climate_direction, actuator_group in climate_to_group.items():
+            rv.setdefault(actuator_group, []).append(climate_direction)
+        return rv
+
+    @staticmethod
+    def _format_climate_directions(climate_directions: list[ClimateDirection]) -> str:
+        return humanize_list([
+            f"'{parameter}' ({direction})"
+            for parameter, direction in climate_directions
+        ])
+
+    @classmethod
     def check_climate_groups(
             cls,
-            climate_cfg: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
-            hardware_cfg: dict[str, gv.AnonymousHardwareConfigDict],
+            climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
     ) -> None:
-        """Check that an actuator group acts on at most one climate role.
+        """Check that each actuator group serves at most one climate role.
 
         A climate role is a climate parameter and its direction, such as
         `temperature` / `decrease`. Two roles driving the same actuators would
@@ -1233,47 +1271,106 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         overrides the climate role of its actuator group while it lasts (a few
         minutes in theory).
 
-        :param climate_cfg: The validated climate config of the ecosystem.
-        :param hardware_cfg: The validated hardware config of the ecosystem.
-        :raises ConfigValidationError: If a group or a hardware has two climate
-                                       roles.
+        Used to validate a whole climate config: each conflict is reported
+        once, from the actuator group's point of view. To validate a single
+        climate parameter, use `check_climate_actuators()`.
+
+        :param climate: The validated climate config of the ecosystem.
+        :raises ConfigValidationError: If an actuator group serves more than
+                                       one climate role.
         """
-        group_to_climate_direction: dict[str, list[ClimateDirection]] = {}
-        errors: list[str] = []
-        climate_to_group = cls._compute_climate_direction_to_group(climate_cfg)
-        # First mark the climate actions regulated by each actuator group ...
-        for climate_direction, actuator_group in climate_to_group.items():
-            if actuator_group not in group_to_climate_direction:
-                group_to_climate_direction[actuator_group] = [climate_direction]
-            else:
-                group_to_climate_direction[actuator_group].append(climate_direction)
-        # ... then flag actuator groups regulating more than one climate action
-        for actuator_group, climate_directions in group_to_climate_direction.items():
-            if len(climate_directions) > 1:
-                msgs = [
-                    f"'{climate_direction[0]}' ({climate_direction[1]})"
-                    for climate_direction in climate_directions
-                ]
-                errors.append(
-                    f"Actuator group '{actuator_group}' is linked to "
-                    f"{humanize_list(msgs)}."
-                )
-        # Make sure hardware don't have multiple groups linked to climate actions
-        for hardware_uid, hardware in hardware_cfg.items():
-            climate_groups = sorted(
-                group for group in hardware["groups"]
-                if group in group_to_climate_direction
+        errors: list[str] = [
+            f"Actuator group '{actuator_group}' is linked to "
+            f"{cls._format_climate_directions(climate_directions)}."
+            for actuator_group, climate_directions
+            in cls._compute_group_to_climate_directions(climate).items()
+            if len(climate_directions) > 1
+        ]
+        if errors:
+            raise ConfigValidationError(
+                f"An actuator group can only serve one climate parameter and "
+                f"direction. {' '.join(errors)}"
             )
-            if len(climate_groups) > 1:
+
+    @classmethod
+    def check_climate_actuators(
+            cls,
+            parameter: gv.ClimateParameter,
+            climate_cfg: gv.AnonymousClimateConfigDict,
+            climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
+    ) -> None:
+        """Check that a climate actuators group has no other climate role.
+
+        :param parameter: The climate parameter name.
+        :param climate_cfg: The validated climate config of the parameter.
+        :param climate: The climate config of the ecosystem. If it already
+                        holds `parameter`, `climate_cfg` replaces it.
+        :raises ConfigValidationError: If one of the parameter's actuator
+                                       groups serves another climate role,
+                                       including the other direction of the
+                                       parameter.
+        """
+        # Merge rather than exclude `parameter`: an unconfigured `light` gets
+        #  a default group, so it must be replaced, not removed
+        climate = {**climate, parameter: climate_cfg}
+        climate_to_group = cls._compute_climate_direction_to_group(climate)
+        group_to_climate_directions = cls._compute_group_to_climate_directions(climate)
+        errors: list[str] = []
+        reported_groups: set[str] = set()
+        directions: tuple[Direction, Direction] = ("increase", "decrease")
+        for direction in directions:
+            actuator_group = climate_to_group.get((parameter, direction))
+            # Both directions sharing a group is a single conflict
+            if actuator_group is None or actuator_group in reported_groups:
+                continue
+            others: list[ClimateDirection] = [
+                climate_direction
+                for climate_direction in group_to_climate_directions[actuator_group]
+                if climate_direction != (parameter, direction)
+            ]
+            if others:
+                reported_groups.add(actuator_group)
                 errors.append(
-                    f"Hardware '{hardware['name']}' ({hardware_uid}) belongs "
-                    f"to more than one actuator group linked to a climate "
-                    f"parameter: {', '.join(climate_groups)}."
+                    f"'{parameter}' ({direction}) cannot be linked to actuator "
+                    f"group '{actuator_group}', which already serves "
+                    f"{cls._format_climate_directions(others)}."
                 )
         if errors:
             raise ConfigValidationError(
-                f"An actuator can only serve one climate parameter and direction. "
-                f"{' '.join(errors)}"
+                f"An actuator group can only serve one climate parameter and "
+                f"direction. {' '.join(errors)}"
+            )
+
+    @classmethod
+    def check_hardware_groups(
+            cls,
+            uid: str,
+            hardware_cfg: gv.AnonymousHardwareConfigDict,
+            climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
+    ) -> None:
+        """Check that a hardware belongs to maximum one actuator group with a
+        climate role.
+
+        :param uid: The uid of the hardware.
+        :param hardware_cfg: The validated config of the hardware.
+        :param climate: The validated climate config of the ecosystem.
+        :raises ConfigValidationError: If the hardware belongs to more than one
+                                       actuator group with a climate role.
+        """
+        group_to_climate_directions = cls._compute_group_to_climate_directions(climate)
+        climate_groups = sorted(
+            group for group in hardware_cfg["groups"]
+            if group in group_to_climate_directions
+        )
+        if len(climate_groups) > 1:
+            msgs = [
+                f"'{group}' "
+                f"({cls._format_climate_directions(group_to_climate_directions[group])})"
+                for group in climate_groups
+            ]
+            raise ConfigValidationError(
+                f"Hardware '{hardware_cfg['name']}' ({uid}) belongs to more than "
+                f"one actuator group with a climate role: {humanize_list(msgs)}."
             )
 
     def get_weather_direction_to_group(self) -> dict[WeatherDirection, str]:
@@ -1466,10 +1563,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.check_hardware_address(hardware_dict["address"], self._used_addresses())
         uid = hardware_dict["uid"]
         anonymous_hardware_dict = gv.to_anonymous(hardware_dict, "uid")
-        self.check_climate_groups(
-            self.climate,
-            {**self.hardware_dict, uid: anonymous_hardware_dict},
-        )
+        self.check_hardware_groups(uid, anonymous_hardware_dict, self.climate)
         self.hardware_dict[uid] = anonymous_hardware_dict
 
     def update_hardware(
@@ -1501,10 +1595,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         used_addresses = self._used_addresses() if "address" in updating_values else []
         self.check_hardware_address(hardware_dict["address"], used_addresses)
         anonymous_hardware_dict = gv.to_anonymous(hardware_dict, "uid")
-        self.check_climate_groups(
-            self.climate,
-            {**self.hardware_dict, uid: anonymous_hardware_dict},
-        )
+        self.check_hardware_groups(uid, anonymous_hardware_dict, self.climate)
         self.hardware_dict[uid] = anonymous_hardware_dict
 
     def delete_hardware(self, uid: str) -> None:

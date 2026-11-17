@@ -570,6 +570,97 @@ class TestEcosystemConfigActuators:
         assert not ecosystem_config.has_climate_parameter("light")
         assert actuators_mapping[("light", "increase")] == "light"
 
+    def test_check_climate_actuators(self, ecosystem_config: EcosystemConfig):
+        climate = ecosystem_config.climate
+        check = EcosystemConfig.check_climate_actuators
+        temperature_cfg = deepcopy(climate["temperature"])
+
+        # A parameter doesn't conflict with its own current config
+        check("temperature", temperature_cfg, climate)
+
+        # A group serving another role is refused, and that role is named
+        temperature_cfg["linked_actuators"] = {"increase": "fogger", "decrease": "cooler"}
+        with pytest.raises(
+                ConfigValidationError,
+                match=r"'temperature' \(increase\) cannot be linked to actuator group "
+                      r"'fogger', which already serves 'humidity' \(increase\)",
+        ):
+            check("temperature", temperature_cfg, climate)
+
+        # Both directions of a parameter can't share a group, reported once
+        temperature_cfg["linked_actuators"] = {"increase": "heater", "decrease": "heater"}
+        with pytest.raises(ConfigValidationError) as exc_info:
+            check("temperature", temperature_cfg, climate)
+        assert str(exc_info.value).count("cannot be linked") == 1
+        assert "already serves 'temperature' (decrease)" in str(exc_info.value)
+
+        # `light` always has a group, even when it is not configured ...
+        temperature_cfg["linked_actuators"] = {"increase": "light", "decrease": None}
+        with pytest.raises(ConfigValidationError, match=r"already serves 'light' \(increase\)"):
+            check("temperature", temperature_cfg, climate)
+
+        # ... which configuring `light` replaces rather than conflicts with
+        assert "light" not in climate
+        light_cfg: gv.AnonymousClimateConfigDict = {
+            **test_data.temperature_cfg,
+            "linked_actuators": {"increase": "light", "decrease": None},
+        }
+        check("light", light_cfg, climate)
+
+    def test_check_hardware_groups(self, ecosystem_config: EcosystemConfig):
+        climate = ecosystem_config.climate
+        check = EcosystemConfig.check_hardware_groups
+        hardware_cfg = deepcopy(ecosystem_config.hardware_dict[test_data.humidifier_uid])
+
+        # 'rainer' only has a weather role, so it can share a hardware with
+        #  'fogger'
+        check(hardware_cfg, climate)
+
+        # Two groups with a climate role can't share a hardware
+        hardware_cfg["groups"] = ["fogger", "heater"]
+        with pytest.raises(
+                ConfigValidationError,
+                match=r"Hardware 'VirtualHumidifier' belongs to more than one actuator "
+                      r"group with a climate role: 'fogger' \('humidity' \(increase\)\) "
+                      r"and 'heater' \('temperature' \(increase\)\)",
+        ):
+            check(hardware_cfg, climate)
+
+    def test_set_climate_parameter_climate_role(self, ecosystem_config: EcosystemConfig):
+        climate_before = deepcopy(ecosystem_config.climate)
+
+        # Conflict through the actuator group ...
+        with pytest.raises(ConfigValidationError, match=r"already serves 'humidity'"):
+            ecosystem_config.update_climate_parameter(
+                "temperature", linked_actuators={"increase": "fogger", "decrease": "cooler"})
+
+        # ... or through another group of the same hardware: 'VirtualHumidifier'
+        #  is both a 'fogger' and a 'rainer'
+        with pytest.raises(ConfigValidationError, match=r"Hardware 'VirtualHumidifier'"):
+            ecosystem_config.update_climate_parameter(
+                "temperature", linked_actuators={"increase": "heater", "decrease": "rainer"})
+
+        # A refused parameter is not stored
+        assert ecosystem_config.climate == climate_before
+
+    def test_hardware_climate_role(self, ecosystem_config: EcosystemConfig):
+        hardware_before = deepcopy(ecosystem_config.hardware_dict)
+
+        with pytest.raises(ConfigValidationError, match=r"Hardware 'NewHeater'"):
+            ecosystem_config.create_new_hardware(**{
+                **test_data.heater_info,
+                "name": "NewHeater",
+                "address": "GPIO_11",  # Use a free address
+                "groups": ["heater", "cooler"],
+            })
+
+        with pytest.raises(ConfigValidationError, match=r"Hardware 'VirtualHumidifier'"):
+            ecosystem_config.update_hardware(
+                test_data.humidifier_uid, groups=["fogger", "dehumidifier"])
+
+        # A refused hardware is not stored
+        assert ecosystem_config.hardware_dict == hardware_before
+
     def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
         valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()
 
@@ -887,6 +978,13 @@ class TestEcosystemConfigHardware:
         issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
         assert len(issues.errors) == 1
         assert re.search(r"Actuator group 'fogger' is linked .*and.*", issues.errors[0])
+
+        # ... on the hardware side too
+        invalid_dict = deepcopy(valid_dict)
+        invalid_dict["hardware"][test_data.humidifier_uid]["groups"] = ["fogger", "heater"]
+        issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
+        assert len(issues.errors) == 1
+        assert re.search(r"Hardware 'VirtualHumidifier' belongs .*fogger.*heater", issues.errors[0])
 
     def test_check_config_logic_default_actuators(self, ecosystem_config: EcosystemConfig):
         places_dict = ecosystem_config.general.private_config["places"]
