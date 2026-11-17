@@ -176,6 +176,67 @@ class TestClimateSubroutine:
                 assert pid.hysteresis == climate_cfg["hysteresis"]
                 assert pid.target != getattr(default_light_target, period)
 
+    async def test_refresh_follows_climate_config(
+            self,
+            ecosystem: Ecosystem,
+            climate_subroutine: Climate,
+            sensors_subroutine: Sensors,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        """PIDs and actuator handlers follow the parameters regulated at refresh."""
+        config = ecosystem.config
+        # Save config
+        climate_config = {**config.climate}
+
+        await sensors_subroutine.routine()
+        climate_subroutine.enable()
+        await climate_subroutine.start()
+        assert set(climate_subroutine.pids) == {"temperature", "humidity"}
+
+        # A parameter that is not regulated any more loses its PID and its handlers
+        config.delete_climate_parameter("humidity")
+        await climate_subroutine.refresh()
+
+        assert set(climate_subroutine.pids) == {"temperature"}
+        assert set(climate_subroutine.actuator_handlers) == {
+            ("temperature", "increase"),
+        }
+
+        # Swapping the regulated parameter in a single refresh: the new parameter
+        #  gets its PID before its handlers are mounted, as an actuator handler
+        #  picks its PID up when it is created
+        config.delete_climate_parameter("temperature")
+        config.set_climate_parameter("humidity", **test_data.humidity_cfg)
+        await climate_subroutine.refresh()
+
+        assert set(climate_subroutine.pids) == {"humidity"}
+        assert set(climate_subroutine.actuator_handlers) == {
+            ("humidity", "decrease"),
+            ("humidity", "increase"),
+        }
+        humidity_pid = climate_subroutine.pids["humidity"]
+        for handler in climate_subroutine.actuator_handlers.values():
+            assert handler.associated_pid is humidity_pid
+
+        # A newly regulated parameter is added next to the existing one
+        config.set_climate_parameter("temperature", **test_data.temperature_cfg)
+        await climate_subroutine.refresh()
+
+        assert set(climate_subroutine.pids) == {"temperature", "humidity"}
+        assert set(climate_subroutine.actuator_handlers) == {
+            ("temperature", "increase"),
+            ("humidity", "decrease"),
+            ("humidity", "increase"),
+        }
+
+        # The routine runs with what was mounted by the refreshes
+        caplog.clear()
+        await climate_subroutine.routine()
+        assert "Encountered an error" not in caplog.text
+
+        # Restore config
+        config.environment["climate"] = climate_config
+
     async def test_routine(self, climate_subroutine: Climate, sensors_subroutine: Sensors):
         # Sensors data are required ...
         await sensors_subroutine.routine()
