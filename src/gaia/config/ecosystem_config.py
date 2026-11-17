@@ -197,7 +197,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         for parameter, climate_cfg in ecosystem_cfg["environment"]["climate"].items():
             if climate_cfg.get("linked_actuators") is None:
                 climate_cfg["linked_actuators"] = \
-                    cls.get_default_linked_actuator(parameter)
+                    cls.get_default_climate_linked_actuator(parameter)
         # Normalize weather dicts
         for parameter, weather_cfg in ecosystem_cfg["environment"]["weather"].items():
             if weather_cfg.get("linked_actuator") is None:
@@ -914,7 +914,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
         if validated_value["linked_actuators"] is None:
             validated_value["linked_actuators"] = \
-                self.get_default_linked_actuator(parameter)
+                self.get_default_climate_linked_actuator(parameter)
         # Make sure the ecosystem can measure the new climate parameter
         self.check_climate_sensors(parameter, validated_value, self.hardware_dict)
         # Make sure the new climate parameter's actuators have no other
@@ -1151,10 +1151,21 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
 
     # ---------------------------------------------------------------------------
-    #   Actuator couples
+    #   Actuator groups
+    # ---------------------------------------------------------------------------
+    def get_valid_actuator_groups(self) -> set[str]:
+        """Get the set of valid actuator group names for this ecosystem."""
+        # TODO: If "free" actuators are ever added, add them here too
+        return {
+            *self.get_climate_direction_to_group().values(),
+            *self.get_weather_direction_to_group().values(),
+        }
+
+    # ---------------------------------------------------------------------------
+    #      Climate roles
     # ---------------------------------------------------------------------------
     @staticmethod
-    def get_default_linked_actuator(
+    def get_default_climate_linked_actuator(
             parameter: gv.ClimateParameter,
     ) -> gv.ActuatorCoupleDict:
         """Get the default actuator groups linked to a climate parameter.
@@ -1168,18 +1179,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             "increase": defaults.get((parameter, "increase")),
             "decrease": defaults.get((parameter, "decrease")),
         }
-
-    @staticmethod
-    def get_default_weather_linked_actuator(
-            parameter: gv.WeatherParameter,
-    ) -> str | None:
-        """Get the default actuator group linked to a weather parameter.
-
-        :param parameter: The weather parameter name.
-        :return: The default actuator group, None when the parameter has no
-                 default actuator group.
-        """
-        return default_actuators.weather_to_group_mapping.get((parameter, "increase"))
 
     @classmethod
     def _compute_climate_direction_to_group(
@@ -1201,7 +1200,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             linked_actuators = climate_cfg.get("linked_actuators")
             if linked_actuators is None:
                 # The climate config has not been normalized (yet)
-                linked_actuators = cls.get_default_linked_actuator(parameter)
+                linked_actuators = cls.get_default_climate_linked_actuator(parameter)
             for direction in directions:
                 actuator_group = linked_actuators[direction]
                 if actuator_group is not None:
@@ -1341,37 +1340,20 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"direction. {' '.join(errors)}"
             )
 
-    @classmethod
-    def check_hardware_groups(
-            cls,
-            uid: str,
-            hardware_cfg: gv.AnonymousHardwareConfigDict,
-            climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
-    ) -> None:
-        """Check that a hardware belongs to maximum one actuator group with a
-        climate role.
+    # ---------------------------------------------------------------------------
+    #      Weather roles
+    # ---------------------------------------------------------------------------
+    @staticmethod
+    def get_default_weather_linked_actuator(
+            parameter: gv.WeatherParameter,
+    ) -> str | None:
+        """Get the default actuator group linked to a weather parameter.
 
-        :param uid: The uid of the hardware.
-        :param hardware_cfg: The validated config of the hardware.
-        :param climate: The validated climate config of the ecosystem.
-        :raises ConfigValidationError: If the hardware belongs to more than one
-                                       actuator group with a climate role.
+        :param parameter: The weather parameter name.
+        :return: The default actuator group, None when the parameter has no
+                 default actuator group.
         """
-        group_to_climate_directions = cls._compute_group_to_climate_directions(climate)
-        climate_groups = sorted(
-            group for group in hardware_cfg["groups"]
-            if group in group_to_climate_directions
-        )
-        if len(climate_groups) > 1:
-            msgs = [
-                f"'{group}' "
-                f"({cls._format_climate_directions(group_to_climate_directions[group])})"
-                for group in climate_groups
-            ]
-            raise ConfigValidationError(
-                f"Hardware '{hardware_cfg['name']}' ({uid}) belongs to more than "
-                f"one actuator group with a climate role: {humanize_list(msgs)}."
-            )
+        return default_actuators.weather_to_group_mapping.get((parameter, "increase"))
 
     def get_weather_direction_to_group(self) -> dict[WeatherDirection, str]:
         """Get the actuator group of all weather parameters.
@@ -1407,15 +1389,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if rv:
             return rv
         return None
-
-    def get_valid_actuator_groups(self) -> set[str]:
-        """Get the set of valid actuator group names for this ecosystem."""
-        # TODO: If "free" actuators are ever added, add them here too
-        return {
-            *self.get_climate_direction_to_group().values(),
-            *self.get_weather_direction_to_group().values(),
-        }
-
 
     # ---------------------------------------------------------------------------
     #   Hardware parameters
@@ -1518,6 +1491,38 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         if validated_address in addresses_used:
             raise ConfigValidationError(f"Address '{validated_address}' already used.")
+
+    @classmethod
+    def check_hardware_groups(
+            cls,
+            uid: str,
+            hardware_cfg: gv.AnonymousHardwareConfigDict,
+            climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
+    ) -> None:
+        """Check that a hardware belongs to maximum one actuator group with a
+        climate role.
+
+        :param uid: The uid of the hardware.
+        :param hardware_cfg: The validated config of the hardware.
+        :param climate: The validated climate config of the ecosystem.
+        :raises ConfigValidationError: If the hardware belongs to more than one
+                                       actuator group with a climate role.
+        """
+        group_to_climate_directions = cls._compute_group_to_climate_directions(climate)
+        climate_groups = sorted(
+            group for group in hardware_cfg["groups"]
+            if group in group_to_climate_directions
+        )
+        if len(climate_groups) > 1:
+            msgs = [
+                f"'{group}' "
+                f"({cls._format_climate_directions(group_to_climate_directions[group])})"
+                for group in climate_groups
+            ]
+            raise ConfigValidationError(
+                f"Hardware '{hardware_cfg['name']}' ({uid}) belongs to more than "
+                f"one actuator group with a climate role: {humanize_list(msgs)}."
+            )
 
     def create_new_hardware(
             self,
