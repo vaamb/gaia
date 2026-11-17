@@ -633,7 +633,8 @@ class TestEcosystemConfigClimate:
         check("light", climate_cfg, {})
 
         # Without sensor, nothing can be regulated ...
-        with pytest.raises(ConfigValidationError, match=r"No sensor measures 'temperature'"):
+        error_msg = r"Climate parameter 'temperature' needs sensor measure 'temperature'.*"
+        with pytest.raises(ConfigValidationError, match=error_msg):
             check("temperature", climate_cfg, {})
 
         # ... and a sensor without configured measures uses the default ones from its model
@@ -644,14 +645,12 @@ class TestEcosystemConfigClimate:
         # A non-default parameter is usable if it provides a sensed "linked_measure"
         check("air_temperature", {**climate_cfg, "linked_measure": "temperature"}, hardware_cfg)
 
-        with pytest.raises(ConfigValidationError, match=r"No sensor measures 'ph'"):
+        error_msg = r"Climate parameter 'water_ph' needs sensor measure 'ph'.*"
+        with pytest.raises(ConfigValidationError, match=error_msg):
             check("water_ph", {**climate_cfg, "linked_measure": "ph"}, hardware_cfg)
 
         # A typo is not sensed by any sensor, and gets a hint
-        with pytest.raises(
-                ConfigValidationError,
-                match=r"No sensor measures 'temprature'.*Did you mean 'temperature'\?",
-        ):
+        with pytest.raises(ConfigValidationError, match=r".*Did you mean 'temperature'\?"):
             check("temprature", climate_cfg, hardware_cfg)
 
     def test_set_climate_parameter_not_sensed(self, ecosystem_config: EcosystemConfig):
@@ -866,8 +865,8 @@ class TestEcosystemConfigHardware:
         assert issues.errors == []
         # No sensor measures "wind": the parameter is kept but reported
         assert issues.warnings == [
-            "No sensor measures 'wind', needed by the climate parameter 'wind'. "
-            "It will not be regulated."
+            "Climate parameter 'wind' needs sensor measure 'wind' but it cannot be "
+            "found. It will not be regulated."
         ]
 
         # Each invalid hardware is reported, the others are still checked
