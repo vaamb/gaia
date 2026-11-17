@@ -24,6 +24,7 @@ from gaia.config.models import (
     EnvironmentConfigValidator, HardwareConfigDictInput, OutdatedData)
 from gaia.exceptions import HardwareNotFound, PlantNotFound, UndefinedParameter
 from gaia.hardware import hardware_models, Hardware
+from gaia.hardware.abc import SensorMixin
 from gaia.hardware.multiplexers import multiplexer_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import create_uid, humanize_list, is_time_between
@@ -240,6 +241,12 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 ecosystem_cfg["environment"]["climate"], ecosystem_cfg["hardware"])
         except ValueError as e:
             errors.append(str(e))
+        # Check climate parameters (warnings)
+        for parameter, climate_cfg in ecosystem_cfg["environment"]["climate"].items():
+            try:
+                cls.check_climate_sensors(parameter, climate_cfg, ecosystem_cfg["hardware"])
+            except ConfigValidationError as e:
+                warnings.append(f"{e} It will not be regulated.")
         # Check nycthemeral config (warnings)
         nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
         for method in (nycthemeral_cfg["span"], nycthemeral_cfg["lighting"]):
@@ -886,7 +893,10 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
 
         :param parameter: The climate parameter name.
         :param value: The climate configuration values.
-        :raises ValueError: If the provided values are invalid.
+        :raises ValueError: If the provided values are invalid, if no sensor
+                            of the ecosystem measures the parameter or if one
+                            of its actuator groups already has a different climate
+                            role.
         """
         parameter = parameter_adapter.validate_python(parameter)
         try:
@@ -899,6 +909,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if validated_value["linked_actuators"] is None:
             validated_value["linked_actuators"] = \
                 self.get_default_linked_actuator(parameter)
+        # Make sure the ecosystem can measure the new climate parameter
+        self.check_climate_sensors(parameter, validated_value, self.hardware_dict)
         # Make sure the new climate parameter isn't acted upon by more than a
         #  single actuator group
         self.check_climate_groups(
@@ -947,6 +959,60 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 f"'{self.name}' in ecosystems configuration file"
                 f"{closest_parameter_hint(parameter, self.climate.keys())}"
             )
+
+    @staticmethod
+    def _get_sensed_measures(
+            hardware_cfg: dict[str, gv.AnonymousHardwareConfigDict],
+    ) -> set[str]:
+        """Get the measures taken by the sensors of a hardware config.
+
+        A sensor without any measure configured takes all the measures its
+        model provides.
+        """
+        rv: set[str] = set()
+        for hardware in hardware_cfg.values():
+            hardware_cls = hardware_models.get(hardware["model"])
+            if hardware_cls is None or not issubclass(hardware_cls, SensorMixin):
+                continue
+            measures = hardware.get("measures")
+            if measures:
+                rv.update(measure["name"].lower() for measure in measures)
+            elif isinstance(hardware_cls.measures_available, dict):
+                rv.update(measure.name for measure in hardware_cls.measures_available)
+        return rv
+
+    @classmethod
+    def check_climate_sensors(
+            cls,
+            parameter: gv.ClimateParameter,
+            climate_cfg: gv.AnonymousClimateConfigDict,
+            hardware_cfg: dict[str, gv.AnonymousHardwareConfigDict],
+    ) -> None:
+        """Check that the ecosystem can "measure" a climate parameter.
+
+        A climate parameter is regulated thanks to the measure it is linked to
+        (its own name by default). This method checks that at least one sensor
+        can sense this measure.
+
+        `light` is the exception as the `Light` subroutine works without sensor.
+
+        :param parameter: The climate parameter name.
+        :param climate_cfg: The validated climate config of the parameter.
+        :param hardware_cfg: The validated hardware config of the ecosystem.
+        :raises ConfigValidationError: If no sensor takes the measure of the
+                                       parameter.
+        """
+        if parameter == "light":
+            return
+        measure = climate_cfg.get("linked_measure") or parameter
+        sensed_measures = cls._get_sensed_measures(hardware_cfg)
+        if measure in sensed_measures:
+            return
+        choices = {*default_actuators.DEFAULT_CLIMATE_PARAMETERS, *sensed_measures}
+        raise ConfigValidationError(
+            f"Climate parameter '{parameter}' needs sensor measure '{measure}' "
+            f"but it cannot be found.{closest_parameter_hint(measure, choices)}"
+        )
 
     def get_scaled_climate_target(
             self,
