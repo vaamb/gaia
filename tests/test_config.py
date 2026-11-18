@@ -572,7 +572,7 @@ class TestEcosystemConfigActuators:
 
     def test_check_climate_actuators(self, ecosystem_config: EcosystemConfig):
         climate = ecosystem_config.climate
-        check = EcosystemConfig.check_climate_actuators
+        check = EcosystemConfig.check_climate_actuators_conflict
         temperature_cfg = deepcopy(climate["temperature"])
 
         # A parameter doesn't conflict with its own current config
