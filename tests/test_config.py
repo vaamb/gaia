@@ -609,7 +609,7 @@ class TestEcosystemConfigActuators:
 
     def test_check_hardware_groups(self, ecosystem_config: EcosystemConfig):
         climate = ecosystem_config.climate
-        check = EcosystemConfig.check_hardware_groups
+        check = EcosystemConfig.check_hardware_groups_conflict
         uid = test_data.humidifier_uid
         hardware_cfg = deepcopy(ecosystem_config.hardware_dict[uid])
 
@@ -722,7 +722,7 @@ class TestEcosystemConfigClimate:
     def test_check_climate_parameter(self, ecosystem_config: EcosystemConfig):
         hardware_cfg = ecosystem_config.hardware_dict
         climate_cfg: gv.AnonymousClimateConfigDict = deepcopy(test_data.temperature_cfg)
-        check = EcosystemConfig.check_climate_sensors
+        check = EcosystemConfig.check_climate_has_sensor
 
         # A sensor of the ecosystem measures the parameter
         check("temperature", climate_cfg, hardware_cfg)
