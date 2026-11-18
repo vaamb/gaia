@@ -16,7 +16,7 @@ from weakref import WeakValueDictionary
 import gaia_validators as gv
 
 from gaia.exceptions import HardwareNotFound
-from gaia.config import default_actuators
+from gaia.config import defaults
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
 
@@ -899,7 +899,7 @@ class ActuatorHub:
 
         rv = {}
         # TODO: send all actuators (the ones associated with weather events too)
-        for actuator_group in default_actuators.climate_to_group_mapping.values():
+        for actuator_group in defaults.climate_to_group_mapping.values():
             if actuator_group in self._actuator_handlers:
                 rv[actuator_group] = self._actuator_handlers[actuator_group].as_dict()
             else:
@@ -925,7 +925,7 @@ class ActuatorHub:
 
         rv = []
         # TODO: send all actuators (the ones associated with weather events too)
-        for climate_direction, actuator_group in default_actuators.climate_to_group_mapping.items():
+        for climate_direction, actuator_group in defaults.climate_to_group_mapping.items():
             if actuator_group in self._actuator_handlers:
                 rv.append(self._actuator_handlers[actuator_group].as_record(now))
             else:
