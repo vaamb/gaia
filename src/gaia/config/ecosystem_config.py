@@ -238,24 +238,24 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 addresses_used.append(hardware_cfg["address"])
         # Check climate roles (errors)
         climate = ecosystem_cfg["environment"]["climate"]
+        hardware = ecosystem_cfg["hardware"]
         try:
             cls.check_climate_groups(climate)
         except ConfigValidationError as e:
             errors.append(str(e))
-        for hardware_uid, hardware_cfg in ecosystem_cfg["hardware"].items():
+        for hardware_uid, hardware_cfg in hardware.items():
             try:
-                cls.check_hardware_groups(hardware_uid, hardware_cfg, climate)
+                cls.check_hardware_groups_conflict(hardware_uid, hardware_cfg, climate)
             except ConfigValidationError as e:
                 errors.append(str(e))
         # Check climate parameters (warnings)
         for parameter, climate_cfg in climate.items():
             try:
-                cls.check_climate_sensors(parameter, climate_cfg, ecosystem_cfg["hardware"])
+                cls.check_climate_has_sensor(parameter, climate_cfg, hardware)
             except ConfigValidationError as e:
                 warnings.append(f"{e} It will not be regulated.")
             try:
-                cls.check_climate_has_actuator(
-                    parameter, climate_cfg, ecosystem_cfg["hardware"])
+                cls.check_climate_has_actuator(parameter, climate_cfg, hardware)
             except ConfigValidationError as e:
                 warnings.append(f"{e} It will not be regulated.")
         # Check nycthemeral config (warnings)
@@ -922,7 +922,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 self.get_default_climate_linked_actuator(parameter)
         # Make sure the ecosystem can measure the new climate parameter
         try:
-            self.check_climate_sensors(parameter, validated_value, self.hardware_dict)
+            self.check_climate_has_sensor(parameter, validated_value, self.hardware_dict)
         except ConfigValidationError as e:
             self.logger.warning(str(e))
         # Make sure the new climate parameter can act on the ecosystem
@@ -945,7 +945,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if linked_groups.isdisjoint(hardware_cfg["groups"]):
                 continue
             try:
-                self.check_hardware_groups(hardware_uid, hardware_cfg, new_climate)
+                self.check_hardware_groups_conflict(hardware_uid, hardware_cfg, new_climate)
             except ConfigValidationError as e:
                 errors.append(str(e))
         if errors:
@@ -1015,13 +1015,14 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         return rv
 
     @classmethod
-    def check_climate_sensors(
+    def check_climate_has_sensor(
             cls,
             parameter: gv.ClimateParameter,
             climate_cfg: gv.AnonymousClimateConfigDict,
             hardware: dict[str, gv.AnonymousHardwareConfigDict],
     ) -> None:
-        """Check that the ecosystem can "measure" a climate parameter.
+        """Check that a climate parameter has at least one sensor able to
+        measure the regulated climate parameter.
 
         A climate parameter is regulated thanks to the measure it is linked to
         (its own name by default). This method checks that at least one sensor
@@ -1555,7 +1556,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             raise ConfigValidationError(f"Address '{validated_address}' already used.")
 
     @classmethod
-    def check_hardware_groups(
+    def check_hardware_groups_conflict(
             cls,
             uid: str,
             hardware_cfg: gv.AnonymousHardwareConfigDict,
@@ -1630,7 +1631,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         self.check_hardware_address(hardware_dict["address"], self._used_addresses())
         uid = hardware_dict["uid"]
         anonymous_hardware_dict = gv.to_anonymous(hardware_dict, "uid")
-        self.check_hardware_groups(uid, anonymous_hardware_dict, self.climate)
+        self.check_hardware_groups_conflict(uid, anonymous_hardware_dict, self.climate)
         self.hardware_dict[uid] = anonymous_hardware_dict
 
     def update_hardware(
@@ -1662,7 +1663,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         used_addresses = self._used_addresses() if "address" in updating_values else []
         self.check_hardware_address(hardware_dict["address"], used_addresses)
         anonymous_hardware_dict = gv.to_anonymous(hardware_dict, "uid")
-        self.check_hardware_groups(uid, anonymous_hardware_dict, self.climate)
+        self.check_hardware_groups_conflict(uid, anonymous_hardware_dict, self.climate)
         self.hardware_dict[uid] = anonymous_hardware_dict
 
     def delete_hardware(self, uid: str) -> None:
