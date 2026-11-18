@@ -1021,8 +1021,8 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             climate_cfg: gv.AnonymousClimateConfigDict,
             hardware: dict[str, gv.AnonymousHardwareConfigDict],
     ) -> None:
-        """Check that a climate parameter has at least one sensor needed to
-        measure the climate parameter.
+        """Check that a climate parameter has at least one sensor able to
+        measure the regulated climate parameter.
 
         A climate parameter is regulated thanks to the measure it is linked to
         (its own name by default). This method checks that at least one sensor
