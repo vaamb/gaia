@@ -752,15 +752,51 @@ class TestEcosystemConfigClimate:
         with pytest.raises(ConfigValidationError, match=r".*Did you mean 'temperature'\?"):
             check("temprature", climate_cfg, hardware_cfg)
 
-    def test_set_climate_parameter_not_sensed(self, ecosystem_config: EcosystemConfig):
-        climate_before = deepcopy(ecosystem_config.climate)
+    def test_check_climate_has_actuator(self, ecosystem_config: EcosystemConfig):
+        # The ecosystem has a sensor and a humidifier, in the 'fogger' and
+        #  'rainer' groups
+        hardware_cfg = ecosystem_config.hardware_dict
+        check = EcosystemConfig.check_climate_has_actuator
 
-        with pytest.raises(ValueError, match=r"Did you mean 'temperature'\?"):
-            ecosystem_config.set_climate_parameter(
-                "temprature", day=25.0, night=20.0, hysteresis=1.0)
+        # The fogger is there but not the dehumidifier: humidity can still be
+        #  regulated in one direction
+        check("humidity", deepcopy(test_data.humidity_cfg), hardware_cfg)
 
-        # A refused parameter is not stored
-        assert ecosystem_config.climate == climate_before
+        # No hardware in any of its groups: nothing can act on it
+        climate_cfg: gv.AnonymousClimateConfigDict = deepcopy(test_data.temperature_cfg)
+        error_msg = (
+            r"Climate parameter 'temperature' has no actuator: no hardware "
+            r"belongs to 'heater' and 'cooler'\.$"
+        )
+        with pytest.raises(ConfigValidationError, match=error_msg):
+            check("temperature", climate_cfg, hardware_cfg)
+
+        # A parameter without default actuator groups must link one
+        error_msg = r"Climate parameter 'ph' is not linked to any actuator group\."
+        with pytest.raises(ConfigValidationError, match=error_msg):
+            check("ph", climate_cfg, hardware_cfg)
+
+        # A typo in a group name gets a hint
+        linked_actuators: gv.ActuatorCoupleDict = {"increase": "foger", "decrease": None}
+        with pytest.raises(ConfigValidationError, match=r"Did you mean 'fogger'\?"):
+            check("humidity", {**climate_cfg, "linked_actuators": linked_actuators},
+                  hardware_cfg)
+
+    def test_set_climate_parameter_unusable(
+            self,
+            ecosystem_config: EcosystemConfig,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        # A parameter that can't be regulated yet is stored, so the missing
+        #  sensors and actuators can be added afterward ...
+        ecosystem_config.set_climate_parameter(
+            "temprature", day=25.0, night=20.0, hysteresis=1.0)
+        assert ecosystem_config.has_climate_parameter("temprature")
+
+        # ... but the user is warned, with a hint in case of a typo
+        assert "needs sensor measure 'temprature'" in caplog.text
+        assert "Did you mean 'temperature'?" in caplog.text
+        assert "'temprature' is not linked to any actuator group" in caplog.text
 
     def test_update_climate_parameter(self, ecosystem_config: EcosystemConfig):
         # Partial update: only day changes, rest stays the same
@@ -962,10 +998,16 @@ class TestEcosystemConfigHardware:
         valid_dict = deepcopy(ecosystem_config._config_dict)
         issues = EcosystemConfig.check_config_logic(valid_dict, places_dict)
         assert issues.errors == []
-        # No sensor measures "wind": the parameter is kept but reported
+        # No hardware is in the 'heater' and 'cooler' groups, no sensor
+        #  measures "wind" and no hardware is in its 'fan' group: the
+        #  parameters are kept but reported
         assert issues.warnings == [
+            "Climate parameter 'temperature' has no actuator: no hardware belongs "
+            "to 'heater' and 'cooler'. It will not be regulated.",
             "Climate parameter 'wind' needs sensor measure 'wind' but it cannot be "
-            "found. It will not be regulated."
+            "found. It will not be regulated.",
+            "Climate parameter 'wind' has no actuator: no hardware belongs to "
+            "'fan'. It will not be regulated.",
         ]
 
         # Each invalid hardware is reported, the others are still checked

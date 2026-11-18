@@ -253,6 +253,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 cls.check_climate_sensors(parameter, climate_cfg, ecosystem_cfg["hardware"])
             except ConfigValidationError as e:
                 warnings.append(f"{e} It will not be regulated.")
+            try:
+                cls.check_climate_has_actuator(
+                    parameter, climate_cfg, ecosystem_cfg["hardware"])
+            except ConfigValidationError as e:
+                warnings.append(f"{e} It will not be regulated.")
         # Check nycthemeral config (warnings)
         nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
         for method in (nycthemeral_cfg["span"], nycthemeral_cfg["lighting"]):
@@ -916,7 +921,15 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             validated_value["linked_actuators"] = \
                 self.get_default_climate_linked_actuator(parameter)
         # Make sure the ecosystem can measure the new climate parameter
-        self.check_climate_sensors(parameter, validated_value, self.hardware_dict)
+        try:
+            self.check_climate_sensors(parameter, validated_value, self.hardware_dict)
+        except ConfigValidationError as e:
+            self.logger.warning(str(e))
+        # Make sure the new climate parameter can act on the ecosystem
+        try:
+            self.check_climate_has_actuator(parameter, validated_value, self.hardware_dict)
+        except ConfigValidationError as e:
+            self.logger.warning(str(e))
         # Make sure the new climate parameter's actuators have no other
         #  climate role, neither through their group ...
         self.check_climate_actuators(parameter, validated_value, self.climate)
@@ -1032,6 +1045,55 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         raise ConfigValidationError(
             f"Climate parameter '{parameter}' needs sensor measure '{measure}' "
             f"but it cannot be found.{closest_parameter_hint(measure, choices)}"
+        )
+
+    @classmethod
+    def check_climate_has_actuator(
+            cls,
+            parameter: gv.ClimateParameter,
+            climate_cfg: gv.AnonymousClimateConfigDict,
+            hardware: dict[str, gv.AnonymousHardwareConfigDict],
+    ) -> None:
+        """Check that a climate parameter has at least one actuator.
+
+        A climate parameter acts through the actuator groups it is linked to.
+        This method checks that at least one hardware belongs to one of them.
+        A parameter whose actuators are only partly there (a heater but no
+        cooler) still passes: it can be regulated in one direction.
+
+        :param parameter: The climate parameter name.
+        :param climate_cfg: The validated climate config of the parameter.
+        :param hardware: The validated hardware config of the ecosystem.
+        :raises ConfigValidationError: If the parameter is linked to no actuator
+                                       group, or if no hardware belongs to its
+                                       actuator groups.
+        """
+        linked_actuators = climate_cfg.get("linked_actuators")
+        if linked_actuators is None:
+            # The climate config has not been normalized (yet)
+            linked_actuators = cls.get_default_climate_linked_actuator(parameter)
+        linked_groups = [
+            group
+            for group in (linked_actuators["increase"], linked_actuators["decrease"])
+            if group is not None
+        ]
+        if not linked_groups:
+            raise ConfigValidationError(
+                f"Climate parameter '{parameter}' is not linked to any actuator group."
+            )
+        hardware_groups = {
+            group
+            for hardware_cfg in hardware.values()
+            for group in hardware_cfg["groups"]
+        }
+        if not hardware_groups.isdisjoint(linked_groups):
+            return
+        hints = "".join(
+            closest_parameter_hint(group, hardware_groups) for group in linked_groups)
+        groups = humanize_list([f"'{group}'" for group in linked_groups])
+        raise ConfigValidationError(
+            f"Climate parameter '{parameter}' has no actuator: no hardware "
+            f"belongs to {groups}.{hints}"
         )
 
     def get_scaled_climate_target(
