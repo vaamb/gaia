@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+### Added
+- Two weather parameters using the same actuator group are now reported with a warning,
+  when loading `ecosystems.cfg` and when setting a weather parameter, as their events
+  must not overlap. The config is still accepted: comparing cron patterns is left to the
+  user. New `EcosystemConfig.check_weather_actuator_conflict()`
+
 ### Changed
 - `logs/stdout` no longer grows for as long as Gaia runs: when started in the background,
   its output goes through `scripts/utils/ring_log.sh`, which keeps only the last 20 lines.

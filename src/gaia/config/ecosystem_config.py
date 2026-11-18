@@ -258,6 +258,17 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
                 cls.check_climate_has_actuator(parameter, climate_cfg, hardware)
             except ConfigValidationError as e:
                 warnings.append(f"{e} It will not be regulated.")
+        # Check weather parameters (warnings). Each parameter is only checked
+        #  against the previous ones so that each conflict is reported once
+        weather = ecosystem_cfg["environment"]["weather"]
+        checked_weather: dict[gv.WeatherParameter, gv.AnonymousWeatherConfigDict] = {}
+        for parameter, weather_cfg in weather.items():
+            try:
+                cls.check_weather_actuator_conflict(parameter, weather_cfg, checked_weather)
+            except ConfigValidationError as e:
+                warnings.append(f"{e} Make sure their events don't overlap.")
+            finally:
+                checked_weather[parameter] = weather_cfg
         # Check nycthemeral config (warnings)
         nycthemeral_cfg = ecosystem_cfg["environment"]["nycthemeral_cycle"]
         for method in (nycthemeral_cfg["span"], nycthemeral_cfg["lighting"]):
@@ -1170,6 +1181,11 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         if validated_value["linked_actuator"] is None:
             validated_value["linked_actuator"] = \
                 self.get_default_weather_linked_actuator(parameter)
+        # Two weather events sharing an actuator group must not overlap
+        try:
+            self.check_weather_actuator_conflict(parameter, validated_value, self.weather)
+        except ConfigValidationError as e:
+            self.logger.warning(f"{e} Make sure their events don't overlap.")
         self.weather[parameter] = validated_value
 
     def update_weather_parameter(
@@ -1452,6 +1468,48 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             for weather_direction, group in self.weather_direction_to_group.items()
             if group == actuator_group
         ]
+
+    @classmethod
+    def check_weather_actuator_conflict(
+            cls,
+            parameter: gv.WeatherParameter,
+            weather_cfg: gv.AnonymousWeatherConfigDict,
+            weather: dict[gv.WeatherParameter, gv.AnonymousWeatherConfigDict],
+    ) -> None:
+        """Check that no other weather parameter uses the actuator group of a
+        weather parameter.
+
+        Sharing an actuator group is allowed, but two events running at the
+        same time would fight over it. As cron patterns cannot easily be
+        compared, it is up to the user to make sure the events don't overlap.
+
+        :param parameter: The weather parameter name.
+        :param weather_cfg: The validated weather config of the parameter.
+        :param weather: The weather config of the ecosystem. `parameter` is
+                        skipped if present.
+        :raises ConfigValidationError: If another weather parameter uses the
+                                       same actuator group.
+        """
+        actuator_group = weather_cfg.get("linked_actuator")
+        if actuator_group is None:
+            # The weather config has not been normalized (yet)
+            actuator_group = cls.get_default_weather_linked_actuator(parameter)
+        if actuator_group is None:
+            return
+        others: list[str] = []
+        for other_parameter, other_cfg in weather.items():
+            if other_parameter == parameter:
+                continue
+            other_group = other_cfg.get("linked_actuator")
+            if other_group is None:
+                other_group = cls.get_default_weather_linked_actuator(other_parameter)
+            if other_group == actuator_group:
+                others.append(f"'{other_parameter}'")
+        if others:
+            raise ConfigValidationError(
+                f"Weather parameter '{parameter}' uses actuator group "
+                f"'{actuator_group}', as {humanize_list(others)}."
+            )
 
     # ---------------------------------------------------------------------------
     #   Hardware parameters
