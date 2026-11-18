@@ -923,6 +923,44 @@ class TestEcosystemConfigWeather:
             "storm", **{**test_data.rain_cfg, "linked_actuator": None})
         assert ("storm", "increase") not in ecosystem_config.weather_direction_to_group
 
+    def test_check_weather_actuator_conflict(self, ecosystem_config: EcosystemConfig):
+        # 'rain' uses the 'rainer' group
+        weather = ecosystem_config.weather
+        check = EcosystemConfig.check_weather_actuator_conflict
+        fog_cfg: gv.AnonymousWeatherConfigDict = {
+            **test_data.rain_cfg, "linked_actuator": "fogger"}
+
+        # Different groups don't conflict, and a parameter doesn't conflict
+        #  with its own previous config
+        check("fog", fog_cfg, weather)
+        check("rain", test_data.rain_cfg, weather)
+
+        # Sharing a group could make two events fight over it
+        error_msg = r"Weather parameter 'fog' uses actuator group 'rainer', as 'rain'\.$"
+        with pytest.raises(ConfigValidationError, match=error_msg):
+            check("fog", {**fog_cfg, "linked_actuator": "rainer"}, weather)
+
+        # A config that has not been normalized falls back on the default group
+        with pytest.raises(ConfigValidationError, match=r"'fogger', as 'mist'"):
+            check("fog", {**fog_cfg, "linked_actuator": None}, {"mist": fog_cfg})
+        with pytest.raises(ConfigValidationError, match=r"'fogger', as 'fog'"):
+            check("mist", fog_cfg, {"fog": {**fog_cfg, "linked_actuator": None}})
+
+        # A parameter without actuator group can't conflict
+        check("storm", {**fog_cfg, "linked_actuator": None}, {"mist": fog_cfg})
+
+    def test_set_weather_parameter_shared_actuator(
+            self,
+            ecosystem_config: EcosystemConfig,
+            caplog: pytest.LogCaptureFixture,
+    ):
+        # Sharing an actuator group is allowed, but the user is warned to
+        #  avoid overlapping events
+        ecosystem_config.set_weather_parameter("fog", **test_data.rain_cfg)
+        assert ecosystem_config.weather["fog"]["linked_actuator"] == "rainer"
+        assert "'fog' uses actuator group 'rainer', as 'rain'" in caplog.text
+        assert "Make sure their events don't overlap." in caplog.text
+
         ecosystem_config.delete_weather_parameter("fog")
         assert ("fog", "increase") not in ecosystem_config.weather_direction_to_group
 
@@ -1035,6 +1073,18 @@ class TestEcosystemConfigHardware:
         issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
         assert len(issues.errors) == 1
         assert re.search(r"Hardware 'VirtualHumidifier' .* belongs .*fogger.*heater", issues.errors[0])
+
+        # Weather parameters sharing an actuator group are only reported, once
+        #  per conflict
+        shared_dict = deepcopy(valid_dict)
+        shared_dict["environment"]["weather"]["fog"] = deepcopy(test_data.rain_cfg)
+        issues = EcosystemConfig.check_config_logic(shared_dict, places_dict)
+        assert issues.errors == []
+        assert issues.warnings[-1] == (
+            "Weather parameter 'fog' uses actuator group 'rainer', as 'rain'. "
+            "Make sure their events don't overlap."
+        )
+        assert len(issues.warnings) == 4
 
     def test_check_config_logic_default_actuators(self, ecosystem_config: EcosystemConfig):
         places_dict = ecosystem_config.general.private_config["places"]
