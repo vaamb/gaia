@@ -107,7 +107,7 @@ class HystericalPID:
         if self._direction is not None:
             return self._direction
         direction: Direction = Direction.none
-        climate_to_group = self.actuator_hub.ecosystem.config.get_climate_direction_to_group()
+        climate_to_group = self.actuator_hub.ecosystem.config.climate_direction_to_group
         for direction_name in ("increase", "decrease"):
             try:
                 actuator_group = climate_to_group[(self.climate_parameter, direction_name)]
@@ -839,11 +839,10 @@ class ActuatorHub:
             return gv.HardwareType.actuator
 
     def _get_actuator_direction(self, actuator_group: str) -> Direction:
-        climate_direction = self.config.get_group_to_climate_direction(actuator_group)
+        climate_direction = self.config.get_climate_direction(actuator_group)
         if climate_direction is not None:
             return Direction[climate_direction[1]]
-        weather_direction = self.config.get_group_to_weather_direction(actuator_group)
-        if weather_direction:
+        if self.config.get_weather_directions(actuator_group):
             # Weather parameter only act on "increase" actuators
             return Direction.increase
         raise HardwareNotFound(
@@ -851,9 +850,9 @@ class ActuatorHub:
         )
 
     def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
-        climate_direction = self.config.get_group_to_climate_direction(actuator_group)
+        climate_direction = self.config.get_climate_direction(actuator_group)
         if climate_direction is None:
-            if not self.config.get_group_to_weather_direction(actuator_group):
+            if not self.config.get_weather_directions(actuator_group):
                 raise ValueError(
                     f"Actuator group '{actuator_group}' has no environment parameter "
                     f"attached to it."

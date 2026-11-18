@@ -352,6 +352,8 @@ class TestCRUDManagement:
 
 
 @pytest.mark.asyncio
+# Climate parameters need a sensor measuring them
+@with_hardware({test_data.sensor_uid: test_data.sensor_info})
 class TestCRUDClimateParameter:
     async def test_create(
             self,

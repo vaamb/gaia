@@ -295,11 +295,23 @@ class TestOnEvent:
         assert get_uid(payload) == test_data.ecosystem_uid
         data = get_data(payload)
         temperature = get_climate_cfg(data, "temperature")
-        assert temperature == {**test_data.temperature_cfg, "parameter": "temperature"}
+        assert temperature == {
+            **test_data.temperature_cfg, 
+            "parameter": "temperature",
+            "linked_actuators": {"decrease": "cooler", "increase": "heater"},
+        }
         humidity = get_climate_cfg(data, "humidity")
-        assert humidity == {**test_data.humidity_cfg, "parameter": "humidity"}
+        assert humidity == {
+            **test_data.humidity_cfg, 
+            "parameter": "humidity",
+            "linked_actuators": {"decrease": "dehumidifier", "increase": "fogger"},
+        }
         wind = get_climate_cfg(data, "wind")
-        assert wind == {**test_data.wind_cfg, "parameter": "wind"}
+        assert wind == {
+            **test_data.wind_cfg,
+            "parameter": "wind",
+            "linked_actuators": {"decrease": None, "increase": "fan"},
+        }
 
         """Weather payload"""
         payload = responses.popleft()

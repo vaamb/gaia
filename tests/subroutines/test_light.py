@@ -1,5 +1,3 @@
-from datetime import time
-
 import pytest
 
 import gaia_validators as gv
@@ -31,6 +29,17 @@ class TestLightSubroutine:
     async def test_hardware_needed(self, light_subroutine: Light):
         uids = light_subroutine.get_hardware_needed_uid()
         assert uids == {test_data.light_uid}
+
+    async def test_actuator_group_unlinked(self, ecosystem: Ecosystem, light_subroutine: Light):
+        # The subroutine cannot run without an actuator group: the config
+        #  keeps the default one when the lights are unlinked
+        ecosystem.config.set_climate_parameter(
+            "light", day=250_000, night=0, hysteresis=10_000,
+            linked_actuators={"increase": None, "decrease": None},
+        )
+
+        assert light_subroutine.get_hardware_needed_uid() == {test_data.light_uid}
+        assert "light" in ecosystem.config.get_valid_actuator_groups()
 
     async def test_turn_light(self, light_subroutine: Light):
         with pytest.raises(RuntimeError, match=r"Light subroutine is not started"):

@@ -529,9 +529,10 @@ class TestEcosystemConfigGeneralEnvironment:
         assert not ecosystem_config.is_lighting_needed(now)
 
 
+@with_hardware(hardware_dict)  # Climate parameters need a sensor measuring them
 class TestEcosystemConfigActuators:
     def test_actuator_couples(self, ecosystem_config: EcosystemConfig):
-        actuators_mapping = ecosystem_config.get_climate_direction_to_group()
+        actuators_mapping = ecosystem_config.climate_direction_to_group
 
         # Test with a parameter that has an actuator override
         assert actuators_mapping[("humidity", "increase")] == "fogger"
@@ -540,6 +541,133 @@ class TestEcosystemConfigActuators:
         # Test with a parameter that uses default actuators
         assert actuators_mapping[("wind", "increase")] == "fan"
         assert actuators_mapping.get(("wind", "decrease")) is None
+
+    def test_actuator_couples_disabled_direction(self, ecosystem_config: EcosystemConfig):
+        # A direction set to `None` has no actuator, it doesn't fall back to the
+        #  default one
+        ecosystem_config.update_climate_parameter(
+            "temperature", linked_actuators={"increase": "heater", "decrease": None})
+
+        actuators_mapping = ecosystem_config.climate_direction_to_group
+        assert actuators_mapping[("temperature", "increase")] == "heater"
+        assert ("temperature", "decrease") not in actuators_mapping
+        assert "cooler" not in ecosystem_config.get_valid_actuator_groups()
+
+    def test_actuator_couples_unconfigured_parameter(self, ecosystem_config: EcosystemConfig):
+        # A parameter that is not configured has no actuator group ...
+        ecosystem_config.delete_climate_parameter("temperature")
+
+        actuators_mapping = ecosystem_config.climate_direction_to_group
+        assert ("temperature", "increase") not in actuators_mapping
+        assert "heater" not in ecosystem_config.get_valid_actuator_groups()
+        # ... so its default groups are free to serve another parameter ...
+        ecosystem_config.update_climate_parameter(
+            "humidity", linked_actuators={"increase": "fogger", "decrease": "cooler"})
+        assert ecosystem_config.get_climate_direction("cooler") == \
+               ("humidity", "decrease")
+        # ... except for light, for which one is always provided so the `Light`
+        #  subroutine can work natively
+        assert not ecosystem_config.has_climate_parameter("light")
+        assert actuators_mapping[("light", "increase")] == "light"
+
+    def test_check_climate_actuators(self, ecosystem_config: EcosystemConfig):
+        climate = ecosystem_config.climate
+        check = EcosystemConfig.check_climate_actuators
+        temperature_cfg = deepcopy(climate["temperature"])
+
+        # A parameter doesn't conflict with its own current config
+        check("temperature", temperature_cfg, climate)
+
+        # A group serving another role is refused, and that role is named
+        temperature_cfg["linked_actuators"] = {"increase": "fogger", "decrease": "cooler"}
+        with pytest.raises(
+                ConfigValidationError,
+                match=r"'temperature' \(increase\) cannot be linked to actuator group "
+                      r"'fogger', which already serves 'humidity' \(increase\)",
+        ):
+            check("temperature", temperature_cfg, climate)
+
+        # Both directions of a parameter can't share a group, reported once
+        temperature_cfg["linked_actuators"] = {"increase": "heater", "decrease": "heater"}
+        with pytest.raises(ConfigValidationError) as exc_info:
+            check("temperature", temperature_cfg, climate)
+        assert str(exc_info.value).count("cannot be linked") == 1
+        assert "already serves 'temperature' (decrease)" in str(exc_info.value)
+
+        # `light` always has a group, even when it is not configured ...
+        temperature_cfg["linked_actuators"] = {"increase": "light", "decrease": None}
+        with pytest.raises(ConfigValidationError, match=r"already serves 'light' \(increase\)"):
+            check("temperature", temperature_cfg, climate)
+
+        # ... which configuring `light` replaces rather than conflicts with
+        assert "light" not in climate
+        light_cfg: gv.AnonymousClimateConfigDict = {
+            **test_data.temperature_cfg,
+            "linked_actuators": {"increase": "light", "decrease": None},
+        }
+        check("light", light_cfg, climate)
+
+    def test_check_hardware_groups(self, ecosystem_config: EcosystemConfig):
+        climate = ecosystem_config.climate
+        check = EcosystemConfig.check_hardware_groups
+        uid = test_data.humidifier_uid
+        hardware_cfg = deepcopy(ecosystem_config.hardware_dict[uid])
+
+        # 'rainer' only has a weather role, so it can share a hardware with
+        #  'fogger'
+        check(uid, hardware_cfg, climate)
+
+        # Two groups with a climate role can't share a hardware
+        hardware_cfg["groups"] = ["fogger", "heater"]
+        with pytest.raises(
+                ConfigValidationError,
+                match=rf"Hardware 'VirtualHumidifier' \({uid}\) belongs to more than "
+                      r"one actuator group with a climate role: 'fogger' \('humidity' "
+                      r"\(increase\)\) and 'heater' \('temperature' \(increase\)\)",
+        ):
+            check(uid, hardware_cfg, climate)
+
+    def test_set_climate_parameter_climate_role(self, ecosystem_config: EcosystemConfig):
+        climate_before = deepcopy(ecosystem_config.climate)
+
+        # Conflict through the actuator group ...
+        with pytest.raises(ConfigValidationError, match=r"already serves 'humidity'"):
+            ecosystem_config.update_climate_parameter(
+                "temperature", linked_actuators={"increase": "fogger", "decrease": "cooler"})
+
+        # ... or through another group of the same hardware: 'VirtualHumidifier'
+        #  is both a 'fogger' and a 'rainer'
+        with pytest.raises(ConfigValidationError, match=r"Hardware 'VirtualHumidifier'"):
+            ecosystem_config.update_climate_parameter(
+                "temperature", linked_actuators={"increase": "heater", "decrease": "rainer"})
+
+        # A refused parameter is not stored
+        assert ecosystem_config.climate == climate_before
+
+        # Only the hardware in the parameter's groups is checked: an existing
+        #  conflict elsewhere doesn't block it
+        ecosystem_config.hardware_dict[test_data.humidifier_uid]["groups"] = \
+            ["fogger", "dehumidifier"]
+        ecosystem_config.update_climate_parameter(
+            "temperature", linked_actuators={"increase": "heater", "decrease": "cooler"})
+
+    def test_hardware_climate_role(self, ecosystem_config: EcosystemConfig):
+        hardware_before = deepcopy(ecosystem_config.hardware_dict)
+
+        with pytest.raises(ConfigValidationError, match=r"Hardware 'NewHeater'"):
+            ecosystem_config.create_new_hardware(**{
+                **test_data.heater_info,
+                "name": "NewHeater",
+                "address": "GPIO_11",  # Use a free address
+                "groups": ["heater", "cooler"],
+            })
+
+        with pytest.raises(ConfigValidationError, match=r"Hardware 'VirtualHumidifier'"):
+            ecosystem_config.update_hardware(
+                test_data.humidifier_uid, groups=["fogger", "dehumidifier"])
+
+        # A refused hardware is not stored
+        assert ecosystem_config.hardware_dict == hardware_before
 
     def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
         valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()
@@ -552,15 +680,18 @@ class TestEcosystemConfigActuators:
         }
 
 
+@with_hardware(hardware_dict)  # Climate parameters need a sensor measuring them
 class TestEcosystemConfigClimate:
     def test_get_climate_parameter(self, ecosystem_config: EcosystemConfig):
-        result = ecosystem_config.get_climate_parameter("temperature")
-        assert result == gv.ClimateConfig(
-            parameter="temperature", **test_data.temperature_cfg)
+        result = ecosystem_config.get_climate_config("temperature")
+        temperature_cfg = test_data.temperature_cfg.copy()
+        # Default actuator groups are injected when validating the config
+        temperature_cfg["linked_actuators"] = gv.ActuatorCouple(increase="heater", decrease="cooler")
+        assert result == gv.ClimateConfig(parameter="temperature", **temperature_cfg)
 
     def test_get_climate_parameter_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.get_climate_parameter("light")
+            ecosystem_config.get_climate_config("light")
 
     def test_set_climate_parameter(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError):
@@ -573,13 +704,68 @@ class TestEcosystemConfigClimate:
         }
         ecosystem_config.set_climate_parameter("light", **param_cfg)
 
-        result = ecosystem_config.get_climate_parameter("light")
-        assert result == gv.ClimateConfig(parameter="light", **param_cfg)
+        # The default linked actuators are injected when none are given
+        result = ecosystem_config.get_climate_config("light")
+        assert result == gv.ClimateConfig(
+            parameter="light",
+            linked_actuators={"increase": "light", "decrease": None},
+            **param_cfg,
+        )
+
+        # Explicit linked actuators are kept as is, `None` directions included
+        linked_actuators = {"increase": "led", "decrease": None}
+        ecosystem_config.set_climate_parameter(
+            "light", linked_actuators=linked_actuators, **param_cfg)
+        result = ecosystem_config.get_climate_config("light")
+        assert result.linked_actuators.model_dump() == linked_actuators
+
+    def test_check_climate_parameter(self, ecosystem_config: EcosystemConfig):
+        hardware_cfg = ecosystem_config.hardware_dict
+        climate_cfg: gv.AnonymousClimateConfigDict = deepcopy(test_data.temperature_cfg)
+        check = EcosystemConfig.check_climate_sensors
+
+        # A sensor of the ecosystem measures the parameter
+        check("temperature", climate_cfg, hardware_cfg)
+
+        # `light` is managed by the `Light` subroutine, which can work without a sensor
+        check("light", climate_cfg, hardware_cfg)
+        check("light", climate_cfg, {})
+
+        # Without sensor, nothing can be regulated ...
+        error_msg = r"Climate parameter 'temperature' needs sensor measure 'temperature'.*"
+        with pytest.raises(ConfigValidationError, match=error_msg):
+            check("temperature", climate_cfg, {})
+
+        # ... and a sensor without configured measures uses the default ones from its model
+        sensor_cfg: gv.AnonymousHardwareConfigDict = deepcopy(hardware_cfg[test_data.sensor_uid])
+        sensor_cfg["measures"] = []
+        check("temperature", climate_cfg, {test_data.sensor_uid: sensor_cfg})
+
+        # A non-default parameter is usable if it provides a sensed "linked_measure"
+        check("air_temperature", {**climate_cfg, "linked_measure": "temperature"}, hardware_cfg)
+
+        error_msg = r"Climate parameter 'water_ph' needs sensor measure 'ph'.*"
+        with pytest.raises(ConfigValidationError, match=error_msg):
+            check("water_ph", {**climate_cfg, "linked_measure": "ph"}, hardware_cfg)
+
+        # A typo is not sensed by any sensor, and gets a hint
+        with pytest.raises(ConfigValidationError, match=r".*Did you mean 'temperature'\?"):
+            check("temprature", climate_cfg, hardware_cfg)
+
+    def test_set_climate_parameter_not_sensed(self, ecosystem_config: EcosystemConfig):
+        climate_before = deepcopy(ecosystem_config.climate)
+
+        with pytest.raises(ValueError, match=r"Did you mean 'temperature'\?"):
+            ecosystem_config.set_climate_parameter(
+                "temprature", day=25.0, night=20.0, hysteresis=1.0)
+
+        # A refused parameter is not stored
+        assert ecosystem_config.climate == climate_before
 
     def test_update_climate_parameter(self, ecosystem_config: EcosystemConfig):
         # Partial update: only day changes, rest stays the same
         ecosystem_config.update_climate_parameter("temperature", day=50.0)
-        updated = ecosystem_config.get_climate_parameter("temperature")
+        updated = ecosystem_config.get_climate_config("temperature")
         assert updated.day == 50.0
         assert updated.night == test_data.temperature_cfg["night"]
 
@@ -590,7 +776,7 @@ class TestEcosystemConfigClimate:
         ecosystem_config.delete_climate_parameter("temperature")
 
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.get_climate_parameter("temperature")
+            ecosystem_config.get_climate_config("temperature")
 
         with pytest.raises(UndefinedParameter):
             ecosystem_config.delete_climate_parameter("temperature")
@@ -608,12 +794,12 @@ class TestEcosystemConfigClimate:
 
 class TestEcosystemConfigWeather:
     def test_get_weather_parameter(self, ecosystem_config: EcosystemConfig):
-        result = ecosystem_config.get_weather_parameter("rain")
+        result = ecosystem_config.get_weather_config("rain")
         assert result == gv.WeatherConfig(parameter="rain", **test_data.rain_cfg)
 
     def test_get_weather_parameter_not_found(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.get_weather_parameter("fog")
+            ecosystem_config.get_weather_config("fog")
 
     def test_set_weather_parameter(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError):
@@ -627,13 +813,34 @@ class TestEcosystemConfigWeather:
         }
         ecosystem_config.set_weather_parameter("fog", **param_cfg)
 
-        result = ecosystem_config.get_weather_parameter("fog")
+        result = ecosystem_config.get_weather_config("fog")
         assert result == gv.WeatherConfig(parameter="fog", **param_cfg)
+
+    def test_set_weather_parameter_default_linked_actuator(
+            self,
+            ecosystem_config: EcosystemConfig,
+    ):
+        param_cfg = {"pattern": "0 6 * * *", "duration": 60, "level": 50.0}
+
+        # Without a linked actuator, the default one is written in the config ...
+        ecosystem_config.set_weather_parameter("fog", **param_cfg)
+        assert ecosystem_config.weather["fog"]["linked_actuator"] == "fogger"
+
+        ecosystem_config.set_weather_parameter("wind_gust", linked_actuator=None, **param_cfg)
+        assert ecosystem_config.weather["wind_gust"]["linked_actuator"] == "fan"
+
+        # ... a given one is kept ...
+        ecosystem_config.update_weather_parameter("fog", linked_actuator="mister")
+        assert ecosystem_config.weather["fog"]["linked_actuator"] == "mister"
+
+        # ... and a parameter without default actuator group stays without any
+        ecosystem_config.set_weather_parameter("storm", **param_cfg)
+        assert ecosystem_config.weather["storm"]["linked_actuator"] is None
 
     def test_update_weather_parameter(self, ecosystem_config: EcosystemConfig):
         # Partial update: only duration changes, rest stays the same
         ecosystem_config.update_weather_parameter("rain", duration=60)
-        updated = ecosystem_config.get_weather_parameter("rain")
+        updated = ecosystem_config.get_weather_config("rain")
         assert updated.duration == 60
         assert updated.level == test_data.rain_cfg["level"]
 
@@ -644,15 +851,44 @@ class TestEcosystemConfigWeather:
         ecosystem_config.delete_weather_parameter("rain")
 
         with pytest.raises(UndefinedParameter):
-            ecosystem_config.get_weather_parameter("rain")
+            ecosystem_config.get_weather_config("rain")
 
         with pytest.raises(UndefinedParameter):
             ecosystem_config.delete_weather_parameter("rain")
 
     def test_get_weather_actuators(self, ecosystem_config: EcosystemConfig):
-        weather_to_group = ecosystem_config.get_weather_direction_to_group()
+        weather_to_group = ecosystem_config.weather_direction_to_group
         assert weather_to_group.get(("rain", "increase")) == "rainer"
         assert weather_to_group.get(("rain", "decrease")) is None
+
+    def test_get_weather_actuators_only_configured(
+            self,
+            ecosystem_config: EcosystemConfig,
+    ):
+        # Only the configured weather parameters have an actuator group: the
+        #  default groups of "fog" and "wind_gust" are not in use
+        assert ecosystem_config.weather_direction_to_group == {
+            ("rain", "increase"): "rainer",
+        }
+
+        ecosystem_config.set_weather_parameter("fog", **test_data.rain_cfg)
+        assert ecosystem_config.weather_direction_to_group == {
+            ("rain", "increase"): "rainer",
+            ("fog", "increase"): "rainer",
+        }
+
+        # A config that has not been normalized falls back on the default group
+        ecosystem_config.weather["fog"]["linked_actuator"] = None
+        weather_to_group = ecosystem_config.weather_direction_to_group
+        assert weather_to_group[("fog", "increase")] == "fogger"
+
+        # A parameter without linked actuator nor default group has no actuator group
+        ecosystem_config.set_weather_parameter(
+            "storm", **{**test_data.rain_cfg, "linked_actuator": None})
+        assert ("storm", "increase") not in ecosystem_config.weather_direction_to_group
+
+        ecosystem_config.delete_weather_parameter("fog")
+        assert ("fog", "increase") not in ecosystem_config.weather_direction_to_group
 
 
 @with_hardware(hardware_dict)
@@ -675,6 +911,39 @@ class TestEcosystemConfigHardware:
         assert set(normalized) == expected_keys
         assert set(hardware[test_data.humidifier_uid]) == expected_hardware_keys
 
+    def test_normalize_config_dict_linked_actuators(self, ecosystem_config: EcosystemConfig):
+        raw_dict = deepcopy(ecosystem_config._config_dict)
+        climate = raw_dict["environment"]["climate"]
+        climate["temperature"]["linked_actuators"] = None
+        climate["wind"]["linked_actuators"] = {"increase": None, "decrease": None}
+        humidity_linked_actuators = deepcopy(climate["humidity"]["linked_actuators"])
+
+        climate = EcosystemConfig.normalize_config_dict(raw_dict)["environment"]["climate"]
+
+        # Missing linked actuators are replaced by the default ones ...
+        assert climate["temperature"]["linked_actuators"] == {
+            "increase": "heater",
+            "decrease": "cooler",
+        }
+        # ... while the ones provided are left untouched, even when they
+        #  unlink all the actuators
+        assert climate["wind"]["linked_actuators"] == {"increase": None, "decrease": None}
+        assert climate["humidity"]["linked_actuators"] == humidity_linked_actuators
+
+    def test_normalize_config_dict_linked_actuator(self, ecosystem_config: EcosystemConfig):
+        raw_dict = deepcopy(ecosystem_config._config_dict)
+        weather = raw_dict["environment"]["weather"]
+        weather["rain"]["linked_actuator"] = None
+        weather["fog"] = {**test_data.rain_cfg, "linked_actuator": "mister"}
+        weather["storm"] = {**test_data.rain_cfg, "linked_actuator": None}
+
+        weather = EcosystemConfig.normalize_config_dict(raw_dict)["environment"]["weather"]
+
+        # Only a missing linked actuator is replaced by the default one, if any
+        assert weather["rain"]["linked_actuator"] == "rainer"
+        assert weather["fog"]["linked_actuator"] == "mister"
+        assert weather["storm"]["linked_actuator"] is None
+
     def test_normalize_config_dict_fail(self, ecosystem_config: EcosystemConfig):
         invalid_dict = deepcopy(ecosystem_config._config_dict)
         invalid_dict["hardware"][test_data.sensor_uid]["model"] = "Invalid"
@@ -692,7 +961,12 @@ class TestEcosystemConfigHardware:
         places_dict = ecosystem_config.general.private_config["places"]
         valid_dict = deepcopy(ecosystem_config._config_dict)
         issues = EcosystemConfig.check_config_logic(valid_dict, places_dict)
-        assert issues.warnings == issues.errors == []
+        assert issues.errors == []
+        # No sensor measures "wind": the parameter is kept but reported
+        assert issues.warnings == [
+            "Climate parameter 'wind' needs sensor measure 'wind' but it cannot be "
+            "found. It will not be regulated."
+        ]
 
         # Each invalid hardware is reported, the others are still checked
         invalid_dict = deepcopy(valid_dict)
@@ -700,7 +974,43 @@ class TestEcosystemConfigHardware:
         invalid_dict["hardware"][test_data.humidifier_uid]["address"] = sensor_address
         issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
         assert len(issues.errors) == 1
-        assert re.search(r"hardware 'VirtualHumidifier'.*already used", issues.errors[0])
+        assert re.search(r"Hardware 'VirtualHumidifier'.*already used", issues.errors[0])
+
+        # Climate roles are checked too. 'fogger' would increase both humidity
+        #  and temperature
+        invalid_dict = deepcopy(valid_dict)
+        invalid_dict["environment"]["climate"]["temperature"]["linked_actuators"] = {
+            "increase": "fogger",
+            "decrease": "cooler",
+        }
+        issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
+        assert len(issues.errors) == 1
+        assert re.search(r"Actuator group 'fogger' is linked .*and.*", issues.errors[0])
+
+        # ... on the hardware side too
+        invalid_dict = deepcopy(valid_dict)
+        invalid_dict["hardware"][test_data.humidifier_uid]["groups"] = ["fogger", "heater"]
+        issues = EcosystemConfig.check_config_logic(invalid_dict, places_dict)
+        assert len(issues.errors) == 1
+        assert re.search(r"Hardware 'VirtualHumidifier' .* belongs .*fogger.*heater", issues.errors[0])
+
+    def test_check_config_logic_default_actuators(self, ecosystem_config: EcosystemConfig):
+        places_dict = ecosystem_config.general.private_config["places"]
+        config_dict = EcosystemConfig.normalize_config_dict(
+            deepcopy(ecosystem_config._config_dict))
+        climate = config_dict["environment"]["climate"]
+
+        # Using 'fan' as a cooler conflicts with the default actuators of wind ...
+        climate["temperature"]["linked_actuators"]["decrease"] = "fan"
+        issues = EcosystemConfig.check_config_logic(config_dict, places_dict)
+        assert len(issues.errors) == 1
+        assert re.search(
+            r"Actuator group 'fan' is linked to .*temperature.*wind", issues.errors[0])
+
+        # ... which can be unlinked now that they are part of the config
+        climate["wind"]["linked_actuators"]["increase"] = None
+        issues = EcosystemConfig.check_config_logic(config_dict, places_dict)
+        assert issues.errors == []
 
     def test_create_fail_address(self, ecosystem_config: EcosystemConfig):
         with pytest.raises(ValueError, match=r"Address .* already used"):

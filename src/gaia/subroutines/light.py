@@ -133,7 +133,7 @@ class Light(SubroutineTemplate[Actuator]):
 
     """Routine specific methods"""
     def _get_actuator_group(self) -> str:
-        climate_to_group = self.config.get_climate_direction_to_group()
+        climate_to_group = self.config.climate_direction_to_group
         return climate_to_group[("light", "increase")]
 
     def get_actuator_handler(self) -> ActuatorHandler:
