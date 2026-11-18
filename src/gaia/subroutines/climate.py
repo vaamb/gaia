@@ -7,7 +7,7 @@ from typing import Type
 import gaia_validators as gv
 
 from gaia.actuator_handler import HystericalPID
-from gaia.config.default_actuators import Direction, ClimateDirection
+from gaia.config.defaults import Direction, ClimateDirection
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Actuator
 from gaia.subroutines.template import SubroutineTemplate

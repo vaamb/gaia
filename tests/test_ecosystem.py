@@ -4,7 +4,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem, EcosystemConfig, Engine
-from gaia.config import default_actuators
+from gaia.config import defaults
 from gaia.exceptions import HardwareNotFound, SubroutineNotFound
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import _MetaHardware
@@ -193,7 +193,7 @@ class TestEcosystem:
 
     async def test_actuators_data(self, ecosystem: Ecosystem):
         actuator_states = ecosystem.actuator_hub.as_dict()
-        assert len(actuator_states) == len(default_actuators.climate_to_group_mapping)
+        assert len(actuator_states) == len(defaults.climate_to_group_mapping)
         for actuator in actuator_states.values():
             assert not actuator["active"]
             assert not actuator["status"]

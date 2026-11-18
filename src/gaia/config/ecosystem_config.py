@@ -14,8 +14,8 @@ from pydantic import TypeAdapter
 import gaia_validators as gv
 from gaia_validators import safe_enum_from_name
 
-from gaia.config import default_actuators
-from gaia.config.default_actuators import ClimateDirection, Direction, WeatherDirection
+from gaia.config import defaults
+from gaia.config.defaults import ClimateDirection, Direction, WeatherDirection
 from gaia.config.helpers import (
     closest_parameter_hint, format_pydantic_error, remove_missing, to_dt)
 from gaia.config.models import (
@@ -1053,7 +1053,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         sensed_measures = cls._get_sensed_measures(hardware)
         if measure in sensed_measures:
             return
-        choices = {*default_actuators.DEFAULT_CLIMATE_PARAMETERS, *sensed_measures}
+        choices = {*defaults.DEFAULT_CLIMATE_PARAMETERS, *sensed_measures}
         raise ConfigValidationError(
             f"Climate parameter '{parameter}' needs sensor measure '{measure}' "
             f"but it cannot be found.{closest_parameter_hint(measure, choices)}"
@@ -1253,10 +1253,9 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :return: The default actuator group of each direction, None when the
                  parameter has no default actuator group for this direction.
         """
-        defaults = default_actuators.climate_to_group_mapping
         return {
-            "increase": defaults.get((parameter, "increase")),
-            "decrease": defaults.get((parameter, "decrease")),
+            "increase": defaults.climate_to_group_mapping.get((parameter, "increase")),
+            "decrease": defaults.climate_to_group_mapping.get((parameter, "decrease")),
         }
 
     @classmethod
@@ -1288,7 +1287,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         #  default actuator group
         light_direction: ClimateDirection = ("light", "increase")
         if light_direction not in rv:
-            rv[light_direction] = default_actuators.climate_to_group_mapping[light_direction]
+            rv[light_direction] = defaults.climate_to_group_mapping[light_direction]
         return rv
 
     @property
@@ -1433,7 +1432,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         :return: The default actuator group, None when the parameter has no
                  default actuator group.
         """
-        return default_actuators.weather_to_group_mapping.get((parameter, "increase"))
+        return defaults.weather_to_group_mapping.get((parameter, "increase"))
 
     @property
     def weather_direction_to_group(self) -> dict[WeatherDirection, str]:
