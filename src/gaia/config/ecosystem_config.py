@@ -240,7 +240,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         climate = ecosystem_cfg["environment"]["climate"]
         hardware = ecosystem_cfg["hardware"]
         try:
-            cls.check_climate_groups(climate)
+            cls.check_climate_conflicts(climate)
         except ConfigValidationError as e:
             errors.append(str(e))
         for hardware_uid, hardware_cfg in hardware.items():
@@ -943,7 +943,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             self.logger.warning(str(e))
         # Make sure the new climate parameter's actuators have no other
         #  climate role, neither through their group ...
-        self.check_climate_actuators(parameter, validated_value, self.climate)
+        self.check_climate_actuators_conflict(parameter, validated_value, self.climate)
         # ... nor through another group of their hardware. Only the hardware in
         #  the parameter's linked groups can gain a conflict
         new_climate = {**self.climate, parameter: validated_value}
@@ -1336,7 +1336,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         ])
 
     @classmethod
-    def check_climate_groups(
+    def check_climate_conflicts(
             cls,
             climate: dict[gv.ClimateParameter, gv.AnonymousClimateConfigDict],
     ) -> None:
@@ -1372,7 +1372,7 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             )
 
     @classmethod
-    def check_climate_actuators(
+    def check_climate_actuators_conflict(
             cls,
             parameter: gv.ClimateParameter,
             climate_cfg: gv.AnonymousClimateConfigDict,
