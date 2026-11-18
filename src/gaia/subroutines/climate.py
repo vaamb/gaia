@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, time
 from time import monotonic
 import typing as t
-from typing import Literal, Type, TypeAlias
+from typing import Type
 
 import gaia_validators as gv
 
 from gaia.actuator_handler import HystericalPID
+from gaia.config.default_actuators import Direction, ClimateDirection
 from gaia.hardware import actuator_models
 from gaia.hardware.abc import Actuator
 from gaia.subroutines.template import SubroutineTemplate
@@ -18,16 +18,7 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from gaia.subroutines.sensors import Sensors
 
 
-Direction = Literal["increase", "decrease"]
-ClimateDirection: TypeAlias = tuple[gv.ClimateParameter, Direction]
-
-
 MISSES_BEFORE_STOP = 5
-
-REGULABLE_PARAMETERS: list[gv.ClimateParameter] = [
-    gv.ClimateParameter.temperature,
-    gv.ClimateParameter.humidity,
-]
 
 
 class Climate(SubroutineTemplate[Actuator]):
@@ -76,7 +67,10 @@ class Climate(SubroutineTemplate[Actuator]):
         # Mount PID controllers
         # TODO: mount PID controllers only if required
         self._pids = {}
-        for climate_parameter in REGULABLE_PARAMETERS:
+        for climate_parameter in self.config.climate.keys():
+            # Light is a special climate parameter that doesn't require any sensor
+            if climate_parameter == "light":
+                continue
             pid = self.get_pid(climate_parameter)
             pid.reset()
             self.pids[climate_parameter] = pid
@@ -136,7 +130,7 @@ class Climate(SubroutineTemplate[Actuator]):
         return self._actuator_handlers
 
     def get_actuator_group_for_parameter(self, climate_direction: ClimateDirection) -> str:
-        return self.ecosystem.config.get_environment_direction_to_group()[climate_direction]
+        return self.ecosystem.config.get_climate_direction_to_group()[climate_direction]
 
     async def _mount_actuator_handler(self, climate_direction: ClimateDirection) -> None:
         if climate_direction in self.actuator_handlers:
@@ -191,7 +185,7 @@ class Climate(SubroutineTemplate[Actuator]):
         # Check if climate parameters are available in the config file
         regulated_parameters: list[gv.ClimateParameter] = [
             climate_parameter for climate_parameter in self.config.climate.keys()
-            if climate_parameter in REGULABLE_PARAMETERS
+            if climate_parameter != "light"
         ]
         if not regulated_parameters:
             self.logger.warning("No climate parameter found.")
@@ -205,7 +199,7 @@ class Climate(SubroutineTemplate[Actuator]):
         }
 
         # Check if sensors taking regulated params are available
-        for climate_param in regulated_parameters:
+        for climate_param in [*regulated_parameters]:
             measure = self._get_measure_for_parameter(climate_param)
             if measure not in measures:
                 regulated_parameters.remove(climate_param)
@@ -254,7 +248,7 @@ class Climate(SubroutineTemplate[Actuator]):
         climate_cfg = self.config.get_climate_parameter(parameter)
         return (
             climate_cfg.linked_measure
-            if climate_cfg.linked_measure else parameter.name
+            if climate_cfg.linked_measure else parameter
         )
 
     async def _get_sensors_average(self) -> dict[str, float]:

@@ -15,6 +15,7 @@ from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
+from gaia.exceptions import HardwareNotFound
 from gaia.config import default_actuators
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
@@ -31,10 +32,10 @@ class PIDParameters(NamedTuple):
 
 
 pid_values: dict[gv.ClimateParameter, PIDParameters] = {
-    gv.ClimateParameter.temperature: PIDParameters(5.0, 0.5, 0.1),
-    gv.ClimateParameter.humidity: PIDParameters(2.0, 0.5, 1.0),
-    gv.ClimateParameter.light: PIDParameters(0.001, 0.0, 0.0),
-    gv.ClimateParameter.wind: PIDParameters(1.0, 0.0, 0.0),
+    "temperature": PIDParameters(5.0, 0.5, 0.1),
+    "humidity": PIDParameters(2.0, 0.5, 1.0),
+    "light": PIDParameters(0.001, 0.0, 0.0),
+    "wind": PIDParameters(1.0, 0.0, 0.0),
 }
 
 
@@ -149,16 +150,16 @@ class HystericalPID:
         if self.actuator_hub.logger.level <= logging.DEBUG:
             if output > 0.0 and not self.direction & Direction.increase:
                 self.actuator_hub.logger.debug(
-                    f"PID output for {self.climate_parameter.name} is > 0 but no "
-                    f"actuator able to increase {self.climate_parameter.name} "
-                    f"has been detected. {self.climate_parameter.name.capitalize()} "
+                    f"PID output for {self.climate_parameter} is > 0 but no "
+                    f"actuator able to increase {self.climate_parameter} "
+                    f"has been detected. {self.climate_parameter.capitalize()} "
                     f"may remain under the targeted value."
                 )
             if output < 0.0 and not self.direction & Direction.decrease:
                 self.actuator_hub.logger.debug(
-                    f"PID output for {self.climate_parameter.name} is < 0 but no "
-                    f"actuator able to decrease {self.climate_parameter.name} "
-                    f"has been detected. {self.climate_parameter.name.capitalize()} "
+                    f"PID output for {self.climate_parameter} is < 0 but no "
+                    f"actuator able to decrease {self.climate_parameter} "
+                    f"has been detected. {self.climate_parameter.capitalize()} "
                     f"may remain above the targeted value."
                 )
         return output
@@ -792,6 +793,7 @@ class ActuatorHandler:
 class ActuatorHub:
     def __init__(self, ecosystem: "Ecosystem") -> None:
         self.ecosystem: Ecosystem = ecosystem
+        self.config = ecosystem.config
         self.logger = logging.getLogger(
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
@@ -811,16 +813,17 @@ class ActuatorHub:
             self,
             climate_parameter: gv.ClimateParameter,
     ) -> HystericalPID:
-        climate_parameter = gv.safe_enum_from_name(gv.ClimateParameter, climate_parameter)
         try:
             return self._pids[climate_parameter]
         except KeyError:
+            # TODO: add a way to inject PID parameters from the config
+            pid_params = pid_values.get(climate_parameter) or PIDParameters(5.0, 0.5, 0.1)
             pid = HystericalPID(
                 self,
                 climate_parameter,
-                Kp=pid_values[climate_parameter].Kp,
-                Ki=pid_values[climate_parameter].Ki,
-                Kd=pid_values[climate_parameter].Kd,
+                Kp=pid_params.Kp,
+                Ki=pid_params.Ki,
+                Kd=pid_params.Kd,
                 minimum_output=-100.0,
                 maximum_output=100.0,
             )
@@ -836,28 +839,34 @@ class ActuatorHub:
             return gv.HardwareType.actuator
 
     def _get_actuator_direction(self, actuator_group: str) -> Direction:
-        group_to_direction = self.ecosystem.config.get_group_to_direction()
-        direction_name = group_to_direction[actuator_group]
-        return Direction[direction_name]
+        climate_direction = self.config.get_group_to_climate_direction(actuator_group)
+        if climate_direction is not None:
+            return Direction[climate_direction[1]]
+        weather_direction = self.config.get_group_to_weather_direction(actuator_group)
+        if weather_direction:
+            # Weather parameter only act on "increase" actuators
+            return Direction.increase
+        raise HardwareNotFound(
+            f"{actuator_group} does not manage any climate or weather parameter."
+        )
 
     def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
-        group_to_parameter = self.ecosystem.config.get_group_to_parameter()
-        parameter = group_to_parameter[actuator_group]
-        if isinstance(parameter, gv.WeatherParameter):
-            # Weather parameters don't have PIDs attached to them
-            return None
-        elif isinstance(parameter, gv.ClimateParameter):
-            if parameter not in self.pids:
-                raise RuntimeError(
-                    f"Trying to get an undefined PID for the actuator group "
-                    f"'{actuator_group}'"
+        climate_direction = self.config.get_group_to_climate_direction(actuator_group)
+        if climate_direction is None:
+            if not self.config.get_group_to_weather_direction(actuator_group):
+                raise ValueError(
+                    f"Actuator group '{actuator_group}' has no environment parameter "
+                    f"attached to it."
                 )
-            return self.get_pid(parameter)
-        else:
-            raise ValueError(
-                f"Actuator group '{actuator_group}' has no environment parameter "
-                f"attached to it."
+            # Only climate parameters have PIDs attached to them
+            return None
+        parameter = climate_direction[0]
+        if parameter not in self.pids:
+            raise RuntimeError(
+                f"Trying to get an undefined PID for the actuator group "
+                f"'{actuator_group}'"
             )
+        return self.get_pid(parameter)
 
     def get_handler(
             self,
@@ -866,7 +875,7 @@ class ActuatorHub:
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
             actuator_group = cast(str, actuator_group.name)
-        if actuator_group not in self.ecosystem.config.get_group_to_parameter():
+        if actuator_group not in self.ecosystem.config.get_valid_actuator_groups():
             raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
         try:
             return self._actuator_handlers[actuator_group]

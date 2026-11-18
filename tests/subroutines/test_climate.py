@@ -64,10 +64,10 @@ class TestClimateSubroutine:
         expected_actuators = climate_subroutine.compute_expected_actuators()
         assert expected_actuators == {
             # Default actuator
-            (gv.ClimateParameter.temperature, "increase"): "heater",
-            (gv.ClimateParameter.humidity, "decrease"): "dehumidifier",
+            ("temperature", "increase"): "heater",
+            ("humidity", "decrease"): "dehumidifier",
             # Overridden actuator
-            (gv.ClimateParameter.humidity, "increase"): "fogger",
+            ("humidity", "increase"): "fogger",
         }
 
     async def test_turn_actuator(self, climate_subroutine: Climate):
@@ -114,7 +114,7 @@ class TestClimateSubroutine:
         climate_subroutine.enable()
         await climate_subroutine.start()
         parameters = climate_subroutine.regulated_parameters
-        assert set(parameters) == {gv.ClimateParameter.temperature, gv.ClimateParameter.humidity}  # depends on hardware available
+        assert set(parameters) == {"temperature", "humidity"}  # depends on hardware available
 
     async def test_safe_stop_from_sensors(
             self,
@@ -137,10 +137,10 @@ class TestClimateSubroutine:
         assert not climate_subroutine.manageable
 
     async def test_get_measure_for_parameter(self, climate_subroutine: Climate):
-        measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.temperature)
-        assert measure == gv.ClimateParameter.temperature.name
+        measure = climate_subroutine._get_measure_for_parameter("temperature")
+        assert measure == "temperature"
 
-        measure = climate_subroutine._get_measure_for_parameter(gv.ClimateParameter.humidity)
+        measure = climate_subroutine._get_measure_for_parameter("humidity")
         assert measure == "absolute_humidity"
 
     async def test_update_pid_targets_its_own_parameter(
@@ -153,16 +153,16 @@ class TestClimateSubroutine:
         # `get_scaled_climate_target` silently falls back on its default config for it,
         #  meaning that a `_update_pid` looking up the wrong parameter would not raise
         #  but would feed the PIDs the default light targets and saturate them.
-        assert not config.has_climate_parameter(gv.ClimateParameter.light)
-        default_light_target = config.get_scaled_climate_target(gv.ClimateParameter.light)
+        assert not config.has_climate_parameter("light")
+        default_light_target = config.get_scaled_climate_target("light")
 
         climate_subroutine.enable()
         await climate_subroutine.start()
 
         sensors_average = {"temperature": 25.0, "absolute_humidity": 10.0}
         parameters = (
-            (gv.ClimateParameter.temperature, test_data.temperature_cfg),
-            (gv.ClimateParameter.humidity, test_data.humidity_cfg),
+            ("temperature", test_data.temperature_cfg),
+            ("humidity", test_data.humidity_cfg),
         )
 
         for is_day, period in ((True, "day"), (False, "night")):
@@ -187,19 +187,17 @@ class TestClimateSubroutine:
         await climate_subroutine.start()
 
         assert set(climate_subroutine.regulated_parameters) == {
-            gv.ClimateParameter.temperature,
-            gv.ClimateParameter.humidity,
+            "temperature", "humidity",
         }
 
         assert set(climate_subroutine.actuator_handlers) == {
-            (gv.ClimateParameter.temperature, "increase"),  # "heater"
-            (gv.ClimateParameter.humidity, "decrease"),  # "dehumidifier"
-            (gv.ClimateParameter.humidity, "increase"),  # "fogger"
+            ("temperature", "increase"),  # "heater"
+            ("humidity", "decrease"),  # "dehumidifier"
+            ("humidity", "increase"),  # "fogger"
         }
 
         assert set(climate_subroutine.pids) == {
-            gv.ClimateParameter.temperature,
-            gv.ClimateParameter.humidity,
+            "temperature", "humidity", "wind",
         }
 
         await climate_subroutine.routine()

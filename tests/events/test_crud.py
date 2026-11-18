@@ -358,7 +358,7 @@ class TestCRUDClimateParameter:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        parameter = gv.ClimateParameter.temperature
+        parameter = "temperature"
         day = 10.0
         night = 15.0
         hysteresis = 0.0
@@ -384,7 +384,7 @@ class TestCRUDClimateParameter:
 
         for data in verified.data:
             # Some other parameters were already present in the config
-            if data.parameter.name in test_data.climate_dict:
+            if data.parameter in test_data.climate_dict:
                 continue
             assert data.parameter == parameter
             assert data.day == day
@@ -392,7 +392,7 @@ class TestCRUDClimateParameter:
             assert data.hysteresis == hysteresis
 
     async def test_update_failure(self, events_handler: Events):
-        parameter = gv.ClimateParameter.light
+        parameter = "light"
         day = 100000.0
         night = 0.0
         hysteresis = None
@@ -419,7 +419,7 @@ class TestCRUDClimateParameter:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        parameter = gv.ClimateParameter.light
+        parameter = "light"
         events_handler.ecosystems[test_data.ecosystem_uid].config.set_climate_parameter(
             parameter=parameter,
             day=42.0,
@@ -453,7 +453,7 @@ class TestCRUDClimateParameter:
         found = False
         for data in verified.data:
             # Some other parameters were already present in the config
-            if data.parameter.name in test_data.climate_dict:
+            if data.parameter in test_data.climate_dict:
                 continue
             found = True
             assert data.parameter == parameter
@@ -463,7 +463,7 @@ class TestCRUDClimateParameter:
         assert found
 
     async def test_delete_failure(self, events_handler: Events):
-        parameter = gv.ClimateParameter.light
+        parameter = "light"
         message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
@@ -482,7 +482,7 @@ class TestCRUDClimateParameter:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        parameter = gv.ClimateParameter.light
+        parameter = "light"
         events_handler.ecosystems[test_data.ecosystem_uid].config.set_climate_parameter(
             parameter=parameter,
             day=250000.0,
@@ -514,7 +514,7 @@ class TestCRUDWeatherEvent:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        parameter = gv.WeatherParameter.fog
+        parameter = "fog"
         pattern = "0 7 * * *"
         duration = 30.0
 
@@ -547,7 +547,7 @@ class TestCRUDWeatherEvent:
         assert found
 
     async def test_update_failure(self, events_handler: Events):
-        parameter = gv.WeatherParameter.fog
+        parameter = "fog"
         pattern = "0 7 * * *"
         duration = 30.0
 
@@ -573,7 +573,7 @@ class TestCRUDWeatherEvent:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        parameter = gv.WeatherParameter.rain
+        parameter = "rain"
         pattern = "0 7 * * *"
         duration = 30.0
 
@@ -606,7 +606,7 @@ class TestCRUDWeatherEvent:
         assert found
 
     async def test_delete_failure(self, events_handler: Events):
-        parameter = gv.WeatherParameter.fog
+        parameter = "fog"
         message: gv.CrudPayloadDict = gv.CrudPayload(
             routing={"engine_uid": test_data.engine_uid, "ecosystem_uid": test_data.ecosystem_uid},
             action=gv.CrudAction.delete,
@@ -625,7 +625,7 @@ class TestCRUDWeatherEvent:
             events_handler: Events,
             caplog: pytest.LogCaptureFixture,
     ):
-        parameter = gv.WeatherParameter.fog
+        parameter = "fog"
         events_handler.ecosystems[test_data.ecosystem_uid].config.set_weather_parameter(
             parameter=parameter,
             pattern="0 7 * * *",

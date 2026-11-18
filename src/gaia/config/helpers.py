@@ -4,9 +4,10 @@ import asyncio
 from asyncio import Event
 from contextlib import suppress
 from datetime import date, datetime, time
+from difflib import get_close_matches
 import hashlib
 from pathlib import Path
-from typing import Type, TypeVar
+from typing import Iterable, Type, TypeVar
 
 from anyio.to_thread import run_sync
 import pydantic
@@ -122,3 +123,10 @@ def validate_from_root_model(
             .model_validate(unvalidated_data)
             .model_dump(exclude_defaults=exclude_defaults)
     )
+
+
+def closest_parameter_hint(parameter: str, choices: Iterable[str]) -> str:
+    matches = get_close_matches(parameter, [*choices], n=1)
+    if matches and matches[0] != parameter:
+        return f" Did you mean '{matches[0]}'?"
+    return ""

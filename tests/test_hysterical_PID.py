@@ -4,7 +4,7 @@ from gaia import Ecosystem
 
 
 def test_hysterical_PID(ecosystem: Ecosystem):
-    pid = ecosystem.actuator_hub.get_pid(gv.ClimateParameter.temperature)
+    pid = ecosystem.actuator_hub.get_pid("temperature")
 
     target_value = 42.0
     hysteresis = 2.5

@@ -224,7 +224,7 @@ class VirtualEcosystem:
         self._start_time: float | None = None
         self._last_update: float | None = None
 
-        self._get_actuator_mapping = self.ecosystem.config.get_environment_direction_to_group
+        self._get_actuator_mapping = self.ecosystem.config.get_climate_direction_to_group
         self._actuators: dict[HardwareUid, ActuatorState] = {}
 
         # Add the virtual ecosystem to the registry
@@ -373,9 +373,9 @@ class VirtualEcosystem:
         heat_quantity = self._heat_quantity
         heat_loss = self.heat_loss_coef * d_sec * d_temp
         heat_quantity -= heat_loss
-        temp_inc_group = actuators_mapping[(gv.ClimateParameter.temperature, "increase")]
+        temp_inc_group = actuators_mapping[("temperature", "increase")]
         heat_quantity += get_output(temp_inc_group, self._max_heater_output, 1.00)
-        temp_dec_group = actuators_mapping[(gv.ClimateParameter.temperature, "decrease")]
+        temp_dec_group = actuators_mapping[("temperature", "decrease")]
         heat_quantity -= get_output(temp_dec_group, self._max_heater_output, 0.60)
         self._heat_quantity = heat_quantity
 
@@ -384,15 +384,15 @@ class VirtualEcosystem:
         humidity_quantity = self._humidity_quantity
         humidity_loss = d_hum * d_sec / 10000  # Pretty much a random factor
         humidity_quantity -= humidity_loss
-        hum_inc_group = actuators_mapping[(gv.ClimateParameter.humidity, "increase")]
+        hum_inc_group = actuators_mapping[("humidity", "increase")]
         humidity_quantity += get_output(hum_inc_group, self._max_humidifier_output, 1.00)
-        hum_dec_group = actuators_mapping[(gv.ClimateParameter.humidity, "decrease")]
+        hum_dec_group = actuators_mapping[("humidity", "decrease")]
         humidity_quantity -= get_output(hum_dec_group, self._max_humidifier_output, 0.50)
         self._humidity_quantity = humidity_quantity
 
         # Light calculation
         self._light = out_light
-        light_inc_group = actuators_mapping[(gv.ClimateParameter.light, "increase")]
+        light_inc_group = actuators_mapping[("light", "increase")]
         self._light += get_output(light_inc_group, self._max_light_output, 1/d_sec)
 
         # Update

@@ -219,7 +219,7 @@ async def virtual_ecosystem(ecosystem: Ecosystem) -> AsyncYieldFixture[VirtualEc
 @pytest_asyncio.fixture(scope="function")
 async def light_handler(ecosystem: Ecosystem) -> AsyncYieldFixture[ActuatorHandler]:
     # We need to hold the pid associated to light handler
-    pid = ecosystem.actuator_hub.get_pid(gv.ClimateParameter.light)
+    pid = ecosystem.actuator_hub.get_pid("light")
     light_handler: ActuatorHandler = ecosystem.get_actuator_handler("light")
     light_handler.activate()
 
