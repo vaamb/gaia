@@ -25,6 +25,7 @@ from gaia.config.models import (
 from gaia.exceptions import HardwareNotFound, PlantNotFound, UndefinedParameter
 from gaia.hardware import hardware_models, Hardware
 from gaia.hardware.abc import SensorMixin
+from gaia.hardware.actuators import actuator_models
 from gaia.hardware.multiplexers import multiplexer_models
 from gaia.subroutines import subroutine_dict
 from gaia.utils import create_uid, humanize_list, is_time_between
@@ -1232,13 +1233,13 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
     # ---------------------------------------------------------------------------
     #   Actuator groups
     # ---------------------------------------------------------------------------
-    def get_valid_actuator_groups(self) -> set[str]:
-        """Get the set of valid actuator group names for this ecosystem."""
-        # TODO: If "free" actuators are ever added, add them here too
-        return {
-            *self.climate_direction_to_group.values(),
-            *self.weather_direction_to_group.values(),
-        }
+    def get_actuator_groups(self) -> set[str]:
+        """Get the name of the actuator groups used in this ecosystem."""
+        rv = set()
+        for hardware in self.hardware_dict.values():
+            if hardware["active"] and hardware["model"] in actuator_models:
+                rv.update(hardware["groups"])
+        return rv
 
     # ---------------------------------------------------------------------------
     #      Climate roles

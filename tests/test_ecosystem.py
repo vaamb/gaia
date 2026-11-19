@@ -235,3 +235,14 @@ class TestEcosystem:
             await ecosystem.turn_actuator(gv.HardwareType.light, "WrongMode")
 
         await ecosystem.stop_subroutine("light")
+
+
+#@with_hardware({test_data.light_uid: test_data.light_info})
+#class TestEcosystemActuators:
+#    def test_actuators_data(self, ecosystem: Ecosystem):
+#        actuator_states = ecosystem.actuator_hub.as_dict()
+#        assert len(actuator_states) == len(ecosystem.actuator_hub.actuator_handlers)
+#        for actuator in actuator_states.values():
+#            assert not actuator["active"]
+#            assert not actuator["status"]
+#            assert actuator["mode"] is gv.ActuatorMode.automatic

@@ -24,6 +24,7 @@ from tests.utils import with_hardware
 hardware_dict = {
     test_data.sensor_uid: test_data.sensor_info,
     test_data.humidifier_uid: test_data.humidifier_info,
+    test_data.ws_dimmer_uid: test_data.ws_dimmer_info,
 }
 
 
@@ -551,7 +552,7 @@ class TestEcosystemConfigActuators:
         actuators_mapping = ecosystem_config.climate_direction_to_group
         assert actuators_mapping[("temperature", "increase")] == "heater"
         assert ("temperature", "decrease") not in actuators_mapping
-        assert "cooler" not in ecosystem_config.get_valid_actuator_groups()
+        assert "cooler" not in ecosystem_config.get_actuator_groups()
 
     def test_actuator_couples_unconfigured_parameter(self, ecosystem_config: EcosystemConfig):
         # A parameter that is not configured has no actuator group ...
@@ -559,13 +560,13 @@ class TestEcosystemConfigActuators:
 
         actuators_mapping = ecosystem_config.climate_direction_to_group
         assert ("temperature", "increase") not in actuators_mapping
-        assert "heater" not in ecosystem_config.get_valid_actuator_groups()
+        assert "heater" not in ecosystem_config.climate_direction_to_group.values()
         # ... so its default groups are free to serve another parameter ...
         ecosystem_config.update_climate_parameter(
             "humidity", linked_actuators={"increase": "fogger", "decrease": "cooler"})
         assert ecosystem_config.climate_direction_to_group[("humidity", "decrease")] == \
                "cooler"
-        assert "cooler" in ecosystem_config.get_valid_actuator_groups()
+        assert "cooler" in ecosystem_config.climate_direction_to_group.values()
         # ... except for light, for which one is always provided so the `Light`
         #  subroutine can work natively
         assert not ecosystem_config.has_climate_parameter("light")
@@ -670,14 +671,16 @@ class TestEcosystemConfigActuators:
         # A refused hardware is not stored
         assert ecosystem_config.hardware_dict == hardware_before
 
-    def test_valid_actuator_groups(self, ecosystem_config: EcosystemConfig):
-        valid_actuator_groups = ecosystem_config.get_valid_actuator_groups()
+    def test_actuator_groups(self, ecosystem_config: EcosystemConfig):
+        valid_actuator_groups = ecosystem_config.get_actuator_groups()
 
         assert valid_actuator_groups == {
             # Overridden
             "fogger", "rainer",
             # Default
-            "heater", "cooler", "dehumidifier", "light", "fan",
+            "dehumidifier",
+            # The remaining defaults don't have an actuator using them:
+            # "heater", "cooler", "dehumidifier", "light", "fan",
         }
 
 

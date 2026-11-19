@@ -39,7 +39,7 @@ class TestLightSubroutine:
         )
 
         assert light_subroutine.get_hardware_needed_uid() == {test_data.light_uid}
-        assert "light" in ecosystem.config.get_valid_actuator_groups()
+        assert "light" in ecosystem.config.get_actuator_groups()
 
     async def test_turn_light(self, light_subroutine: Light):
         with pytest.raises(RuntimeError, match=r"Light subroutine is not started"):

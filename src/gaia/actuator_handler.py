@@ -113,8 +113,7 @@ class HystericalPID:
                 actuator_group = climate_to_group[(self.climate_parameter, direction_name)]
             except KeyError:
                 continue
-            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(actuator_group)
-            if actuator_handler.get_linked_actuators():
+            if actuator_group in self.actuator_hub.config.get_actuator_groups():
                 direction = direction | Direction[direction_name]
         self._direction = direction
         return direction
@@ -832,8 +831,8 @@ class ActuatorHub:
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
             actuator_group = cast(str, actuator_group.name)
-        if actuator_group not in self.ecosystem.config.get_valid_actuator_groups():
-            raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
+        if actuator_group not in self.ecosystem.config.get_actuator_groups():
+            raise ValueError(f"Actuator group '{actuator_group}' is not defined in the config.")
         try:
             return self._actuator_handlers[actuator_group]
         except KeyError:
