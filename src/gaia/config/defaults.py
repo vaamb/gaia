@@ -1,4 +1,4 @@
-from typing import Literal, TypeAlias
+from typing import Literal, NamedTuple, TypeAlias
 
 import gaia_validators as gv
 
@@ -7,6 +7,12 @@ Direction = Literal["increase", "decrease"]
 EnvironmentDirection: TypeAlias = tuple[gv.EnvironmentParameter, Direction]
 ClimateDirection: TypeAlias = tuple[gv.ClimateParameter, Direction]
 WeatherDirection: TypeAlias = tuple[gv.WeatherParameter, Literal["increase"]]
+
+
+class PIDParameters(NamedTuple):
+    Kp: float
+    Ki: float
+    Kd: float
 
 
 # Default actuator groups name for the climate parameters
@@ -32,3 +38,12 @@ weather_to_group_mapping: dict[WeatherDirection, str] = {
 
 
 DEFAULT_WEATHERS_PARAMETERS = frozenset(p for p, _ in weather_to_group_mapping)
+
+
+# Default PID values for the default climate parameters
+pid_values: dict[gv.ClimateParameter, PIDParameters] = {
+    "temperature": PIDParameters(5.0, 0.5, 0.1),
+    "humidity": PIDParameters(2.0, 0.5, 1.0),
+    "light": PIDParameters(0.001, 0.0, 0.0),
+    "wind": PIDParameters(1.0, 0.0, 0.0),
+}

@@ -10,32 +10,19 @@ import inspect
 import logging
 import time
 import typing
-from typing import cast, Callable, NamedTuple, Type
+from typing import cast, Callable, Type
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
 from gaia.config import defaults
+from gaia.config.defaults import PIDParameters
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
 
 if typing.TYPE_CHECKING:
     from gaia import Ecosystem
     from gaia.database.models import ActuatorBuffer, ActuatorRecord
-
-
-class PIDParameters(NamedTuple):
-    Kp: float
-    Ki: float
-    Kd: float
-
-
-pid_values: dict[gv.ClimateParameter, PIDParameters] = {
-    "temperature": PIDParameters(5.0, 0.5, 0.1),
-    "humidity": PIDParameters(2.0, 0.5, 1.0),
-    "light": PIDParameters(0.001, 0.0, 0.0),
-    "wind": PIDParameters(1.0, 0.0, 0.0),
-}
 
 
 # Delays (in seconds) between two attempts to bring the actuators state in sync
@@ -803,7 +790,7 @@ class ActuatorHub:
             return self._pids[climate_parameter]
         except KeyError:
             # TODO: add a way to inject PID parameters from the config
-            pid_params = pid_values.get(climate_parameter) or PIDParameters(5.0, 0.5, 0.1)
+            pid_params = defaults.pid_values.get(climate_parameter) or PIDParameters(5.0, 0.5, 0.1)
             pid = HystericalPID(
                 self,
                 climate_parameter,
