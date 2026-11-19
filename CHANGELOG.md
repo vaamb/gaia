@@ -34,6 +34,16 @@
 - Hardware addresses are now stored in their normalized form once `ecosystems.cfg` is
   loaded (`BOARD_7` becomes `GPIO_4`, a `default` I2C address becomes the address of the
   model), and are written that way at the next save (#533)
+- `ActuatorHandler` no longer decides when it should be on: Climate and Light compute the
+  status and level they want from their PID and hand them over with the new
+  `ActuatorHandler.set_automatic_target()`, which replaces `compute_expected_status()`.
+  The target is applied right away in automatic mode and stored otherwise; switching back
+  to automatic applies the latest one (status *and* level), and `reset()` clears it (#541)
+- `ActuatorHandler` is now a plain group of actuators: it no longer has a `direction` nor
+  an `associated_pid`, and `ActuatorHub` no longer looks up which parameter a group serves.
+  Climate and Light reset their PIDs themselves when a handler's mode changes.
+  `EcosystemConfig.get_climate_direction()` and `get_weather_directions()` are 
+  removed (#541)
 
 ### Development
 - Sandbox script (`scripts/utils/sandbox.sh`) to run the install and update
@@ -62,6 +72,14 @@
 - Two hardware using the same pin under different names (`BOARD_7` and `GPIO_4`) are now
   refused when loading `ecosystems.cfg`, whatever their order in the file. Addresses used
   to be compared as written, so the conflict could go unnoticed (#532)
+- Climate and Light no longer overwrite the level of an actuator turned on manually: they
+  set it to their PID output at every loop (#541)
+- When a weather event ends on an actuator group in automatic mode, the group now goes back
+  to what Climate last asked for, rather than to the status and level it had before the
+  event (#541)
+- An actuator handler created before its group got a climate role (or before the role
+  changed) kept the direction and PID it was created with, and failed Climate's loop
+  (#541)
 
 ---
 
