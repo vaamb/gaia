@@ -1299,22 +1299,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
         """
         return self._compute_climate_direction_to_group(self.climate)
 
-    def get_climate_direction(self, actuator_group: str) -> ClimateDirection | None:
-        """Get the climate parameter and direction an actuator group serves.
-
-        An actuator group can serve a climate and weather roles at the same time
-        (`fan` for `cooler` and `air_purity`): the climate role is returned,
-        as it is the one that needs a direction and a PID.
-
-        :param actuator_group: The name of the actuator group.
-        :return: The climate parameter and direction, or None if the group only
-                 serves weather parameters or is unknown.
-        """
-        for climate_direction, group in self.climate_direction_to_group.items():
-            if group == actuator_group:
-                return climate_direction
-        return None
-
     @classmethod
     def _compute_group_to_climate_directions(
             cls,
@@ -1450,23 +1434,6 @@ class EcosystemConfig(metaclass=_MetaEcosystemConfig):
             if actuator_group is not None:
                 rv[(parameter, "increase")] = actuator_group
         return rv
-
-    def get_weather_directions(self, actuator_group: str) -> list[WeatherDirection]:
-        """Get the weather parameters and direction an actuator group serves.
-
-        Unlike climate roles, an actuator group can serve several weather
-        roles (a `fogger` used for both `fog` and `rain`), as weather events
-        are short and don't need a PID.
-
-        :param actuator_group: The name of the actuator group.
-        :return: The weather parameters and direction, or an empty list if the
-                 group serves no weather parameter or is unknown.
-        """
-        return [
-            weather_direction
-            for weather_direction, group in self.weather_direction_to_group.items()
-            if group == actuator_group
-        ]
 
     @classmethod
     def check_weather_actuator_conflict(
