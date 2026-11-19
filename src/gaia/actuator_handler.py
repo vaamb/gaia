@@ -795,23 +795,6 @@ class ActuatorHandler:
         self._sending_data_task = asyncio.create_task(
             self.send_actuator_state(data), name=task_name)
 
-    def compute_expected_status(self, expected_level: float) -> bool:
-        self._last_expected_level = expected_level
-        if self.mode == gv.ActuatorMode.automatic:
-            if expected_level is None:
-                self.logger.error(
-                    "Cannot compute an expected status for automatic mode "
-                    "without an expected PID level. Falling back to off status.")
-                return False
-            else:
-                if self.direction == Direction.increase:
-                    return expected_level > 0  # Should be on when trying to increase measure
-                else:
-                    return expected_level < 0  # Should be on when trying to decrease measure
-        else:
-            # Mode is manual
-            return self.status
-
 
 class ActuatorHub:
     def __init__(self, ecosystem: "Ecosystem") -> None:

@@ -315,16 +315,18 @@ class Climate(SubroutineTemplate[Actuator]):
         current_value: float | None = sensors_average.get(measure)
         pid.update_pid(current_value)
 
-    async def _update_actuator_handler(self, actuator_handler: ActuatorHandler) -> None:
-        pid = actuator_handler.associated_pid
-        assert pid is not None
-        expected_status = actuator_handler.compute_expected_status(pid.last_output)
-        if expected_status:
-            await actuator_handler.turn_on()
-            await actuator_handler.set_level(abs(pid.last_output))
-        else:
-            await actuator_handler.turn_off()
-            await actuator_handler.set_level(0.0)
+    async def _update_actuator_handler(
+            self,
+            climate_direction: ClimateDirection,
+            actuator_handler: ActuatorHandler,
+    ) -> None:
+        parameter, direction = climate_direction
+        output = self.pids[parameter].last_output
+        # Should be "on" when the output and the handler's direction go to the
+        # same side
+        status = output > 0.0 if direction == "increase" else output < 0.0
+        level = abs(output) if status else 0.0
+        await actuator_handler.set_automatic_target(status, level)
 
     async def _update_climate_actuators(self) -> None:
         sensors_average: dict[str, float] = await self._get_sensors_average()
@@ -333,9 +335,9 @@ class Climate(SubroutineTemplate[Actuator]):
             return
         for climate_parameter in self.pids.keys():
             self._update_pid(climate_parameter, sensors_average)
-        for actuator_handler in self.actuator_handlers.values():
+        for climate_direction, actuator_handler in self.actuator_handlers.items():
             async with actuator_handler.update_status_transaction():
-                await self._update_actuator_handler(actuator_handler)
+                await self._update_actuator_handler(climate_direction, actuator_handler)
 
     """API calls"""
     async def turn_climate_actuator(
