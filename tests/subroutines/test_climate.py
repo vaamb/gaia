@@ -5,6 +5,7 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem
+from gaia.actuator_handler import Direction
 from gaia.subroutines.sensors import Sensors
 from gaia.subroutines.climate import Climate
 
@@ -100,6 +101,30 @@ class TestClimateSubroutine:
             await climate_subroutine.turn_climate_actuator(valid_actuator_group, "WrongMode")
 
         handler.deactivate()
+
+    async def test_pid_reset_on_mode_change(self, climate_subroutine: Climate):
+        climate_subroutine.enable()
+        await climate_subroutine.start()
+        pid = climate_subroutine.pids["temperature"]
+
+        # No mode change: the PID keeps its history
+        pid.update_pid(pid.target - 10.0)
+        last_output = pid.last_output
+        assert last_output != 0.0
+        climate_subroutine._reset_pids_on_mode_change()
+        assert pid.last_output == last_output
+
+        # The heater is driven manually: its PID history is dropped ...
+        await climate_subroutine.turn_climate_actuator("heater", gv.ActuatorModePayload.on)
+        climate_subroutine._reset_pids_on_mode_change()
+        assert pid.last_output == 0.0
+
+        # ... and again when it goes back to automatic
+        pid.update_pid(pid.target - 10.0)
+        assert pid.last_output != 0.0
+        await climate_subroutine.turn_climate_actuator("heater", gv.ActuatorModePayload.automatic)
+        climate_subroutine._reset_pids_on_mode_change()
+        assert pid.last_output == 0.0
 
     async def test_regulated_parameters(self, climate_subroutine: Climate):
         parameters = climate_subroutine.regulated_parameters
@@ -203,8 +228,8 @@ class TestClimateSubroutine:
         }
 
         # Swapping the regulated parameter in a single refresh: the new parameter
-        #  gets its PID before its handlers are mounted, as an actuator handler
-        #  picks its PID up when it is created
+        #  gets its PID before its handlers are mounted, as mounting a handler
+        #  resets its PID's directions
         config.delete_climate_parameter("temperature")
         config.set_climate_parameter("humidity", **test_data.humidity_cfg)
         await climate_subroutine.refresh()
@@ -215,8 +240,7 @@ class TestClimateSubroutine:
             ("humidity", "increase"),
         }
         humidity_pid = climate_subroutine.pids["humidity"]
-        for handler in climate_subroutine.actuator_handlers.values():
-            assert handler.associated_pid is humidity_pid
+        assert humidity_pid.direction == Direction.increase | Direction.decrease
 
         # A newly regulated parameter is added next to the existing one
         config.set_climate_parameter("temperature", **test_data.temperature_cfg)

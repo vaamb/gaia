@@ -563,8 +563,9 @@ class TestEcosystemConfigActuators:
         # ... so its default groups are free to serve another parameter ...
         ecosystem_config.update_climate_parameter(
             "humidity", linked_actuators={"increase": "fogger", "decrease": "cooler"})
-        assert ecosystem_config.get_climate_direction("cooler") == \
-               ("humidity", "decrease")
+        assert ecosystem_config.climate_direction_to_group[("humidity", "decrease")] == \
+               "cooler"
+        assert "cooler" in ecosystem_config.get_valid_actuator_groups()
         # ... except for light, for which one is always provided so the `Light`
         #  subroutine can work natively
         assert not ecosystem_config.has_climate_parameter("light")
