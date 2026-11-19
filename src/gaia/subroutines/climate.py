@@ -99,8 +99,8 @@ class Climate(SubroutineTemplate[Actuator]):
         pids_mounted: set[gv.ClimateParameter] = set(self.pids)
         # Activate PIDs that are needed before actuators handlers using them are 
         #  mounted
-        for parameter in pids_expected - pids_mounted:
-            self._add_pid(parameter)
+        for climate_parameter in pids_expected - pids_mounted:
+            self._add_pid(climate_parameter)
         # Activate, deactivate and reset actuator handlers if required
         handlers_expected: set[ClimateDirection] = set(climate_directions)
         handlers_mounted: set[ClimateDirection] = set(self.actuator_handlers.keys())
@@ -163,15 +163,14 @@ class Climate(SubroutineTemplate[Actuator]):
         del self.actuator_handlers[climate_direction]
 
     def _add_pid(self, climate_parameter: gv.ClimateParameter) -> None:
-        pid = self.get_pid(climate_parameter)
+        pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
         pid.reset()
         self.pids[climate_parameter] = pid
 
     def _remove_pid(self, climate_parameter: gv.ClimateParameter) -> None:
         del self.pids[climate_parameter]
-    
-    def get_pid(self, climate_parameter: gv.ClimateParameter) -> HystericalPID:
-        return self.ecosystem.actuator_hub.get_pid(climate_parameter)
+        if not self.pids:
+            self._pids = None
 
     @property
     def pids(self) -> dict[gv.ClimateParameter, HystericalPID]:

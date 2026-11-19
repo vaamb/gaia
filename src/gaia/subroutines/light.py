@@ -77,7 +77,7 @@ class Light(SubroutineTemplate[Actuator]):
 
     async def _start(self) -> None:
         # Initialize PID and actuator handler
-        self._pid = self.get_pid()
+        self._add_pid()
         self._actuator_handler = self.get_actuator_handler()
         # Activate actuator handler
         async with self.actuator_handler.update_status_transaction(activation=True):
@@ -114,7 +114,7 @@ class Light(SubroutineTemplate[Actuator]):
             self.actuator_handler.deactivate()
         # Reset actuator handler and PID
         self._actuator_handler = None
-        self._pid = None
+        self._remove_pid()
 
     def get_hardware_needed_uid(self) -> set[str]:
         actuator_group: str = self._get_actuator_group()
@@ -147,8 +147,13 @@ class Light(SubroutineTemplate[Actuator]):
                 "actuator_handler is not defined in non-started Light subroutine")
         return self._actuator_handler
 
-    def get_pid(self) -> HystericalPID:
-        return self.ecosystem.actuator_hub.get_pid("light")
+    def _add_pid(self) -> None:
+        pid = self.ecosystem.actuator_hub.get_pid("light")
+        pid.reset()
+        self._pid = pid
+
+    def _remove_pid(self) -> None:
+        self._pid = None
 
     @property
     def pid(self) -> HystericalPID:
@@ -205,7 +210,7 @@ class Light(SubroutineTemplate[Actuator]):
         return mean(light_level)
 
     async def _update_pid(self) -> None:
-        pid: HystericalPID = self.get_pid()
+        pid: HystericalPID = self.pid
         scaled_target = self.config.get_scaled_climate_target("light")
         target = scaled_target.day if self.config.is_lighting_needed() else scaled_target.night
         hysteresis = scaled_target.hysteresis
