@@ -280,7 +280,8 @@ class ActuatorHandler:
         "_active",
         "_actuators",
         "_any_status_change",
-        "_last_expected_level",
+        "_automatic_level",
+        "_automatic_status",
         "_level",
         "_level_synced",
         "_mode",
@@ -325,7 +326,9 @@ class ActuatorHandler:
         self._active: int = 0
         self._status: bool = False
         self._level: float = 0.0
-        self._last_expected_level: float = 0.0
+        # What the Climate and Light subroutine request, applied in automatic mode
+        self._automatic_status: bool = False
+        self._automatic_level: float = 0.0
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
         # Linked actuators, PIDs and tasks
         self._timer: Timer | None = None
@@ -461,6 +464,9 @@ class ActuatorHandler:
         self.logger.debug(
             f"{self.group.capitalize()} has been set to "
             f"'{self.mode.name}' mode.")
+        if validated_value is gv.ActuatorMode.automatic:
+            # Apply the latest automatic target
+            await self._apply_automatic_target()
 
     def _set_mode(self, value: gv.ActuatorMode) -> None:
         self._mode = value
@@ -560,6 +566,23 @@ class ActuatorHandler:
             f"{self.group.capitalize()}'s PWM level has been set to {pwm_level}%.")
         return True
 
+    async def set_automatic_target(self, status: bool, level: float) -> None:
+        """Set the status and level wanted by the Climate and Light subroutines.
+
+        In automatic mode, they are applied right away. In manual mode, they are
+        stored and will be applied when the handler will goes back to automatic
+        mode.
+        """
+        self._check_update_status_transaction()
+        self._automatic_status = status
+        self._automatic_level = level
+        if self._mode is gv.ActuatorMode.automatic:
+            await self._apply_automatic_target()
+
+    async def _apply_automatic_target(self) -> None:
+        await self.set_status(self._automatic_status)
+        await self.set_level(self._automatic_level)
+
     @property
     def synced(self) -> bool:
         return self._status_synced and self._level_synced
@@ -636,8 +659,10 @@ class ActuatorHandler:
 
     async def reset(self) -> None:
         self._check_update_status_transaction()
+        # Store the target so it will be applied right after when going back to
+        #  automatic mode
+        await self.set_automatic_target(False, 0.0)
         await self.set_mode(gv.ActuatorMode.automatic)
-        await self.set_status(False)
         self.reset_timer()
 
     async def _turn_to(
@@ -646,10 +671,8 @@ class ActuatorHandler:
             level: float = 100.0,
     ) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
+            # Applies the automatic target
             await self.set_mode(gv.ActuatorMode.automatic)
-            outdated_expected_status = self.compute_expected_status(
-                self._last_expected_level)
-            await self.set_status(outdated_expected_status)
         else:
             await self.set_mode(gv.ActuatorMode.manual)
             if turn_to == gv.ActuatorModePayload.on:
