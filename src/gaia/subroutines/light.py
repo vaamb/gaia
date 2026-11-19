@@ -31,6 +31,8 @@ class Light(SubroutineTemplate[Actuator]):
         # Actuator handler
         self._actuator_handler: ActuatorHandler | None = None
         self._pid: HystericalPID | None = None
+        # The handler's mode at the last loop, to reset the PID when it changes
+        self._handler_mode: gv.ActuatorMode | None = None
         # Background task
         self._loop_period: float = float(
             self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
@@ -79,6 +81,7 @@ class Light(SubroutineTemplate[Actuator]):
         # Initialize PID and actuator handler
         self._add_pid()
         self._actuator_handler = self.get_actuator_handler()
+        self._handler_mode = self.actuator_handler.mode
         # Activate actuator handler
         async with self.actuator_handler.update_status_transaction(activation=True):
             self.actuator_handler.activate()
@@ -114,6 +117,7 @@ class Light(SubroutineTemplate[Actuator]):
             self.actuator_handler.deactivate()
         # Reset actuator handler and PID
         self._actuator_handler = None
+        self._handler_mode = None
         self._remove_pid()
 
     def get_hardware_needed_uid(self) -> set[str]:
@@ -125,9 +129,11 @@ class Light(SubroutineTemplate[Actuator]):
         assert self._pid is not None
         # Refresh the actuator handler in case the actuator group name has changed
         self._actuator_handler = self.get_actuator_handler()
+        self._handler_mode = self.actuator_handler.mode
         # Reset actuator handler, PID and light sensors
         self.actuator_handler.reset_cached_actuators()
         self.pid.reset()
+        self.pid.reset_direction()
         self.reset_light_sensors()
         self.reset_any_dimmable_light()
 
@@ -226,7 +232,15 @@ class Light(SubroutineTemplate[Actuator]):
         level = output if status else 0.0
         await actuator_handler.set_automatic_target(status, level)
 
+    def _reset_pid_on_mode_change(self) -> None:
+        # The PID's history is meaningless once the lights were driven by
+        #  someone else: reset it when they go from or back to automatic mode
+        if self.actuator_handler.mode is not self._handler_mode:
+            self._handler_mode = self.actuator_handler.mode
+            self.pid.reset()
+
     async def _update_light_actuators(self) -> None:
+        self._reset_pid_on_mode_change()
         await self._update_pid()
         async with self.actuator_handler.update_status_transaction():
             await self._update_actuator_handler(self.actuator_handler)

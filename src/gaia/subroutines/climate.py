@@ -30,6 +30,9 @@ class Climate(SubroutineTemplate[Actuator]):
         loop_period = float(self.ecosystem.engine.config.app_config.CLIMATE_LOOP_PERIOD)
         self._loop_period: float = max(loop_period, 10.0)
         self._actuator_handlers: dict[ClimateDirection, ActuatorHandler] | None = None
+        # The handlers' mode after the last loop, so we can reset the PID when it
+        #  changes
+        self._handler_modes: dict[ClimateDirection, gv.ActuatorMode] = {}
         self._pids: dict[gv.ClimateParameter, HystericalPID] | None = None
         self._sensor_miss: int = 0
 
@@ -115,6 +118,7 @@ class Climate(SubroutineTemplate[Actuator]):
             self._remove_pid(parameter)
         for pid in self.pids.values():
             pid.reset()
+            pid.reset_direction()
 
     """Routine specific methods"""
     def get_actuator_handler(self, actuator_group: str) -> ActuatorHandler:
@@ -145,9 +149,13 @@ class Climate(SubroutineTemplate[Actuator]):
         actuator_group = self.get_actuator_group_for_parameter(climate_direction)
         actuator_handler = self.get_actuator_handler(actuator_group)
         self.actuator_handlers[climate_direction] = actuator_handler
+        self._handler_modes[climate_direction] = actuator_handler.mode
         async with actuator_handler.update_status_transaction(activation=True):
             actuator_handler.activate()
         actuator_handler.reset_cached_actuators()
+        # The PID's directions now include this handler's
+        climate_parameter = climate_direction[0]
+        self.pids[climate_parameter].reset_direction()
 
     async def _unmount_actuator_handler(self, climate_direction: ClimateDirection) -> None:
         if climate_direction not in self.actuator_handlers:
@@ -161,6 +169,7 @@ class Climate(SubroutineTemplate[Actuator]):
                 await actuator_handler.reset()
             actuator_handler.deactivate()
         del self.actuator_handlers[climate_direction]
+        del self._handler_modes[climate_direction]
 
     def _add_pid(self, climate_parameter: gv.ClimateParameter) -> None:
         pid = self.ecosystem.actuator_hub.get_pid(climate_parameter)
@@ -314,6 +323,15 @@ class Climate(SubroutineTemplate[Actuator]):
         current_value: float | None = sensors_average.get(measure)
         pid.update_pid(current_value)
 
+    def _reset_pids_on_mode_change(self) -> None:
+        # Reset the PIDs when they go from manual to automatic mode as the errors 
+        #  they registered while overridden are meaningless
+        for climate_direction, actuator_handler in self.actuator_handlers.items():
+            if actuator_handler.mode is not self._handler_modes[climate_direction]:
+                climate_parameter = climate_direction[0]
+                self.pids[climate_parameter].reset()
+                self._handler_modes[climate_direction] = actuator_handler.mode
+
     async def _update_actuator_handler(
             self,
             climate_direction: ClimateDirection,
@@ -332,6 +350,7 @@ class Climate(SubroutineTemplate[Actuator]):
         if self._check_misses():
             await self.stop()
             return
+        self._reset_pids_on_mode_change()
         for climate_parameter in self.pids.keys():
             self._update_pid(climate_parameter, sensors_average)
         for climate_direction, actuator_handler in self.actuator_handlers.items():

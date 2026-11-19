@@ -15,7 +15,6 @@ from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
-from gaia.exceptions import HardwareNotFound
 from gaia.config import defaults
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
@@ -104,6 +103,7 @@ class HystericalPID:
 
     @property
     def direction(self) -> Direction:
+        """The directions on which the actuators can influence"""
         if self._direction is not None:
             return self._direction
         direction: Direction = Direction.none
@@ -213,6 +213,7 @@ class HystericalPID:
         self._last_sampling_time = None
         self._last_output = 0.0
         self._reset_errors()
+        self.reset_direction()
 
 
 class Timer:
@@ -294,8 +295,6 @@ class ActuatorHandler:
         "_update_lock",
         "_updating",
         "actuator_hub",
-        "associated_pid",
-        "direction",
         "ecosystem",
         "group",
         "logger",
@@ -306,17 +305,13 @@ class ActuatorHandler:
             self,
             actuator_hub: ActuatorHub,
             actuator_type: gv.HardwareType,
-            actuator_direction: Direction,
             actuator_group: str | None = None,
-            associated_pid: HystericalPID | None = None,
     ) -> None:
         assert actuator_type & gv.HardwareType.actuator
-        assert actuator_direction in (Direction.decrease, Direction.increase)
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
         # Actuators info
         self.type: gv.HardwareType = actuator_type
-        self.direction: Direction = actuator_direction
         self.group: str = actuator_group or self.type.name
         # Logger
         eco_name = self.ecosystem.name.replace(" ", "_")
@@ -330,9 +325,8 @@ class ActuatorHandler:
         self._automatic_status: bool = False
         self._automatic_level: float = 0.0
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
-        # Linked actuators, PIDs and tasks
+        # Linked actuators and tasks
         self._timer: Timer | None = None
-        self.associated_pid: HystericalPID | None = associated_pid
         self._actuators: list[Actuator] | None = None
         # State update management
         self._update_lock: Lock = Lock()
@@ -366,8 +360,6 @@ class ActuatorHandler:
         # The linked actuators changed or are being terminated, the next status
         #  or level update will retry if still needed
         self._cancel_retry()
-        if self.associated_pid is not None:
-            self.associated_pid.reset_direction()
 
     def as_dict(self) -> gv.ActuatorStateDict:
         return {
@@ -459,7 +451,7 @@ class ActuatorHandler:
         if self._mode == validated_value:
             # No need to update
             return
-        self._set_mode(validated_value)
+        self._mode = validated_value
         self._any_status_change = True
         self.logger.debug(
             f"{self.group.capitalize()} has been set to "
@@ -467,11 +459,6 @@ class ActuatorHandler:
         if validated_value is gv.ActuatorMode.automatic:
             # Apply the latest automatic target
             await self._apply_automatic_target()
-
-    def _set_mode(self, value: gv.ActuatorMode) -> None:
-        self._mode = value
-        if self.associated_pid is not None:
-            self.associated_pid.reset()
 
     @property
     def status(self) -> bool:
@@ -844,35 +831,6 @@ class ActuatorHub:
         except KeyError:
             return gv.HardwareType.actuator
 
-    def _get_actuator_direction(self, actuator_group: str) -> Direction:
-        climate_direction = self.config.get_climate_direction(actuator_group)
-        if climate_direction is not None:
-            return Direction[climate_direction[1]]
-        if self.config.get_weather_directions(actuator_group):
-            # Weather parameter only act on "increase" actuators
-            return Direction.increase
-        raise HardwareNotFound(
-            f"{actuator_group} does not manage any climate or weather parameter."
-        )
-
-    def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
-        climate_direction = self.config.get_climate_direction(actuator_group)
-        if climate_direction is None:
-            if not self.config.get_weather_directions(actuator_group):
-                raise ValueError(
-                    f"Actuator group '{actuator_group}' has no environment parameter "
-                    f"attached to it."
-                )
-            # Only climate parameters have PIDs attached to them
-            return None
-        parameter = climate_direction[0]
-        if parameter not in self.pids:
-            raise RuntimeError(
-                f"Trying to get an undefined PID for the actuator group "
-                f"'{actuator_group}'"
-            )
-        return self.get_pid(parameter)
-
     def get_handler(
             self,
             actuator_group: str | gv.HardwareType,
@@ -886,10 +844,7 @@ class ActuatorHub:
             return self._actuator_handlers[actuator_group]
         except KeyError:
             actuator_type = self._get_actuator_type(actuator_group)
-            direction = self._get_actuator_direction(actuator_group)
-            maybe_pid = self._get_actuator_pid(actuator_group)
-            actuator_handler = ActuatorHandler(
-                self, actuator_type, direction, actuator_group, maybe_pid)
+            actuator_handler = ActuatorHandler(self, actuator_type, actuator_group)
             # Attach the handler to the actuator hub handlers store
             self._actuator_handlers[actuator_group] = actuator_handler
             # The handler is attached to the handlers store during its init
