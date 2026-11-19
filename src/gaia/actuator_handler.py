@@ -15,7 +15,6 @@ from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
-from gaia.exceptions import HardwareNotFound
 from gaia.config import defaults
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
@@ -104,6 +103,7 @@ class HystericalPID:
 
     @property
     def direction(self) -> Direction:
+        """The directions on which the actuators can influence"""
         if self._direction is not None:
             return self._direction
         direction: Direction = Direction.none
@@ -213,6 +213,7 @@ class HystericalPID:
         self._last_sampling_time = None
         self._last_output = 0.0
         self._reset_errors()
+        self.reset_direction()
 
 
 class Timer:
@@ -280,7 +281,8 @@ class ActuatorHandler:
         "_active",
         "_actuators",
         "_any_status_change",
-        "_last_expected_level",
+        "_automatic_level",
+        "_automatic_status",
         "_level",
         "_level_synced",
         "_mode",
@@ -293,8 +295,6 @@ class ActuatorHandler:
         "_update_lock",
         "_updating",
         "actuator_hub",
-        "associated_pid",
-        "direction",
         "ecosystem",
         "group",
         "logger",
@@ -305,17 +305,13 @@ class ActuatorHandler:
             self,
             actuator_hub: ActuatorHub,
             actuator_type: gv.HardwareType,
-            actuator_direction: Direction,
             actuator_group: str | None = None,
-            associated_pid: HystericalPID | None = None,
     ) -> None:
         assert actuator_type & gv.HardwareType.actuator
-        assert actuator_direction in (Direction.decrease, Direction.increase)
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
         # Actuators info
         self.type: gv.HardwareType = actuator_type
-        self.direction: Direction = actuator_direction
         self.group: str = actuator_group or self.type.name
         # Logger
         eco_name = self.ecosystem.name.replace(" ", "_")
@@ -325,11 +321,12 @@ class ActuatorHandler:
         self._active: int = 0
         self._status: bool = False
         self._level: float = 0.0
-        self._last_expected_level: float = 0.0
+        # What the Climate and Light subroutine request, applied in automatic mode
+        self._automatic_status: bool = False
+        self._automatic_level: float = 0.0
         self._mode: gv.ActuatorMode = gv.ActuatorMode.automatic
-        # Linked actuators, PIDs and tasks
+        # Linked actuators and tasks
         self._timer: Timer | None = None
-        self.associated_pid: HystericalPID | None = associated_pid
         self._actuators: list[Actuator] | None = None
         # State update management
         self._update_lock: Lock = Lock()
@@ -363,8 +360,6 @@ class ActuatorHandler:
         # The linked actuators changed or are being terminated, the next status
         #  or level update will retry if still needed
         self._cancel_retry()
-        if self.associated_pid is not None:
-            self.associated_pid.reset_direction()
 
     def as_dict(self) -> gv.ActuatorStateDict:
         return {
@@ -456,16 +451,14 @@ class ActuatorHandler:
         if self._mode == validated_value:
             # No need to update
             return
-        self._set_mode(validated_value)
+        self._mode = validated_value
         self._any_status_change = True
         self.logger.debug(
             f"{self.group.capitalize()} has been set to "
             f"'{self.mode.name}' mode.")
-
-    def _set_mode(self, value: gv.ActuatorMode) -> None:
-        self._mode = value
-        if self.associated_pid is not None:
-            self.associated_pid.reset()
+        if validated_value is gv.ActuatorMode.automatic:
+            # Apply the latest automatic target
+            await self._apply_automatic_target()
 
     @property
     def status(self) -> bool:
@@ -560,6 +553,23 @@ class ActuatorHandler:
             f"{self.group.capitalize()}'s PWM level has been set to {pwm_level}%.")
         return True
 
+    async def set_automatic_target(self, status: bool, level: float) -> None:
+        """Set the status and level wanted by the Climate and Light subroutines.
+
+        In automatic mode, they are applied right away. In manual mode, they are
+        stored and will be applied when the handler will goes back to automatic
+        mode.
+        """
+        self._check_update_status_transaction()
+        self._automatic_status = status
+        self._automatic_level = level
+        if self._mode is gv.ActuatorMode.automatic:
+            await self._apply_automatic_target()
+
+    async def _apply_automatic_target(self) -> None:
+        await self.set_status(self._automatic_status)
+        await self.set_level(self._automatic_level)
+
     @property
     def synced(self) -> bool:
         return self._status_synced and self._level_synced
@@ -636,8 +646,10 @@ class ActuatorHandler:
 
     async def reset(self) -> None:
         self._check_update_status_transaction()
+        # Store the target so it will be applied right after when going back to
+        #  automatic mode
+        await self.set_automatic_target(False, 0.0)
         await self.set_mode(gv.ActuatorMode.automatic)
-        await self.set_status(False)
         self.reset_timer()
 
     async def _turn_to(
@@ -646,10 +658,8 @@ class ActuatorHandler:
             level: float = 100.0,
     ) -> None:
         if turn_to == gv.ActuatorModePayload.automatic:
+            # Applies the automatic target
             await self.set_mode(gv.ActuatorMode.automatic)
-            outdated_expected_status = self.compute_expected_status(
-                self._last_expected_level)
-            await self.set_status(outdated_expected_status)
         else:
             await self.set_mode(gv.ActuatorMode.manual)
             if turn_to == gv.ActuatorModePayload.on:
@@ -772,23 +782,6 @@ class ActuatorHandler:
         self._sending_data_task = asyncio.create_task(
             self.send_actuator_state(data), name=task_name)
 
-    def compute_expected_status(self, expected_level: float) -> bool:
-        self._last_expected_level = expected_level
-        if self.mode == gv.ActuatorMode.automatic:
-            if expected_level is None:
-                self.logger.error(
-                    "Cannot compute an expected status for automatic mode "
-                    "without an expected PID level. Falling back to off status.")
-                return False
-            else:
-                if self.direction == Direction.increase:
-                    return expected_level > 0  # Should be on when trying to increase measure
-                else:
-                    return expected_level < 0  # Should be on when trying to decrease measure
-        else:
-            # Mode is manual
-            return self.status
-
 
 class ActuatorHub:
     def __init__(self, ecosystem: "Ecosystem") -> None:
@@ -838,35 +831,6 @@ class ActuatorHub:
         except KeyError:
             return gv.HardwareType.actuator
 
-    def _get_actuator_direction(self, actuator_group: str) -> Direction:
-        climate_direction = self.config.get_climate_direction(actuator_group)
-        if climate_direction is not None:
-            return Direction[climate_direction[1]]
-        if self.config.get_weather_directions(actuator_group):
-            # Weather parameter only act on "increase" actuators
-            return Direction.increase
-        raise HardwareNotFound(
-            f"{actuator_group} does not manage any climate or weather parameter."
-        )
-
-    def _get_actuator_pid(self, actuator_group: str) -> HystericalPID | None:
-        climate_direction = self.config.get_climate_direction(actuator_group)
-        if climate_direction is None:
-            if not self.config.get_weather_directions(actuator_group):
-                raise ValueError(
-                    f"Actuator group '{actuator_group}' has no environment parameter "
-                    f"attached to it."
-                )
-            # Only climate parameters have PIDs attached to them
-            return None
-        parameter = climate_direction[0]
-        if parameter not in self.pids:
-            raise RuntimeError(
-                f"Trying to get an undefined PID for the actuator group "
-                f"'{actuator_group}'"
-            )
-        return self.get_pid(parameter)
-
     def get_handler(
             self,
             actuator_group: str | gv.HardwareType,
@@ -880,10 +844,7 @@ class ActuatorHub:
             return self._actuator_handlers[actuator_group]
         except KeyError:
             actuator_type = self._get_actuator_type(actuator_group)
-            direction = self._get_actuator_direction(actuator_group)
-            maybe_pid = self._get_actuator_pid(actuator_group)
-            actuator_handler = ActuatorHandler(
-                self, actuator_type, direction, actuator_group, maybe_pid)
+            actuator_handler = ActuatorHandler(self, actuator_type, actuator_group)
             # Attach the handler to the actuator hub handlers store
             self._actuator_handlers[actuator_group] = actuator_handler
             # The handler is attached to the handlers store during its init

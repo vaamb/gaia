@@ -137,9 +137,14 @@ class Weather(SubroutineTemplate[Actuator]):
                 f"Job for `{job_name}` weather event is over. Restoring actuator "
                 f"handler to {status} {level} {mode}")
             async with actuator_handler.update_status_transaction():
-                await actuator_handler.set_status(status)
-                await actuator_handler.set_level(level)
-                await actuator_handler.set_mode(mode)
+                if mode is gv.ActuatorMode.automatic:
+                    # Going back to automatic mode will apply the latest automatic
+                    #  target requested by climate
+                    await actuator_handler.set_mode(mode)
+                else:
+                    await actuator_handler.set_status(status)
+                    await actuator_handler.set_level(level)
+                    await actuator_handler.set_mode(mode)
             del self._timers[job_name]
 
         async def wrapper() -> None:

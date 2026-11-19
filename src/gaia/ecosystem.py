@@ -512,6 +512,9 @@ class Ecosystem:
             for actuator_handler in self.actuator_hub.actuator_handlers.values():
                 if hardware in actuator_handler.get_linked_actuators():
                     actuator_handler.reset_cached_actuators()
+            # The PIDs may have lost their only actuator in a direction
+            for pid in self.actuator_hub.pids.values():
+                pid.reset_direction()
         del self._hardware[hardware_uid]
         self.logger.debug(f"Hardware {hardware.name} has been dismounted.")
 
