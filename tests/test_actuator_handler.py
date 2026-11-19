@@ -245,3 +245,37 @@ class TestActuatorHandler:
         assert actuator_payload[2] is True                    # Actuator active status
         assert actuator_payload[3] == gv.ActuatorMode.manual  # Actuator mode
         assert actuator_payload[4] is True                    # Actuator status
+
+    async def test_automatic_target(self, light_handler: ActuatorHandler):
+        light: DimmableSwitchMixin = light_handler.ecosystem.hardware[test_data.light_uid]
+
+        # In automatic mode, the target is applied right away
+        async with light_handler.update_status_transaction():
+            await light_handler.set_automatic_target(True, 42.0)
+        assert light_handler.status is True
+        assert light_handler.level == 42.0
+        assert (await light.get_status()) is True
+
+        # In manual mode, the target is only stored
+        async with light_handler.update_status_transaction():
+            await light_handler.turn_to(gv.ActuatorModePayload.off, level=0.0)
+            await light_handler.set_automatic_target(True, 21.0)
+        assert light_handler.status is False
+        assert light_handler.level == 0.0
+        assert light_handler._automatic_status is True
+        assert light_handler._automatic_level == 21.0
+
+        # Going back to automatic applies the latest target
+        async with light_handler.update_status_transaction():
+            await light_handler.turn_to(gv.ActuatorModePayload.automatic)
+        assert light_handler.status is True
+        assert light_handler.level == 21.0
+        assert (await light.get_status()) is True
+
+        # Resetting clears the target, so it is not applied again later
+        async with light_handler.update_status_transaction():
+            await light_handler.turn_to(gv.ActuatorModePayload.on)
+            await light_handler.reset()
+        assert light_handler.mode is gv.ActuatorMode.automatic
+        assert light_handler.status is False
+        assert light_handler.level == 0.0
