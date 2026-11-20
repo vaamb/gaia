@@ -200,7 +200,7 @@ class TestEcosystem:
             assert actuator["mode"] is gv.ActuatorMode.automatic
 
     async def test_turn_actuator(self, ecosystem: Ecosystem):
-        with pytest.raises(ValueError, match=r"Actuator group 'light' is not mounted."):
+        with pytest.raises(RuntimeError, match=r"This actuator is not active."):
             await ecosystem.turn_actuator("light", gv.ActuatorModePayload.automatic)
 
         # All subroutines are disabled by default in testing config

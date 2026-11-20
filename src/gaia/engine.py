@@ -707,6 +707,9 @@ class Engine(metaclass=SingletonMeta):
             try:
                 await ecosystem.refresh_hardware()
                 await ecosystem.refresh_subroutines()
+                # Refresh the handlers once the hardware are updated and the
+                # subroutines not needing them anymore unlinked them
+                await ecosystem.actuator_hub.refresh_handlers()
                 await ecosystem.refresh_lighting_hours(send_info=False)
             except Exception as e:
                 self._log_ecosystem_error("refreshing", ecosystem_uid, e)

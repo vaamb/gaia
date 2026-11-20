@@ -772,11 +772,10 @@ class ActuatorHub:
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
             WeakValueDictionary()
-        self._actuator_handlers: WeakValueDictionary[str, ActuatorHandler] = \
-            WeakValueDictionary()
+        self._actuator_handlers: dict[str, ActuatorHandler] = {}
 
     @property
-    def actuator_handlers(self) -> WeakValueDictionary[str, ActuatorHandler]:
+    def actuator_handlers(self) -> dict[str, ActuatorHandler]:
         return self._actuator_handlers
 
     @property
@@ -806,6 +805,33 @@ class ActuatorHub:
             # The PID is attached to the PIDs store during its init
             return pid
 
+    async def mount_handler(self, actuator_group: str) -> ActuatorHandler:
+        actuator_handler = ActuatorHandler(self, actuator_group)
+        # Attach the handler to the actuator hub handlers store
+        self._actuator_handlers[actuator_group] = actuator_handler
+        # The handler is attached to the handlers store during its init
+        return actuator_handler
+
+    async def unmount_handler(self, actuator_group: str) -> None:
+        actuator_handler = self._actuator_handlers[actuator_group]
+        updated_data = actuator_handler.as_record(datetime.now(timezone.utc))
+        actuator_handler.reset_timer()
+        if actuator_handler._retry_timer is not None:
+            actuator_handler._retry_timer.cancel()
+        await actuator_handler.log_actuator_state(updated_data)
+        await actuator_handler.schedule_send_actuator_state(updated_data)
+        del self._actuator_handlers[actuator_group], actuator_handler
+
+    async def refresh_handlers(self) -> None:
+        mounted = set(self.actuator_handlers)
+        needed = self.ecosystem.get_actuator_groups_needed()
+        for actuator_group in mounted - needed:
+            await self.unmount_handler(actuator_group)
+        for actuator_group in needed - mounted:
+            await self.mount_handler(actuator_group)
+        for actuator_handler in self.actuator_handlers.values():
+            actuator_handler.reset_cached_actuators()
+
     def get_handler(
             self,
             actuator_group: str | gv.HardwareType,
@@ -815,14 +841,7 @@ class ActuatorHub:
             actuator_group = cast(str, actuator_group.name)
         if actuator_group not in self.ecosystem.config.get_actuator_groups():
             raise ValueError(f"Actuator group '{actuator_group}' is not defined in the config.")
-        try:
-            return self._actuator_handlers[actuator_group]
-        except KeyError:
-            actuator_handler = ActuatorHandler(self, actuator_group)
-            # Attach the handler to the actuator hub handlers store
-            self._actuator_handlers[actuator_group] = actuator_handler
-            # The handler is attached to the handlers store during its init
-            return actuator_handler
+        return self._actuator_handlers[actuator_group]
 
     def as_dict(self) -> dict[str, gv.ActuatorStateDict]:
         default_state_dict: gv.ActuatorStateDict = {

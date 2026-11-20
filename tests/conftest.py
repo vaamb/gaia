@@ -202,6 +202,7 @@ async def ecosystem(
     ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
     await ecosystem.initialize_hardware()
+    await ecosystem.actuator_hub.refresh_handlers()
 
     caplog.clear()
 
