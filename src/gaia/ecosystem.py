@@ -600,6 +600,17 @@ class Ecosystem:
         # Give failing hardware a chance to start on the next start
         self._failing_hardware.clear()
 
+    def get_actuator_groups_needed(self) -> set[str]:
+        rv = set()
+        for hardware_uid, hardware in self.hardware.items():
+            if (
+                    isinstance(hardware, ActuatorMixin)
+                    and hardware.active
+                    and hardware_uid not in self._failing_hardware
+            ):
+                rv.update(hardware.groups)
+        return rv
+
     # ---------------------------------------------------------------------------
     #   Lifecycle management
     # ---------------------------------------------------------------------------
