@@ -822,15 +822,32 @@ class ActuatorHub:
         await actuator_handler.schedule_send_actuator_state(updated_data)
         del self._actuator_handlers[actuator_group], actuator_handler
 
-    async def refresh_handlers(self) -> None:
-        mounted = set(self.actuator_handlers)
+    async def mount_needed_handlers(self) -> None:
+        """Mount the handlers of the actuator groups not already mounted.
+
+        Call it after the hardware are refreshed and before the subroutines
+        are, so they can find the handlers of new groups.
+        """
         needed = self.ecosystem.get_actuator_groups_needed()
-        for actuator_group in mounted - needed:
-            await self.unmount_handler(actuator_group)
-        for actuator_group in needed - mounted:
+        for actuator_group in needed - self.actuator_handlers.keys():
             await self.mount_handler(actuator_group)
         for actuator_handler in self.actuator_handlers.values():
             actuator_handler.reset_cached_actuators()
+
+    async def unmount_unneeded_handlers(self) -> None:
+        """Unmount the handlers of the actuator groups that are gone.
+
+        Call it after the subroutines are refreshed, so they have deactivated
+        the handlers they don't use anymore.
+        """
+        needed = self.ecosystem.get_actuator_groups_needed()
+        for actuator_group in self.actuator_handlers.keys() - needed:
+            if self.actuator_handlers[actuator_group].active:
+                self.logger.error(
+                    f"Actuator group '{actuator_group}' has no hardware anymore "
+                    f"but is still used by a subroutine, its handler is kept.")
+                continue
+            await self.unmount_handler(actuator_group)
 
     def get_handler(
             self,
@@ -839,8 +856,8 @@ class ActuatorHub:
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
             actuator_group = cast(str, actuator_group.name)
-        if actuator_group not in self.ecosystem.config.get_actuator_groups():
-            raise ValueError(f"Actuator group '{actuator_group}' is not defined in the config.")
+        # The handlers mounted are the source of truth, not the config: a
+        #  subroutine must be able to release a group removed from the config
         return self._actuator_handlers[actuator_group]
 
     def as_dict(self) -> dict[str, gv.ActuatorStateDict]:

@@ -631,7 +631,7 @@ class Ecosystem:
             # Mount all the hardware
             await self.initialize_hardware()
             # Mount the actuator handlers linked to active hardware
-            await self.actuator_hub.refresh_handlers()
+            await self.actuator_hub.mount_needed_handlers()
             # Refresh subroutines
             await self.refresh_subroutines()
             # Send ecosystems info
@@ -677,6 +677,15 @@ class Ecosystem:
             self.virtual_self.stop()
         self.logger.debug("Ecosystem successfully stopped.")
         self._started = False
+
+    async def refresh(self) -> None:
+        await self.refresh_hardware()
+        # Mount the handlers of new groups before the subroutines need them ...
+        await self.actuator_hub.mount_needed_handlers()
+        await self.refresh_subroutines()
+        # ... and unmount the ones of groups gone once the subroutines released them
+        await self.actuator_hub.unmount_unneeded_handlers()
+        await self.refresh_lighting_hours(send_info=False)
 
     # ---------------------------------------------------------------------------
     #   Config and specific subroutines interaction

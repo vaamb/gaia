@@ -703,14 +703,8 @@ class Engine(metaclass=SingletonMeta):
         self.logger.debug(
             "Looking for already running ecosystems that need to continue to run.")
         for ecosystem_uid in already_started:
-            ecosystem = self.ecosystems[ecosystem_uid]
             try:
-                await ecosystem.refresh_hardware()
-                await ecosystem.refresh_subroutines()
-                # Refresh the handlers once the hardware are updated and the
-                # subroutines not needing them anymore unlinked them
-                await ecosystem.actuator_hub.refresh_handlers()
-                await ecosystem.refresh_lighting_hours(send_info=False)
+                await self.ecosystems[ecosystem_uid].refresh()
             except Exception as e:
                 self._log_ecosystem_error("refreshing", ecosystem_uid, e)
         # self.refresh_ecosystems_lighting_hours()  # done by Ecosystem during their startup
