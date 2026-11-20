@@ -284,21 +284,22 @@ class ActuatorHandler:
         "ecosystem",
         "group",
         "logger",
-        "type",
     )
 
     def __init__(
             self,
             actuator_hub: ActuatorHub,
-            actuator_type: gv.HardwareType,
-            actuator_group: str | None = None,
+            actuator_group: str,
     ) -> None:
-        assert actuator_type & gv.HardwareType.actuator
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
         # Actuators info
-        self.type: gv.HardwareType = actuator_type
-        self.group: str = actuator_group or self.type.name
+        if actuator_group not in self.ecosystem.config.get_actuator_groups():
+            raise ValueError(
+                f"Actuator group '{actuator_group}' has no valid actuator "
+                f"linked to it."
+            )
+        self.group: str = actuator_group
         # Logger
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
@@ -357,7 +358,7 @@ class ActuatorHandler:
 
     def as_record(self, timestamp: datetime) -> gv.ActuatorStateRecord:
         return gv.ActuatorStateRecord(
-            type=self.type,
+            type=gv.HardwareType.actuator,
             group=self.group,
             active=self.active,
             mode=self.mode,
@@ -693,7 +694,7 @@ class ActuatorHandler:
             session.add(
                 db_model(
                     ecosystem_uid=self.ecosystem.uid,
-                    type=data.type,
+                    type=gv.HardwareType.actuator,
                     timestamp=data.timestamp,
                     active=data.active,
                     mode=data.mode,
@@ -805,12 +806,6 @@ class ActuatorHub:
             # The PID is attached to the PIDs store during its init
             return pid
 
-    def _get_actuator_type(self, actuator_group: str) -> gv.HardwareType:
-        try:
-            return gv.HardwareType[actuator_group]
-        except KeyError:
-            return gv.HardwareType.actuator
-
     def get_handler(
             self,
             actuator_group: str | gv.HardwareType,
@@ -823,8 +818,7 @@ class ActuatorHub:
         try:
             return self._actuator_handlers[actuator_group]
         except KeyError:
-            actuator_type = self._get_actuator_type(actuator_group)
-            actuator_handler = ActuatorHandler(self, actuator_type, actuator_group)
+            actuator_handler = ActuatorHandler(self, actuator_group)
             # Attach the handler to the actuator hub handlers store
             self._actuator_handlers[actuator_group] = actuator_handler
             # The handler is attached to the handlers store during its init
@@ -851,12 +845,12 @@ class ActuatorHub:
         now = datetime.now(timezone.utc)
 
         def get_default_record(
-                hardware_type: gv.HardwareType,
+                actuator_group: str,
                 timestamp: datetime,
         ) -> gv.ActuatorStateRecord:
             return gv.ActuatorStateRecord(
-                type=hardware_type,
-                group=str(hardware_type.name),
+                type=gv.HardwareType.actuator,
+                group=actuator_group,
                 active=False,
                 mode=gv.ActuatorMode.automatic,
                 status=False,
@@ -870,6 +864,5 @@ class ActuatorHub:
             if actuator_group in self._actuator_handlers:
                 rv.append(self._actuator_handlers[actuator_group].as_record(now))
             else:
-                actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_group)
-                rv.append(get_default_record(actuator_type, now))
+                rv.append(get_default_record(actuator_group, now))
         return rv

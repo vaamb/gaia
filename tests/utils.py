@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from asyncio import sleep
+from collections import deque
 from typing import AsyncIterator, TypedDict
 
 import pytest
@@ -35,7 +36,7 @@ async def yield_control(iterations: int = 10) -> None:
 class MockDispatcher(AsyncDispatcher):
     def __init__(self, namespace: str):
         super().__init__(namespace)
-        self.emit_store: list[EmitDict] = []
+        self.emit_store: deque[EmitDict] = deque()
 
     async def _listen(self) -> AsyncIterator[bytes]:
         pass  # No used

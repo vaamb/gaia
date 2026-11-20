@@ -1,5 +1,4 @@
 from asyncio import sleep
-from collections import deque
 from datetime import datetime, timezone
 from math import isclose
 from time import monotonic
@@ -232,7 +231,7 @@ class TestOnEvent:
 
         assert "registration successful, sending initial ecosystems info" in caplog.text
 
-        responses = deque(events_handler._dispatcher.emit_store)
+        responses = events_handler._dispatcher.emit_store
 
         def get_uid(payload):
             return payload["data"][0]["uid"]
@@ -296,13 +295,13 @@ class TestOnEvent:
         data = get_data(payload)
         temperature = get_climate_cfg(data, "temperature")
         assert temperature == {
-            **test_data.temperature_cfg, 
+            **test_data.temperature_cfg,
             "parameter": "temperature",
             "linked_actuators": {"decrease": "cooler", "increase": "heater"},
         }
         humidity = get_climate_cfg(data, "humidity")
         assert humidity == {
-            **test_data.humidity_cfg, 
+            **test_data.humidity_cfg,
             "parameter": "humidity",
             "linked_actuators": {"decrease": "dehumidifier", "increase": "fogger"},
         }
@@ -345,13 +344,12 @@ class TestOnEvent:
         assert payload["event"] == "actuators_data"
         assert get_uid(payload) == test_data.ecosystem_uid
         for actuator_record in get_data(payload):
-            actuator_record: gv.ActuatorStateRecord
-            actuator_type = gv.HardwareType(actuator_record[0])
-            assert actuator_type & gv.HardwareType.actuator
-            assert actuator_record[1] == actuator_type.name
-            assert actuator_record[2] is False
-            assert actuator_record[3] == gv.ActuatorMode.automatic
-            assert actuator_record[4] is False
+            actuator_record = gv.ActuatorStateRecord(*actuator_record)
+            assert actuator_record.type is gv.HardwareType.actuator
+            #assert actuator_record.group == actuator_record.type.name
+            assert actuator_record.active is False
+            assert actuator_record.mode == gv.ActuatorMode.automatic
+            assert actuator_record.status is False
 
         """Initialization finished"""
         payload = responses.popleft()
