@@ -622,27 +622,21 @@ class ActuatorHandler:
         return self._timer.time_left()
 
     def reset_timer(self) -> None:
-        self._check_update_status_transaction()
         if self._timer is not None:
             self._timer.cancel()
         self._timer = None
-        self._any_status_change = True
 
     def increase_countdown(self, delta_time: float) -> None:
-        self._check_update_status_transaction()
         if self._timer is None:
             raise AttributeError("No timer set, you cannot increase the countdown.")
         self.logger.info(f"Increasing timer by {delta_time} seconds.")
         self._timer.modify_countdown(delta_time)
-        self._any_status_change = True
 
     def decrease_countdown(self, delta_time: float) -> None:
-        self._check_update_status_transaction()
         if self._timer is None:
             raise AttributeError("No timer set, you cannot decrease the countdown.")
         self.logger.info(f"Decreasing timer by {delta_time} seconds.")
         self._timer.modify_countdown(-delta_time)
-        self._any_status_change = True
 
     async def reset(self) -> None:
         self._check_update_status_transaction()
