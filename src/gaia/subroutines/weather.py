@@ -17,7 +17,7 @@ class Weather(SubroutineTemplate[Actuator]):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Routine parameters
-        self._actuator_handlers: dict[gv.WeatherParameter, ActuatorHandler] | None = None
+        self._active_parameters: dict[gv.WeatherParameter, str] = {}
         self._jobs: set[gv.WeatherParameter] = set()
         self._timers: dict[str, Timer] = {}
 
@@ -37,24 +37,21 @@ class Weather(SubroutineTemplate[Actuator]):
         self.logger.info(
             "Starting the weather subroutine. Its actions frequency are "
             "determined in the config file")
-        self._actuator_handlers = {}
-        expected_parameters = self.compute_expected_actuators()
+        expected_parameters = self.compute_expected_actuators().keys()
         for weather_parameter in expected_parameters:
             # Mount actuator handler
-            await self._mount_actuator_handler(weather_parameter)
+            await self._activate_actuator_handler(weather_parameter)
             # Add job
             await self._add_job(weather_parameter)
 
     async def _stop(self) -> None:
-        # Deactivate activated actuator handlers
-        for actuator_group in [*self.actuator_handlers.keys()]:
-            await self._unmount_actuator_handler(actuator_group)
-        # Reset actuator handlers
-        self._actuator_handlers = None
         # Close all jobs
         for weather_parameter in [*self._jobs]:
             await self._remove_job(weather_parameter)
         self._timers = {}
+        # Deactivate activated actuator handlers
+        for weather_parameter in [*self._active_parameters]:
+            await self._inactivate_actuator_handler(weather_parameter)
 
     def get_hardware_needed_uid(self) -> set[str]:
         hardware_needed: set[str] = set()
@@ -67,15 +64,17 @@ class Weather(SubroutineTemplate[Actuator]):
         # Remove all jobs to make sure they will be updated if they changed
         for weather_parameter in [*self._jobs]:
             await self._remove_job(weather_parameter)
-        # Mount and unmount actuator handlers if required
-        expected: set[str] = set(self.compute_expected_actuators())
-        mounted: set[str] = set(self.actuator_handlers)
-        for weather_event in expected - mounted:
-            await self._mount_actuator_handler(weather_event)
-        for weather_event in mounted - expected:
-            await self._unmount_actuator_handler(weather_event)
+        # Activate and deactivate actuator handlers if required
+        expected = self.compute_expected_actuators()
+        for weather_parameter, actuator_group in [*self._active_parameters.items()]:
+            # Deactivate the parameters removed and the ones linked to another group
+            if expected.get(weather_parameter) != actuator_group:
+                await self._inactivate_actuator_handler(weather_parameter)
+        for weather_parameter in expected.keys() - self._active_parameters.keys():
+            await self._activate_actuator_handler(weather_parameter)
         # Reset actuator handlers
-        for actuator_handler in self.actuator_handlers.values():
+        for actuator_group in self._active_parameters.values():
+            actuator_handler = self.get_actuator_handler(actuator_group)
             actuator_handler.reset_cached_actuators()
         # Add back jobs
         for weather_parameter in expected:
@@ -101,31 +100,33 @@ class Weather(SubroutineTemplate[Actuator]):
                 rv[weather_event] = actuator_group
         return rv
 
-    async def _mount_actuator_handler(self, weather_parameter: gv.WeatherParameter) -> None:
-        if weather_parameter in self.actuator_handlers:
+    async def _activate_actuator_handler(self, weather_parameter: gv.WeatherParameter) -> None:
+        if weather_parameter in self._active_parameters:
             raise ValueError(
                 f"Actuator handler for weather parameter '{weather_parameter}' "
                 f"is already mounted"
             )
         actuator_group = self.get_actuator_group_for_parameter(weather_parameter)
         actuator_handler = self.get_actuator_handler(actuator_group)
-        self.actuator_handlers[weather_parameter] = actuator_handler
         async with actuator_handler.update_status_transaction(activation=True):
             actuator_handler.activate()
         actuator_handler.reset_cached_actuators()
+        self._active_parameters[weather_parameter] = actuator_group
 
-    async def _unmount_actuator_handler(self, weather_parameter: gv.WeatherParameter) -> None:
-        if weather_parameter not in self.actuator_handlers:
+    async def _inactivate_actuator_handler(self, weather_parameter: gv.WeatherParameter) -> None:
+        if weather_parameter not in self._active_parameters:
             raise ValueError(
                 f"Actuator handler for weather parameter '{weather_parameter}' is "
-                f"not mounted"
+                f"not activated"
             )
-        actuator_handler = self.actuator_handlers[weather_parameter]
+        # Use the group activated, the config may have changed since then
+        actuator_group = self._active_parameters[weather_parameter]
+        actuator_handler = self.get_actuator_handler(actuator_group)
         async with actuator_handler.update_status_transaction(activation=True):
             if actuator_handler.mode is gv.ActuatorMode.automatic:
                 await actuator_handler.reset()
             actuator_handler.deactivate()
-        del self.actuator_handlers[weather_parameter]
+        del self._active_parameters[weather_parameter]
 
     def _create_job_func(
             self,
@@ -169,10 +170,13 @@ class Weather(SubroutineTemplate[Actuator]):
 
     async def _add_job(self, weather_parameter: gv.WeatherParameter) ->  None:
         if weather_parameter in self._jobs:
-            raise ValueError(f"Job for weather parameter '{weather_parameter}' already exists")
+            raise ValueError(
+                f"Job for weather parameter '{weather_parameter}' already exists"
+            )
         weather_cfg = self.ecosystem.config.get_weather_config(weather_parameter)
-        # Should raise if the actuator handler is not mounted
-        actuator_handler = self.actuator_handlers[weather_parameter]
+        # Raises a `KeyError` if the actuator handler is not activated
+        actuator_group = self._active_parameters[weather_parameter]
+        actuator_handler = self.get_actuator_handler(actuator_group)
         # Add the job
         self.logger.debug(f"Creating job for `{weather_parameter}` weather event")
         self.ecosystem.engine.scheduler.add_job(
@@ -186,7 +190,9 @@ class Weather(SubroutineTemplate[Actuator]):
 
     async def _remove_job(self, weather_parameter: gv.WeatherParameter) -> None:
         if weather_parameter not in self._jobs:
-            raise ValueError(f"Job for weather parameter '{weather_parameter}' does not exist")
+            raise ValueError(
+                f"Job for weather parameter {weather_parameter} does not exist"
+            )
         # Remove the job
         identifier = f"{self.ecosystem.uid}-weather_routine-{weather_parameter}"
         self.ecosystem.engine.scheduler.remove_job(identifier)
@@ -198,18 +204,6 @@ class Weather(SubroutineTemplate[Actuator]):
 
     def get_actuator_handler(self, actuator_group: str) -> ActuatorHandler:
         return self.ecosystem.actuator_hub.get_handler(actuator_group)
-
-    @property
-    def actuator_handlers(self) -> dict[gv.WeatherParameter, ActuatorHandler]:
-        """Return the actuator handlers used by the weather subroutine.
-
-        The result is a dictionary where the keys are the weather event names
-        and the values are the associated actuator handlers.
-        """
-        if self._actuator_handlers is None:
-            raise ValueError(
-                "actuator_handlers is not defined in non-started Climate subroutine")
-        return self._actuator_handlers
 
     def get_actuator_group_for_parameter(self, weather_parameter: gv.WeatherParameter) -> str:
         # Raises `UndefinedParameter` if the weather parameter is not configured

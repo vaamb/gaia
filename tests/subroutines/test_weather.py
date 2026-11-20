@@ -45,14 +45,17 @@ class TestWeatherSubroutine:
         # Enable the subroutine
         weather_subroutine.enable()
 
-        assert not weather_subroutine._actuator_handlers
+        assert not weather_subroutine._active_parameters
         assert not weather_subroutine._jobs
 
         # Test start, refresh and stop (weather has no routine)
         await weather_subroutine.start()
 
-        assert weather_subroutine._actuator_handlers
+        assert weather_subroutine._active_parameters == {"rain": "rainer"}
         assert weather_subroutine._jobs
+        actuator_handler = weather_subroutine.get_actuator_handler("rainer")
+        assert actuator_handler.active
+        active_refs = actuator_handler._active
 
         with pytest.raises(ValueError):
             await weather_subroutine.routine()
@@ -61,32 +64,69 @@ class TestWeatherSubroutine:
 
         await weather_subroutine.stop()
 
+        # Stopping should deactivate the actuator handlers it activated
+        assert not weather_subroutine._active_parameters
+        # Only the reference taken by `start()` is released
+        assert actuator_handler._active == active_refs - 1
+
         # Disable the subroutine
         weather_subroutine.disable()
 
-    async def test_mount_actuator_handler(self, weather_subroutine: Weather):
-        # Setup
-        weather_subroutine._actuator_handlers = {}
-
-        # Test mounting actuator handler
-        await weather_subroutine._mount_actuator_handler("rain")
+    async def test_activate_actuator_handler(self, weather_subroutine: Weather):
+        # Test activating the actuator handler
+        await weather_subroutine._activate_actuator_handler("rain")
 
         # Rainer is the actuator group for the rain parameter
         actuator_group = weather_subroutine.get_actuator_group_for_parameter("rain")
-        assert weather_subroutine.actuator_handlers["rain"].group == actuator_group
+        assert weather_subroutine._active_parameters == {"rain": actuator_group}
+        actuator_handler = weather_subroutine.get_actuator_handler(actuator_group)
+        assert actuator_handler.active
 
-        # Should raise if the actuator handler is already mounted
+        # Should raise if the actuator handler is already activated
         with pytest.raises(ValueError):
-            await weather_subroutine._mount_actuator_handler("rain")
+            await weather_subroutine._activate_actuator_handler("rain")
 
-        # Test unmounting actuator handler
-        await weather_subroutine._unmount_actuator_handler("rain")
+        # Test deactivating the actuator handler
+        await weather_subroutine._inactivate_actuator_handler("rain")
 
-        assert "rain" not in weather_subroutine.actuator_handlers
+        assert "rain" not in weather_subroutine._active_parameters
+        assert not actuator_handler.active
 
-        # Should raise if the actuator handler is not mounted
+        # Should raise if the actuator handler is not activated
         with pytest.raises(ValueError):
-            await weather_subroutine._unmount_actuator_handler("rain")
+            await weather_subroutine._inactivate_actuator_handler("rain")
+
+    async def test_refresh_relink_parameter(
+            self,
+            ecosystem: Ecosystem,
+            weather_subroutine: Weather,
+    ):
+        weather_subroutine.enable()
+        await weather_subroutine.start()
+
+        # "rainer" is defined as "rain"'s linked actuator
+        assert weather_subroutine._active_parameters == {"rain": "rainer"}
+        rainer_handler = weather_subroutine.get_actuator_handler("rainer")
+        assert rainer_handler.active
+
+        # Link "rain" to another group. Refreshing should deactivate "rainer" and
+        #  activate "fogger" instead
+        ecosystem.config.update_weather_parameter("rain", linked_actuator="fogger")
+        await weather_subroutine.refresh()
+
+        assert weather_subroutine._active_parameters == {"rain": "fogger"}
+        assert not rainer_handler.active
+        fogger_handler = weather_subroutine.get_actuator_handler("fogger")
+        assert fogger_handler.active
+
+        # Delete "rain" altogether, it shouldn't impact anything
+        ecosystem.config.delete_weather_parameter("rain")
+        await weather_subroutine.stop()
+
+        assert not weather_subroutine._active_parameters
+        assert not fogger_handler.active
+
+        weather_subroutine.disable()
 
     async def test_default_actuator_group(
             self,
@@ -100,11 +140,10 @@ class TestWeatherSubroutine:
         assert weather_subroutine.compute_expected_actuators() == {"rain": "rainer"}
         assert weather_subroutine.get_actuator_group_for_parameter("rain") == "rainer"
 
-        weather_subroutine._actuator_handlers = {}
-        await weather_subroutine._mount_actuator_handler("rain")
-        assert weather_subroutine.actuator_handlers["rain"].group == "rainer"
+        await weather_subroutine._activate_actuator_handler("rain")
+        assert weather_subroutine._active_parameters["rain"] == "rainer"
 
-        await weather_subroutine._unmount_actuator_handler("rain")
+        await weather_subroutine._inactivate_actuator_handler("rain")
 
     async def test_parameter_without_actuator_group(
             self,
@@ -129,10 +168,9 @@ class TestWeatherSubroutine:
 
     async def test_create_job(self, weather_subroutine: Weather):
         # Setup
-        weather_subroutine._actuator_handlers = {}
-        await weather_subroutine._mount_actuator_handler("rain")
+        await weather_subroutine._activate_actuator_handler("rain")
 
-        actuator_handler = weather_subroutine.actuator_handlers["rain"]
+        actuator_handler = weather_subroutine.get_actuator_handler("rainer")
 
         assert actuator_handler.mode is gv.ActuatorMode.automatic
         assert not actuator_handler.status
@@ -165,13 +203,12 @@ class TestWeatherSubroutine:
         assert actuator_handler.status is False
         assert actuator_handler.level == 0.0
 
-        await weather_subroutine._unmount_actuator_handler("rain")
+        await weather_subroutine._inactivate_actuator_handler("rain")
 
     async def test_add_job(self, weather_subroutine: Weather):
         # Setup
-        weather_subroutine._actuator_handlers = {}
         parameter = "rain"
-        await weather_subroutine._mount_actuator_handler(parameter)
+        await weather_subroutine._activate_actuator_handler(parameter)
 
         # Test adding job
         await weather_subroutine._add_job(parameter)
@@ -193,4 +230,4 @@ class TestWeatherSubroutine:
         with pytest.raises(ValueError):
             await weather_subroutine._remove_job("rain")
 
-        await weather_subroutine._unmount_actuator_handler("rain")
+        await weather_subroutine._inactivate_actuator_handler("rain")
