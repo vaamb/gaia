@@ -65,7 +65,9 @@ class TestLightSubroutine:
         # Test start, routine, refresh and stop
         await light_subroutine.start()
 
-        assert light_subroutine.actuator_handler.group == "light"
+        assert light_subroutine._actuator_group == "light"
+        actuator_handler = light_subroutine.actuator_handler
+        assert actuator_handler.active
         assert len(light_subroutine.light_sensors) > 0
 
         await light_subroutine.routine()
@@ -74,5 +76,39 @@ class TestLightSubroutine:
 
         await light_subroutine.stop()
 
+        # Stopping should deactivate the actuator handler it activated
+        assert light_subroutine._actuator_group is None
+        assert not actuator_handler.active
+
         # Disable the subroutine
+        light_subroutine.disable()
+
+    async def test_refresh_relinked_group(
+            self,
+            ecosystem: Ecosystem,
+            light_subroutine: Light,
+    ):
+        light_subroutine.enable()
+        await light_subroutine.start()
+        light_handler = light_subroutine.actuator_handler
+        assert light_handler.active
+
+        # Move the lights to a new group: its handler only exists once the
+        #  hardware is refreshed, so the ecosystem must mount it before
+        #  refreshing the subroutines
+        ecosystem.config.update_hardware(test_data.light_uid, groups=["grow_light"])
+        ecosystem.config.set_climate_parameter(
+            "light", day=250_000, night=0, hysteresis=10_000,
+            linked_actuators={"increase": "grow_light", "decrease": None},
+        )
+        await ecosystem.refresh()
+
+        assert light_subroutine._actuator_group == "grow_light"
+        assert light_subroutine.actuator_handler.active
+        # The previous group has no hardware anymore: its handler is released
+        #  by Light, then unmounted by the hub
+        assert not light_handler.active
+        assert "light" not in ecosystem.actuator_hub.actuator_handlers
+
+        await light_subroutine.stop()
         light_subroutine.disable()
