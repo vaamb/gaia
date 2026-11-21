@@ -36,7 +36,9 @@ class Light(SubroutineTemplate[Actuator]):
         # Background task
         self._loop_period: float = float(
             self.ecosystem.engine.config.app_config.LIGHT_LOOP_PERIOD)
-        self._get_lux_futures: list[Task] = []
+        # Every in-flight sensor read, whoever started it: a read must not be
+        #  forgotten when another routine call starts its own
+        self._get_lux_futures: set[Task] = set()
         self._task: Task | None = None
 
     """SubroutineTemplate methods"""
@@ -99,11 +101,12 @@ class Light(SubroutineTemplate[Actuator]):
         self._task.cancel()
         self._task = None
         # Cancel any in-flight sensor reads so they don't outlive the subroutine
-        for future in self._get_lux_futures:
+        futures = [*self._get_lux_futures]
+        for future in futures:
             future.cancel()
-        if self._get_lux_futures:
+        if futures:
             try:
-                await asyncio.gather(*self._get_lux_futures)
+                await asyncio.gather(*futures)
             except CancelledError:
                 # Futures created via `anyio.run_sync()` raise `CancelledError`
                 #  when a parent task is cancelled
@@ -200,13 +203,14 @@ class Light(SubroutineTemplate[Actuator]):
         # If there isn't any dimmable light, the info cannot be properly used
         if not self.light_sensors or not self.any_dimmable_light:
             return 0.0  # Fallback value
-        self._get_lux_futures = [
+        futures = [
             asyncio.create_task(light_sensor.get_lux())
             for light_sensor in self.light_sensors
         ]
-        if not self._get_lux_futures:
-            return 0.0  # Fallback value
-        done, pending = await asyncio.wait(self._get_lux_futures, timeout=self._loop_period / 2)
+        for future in futures:
+            self._get_lux_futures.add(future)
+            future.add_done_callback(self._get_lux_futures.discard)
+        done, pending = await asyncio.wait(futures, timeout=self._loop_period / 2)
         for future in pending:
             future.cancel()
         results: list[float | None] = [future.result() for future in done]

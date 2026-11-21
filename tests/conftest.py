@@ -1,4 +1,4 @@
-from asyncio import Event, Lock
+from asyncio import Event, Lock, sleep
 from copy import deepcopy
 import gc
 import os
@@ -141,10 +141,16 @@ async def engine(
         # Since python 3.13, it sometimes takes more time to perform garbage
         # collection and reclaim the unreferenced hardware
         await yield_control()
-        if _MetaHardware.instances:
-            # Some hardware may only be held by a reference cycle, waiting for
-            #  the cyclic garbage collector
+        # Some hardware may only be held by a reference cycle, waiting for the
+        #  cyclic garbage collector, or by an AnyIO worker thread that has
+        #  already reported its result but not yet dropped its work item. It only
+        #  releases it once it gets the GIL back.
+        #  Use a positive sleep time so the main thread can release the GIL.
+        #  Real leaks still fail once the deadline is reached
+        deadline = monotonic() + 0.5
+        while _MetaHardware.instances and monotonic() < deadline:
             gc.collect()
+            await sleep(0.01)
         not_cleared = [_ for _ in _MetaHardware.instances]
         _MetaHardware.instances.clear()
         if not_cleared:
