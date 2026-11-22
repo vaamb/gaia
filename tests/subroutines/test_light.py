@@ -54,7 +54,19 @@ class TestLightSubroutine:
         with pytest.raises(ValueError):
             await light_subroutine.turn_light("WrongMode")
 
-    async def test_routine(self, sensors_subroutine: Sensors, light_subroutine: Light):
+    @pytest.mark.parametrize("lighting_needed", [True, False], ids=["lights_on", "lights_off"])
+    async def test_routine(
+            self,
+            sensors_subroutine: Sensors,
+            light_subroutine: Light,
+            monkeypatch: pytest.MonkeyPatch,
+            lighting_needed: bool,
+    ):
+        monkeypatch.setattr(
+            sensors_subroutine.ecosystem.config, "is_lighting_needed",
+            lambda now=None, rv=lighting_needed: rv,
+        )
+        
         # Sensors subroutine is required for full routine
         sensors_subroutine.enable()
         await sensors_subroutine.start()
@@ -83,15 +95,24 @@ class TestLightSubroutine:
         # Disable the subroutine
         light_subroutine.disable()
 
+    @pytest.mark.parametrize("lighting_needed", [True, False], ids=["lights_on", "lights_off"])
     async def test_refresh_relinked_group(
             self,
             ecosystem: Ecosystem,
             light_subroutine: Light,
+            monkeypatch: pytest.MonkeyPatch,
+            lighting_needed: bool,
     ):
+        monkeypatch.setattr(
+            ecosystem.config, "is_lighting_needed",
+            lambda now=None, rv=lighting_needed: rv,
+        )
         light_subroutine.enable()
         await light_subroutine.start()
         light_handler = light_subroutine.actuator_handler
         assert light_handler.active
+        await light_subroutine.routine()
+        assert light_handler.status is lighting_needed
 
         # Move the lights to a new group: its handler only exists once the
         #  hardware is refreshed, so the ecosystem must mount it before
@@ -106,8 +127,9 @@ class TestLightSubroutine:
         assert light_subroutine._actuator_group == "grow_light"
         assert light_subroutine.actuator_handler.active
         # The previous group has no hardware anymore: its handler is released
-        #  by Light, then unmounted by the hub
+        #  by Light, even if it was on, then unmounted by the hub
         assert not light_handler.active
+        assert light_handler.status is False
         assert "light" not in ecosystem.actuator_hub.actuator_handlers
 
         await light_subroutine.stop()
