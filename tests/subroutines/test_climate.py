@@ -223,7 +223,7 @@ class TestClimateSubroutine:
         await climate_subroutine.refresh()
 
         assert set(climate_subroutine.pids) == {"temperature"}
-        assert set(climate_subroutine.actuator_handlers) == {
+        assert set(climate_subroutine._active_directions) == {
             ("temperature", "increase"),
         }
 
@@ -235,7 +235,7 @@ class TestClimateSubroutine:
         await climate_subroutine.refresh()
 
         assert set(climate_subroutine.pids) == {"humidity"}
-        assert set(climate_subroutine.actuator_handlers) == {
+        assert set(climate_subroutine._active_directions) == {
             ("humidity", "decrease"),
             ("humidity", "increase"),
         }
@@ -247,7 +247,7 @@ class TestClimateSubroutine:
         await climate_subroutine.refresh()
 
         assert set(climate_subroutine.pids) == {"temperature", "humidity"}
-        assert set(climate_subroutine.actuator_handlers) == {
+        assert set(climate_subroutine._active_directions) == {
             ("temperature", "increase"),
             ("humidity", "decrease"),
             ("humidity", "increase"),
@@ -275,13 +275,18 @@ class TestClimateSubroutine:
             "temperature", "humidity",
         }
 
-        assert set(climate_subroutine.actuator_handlers) == {
+        assert set(climate_subroutine._active_directions) == {
             ("temperature", "increase"),  # "heater"
             ("humidity", "decrease"),  # "dehumidifier"
             ("humidity", "increase"),  # "fogger"
         }
 
         assert set(climate_subroutine.pids) == {"temperature", "humidity"}
+        actuator_handlers = [
+            climate_subroutine.get_actuator_handler(actuator_group)
+            for actuator_group in climate_subroutine._active_directions.values()
+        ]
+        assert all(handler.active for handler in actuator_handlers)
 
         await climate_subroutine.routine()
 
@@ -289,5 +294,57 @@ class TestClimateSubroutine:
 
         await climate_subroutine.stop()
 
+        # Stopping should deactivate the actuator handlers it activated
+        assert not climate_subroutine._active_directions
+        assert not any(handler.active for handler in actuator_handlers)
+
         # Disable the subroutine
         climate_subroutine.disable()
+
+    async def test_refresh_relinked_group(
+            self,
+            ecosystem: Ecosystem,
+            climate_subroutine: Climate,
+            sensors_subroutine: Sensors,
+    ):
+        config = ecosystem.config
+        # Save config
+        climate_config = {**config.climate}
+
+        await sensors_subroutine.routine()
+        climate_subroutine.enable()
+        await climate_subroutine.start()
+        assert climate_subroutine._active_directions[("temperature", "increase")] == "heater"
+        heater_handler = climate_subroutine.get_actuator_handler("heater")
+        assert heater_handler.active
+
+        # Move the heater to a new group. The handler only exists once the
+        #  hardware has been refreshed. Mount it before refreshing the subroutines
+        config.update_hardware(test_data.heater_uid, groups=["warmer"])
+        config.set_climate_parameter(
+            "temperature",
+            **{
+                **test_data.temperature_cfg,
+                "linked_actuators": {"increase": "warmer", "decrease": None},
+            },
+        )
+        await ecosystem.refresh()
+
+        assert climate_subroutine._active_directions[("temperature", "increase")] == "warmer"
+        warmer_handler = climate_subroutine.get_actuator_handler("warmer")
+        assert warmer_handler.active
+        # The previous group has no hardware anymore, its handler has been released
+        #  by Climate and then unmounted by the hub
+        assert not heater_handler.active
+        assert "heater" not in ecosystem.actuator_hub.actuator_handlers
+
+        # Delete "temperature". Stopping should not need its config
+        config.delete_climate_parameter("temperature")
+        await climate_subroutine.stop()
+
+        assert not climate_subroutine._active_directions
+        assert not warmer_handler.active
+
+        climate_subroutine.disable()
+        # Restore config
+        config.environment["climate"] = climate_config
