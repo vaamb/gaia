@@ -627,6 +627,22 @@ class ActuatorHandler:
 
     async def reset(self) -> None:
         self._check_update_status_transaction()
+        if not self.get_linked_actuators():
+            # No actuator left to turn off, simply reset the state as driving
+            #  the actuators would raise and prevent the subroutines from
+            #  releasing the handler
+            if self._status or self._level or self._mode is not gv.ActuatorMode.automatic:
+                self._any_status_change = True
+            self._automatic_status = False
+            self._automatic_level = 0.0
+            self._status = False
+            self._level = 0.0
+            self._mode = gv.ActuatorMode.automatic
+            self._status_synced = True
+            self._level_synced = True
+            self._cancel_retry()
+            self.reset_timer()
+            return
         # Store the target so it will be applied right after when going back to
         #  automatic mode
         await self.set_automatic_target(False, 0.0)
