@@ -3,6 +3,7 @@
 ---
 
 ## Unreleased
+_Contracts: gaia ↔ ouranos-core v2_
 
 ### Added
 - Two weather parameters using the same actuator group are now reported with a warning,
