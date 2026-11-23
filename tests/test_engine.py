@@ -128,8 +128,6 @@ class TestEngine:
 
         with pytest.raises(RuntimeError):
             await engine.init_plugins()
-        with pytest.raises(RuntimeError):
-            await engine.start_plugins()
 
         engine.config.app_config.COMMUNICATE_WITH_OURANOS = True
         engine.config.app_config.USE_DATABASE = True
@@ -139,7 +137,8 @@ class TestEngine:
         assert "Initialising the plugins" in caplog.text
         assert engine.plugins_initialized is True
 
-        await engine.start_plugins()
+        await engine.start_database()
+        await engine.start_message_broker()
         await engine.stop_plugins()
 
         # Reset the message broker and the database
@@ -218,7 +217,7 @@ class TestEngine:
 
     async def test_terminate_after_failed_start(self, engine: Engine):
         with patch.object(
-                engine, "initialize_ecosystems", side_effect=RuntimeError("Oops")):
+                engine, "refresh_ecosystems", side_effect=RuntimeError("Oops")):
             with pytest.raises(RuntimeError, match="Oops"):
                 await engine.start()
         assert not engine.started
@@ -329,6 +328,21 @@ class TestEngine:
         with pytest.raises(ValueError, match=r"Ecosystem .* is not linked to this engine"):
             await engine.start_ecosystem(test_data.ecosystem_uid)
 
+    async def test_terminate_ecosystems_stops_started_ones(
+            self,
+            engine: Engine,
+            ecosystem_config: EcosystemConfig,
+    ):
+        # A `start()` failing after the ecosystems started leaves them running
+        #  when `terminate()` is called
+        ecosystem_config.set_management("light", True)
+        await engine.start_ecosystem(test_data.ecosystem_uid)
+        assert engine.ecosystems_started == {test_data.ecosystem_uid}
+
+        await engine.terminate_ecosystems()
+        assert not engine.ecosystems_started
+        assert not engine.ecosystems
+
     async def test_failing_ecosystems(
             self,
             engine: Engine,
@@ -339,17 +353,16 @@ class TestEngine:
         ecosystem_config.set_management("light", True)
         ecosystem_config.status = True
 
-        # An ecosystem failing to initialize should not make the refresh fail,
+        # An ecosystem failing to start should not make the refresh fail,
         #  even if it is expected to run
-        with patch("gaia.engine.Ecosystem.initialize", side_effect=RuntimeError("Oops")):
+        with patch("gaia.engine.Ecosystem.start", side_effect=RuntimeError("Oops")):
             await engine.refresh_ecosystems(send_info=False)
-        assert "Encountered an error while setting up ecosystem" in caplog.text
+        assert "Encountered an error while starting ecosystem 'Testing ecosystem'" in caplog.text
         assert test_data.ecosystem_uid in engine._failing_ecosystems
-        assert test_data.ecosystem_uid not in engine.ecosystems
 
         # It should not be retried as long as its config is unchanged
         await engine.refresh_ecosystems(send_info=False)
-        assert test_data.ecosystem_uid not in engine.ecosystems
+        assert test_data.ecosystem_uid in engine._failing_ecosystems
 
         # Once its config changed, it should be given a new chance
         ecosystem_config.name = "Fixed ecosystem"

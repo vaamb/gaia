@@ -197,8 +197,6 @@ async def ecosystem(
         ecosystem_config: EcosystemConfig,
         caplog: pytest.LogCaptureFixture,
 ) -> AsyncYieldFixture[Ecosystem]:
-    await engine.initialize_ecosystems()
-
     ecosystem = engine.get_ecosystem(ecosystem_uid)
     ecosystem.virtual_self.start()
     await ecosystem.initialize_hardware()
