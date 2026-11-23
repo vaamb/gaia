@@ -343,10 +343,13 @@ class TestOnEvent:
         payload = responses.popleft()
         assert payload["event"] == "actuators_data"
         assert get_uid(payload) == test_data.ecosystem_uid
-        for actuator_record in get_data(payload):
+        actuator_records = get_data(payload)
+        # There is only one actuator in the config used, with no explicit group
+        assert len(actuator_records) == 1
+        for actuator_record in actuator_records:
             actuator_record = gv.ActuatorStateRecord(*actuator_record)
             assert actuator_record.type is gv.HardwareType.actuator
-            #assert actuator_record.group == actuator_record.type.name
+            assert actuator_record.group == "light"
             assert actuator_record.active is False
             assert actuator_record.mode == gv.ActuatorMode.automatic
             assert actuator_record.status is False

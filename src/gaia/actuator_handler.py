@@ -877,44 +877,11 @@ class ActuatorHub:
         return self._actuator_handlers[actuator_group]
 
     def as_dict(self) -> dict[str, gv.ActuatorStateDict]:
-        default_state_dict: gv.ActuatorStateDict = {
-            "active": False,
-            "status": False,
-            "level": None,
-            "mode": gv.ActuatorMode.automatic,
+        return {
+            actuator_group: handler.as_dict()
+            for actuator_group, handler in self.actuator_handlers.items()
         }
-
-        rv = {}
-        # TODO: send all actuators (the ones associated with weather events too)
-        for actuator_group in defaults.climate_to_group_mapping.values():
-            if actuator_group in self._actuator_handlers:
-                rv[actuator_group] = self._actuator_handlers[actuator_group].as_dict()
-            else:
-                rv[actuator_group] = default_state_dict
-        return rv
 
     def as_records(self) -> list[gv.ActuatorStateRecord]:
         now = datetime.now(timezone.utc)
-
-        def get_default_record(
-                actuator_group: str,
-                timestamp: datetime,
-        ) -> gv.ActuatorStateRecord:
-            return gv.ActuatorStateRecord(
-                type=gv.HardwareType.actuator,
-                group=actuator_group,
-                active=False,
-                mode=gv.ActuatorMode.automatic,
-                status=False,
-                level=None,
-                timestamp=timestamp,
-            )
-
-        rv = []
-        # TODO: send all actuators (the ones associated with weather events too)
-        for climate_direction, actuator_group in defaults.climate_to_group_mapping.items():
-            if actuator_group in self._actuator_handlers:
-                rv.append(self._actuator_handlers[actuator_group].as_record(now))
-            else:
-                rv.append(get_default_record(actuator_group, now))
-        return rv
+        return [handler.as_record(now) for handler in self.actuator_handlers.values()]
