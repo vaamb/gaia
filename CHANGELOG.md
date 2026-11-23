@@ -59,6 +59,10 @@
   than being ignored until restart (#495)
 - Config file changes detected while the engine was refreshing the ecosystems were ignored
   until the next change (#497)
+- The initialization data sent to Ouranos could reflect the config rather than the actual
+  state (e.g. actuators not yet set up), as the message broker was started before the
+  ecosystems. `Engine.start()` now starts the database, sets up and starts the ecosystems,
+  then connects to the message broker (#446)
 - `Engine.terminate()` now stops the config files watchdog, which kept running when
   `Engine.start()` failed after starting it (#499)
 - The `Pictures` subroutine now checks its camera dependencies when computing whether it
