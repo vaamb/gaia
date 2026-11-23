@@ -44,6 +44,25 @@
   Climate and Light reset their PIDs themselves when a handler's mode changes.
   `EcosystemConfig.get_climate_direction()` and `get_weather_directions()` are 
   removed (#541)
+- `ActuatorHub` now owns the lifecycle of the `ActuatorHandler`s: a handler is mounted for
+  every group of an active, non-failing actuator when the ecosystem starts or is refreshed,
+  and unmounted (its last state logged and sent) once its group has no hardware left and
+  no subroutine uses it, or when the ecosystem stops. `ActuatorHub.get_handler()` no longer
+  creates handlers, and the new `Ecosystem.refresh()` orders the refresh steps: hardware,
+  handlers mounting, subroutines, handlers unmounting, lighting hours.
+  `Ecosystem.terminate_actuator_hub()` is now async and called by `stop()` (#545)
+- Actuator groups are now the groups of the active actuators in `ecosystems.cfg` rather
+  than the ones of the climate and weather mappings: `EcosystemConfig.get_valid_actuator_groups()`
+  is renamed `get_actuator_groups()`. `ActuatorHandler` no longer has a `type`, its records
+  carry `gv.HardwareType.actuator` (#545)
+- The actuators state sent to Ouranos and logged in the database now covers every mounted
+  handler, weather groups included, instead of the default climate groups padded with
+  default states (#545)
+- `GAIA_CONTRACT` bumped to 2: actuator records now always have `type=actuator` and only
+  list the mounted groups, which Ouranos instances on contract 1 can't handle. Registration
+  to them is refused (#545)
+- Climate, Light and Weather now track the actuator group they activated rather than the
+  handler itself (#545)
 
 ### Development
 - Sandbox script (`scripts/utils/sandbox.sh`) to run the install and update
@@ -78,6 +97,14 @@
   to be compared as written, so the conflict could go unnoticed (#532)
 - Climate and Light no longer overwrite the level of an actuator turned on manually: they
   set it to their PID output at every loop (#541)
+- Changing the actuator group of a climate or weather parameter, or of the light, is now
+  picked up when the ecosystem is refreshed: the old group's handler is released and the
+  new one activated. Climate and Weather used to keep the old handler, and Light switched
+  handlers without deactivating the previous one (#545)
+- Light now uses its configured actuator group to decide whether it is manageable and in
+  `turn_light()`, instead of the hard-coded `light` group (#545)
+- Resetting an `ActuatorHandler` whose actuators are all gone no longer raises, so a
+  subroutine can release a handler whose hardware was removed (#545)
 - When a weather event ends on an actuator group in automatic mode, the group now goes back
   to what Climate last asked for, rather than to the status and level it had before the
   event (#541)
