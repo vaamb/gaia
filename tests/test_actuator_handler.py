@@ -187,16 +187,17 @@ class TestActuatorHandler:
         assert light_handler.mode is gv.ActuatorMode.manual
 
         await yield_control()  # Allow the send data task to be processed
-        event_payload = registered_events_handler.dispatcher.emit_store[0]
+        event_payload = registered_events_handler.dispatcher.emit_store.popleft()
         assert event_payload["event"] == "actuators_data"
-        ecosystem_payload = event_payload["data"][0]
+        ecosystem_payload: gv.ActuatorsDataPayloadDict = event_payload["data"][0]
         assert ecosystem_payload["uid"] == test_data.ecosystem_uid
-        actuator_payload: gv.TurnActuatorPayload = ecosystem_payload["data"][0]
-        assert actuator_payload[0] == light_handler.type      # Hardware type
-        assert actuator_payload[1] == light_handler.group     # Actuator group
-        assert actuator_payload[2] is True                    # Actuator active status
-        assert actuator_payload[3] == gv.ActuatorMode.manual  # Actuator mode
-        assert actuator_payload[4] is True                    # Actuator status
+        actuator_payload = gv.ActuatorStateRecord(*ecosystem_payload["data"][0])
+
+        assert actuator_payload.type == gv.HardwareType.actuator
+        assert actuator_payload.group == light_handler.group
+        assert actuator_payload.active is True
+        assert actuator_payload.mode == gv.ActuatorMode.manual
+        assert actuator_payload.status is True
 
         # Test turn off
         async with light_handler.update_status_transaction():
@@ -205,12 +206,15 @@ class TestActuatorHandler:
         assert light_handler.mode is gv.ActuatorMode.manual
 
         await yield_control()  # Allow the send data task to be processed
-        actuator_payload = registered_events_handler.dispatcher.emit_store[1]["data"][0]["data"][0]
-        assert actuator_payload[0] == light_handler.type      # Hardware type
-        assert actuator_payload[1] == light_handler.group     # Actuator group
-        assert actuator_payload[2] is True                    # Actuator active status
-        assert actuator_payload[3] == gv.ActuatorMode.manual  # Actuator mode
-        assert actuator_payload[4] is False                   # Actuator status
+        event_payload = registered_events_handler.dispatcher.emit_store.popleft()
+        ecosystem_payload: gv.ActuatorsDataPayloadDict = event_payload["data"][0]
+        actuator_payload = gv.ActuatorStateRecord(*ecosystem_payload["data"][0])
+
+        assert actuator_payload.type == gv.HardwareType.actuator
+        assert actuator_payload.group == light_handler.group
+        assert actuator_payload.active is True
+        assert actuator_payload.mode == gv.ActuatorMode.manual
+        assert actuator_payload.status is False
 
         # Test turn automatic
         async with light_handler.update_status_transaction():
@@ -219,12 +223,15 @@ class TestActuatorHandler:
         assert light_handler.mode is gv.ActuatorMode.automatic
 
         await yield_control()  # Allow the send data task to be processed
-        actuator_payload = registered_events_handler.dispatcher.emit_store[2]["data"][0]["data"][0]
-        assert actuator_payload[0] == light_handler.type         # Hardware type
-        assert actuator_payload[1] == light_handler.group        # Actuator group
-        assert actuator_payload[2] is True                       # Actuator active status
-        assert actuator_payload[3] == gv.ActuatorMode.automatic  # Actuator mode
-        assert actuator_payload[4] is False                      # Actuator status
+        event_payload = registered_events_handler.dispatcher.emit_store.popleft()
+        ecosystem_payload: gv.ActuatorsDataPayloadDict = event_payload["data"][0]
+        actuator_payload = gv.ActuatorStateRecord(*ecosystem_payload["data"][0])
+
+        assert actuator_payload.type == gv.HardwareType.actuator
+        assert actuator_payload.group == light_handler.group
+        assert actuator_payload.active is True
+        assert actuator_payload.mode == gv.ActuatorMode.automatic
+        assert actuator_payload.status is False
 
         # Test countdown
         countdown = 0.02
@@ -232,19 +239,21 @@ class TestActuatorHandler:
             await light_handler.turn_to(gv.ActuatorModePayload.on, countdown=countdown)
         assert light_handler.mode is gv.ActuatorMode.automatic  # Make sure it hasn't changed yet
         assert math.isclose(light_handler.countdown, countdown, abs_tol=0.001)
-        assert len(registered_events_handler.dispatcher.emit_store) == 3
 
         await sleep(countdown + 0.01)  # Allow the countdown to finish
         assert light_handler.status is True
         assert light_handler.mode is gv.ActuatorMode.manual
 
         await yield_control()  # Allow the send data task to be processed
-        actuator_payload = registered_events_handler.dispatcher.emit_store[3]["data"][0]["data"][0]
-        assert actuator_payload[0] == light_handler.type      # Hardware type
-        assert actuator_payload[1] == light_handler.group     # Actuator group
-        assert actuator_payload[2] is True                    # Actuator active status
-        assert actuator_payload[3] == gv.ActuatorMode.manual  # Actuator mode
-        assert actuator_payload[4] is True                    # Actuator status
+        event_payload = registered_events_handler.dispatcher.emit_store.popleft()
+        ecosystem_payload: gv.ActuatorsDataPayloadDict = event_payload["data"][0]
+        actuator_payload = gv.ActuatorStateRecord(*ecosystem_payload["data"][0])
+
+        assert actuator_payload.type == gv.HardwareType.actuator
+        assert actuator_payload.group == light_handler.group
+        assert actuator_payload.active is True
+        assert actuator_payload.mode == gv.ActuatorMode.manual
+        assert actuator_payload.status is True
 
     async def test_automatic_target(self, light_handler: ActuatorHandler):
         light: DimmableSwitchMixin = light_handler.ecosystem.hardware[test_data.light_uid]

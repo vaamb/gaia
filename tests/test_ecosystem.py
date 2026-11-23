@@ -4,7 +4,6 @@ import pytest
 import gaia_validators as gv
 
 from gaia import Ecosystem, EcosystemConfig, Engine
-from gaia.config import defaults
 from gaia.exceptions import HardwareNotFound, SubroutineNotFound
 from gaia.hardware import hardware_models
 from gaia.hardware.abc import _MetaHardware
@@ -52,7 +51,7 @@ class TestEcosystem:
         with pytest.raises(
             RuntimeError, match=r"Cannot stop an ecosystem that hasn't started"):
             await ecosystem.stop()
-        
+
         # Test that starting an ecosystem that was stopped doesn't crash
         await ecosystem.start()
 
@@ -185,7 +184,7 @@ class TestEcosystem:
     async def test_deactivate_hardware(self, ecosystem: Ecosystem):
         old_cfg = ecosystem.hardware[test_data.light_uid].dict_repr()
         assert old_cfg["active"] is True
-        
+
         ecosystem.config.hardware_dict[test_data.light_uid]["active"] = False
         await ecosystem.refresh_hardware()
 
@@ -193,14 +192,17 @@ class TestEcosystem:
 
     async def test_actuators_data(self, ecosystem: Ecosystem):
         actuator_states = ecosystem.actuator_hub.as_dict()
-        assert len(actuator_states) == len(defaults.climate_to_group_mapping)
+        assert actuator_states
+        assert len(actuator_states) == len(ecosystem.get_actuator_groups_needed())
         for actuator in actuator_states.values():
+            # No subroutine is activated, handlers should just be initialized
             assert not actuator["active"]
-            assert not actuator["status"]
             assert actuator["mode"] is gv.ActuatorMode.automatic
+            assert not actuator["status"]
+            assert actuator["level"] == 0
 
     async def test_turn_actuator(self, ecosystem: Ecosystem):
-        with pytest.raises(ValueError, match=r"Actuator group 'light' is not mounted."):
+        with pytest.raises(RuntimeError, match=r"This actuator is not active."):
             await ecosystem.turn_actuator("light", gv.ActuatorModePayload.automatic)
 
         # All subroutines are disabled by default in testing config
@@ -235,3 +237,14 @@ class TestEcosystem:
             await ecosystem.turn_actuator(gv.HardwareType.light, "WrongMode")
 
         await ecosystem.stop_subroutine("light")
+
+
+#@with_hardware({test_data.light_uid: test_data.light_info})
+#class TestEcosystemActuators:
+#    def test_actuators_data(self, ecosystem: Ecosystem):
+#        actuator_states = ecosystem.actuator_hub.as_dict()
+#        assert len(actuator_states) == len(ecosystem.actuator_hub.actuator_handlers)
+#        for actuator in actuator_states.values():
+#            assert not actuator["active"]
+#            assert not actuator["status"]
+#            assert actuator["mode"] is gv.ActuatorMode.automatic

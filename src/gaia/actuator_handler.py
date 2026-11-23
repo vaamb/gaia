@@ -10,32 +10,19 @@ import inspect
 import logging
 import time
 import typing
-from typing import cast, Callable, NamedTuple, Type
+from typing import cast, Callable, Type
 from weakref import WeakValueDictionary
 
 import gaia_validators as gv
 
 from gaia.config import defaults
+from gaia.config.defaults import PIDParameters
 from gaia.hardware.abc import Actuator, DimmerMixin, SwitchMixin
 
 
 if typing.TYPE_CHECKING:
     from gaia import Ecosystem
     from gaia.database.models import ActuatorBuffer, ActuatorRecord
-
-
-class PIDParameters(NamedTuple):
-    Kp: float
-    Ki: float
-    Kd: float
-
-
-pid_values: dict[gv.ClimateParameter, PIDParameters] = {
-    "temperature": PIDParameters(5.0, 0.5, 0.1),
-    "humidity": PIDParameters(2.0, 0.5, 1.0),
-    "light": PIDParameters(0.001, 0.0, 0.0),
-    "wind": PIDParameters(1.0, 0.0, 0.0),
-}
 
 
 # Delays (in seconds) between two attempts to bring the actuators state in sync
@@ -113,8 +100,7 @@ class HystericalPID:
                 actuator_group = climate_to_group[(self.climate_parameter, direction_name)]
             except KeyError:
                 continue
-            actuator_handler: ActuatorHandler = self.actuator_hub.get_handler(actuator_group)
-            if actuator_handler.get_linked_actuators():
+            if actuator_group in self.actuator_hub.config.get_actuator_groups():
                 direction = direction | Direction[direction_name]
         self._direction = direction
         return direction
@@ -298,21 +284,22 @@ class ActuatorHandler:
         "ecosystem",
         "group",
         "logger",
-        "type",
     )
 
     def __init__(
             self,
             actuator_hub: ActuatorHub,
-            actuator_type: gv.HardwareType,
-            actuator_group: str | None = None,
+            actuator_group: str,
     ) -> None:
-        assert actuator_type & gv.HardwareType.actuator
         self.actuator_hub: ActuatorHub = actuator_hub
         self.ecosystem = self.actuator_hub.ecosystem
         # Actuators info
-        self.type: gv.HardwareType = actuator_type
-        self.group: str = actuator_group or self.type.name
+        if actuator_group not in self.ecosystem.config.get_actuator_groups():
+            raise ValueError(
+                f"Actuator group '{actuator_group}' has no valid actuator "
+                f"linked to it."
+            )
+        self.group: str = actuator_group
         # Logger
         eco_name = self.ecosystem.name.replace(" ", "_")
         self.logger = logging.getLogger(
@@ -371,7 +358,7 @@ class ActuatorHandler:
 
     def as_record(self, timestamp: datetime) -> gv.ActuatorStateRecord:
         return gv.ActuatorStateRecord(
-            type=self.type,
+            type=gv.HardwareType.actuator,
             group=self.group,
             active=self.active,
             mode=self.mode,
@@ -640,6 +627,22 @@ class ActuatorHandler:
 
     async def reset(self) -> None:
         self._check_update_status_transaction()
+        if not self.get_linked_actuators():
+            # No actuator left to turn off, simply reset the state as driving
+            #  the actuators would raise and prevent the subroutines from
+            #  releasing the handler
+            if self._status or self._level or self._mode is not gv.ActuatorMode.automatic:
+                self._any_status_change = True
+            self._automatic_status = False
+            self._automatic_level = 0.0
+            self._status = False
+            self._level = 0.0
+            self._mode = gv.ActuatorMode.automatic
+            self._status_synced = True
+            self._level_synced = True
+            self._cancel_retry()
+            self.reset_timer()
+            return
         # Store the target so it will be applied right after when going back to
         #  automatic mode
         await self.set_automatic_target(False, 0.0)
@@ -707,7 +710,7 @@ class ActuatorHandler:
             session.add(
                 db_model(
                     ecosystem_uid=self.ecosystem.uid,
-                    type=data.type,
+                    type=gv.HardwareType.actuator,
                     timestamp=data.timestamp,
                     active=data.active,
                     mode=data.mode,
@@ -785,11 +788,10 @@ class ActuatorHub:
             f"gaia.engine.{ecosystem.name.replace(' ', '_')}.actuators")
         self._pids: WeakValueDictionary[gv.ClimateParameter, HystericalPID] = \
             WeakValueDictionary()
-        self._actuator_handlers: WeakValueDictionary[str, ActuatorHandler] = \
-            WeakValueDictionary()
+        self._actuator_handlers: dict[str, ActuatorHandler] = {}
 
     @property
-    def actuator_handlers(self) -> WeakValueDictionary[str, ActuatorHandler]:
+    def actuator_handlers(self) -> dict[str, ActuatorHandler]:
         return self._actuator_handlers
 
     @property
@@ -804,7 +806,7 @@ class ActuatorHub:
             return self._pids[climate_parameter]
         except KeyError:
             # TODO: add a way to inject PID parameters from the config
-            pid_params = pid_values.get(climate_parameter) or PIDParameters(5.0, 0.5, 0.1)
+            pid_params = defaults.pid_values.get(climate_parameter) or PIDParameters(5.0, 0.5, 0.1)
             pid = HystericalPID(
                 self,
                 climate_parameter,
@@ -819,11 +821,49 @@ class ActuatorHub:
             # The PID is attached to the PIDs store during its init
             return pid
 
-    def _get_actuator_type(self, actuator_group: str) -> gv.HardwareType:
-        try:
-            return gv.HardwareType[actuator_group]
-        except KeyError:
-            return gv.HardwareType.actuator
+    async def mount_handler(self, actuator_group: str) -> ActuatorHandler:
+        actuator_handler = ActuatorHandler(self, actuator_group)
+        # Attach the handler to the actuator hub handlers store
+        self._actuator_handlers[actuator_group] = actuator_handler
+        # The handler is attached to the handlers store during its init
+        return actuator_handler
+
+    async def unmount_handler(self, actuator_group: str) -> None:
+        actuator_handler = self._actuator_handlers[actuator_group]
+        updated_data = actuator_handler.as_record(datetime.now(timezone.utc))
+        actuator_handler.reset_timer()
+        if actuator_handler._retry_timer is not None:
+            actuator_handler._retry_timer.cancel()
+        await actuator_handler.log_actuator_state(updated_data)
+        await actuator_handler.schedule_send_actuator_state(updated_data)
+        del self._actuator_handlers[actuator_group], actuator_handler
+
+    async def mount_needed_handlers(self) -> None:
+        """Mount the handlers of the actuator groups not already mounted.
+
+        Call it after the hardware are refreshed and before the subroutines
+        are, so they can find the handlers of new groups.
+        """
+        needed = self.ecosystem.get_actuator_groups_needed()
+        for actuator_group in needed - self.actuator_handlers.keys():
+            await self.mount_handler(actuator_group)
+        for actuator_handler in self.actuator_handlers.values():
+            actuator_handler.reset_cached_actuators()
+
+    async def unmount_unneeded_handlers(self) -> None:
+        """Unmount the handlers of the actuator groups that are gone.
+
+        Call it after the subroutines are refreshed, so they have deactivated
+        the handlers they don't use anymore.
+        """
+        needed = self.ecosystem.get_actuator_groups_needed()
+        for actuator_group in self.actuator_handlers.keys() - needed:
+            if self.actuator_handlers[actuator_group].active:
+                self.logger.error(
+                    f"Actuator group '{actuator_group}' has no hardware anymore "
+                    f"but is still used by a subroutine, its handler is kept.")
+                continue
+            await self.unmount_handler(actuator_group)
 
     def get_handler(
             self,
@@ -832,58 +872,16 @@ class ActuatorHub:
         if isinstance(actuator_group, gv.HardwareType):
             assert actuator_group & gv.HardwareType.actuator
             actuator_group = cast(str, actuator_group.name)
-        if actuator_group not in self.ecosystem.config.get_valid_actuator_groups():
-            raise ValueError(f"Actuator group {actuator_group} is not defined in the config.")
-        try:
-            return self._actuator_handlers[actuator_group]
-        except KeyError:
-            actuator_type = self._get_actuator_type(actuator_group)
-            actuator_handler = ActuatorHandler(self, actuator_type, actuator_group)
-            # Attach the handler to the actuator hub handlers store
-            self._actuator_handlers[actuator_group] = actuator_handler
-            # The handler is attached to the handlers store during its init
-            return actuator_handler
+        # The handlers mounted are the source of truth, not the config: a
+        #  subroutine must be able to release a group removed from the config
+        return self._actuator_handlers[actuator_group]
 
     def as_dict(self) -> dict[str, gv.ActuatorStateDict]:
-        default_state_dict: gv.ActuatorStateDict = {
-            "active": False,
-            "status": False,
-            "level": None,
-            "mode": gv.ActuatorMode.automatic,
+        return {
+            actuator_group: handler.as_dict()
+            for actuator_group, handler in self.actuator_handlers.items()
         }
-
-        rv = {}
-        # TODO: send all actuators (the ones associated with weather events too)
-        for actuator_group in defaults.climate_to_group_mapping.values():
-            if actuator_group in self._actuator_handlers:
-                rv[actuator_group] = self._actuator_handlers[actuator_group].as_dict()
-            else:
-                rv[actuator_group] = default_state_dict
-        return rv
 
     def as_records(self) -> list[gv.ActuatorStateRecord]:
         now = datetime.now(timezone.utc)
-
-        def get_default_record(
-                hardware_type: gv.HardwareType,
-                timestamp: datetime,
-        ) -> gv.ActuatorStateRecord:
-            return gv.ActuatorStateRecord(
-                type=hardware_type,
-                group=str(hardware_type.name),
-                active=False,
-                mode=gv.ActuatorMode.automatic,
-                status=False,
-                level=None,
-                timestamp=timestamp,
-            )
-
-        rv = []
-        # TODO: send all actuators (the ones associated with weather events too)
-        for climate_direction, actuator_group in defaults.climate_to_group_mapping.items():
-            if actuator_group in self._actuator_handlers:
-                rv.append(self._actuator_handlers[actuator_group].as_record(now))
-            else:
-                actuator_type = gv.safe_enum_from_name(gv.HardwareType, actuator_group)
-                rv.append(get_default_record(actuator_type, now))
-        return rv
+        return [handler.as_record(now) for handler in self.actuator_handlers.values()]

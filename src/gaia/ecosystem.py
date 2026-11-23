@@ -198,8 +198,6 @@ class Ecosystem:
             raise RuntimeError("Cannot terminate a running ecosystem. Stop it first")
         # Terminate the subroutines first
         self.terminate_subroutines()
-        # Terminate the actuator hub
-        self.terminate_actuator_hub()
         # Detach the virtual ecosystem
         if self.virtualized:
             self._virtual_self = None
@@ -600,6 +598,17 @@ class Ecosystem:
         # Give failing hardware a chance to start on the next start
         self._failing_hardware.clear()
 
+    def get_actuator_groups_needed(self) -> set[str]:
+        rv = set()
+        for hardware_uid, hardware in self.hardware.items():
+            if (
+                    isinstance(hardware, ActuatorMixin)
+                    and hardware.active
+                    and hardware_uid not in self._failing_hardware
+            ):
+                rv.update(hardware.groups)
+        return rv
+
     # ---------------------------------------------------------------------------
     #   Lifecycle management
     # ---------------------------------------------------------------------------
@@ -621,6 +630,8 @@ class Ecosystem:
                 self.virtual_self.start()
             # Mount all the hardware
             await self.initialize_hardware()
+            # Mount the actuator handlers linked to active hardware
+            await self.actuator_hub.mount_needed_handlers()
             # Refresh subroutines
             await self.refresh_subroutines()
             # Send ecosystems info
@@ -659,11 +670,22 @@ class Ecosystem:
             raise RuntimeError(f"Failed to stop ecosystem {self.name}")
         # Dismount all the hardware
         await self.terminate_hardware()
+        # Terminate the actuator hub
+        await self.terminate_actuator_hub()
         # Stop the virtual ecosystem
         if self.virtualized:
             self.virtual_self.stop()
         self.logger.debug("Ecosystem successfully stopped.")
         self._started = False
+
+    async def refresh(self) -> None:
+        await self.refresh_hardware()
+        # Mount the handlers of new groups before the subroutines need them ...
+        await self.actuator_hub.mount_needed_handlers()
+        await self.refresh_subroutines()
+        # ... and unmount the ones of groups gone once the subroutines released them
+        await self.actuator_hub.unmount_unneeded_handlers()
+        await self.refresh_lighting_hours(send_info=False)
 
     # ---------------------------------------------------------------------------
     #   Config and specific subroutines interaction
@@ -716,19 +738,15 @@ class Ecosystem:
         """
         return self.actuator_hub.get_handler(actuator_group)
 
-    def terminate_actuator_hub(self) -> None:
+    async def terminate_actuator_hub(self) -> None:
         """Release all actuator handlers and PIDs.
 
         Called during ecosystem termination. All handlers must be inactive
         (their managing subroutines must have stopped).
         """
         # Terminate actuator handlers
-        for handler_group in [*self.actuator_hub.actuator_handlers.keys()]:
-            handler = self.actuator_hub.actuator_handlers[handler_group]
-            handler.reset_cached_actuators()
-            # Make sure all the handlers where deactivated when the subroutine finished
-            assert not handler.active
-            del self.actuator_hub.actuator_handlers[handler_group], handler
+        for actuator_group in [*self.actuator_hub.actuator_handlers.keys()]:
+            await self.actuator_hub.unmount_handler(actuator_group)
         # Terminate PIDs
         for pid_group in [*self.actuator_hub.pids.keys()]:
             del self.actuator_hub.pids[pid_group]
