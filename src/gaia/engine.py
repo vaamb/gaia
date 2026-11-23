@@ -81,9 +81,11 @@ class Engine(metaclass=SingletonMeta):
         return f"{self.__class__.__name__}({self._uid}, config={self.config})"
 
     async def _async_init(self) -> None:
+        # Initialize the database and the message broker
         if self.plugins_needed:
-            # Initialize the database and the message broker
             await self.init_plugins()
+        # Initialize the ecosystems
+        await self.initialize_ecosystems()
 
     @classmethod
     async def initialize(
@@ -357,17 +359,6 @@ class Engine(metaclass=SingletonMeta):
         if self.use_message_broker:
             await self.init_message_broker()
         self.plugins_initialized = True
-
-    async def start_plugins(self) -> None:
-        if not self.plugins_initialized:
-            raise RuntimeError(
-                "Cannot start plugins if they have not been initialised."
-            )
-        self.logger.info("Initialising the plugins.")
-        if self.use_message_broker and not self.message_broker_started:
-            await self.start_message_broker()
-        if self.use_db and not self.db_started:
-            await self.start_database()
 
     async def stop_plugins(self) -> None:
         self.logger.info("Stopping the plugins.")
@@ -716,6 +707,10 @@ class Engine(metaclass=SingletonMeta):
             await self._send_ecosystems_info()
 
     async def terminate_ecosystems(self) -> None:
+        # Ecosystems can still be running if `start()` failed after starting
+        #  them, stop them first as started ecosystems cannot be removed
+        for ecosystem_uid in [*self.ecosystems_started]:
+            await self._stop_ecosystem_no_raise(ecosystem_uid)
         for ecosystem_uid in [*self.ecosystems.keys()]:
             await self._remove_ecosystem_no_raise(ecosystem_uid)
         # Give failing ecosystems a chance to start on the next start
@@ -770,19 +765,23 @@ class Engine(metaclass=SingletonMeta):
         # Load the ecosystem configs into memory and start the watchdog
         await self.config.initialize_configs()
         self.config.start_watchdog()
-        # Start background tasks and plugins
+        # Start background tasks and the database
         self.start_background_tasks()
-        if self.plugins_needed:
-            await self.start_plugins()
-        # Initialize the ecosystems
-        await self.initialize_ecosystems()
+        if self.use_db:
+            assert not self.db_started
+            await self.start_database()
+        # Start the ecosystems without sending the updated info, it will be done
+        #  right upon message broker registration
+        self.config.new_config.clear()
+        await self.refresh_ecosystems(send_info=False)
+        if self.use_message_broker:
+            assert not self.message_broker_started
+            await self.start_message_broker()
         # Start the engine thread
         self.task = asyncio.create_task(self._loop(), name="engine-loop")
         await sleep(0)  # Allow _loop() to start
-        # Set the state to running before unlocking the loop
+        # Set the state to running
         self._state = EngineState.RUNNING
-        # Send a config signal so the loop unlocks and refreshes the ecosystems
-        await self._notify_loop()
         self.scheduler.resume()
         self.logger.info("Gaia started.")
 
